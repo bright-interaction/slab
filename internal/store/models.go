@@ -104,7 +104,7 @@ type Site struct {
 	Ga4ID           string `json:"ga4_id"`
 	UmamiID         string `json:"umami_id"`
 	UmamiUrl        string `json:"umami_url"`
-	CookiebitDomain string `json:"cookiebit_domain"`
+	CookiebitDomain string `json:"cookieproof_domain"`
 	Lang            string `json:"lang"`
 	LastBuildAt     string `json:"last_build_at"`
 	LastBuildStatus string `json:"last_build_status"`
