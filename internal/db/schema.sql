@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS sites (
     ga4_id           TEXT NOT NULL DEFAULT '',
     umami_id         TEXT NOT NULL DEFAULT '',
     umami_url        TEXT NOT NULL DEFAULT '',
-    cookiebit_domain TEXT NOT NULL DEFAULT '',
+    cookieproof_domain TEXT NOT NULL DEFAULT '',
     -- Build config
     lang             TEXT NOT NULL DEFAULT 'en',
     last_build_at    TEXT NOT NULL DEFAULT '',

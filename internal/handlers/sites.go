@@ -136,7 +136,7 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Ga4ID           *string `json:"ga4_id"`
 		UmamiID         *string `json:"umami_id"`
 		UmamiURL        *string `json:"umami_url"`
-		CookiebitDomain *string `json:"cookiebit_domain"`
+		CookiebitDomain *string `json:"cookieproof_domain"`
 		Lang            *string `json:"lang"`
 	}
 	if err := parseJSON(r, &req); err != nil {

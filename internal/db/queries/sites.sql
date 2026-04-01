@@ -30,7 +30,7 @@ UPDATE sites SET
     ga4_id = ?,
     umami_id = ?,
     umami_url = ?,
-    cookiebit_domain = ?,
+    cookieproof_domain = ?,
     lang = ?,
     updated_at = datetime('now')
 WHERE id = ?;

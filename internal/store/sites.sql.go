@@ -55,7 +55,7 @@ func (q *Queries) DeleteSite(ctx context.Context, id string) error {
 }
 
 const getSiteByID = `-- name: GetSiteByID :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookiebit_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE id = ?
+SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE id = ?
 `
 
 func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
@@ -93,7 +93,7 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 }
 
 const getSiteBySlug = `-- name: GetSiteBySlug :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookiebit_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE slug = ?
+SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE slug = ?
 `
 
 func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) {
@@ -131,7 +131,7 @@ func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) 
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookiebit_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites ORDER BY updated_at DESC
+SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites ORDER BY updated_at DESC
 `
 
 func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
@@ -203,7 +203,7 @@ UPDATE sites SET
     ga4_id = ?,
     umami_id = ?,
     umami_url = ?,
-    cookiebit_domain = ?,
+    cookieproof_domain = ?,
     lang = ?,
     updated_at = datetime('now')
 WHERE id = ?
@@ -227,7 +227,7 @@ type UpdateSiteParams struct {
 	Ga4ID           string `json:"ga4_id"`
 	UmamiID         string `json:"umami_id"`
 	UmamiUrl        string `json:"umami_url"`
-	CookiebitDomain string `json:"cookiebit_domain"`
+	CookiebitDomain string `json:"cookieproof_domain"`
 	Lang            string `json:"lang"`
 	ID              string `json:"id"`
 }
