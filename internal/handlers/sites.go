@@ -4,17 +4,23 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bright-interaction/slab/internal/agent"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
 type SiteHandler struct {
-	cfg     *config.Config
-	queries *store.Queries
+	cfg        *config.Config
+	queries    *store.Queries
+	guardrails *agent.GuardrailEngine
 }
 
 func NewSiteHandler(cfg *config.Config, queries *store.Queries) *SiteHandler {
-	return &SiteHandler{cfg: cfg, queries: queries}
+	return &SiteHandler{
+		cfg:        cfg,
+		queries:    queries,
+		guardrails: agent.NewGuardrailEngine(queries),
+	}
 }
 
 func (h *SiteHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -105,6 +111,18 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to create site")
 		return
 	}
+
+	// Seed defaults for the new site
+	_ = h.guardrails.SeedDefaultGuardrails(r.Context(), id)
+	_ = h.guardrails.SeedDefaultKnowledgebase(r.Context(), id)
+
+	// Create default architecture
+	_ = h.queries.UpsertSiteArchitecture(r.Context(), store.UpsertSiteArchitectureParams{
+		ID:            newID(),
+		SiteID:        id,
+		StructureType: "soft-silo",
+		MaxDepth:      3,
+	})
 
 	site, _ := h.queries.GetSiteByID(r.Context(), id)
 	writeJSON(w, http.StatusCreated, site)

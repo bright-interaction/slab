@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/bright-interaction/slab/internal/agent"
 	"github.com/bright-interaction/slab/internal/config"
@@ -56,6 +57,10 @@ func (h *AgentHandler) resolvePageBySlug(w http.ResponseWriter, r *http.Request,
 	if pageSlug == "" {
 		writeError(w, http.StatusBadRequest, "page slug is required (query param ?page= or path param)")
 		return nil, false
+	}
+	// Normalize: ensure leading slash (URL params strip it)
+	if pageSlug != "/" && !strings.HasPrefix(pageSlug, "/") {
+		pageSlug = "/" + pageSlug
 	}
 	page, err := h.queries.GetPageBySiteAndSlug(r.Context(), store.GetPageBySiteAndSlugParams{
 		SiteID: siteID,
@@ -187,7 +192,7 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	if req.Title != nil {
 		params.Title = *req.Title
 	}
-	if req.Slug != nil {
+	if req.Slug != nil && *req.Slug != page.Slug {
 		violations := h.guardrails.ValidatePageSlug(r.Context(), a.SiteID, *req.Slug)
 		if agent.HasErrors(violations) {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
@@ -196,6 +201,15 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		// Auto-create 301 redirect from old slug to new slug
+		_ = h.queries.CreateRedirect(r.Context(), store.CreateRedirectParams{
+			ID:         newID(),
+			SiteID:     a.SiteID,
+			FromPath:   page.Slug,
+			ToPath:     *req.Slug,
+			StatusCode: 301,
+			IsAuto:     1,
+		})
 		params.Slug = *req.Slug
 	}
 	if req.Status != nil {
@@ -284,6 +298,9 @@ func (h *AgentHandler) CreateBlock(w http.ResponseWriter, r *http.Request) {
 	styleStr := marshalField(req.Style)
 
 	violations := h.guardrails.ValidateBlock(r.Context(), a.SiteID, req.BlockType, dataStr)
+	// Also check block count limit
+	countViolations := h.guardrails.ValidateBlockCount(r.Context(), a.SiteID, page.ID)
+	violations = append(violations, countViolations...)
 	if agent.HasErrors(violations) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 			"error":      "Guardrail violations",
@@ -396,6 +413,27 @@ func (h *AgentHandler) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blockID := urlParam(r, "blockID")
+
+	// Look up the block to find its page for required blocks check
+	block, err := h.queries.GetBlockByID(r.Context(), blockID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return
+	}
+
+	// Find the page to get its slug for required blocks validation
+	page, err := h.queries.GetPageByID(r.Context(), block.PageID)
+	if err == nil {
+		violations := h.guardrails.ValidateRequiredBlocks(r.Context(), a.SiteID, page.Slug, page.ID, blockID)
+		if agent.HasErrors(violations) {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+				"error":      "Guardrail violations",
+				"violations": violations,
+			})
+			return
+		}
+	}
+
 	if err := h.queries.DeleteBlock(r.Context(), blockID); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete block")
 		return
