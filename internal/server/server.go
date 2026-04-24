@@ -134,6 +134,10 @@ func (s *Server) Router() http.Handler {
 		r.Patch("/api/sites/{siteID}/guardrails/{ruleID}", grh.Update)
 		r.Delete("/api/sites/{siteID}/guardrails/{ruleID}", grh.Delete)
 
+		// Builds (admin)
+		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
+		r.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
+
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)
@@ -171,6 +175,11 @@ func (s *Server) Router() http.Handler {
 
 		// Global Blocks
 		r.Put("/api/agent/global/{slot}", agentH.UpdateGlobalBlock)
+
+		// Build
+		agentBuildH := handlers.NewBuildHandler(s.cfg, s.queries)
+		r.Post("/api/agent/build", agentBuildH.TriggerBuild)
+		r.Get("/api/agent/build/{buildID}/status", agentBuildH.BuildStatus)
 
 		// Evaluation
 		r.Get("/api/agent/evaluation/{buildID}", agentH.GetEvaluation)

@@ -322,6 +322,7 @@ func (h *AgentHandler) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		DataJson:  dataStr,
 		StyleJson: styleStr,
 		SortOrder: sortOrder,
+		IsVisible: 1,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create block")
