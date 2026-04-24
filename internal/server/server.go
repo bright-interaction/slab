@@ -137,6 +137,18 @@ func (s *Server) Router() http.Handler {
 		r.Patch("/api/sites/{siteID}/guardrails/{ruleID}", grh.Update)
 		r.Delete("/api/sites/{siteID}/guardrails/{ruleID}", grh.Delete)
 
+		// Profile (business info, legal contacts)
+		ph2 := handlers.NewProfileHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/profile", ph2.Get)
+		r.Put("/api/sites/{siteID}/profile", ph2.Upsert)
+
+		// Allowed scripts (CSP whitelist)
+		ash := handlers.NewAllowedScriptHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/allowed-scripts", ash.List)
+		r.Post("/api/sites/{siteID}/allowed-scripts", ash.Create)
+		r.Patch("/api/sites/{siteID}/allowed-scripts/{scriptID}", ash.Update)
+		r.Delete("/api/sites/{siteID}/allowed-scripts/{scriptID}", ash.Delete)
+
 		// Media
 		mh := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
 		r.Get("/api/sites/{siteID}/media", mh.List)

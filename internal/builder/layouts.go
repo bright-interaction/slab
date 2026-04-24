@@ -82,9 +82,17 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("  <meta property=\"og:type\" content=\"website\" />\n")
 	b.WriteString("  <meta property=\"og:url\" content={canonicalURL.href} />\n\n")
 
-	// Security headers as meta
-	if v := settingsMap["security.referrer_policy"]; v != "" {
-		b.WriteString(fmt.Sprintf("  <meta name=\"referrer\" content=\"%s\" />\n", v))
+	// Security headers as meta (belt-and-suspenders: headers also sent via
+	// _headers file and nginx.conf for directives browsers honor only in
+	// headers, e.g. frame-ancestors, HSTS, X-Frame-Options).
+	if headers, err := BuildSecurityHeaders(ctx, queries, siteID); err == nil {
+		if headers.ReferrerPolicy != "" {
+			b.WriteString(fmt.Sprintf("  <meta name=\"referrer\" content=\"%s\" />\n", escapeAttr(headers.ReferrerPolicy)))
+		}
+		// Use meta-safe CSP subset -- frame-ancestors etc. only work in headers.
+		if metaCSP := CSPForMeta(headers.CSP); metaCSP != "" {
+			b.WriteString(fmt.Sprintf("  <meta http-equiv=\"Content-Security-Policy\" content=\"%s\" />\n", escapeAttr(metaCSP)))
+		}
 	}
 
 	// Analytics

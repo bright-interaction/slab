@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS pages (
     sort_order       INTEGER NOT NULL DEFAULT 0,
     show_in_nav      INTEGER NOT NULL DEFAULT 1,
     nav_label        TEXT NOT NULL DEFAULT '',
+    no_index         INTEGER NOT NULL DEFAULT 0,
+    canonical_url    TEXT NOT NULL DEFAULT '',
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(site_id, slug)

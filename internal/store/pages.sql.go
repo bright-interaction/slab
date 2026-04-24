@@ -58,7 +58,7 @@ func (q *Queries) DeletePage(ctx context.Context, id string) error {
 }
 
 const getPageByID = `-- name: GetPageByID :one
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, created_at, updated_at FROM pages WHERE id = ?
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, created_at, updated_at FROM pages WHERE id = ?
 `
 
 func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
@@ -77,6 +77,8 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 		&i.SortOrder,
 		&i.ShowInNav,
 		&i.NavLabel,
+		&i.NoIndex,
+		&i.CanonicalUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -84,7 +86,7 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 }
 
 const getPageBySiteAndSlug = `-- name: GetPageBySiteAndSlug :one
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, created_at, updated_at FROM pages WHERE site_id = ? AND slug = ?
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, created_at, updated_at FROM pages WHERE site_id = ? AND slug = ?
 `
 
 type GetPageBySiteAndSlugParams struct {
@@ -108,6 +110,8 @@ func (q *Queries) GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAnd
 		&i.SortOrder,
 		&i.ShowInNav,
 		&i.NavLabel,
+		&i.NoIndex,
+		&i.CanonicalUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -115,7 +119,7 @@ func (q *Queries) GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAnd
 }
 
 const listPagesBySite = `-- name: ListPagesBySite :many
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, created_at, updated_at FROM pages WHERE site_id = ? ORDER BY sort_order ASC
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, created_at, updated_at FROM pages WHERE site_id = ? ORDER BY sort_order ASC
 `
 
 func (q *Queries) ListPagesBySite(ctx context.Context, siteID string) ([]Page, error) {
@@ -140,6 +144,8 @@ func (q *Queries) ListPagesBySite(ctx context.Context, siteID string) ([]Page, e
 			&i.SortOrder,
 			&i.ShowInNav,
 			&i.NavLabel,
+			&i.NoIndex,
+			&i.CanonicalUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -157,7 +163,7 @@ func (q *Queries) ListPagesBySite(ctx context.Context, siteID string) ([]Page, e
 }
 
 const listPublishedPagesBySite = `-- name: ListPublishedPagesBySite :many
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, created_at, updated_at FROM pages WHERE site_id = ? AND status = 'published' ORDER BY sort_order ASC
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, created_at, updated_at FROM pages WHERE site_id = ? AND status = 'published' ORDER BY sort_order ASC
 `
 
 func (q *Queries) ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error) {
@@ -182,6 +188,8 @@ func (q *Queries) ListPublishedPagesBySite(ctx context.Context, siteID string) (
 			&i.SortOrder,
 			&i.ShowInNav,
 			&i.NavLabel,
+			&i.NoIndex,
+			&i.CanonicalUrl,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -210,6 +218,8 @@ UPDATE pages SET
     sort_order = ?,
     show_in_nav = ?,
     nav_label = ?,
+    no_index = ?,
+    canonical_url = ?,
     updated_at = datetime('now')
 WHERE id = ?
 `
@@ -225,6 +235,8 @@ type UpdatePageParams struct {
 	SortOrder       int64  `json:"sort_order"`
 	ShowInNav       int64  `json:"show_in_nav"`
 	NavLabel        string `json:"nav_label"`
+	NoIndex         int64  `json:"no_index"`
+	CanonicalUrl    string `json:"canonical_url"`
 	ID              string `json:"id"`
 }
 
@@ -240,6 +252,8 @@ func (q *Queries) UpdatePage(ctx context.Context, arg UpdatePageParams) error {
 		arg.SortOrder,
 		arg.ShowInNav,
 		arg.NavLabel,
+		arg.NoIndex,
+		arg.CanonicalUrl,
 		arg.ID,
 	)
 	return err

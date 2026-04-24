@@ -175,6 +175,8 @@ type Page struct {
 	SortOrder       int64  `json:"sort_order"`
 	ShowInNav       int64  `json:"show_in_nav"`
 	NavLabel        string `json:"nav_label"`
+	NoIndex         int64  `json:"no_index"`
+	CanonicalUrl    string `json:"canonical_url"`
 	CreatedAt       string `json:"created_at"`
 	UpdatedAt       string `json:"updated_at"`
 }

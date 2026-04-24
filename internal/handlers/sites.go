@@ -124,6 +124,39 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		MaxDepth:      3,
 	})
 
+	// Seed default security + server settings (best-practice defaults).
+	// All toggles can be flipped via PATCH /api/sites/{id}/settings.
+	defaultSettings := []struct{ category, key, value string }{
+		// Security headers
+		{"security", "csp_enabled", "true"},
+		{"security", "csp_policy", "auto"},
+		{"security", "hsts_enabled", "true"},
+		{"security", "hsts_max_age", "31536000"},
+		{"security", "hsts_preload", "false"},
+		{"security", "x_frame_options", "DENY"},
+		{"security", "x_content_type", "nosniff"},
+		{"security", "referrer_policy", "strict-origin-when-cross-origin"},
+		{"security", "permissions_policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()"},
+		{"security", "coop", "same-origin"},
+		{"security", "corp", "same-origin"},
+		// Nginx/server
+		{"server", "gzip_enabled", "true"},
+		{"server", "brotli_enabled", "false"},
+		{"server", "cache_static_max_age", "31536000"},
+		{"server", "cache_html_max_age", "3600"},
+		{"server", "rate_limit_enabled", "false"},
+		{"server", "rate_limit_rps", "10"},
+	}
+	for _, d := range defaultSettings {
+		_ = h.queries.UpsertSetting(r.Context(), store.UpsertSettingParams{
+			ID:       newID(),
+			SiteID:   id,
+			Category: d.category,
+			Key:      d.key,
+			Value:    d.value,
+		})
+	}
+
 	site, _ := h.queries.GetSiteByID(r.Context(), id)
 	writeJSON(w, http.StatusCreated, site)
 }

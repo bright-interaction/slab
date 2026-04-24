@@ -75,6 +75,9 @@ func renderPage(page store.Page, blocks []store.Block, components map[string]boo
 	if page.MetaDescription != "" {
 		b.WriteString(fmt.Sprintf(" description=\"%s\"", escapeAttr(page.MetaDescription)))
 	}
+	if page.NoIndex == 1 {
+		b.WriteString(` robots="noindex, nofollow"`)
+	}
 	b.WriteString(">\n")
 
 	// Render blocks
