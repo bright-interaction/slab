@@ -143,27 +143,49 @@ func renderComponentBlock(name string, data map[string]any) string {
 
 func renderDataBlock(blockType string, data map[string]any) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  <section class=\"block block--%s\">\n", blockType))
+	b.WriteString(fmt.Sprintf("  <section class=\"block block--%s\">\n", escapeAttr(blockType)))
 
 	if heading, ok := data["heading"].(string); ok {
-		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", heading))
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
 	}
 	if subheading, ok := data["subheading"].(string); ok {
-		b.WriteString(fmt.Sprintf("    <p>%s</p>\n", subheading))
+		b.WriteString(fmt.Sprintf("    <p>%s</p>\n", escapeHTML(subheading)))
 	}
 	if text, ok := data["text"].(string); ok {
-		b.WriteString(fmt.Sprintf("    <div>%s</div>\n", text))
+		b.WriteString(fmt.Sprintf("    <div>%s</div>\n", escapeHTML(text)))
 	}
 	if ctaText, ok := data["cta_text"].(string); ok {
 		ctaURL, _ := data["cta_url"].(string)
 		if ctaURL == "" {
 			ctaURL = "#"
 		}
-		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-primary\">%s</a>\n", ctaURL, ctaText))
+		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
+			escapeURL(ctaURL), escapeHTML(ctaText)))
 	}
 
 	b.WriteString("  </section>\n")
 	return b.String()
+}
+
+// escapeHTML escapes text content for safe injection into HTML body.
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+// escapeURL sanitizes a URL for href/src attribute use. Rejects javascript: and
+// data: schemes, then escapes for attribute context.
+func escapeURL(s string) string {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	// Block dangerous schemes; fall back to a safe anchor.
+	for _, bad := range []string{"javascript:", "data:", "vbscript:"} {
+		if strings.HasPrefix(lower, bad) {
+			return "#"
+		}
+	}
+	return escapeAttr(s)
 }
 
 func extractComponentName(bl store.Block) string {
@@ -196,7 +218,10 @@ func pascalCase(s string) string {
 }
 
 func escapeAttr(s string) string {
+	// Order matters: & must be first, otherwise we double-escape the entities below.
+	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "\"", "&quot;")
+	s = strings.ReplaceAll(s, "'", "&#39;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, ">", "&gt;")
 	return s

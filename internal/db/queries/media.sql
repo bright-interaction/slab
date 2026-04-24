@@ -1,6 +1,12 @@
 -- name: ListMediaBySite :many
 SELECT * FROM media WHERE site_id = ? ORDER BY created_at DESC;
 
+-- name: ListMediaBySitePaginated :many
+SELECT * FROM media WHERE site_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
+
+-- name: CountMediaBySite :one
+SELECT COUNT(*) FROM media WHERE site_id = ?;
+
 -- name: GetMediaByID :one
 SELECT * FROM media WHERE id = ?;
 

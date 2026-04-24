@@ -13,6 +13,7 @@ import (
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/handlers"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -21,19 +22,21 @@ var FrontendFS fs.FS
 
 // Server holds all dependencies.
 type Server struct {
-	cfg      *config.Config
-	db       *sql.DB
-	queries  *store.Queries
-	authMW   *authmw.AuthMiddleware
-	agentMW  *authmw.AgentAuthMiddleware
+	cfg     *config.Config
+	db      *sql.DB
+	queries *store.Queries
+	storage storage.Store
+	authMW  *authmw.AuthMiddleware
+	agentMW *authmw.AgentAuthMiddleware
 }
 
 // New creates a Server.
-func New(cfg *config.Config, db *sql.DB, queries *store.Queries) *Server {
+func New(cfg *config.Config, db *sql.DB, queries *store.Queries, st storage.Store) *Server {
 	return &Server{
 		cfg:     cfg,
 		db:      db,
 		queries: queries,
+		storage: st,
 		authMW:  authmw.NewAuthMiddleware(cfg, queries),
 		agentMW: authmw.NewAgentAuthMiddleware(queries),
 	}
@@ -134,6 +137,14 @@ func (s *Server) Router() http.Handler {
 		r.Patch("/api/sites/{siteID}/guardrails/{ruleID}", grh.Update)
 		r.Delete("/api/sites/{siteID}/guardrails/{ruleID}", grh.Delete)
 
+		// Media
+		mh := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
+		r.Get("/api/sites/{siteID}/media", mh.List)
+		r.Post("/api/sites/{siteID}/media", mh.Upload)
+		r.Get("/api/sites/{siteID}/media/{mediaID}", mh.Get)
+		r.Patch("/api/sites/{siteID}/media/{mediaID}", mh.Update)
+		r.Delete("/api/sites/{siteID}/media/{mediaID}", mh.Delete)
+
 		// Builds (admin)
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
@@ -185,8 +196,19 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/agent/evaluation/{buildID}", agentH.GetEvaluation)
 
 		// Media
+		agentMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
 		r.Get("/api/agent/media", agentH.ListMedia)
+		r.Post("/api/agent/media", agentMediaH.AgentUpload)
+		r.Post("/api/agent/media/from-url", agentMediaH.AgentUploadFromURL)
+		r.Post("/api/agent/media/from-base64", agentMediaH.AgentUploadFromBase64)
+		r.Patch("/api/agent/media/{mediaID}", agentMediaH.AgentUpdate)
+		r.Delete("/api/agent/media/{mediaID}", agentMediaH.AgentDelete)
 	})
+
+	// Public media serving (no auth, long cache). Must come BEFORE mountFrontend.
+	publicMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
+	r.Get("/media/*", publicMediaH.ServePublic)
+	r.Head("/media/*", publicMediaH.ServePublic)
 
 	// Serve embedded frontend (SPA)
 	s.mountFrontend(r)

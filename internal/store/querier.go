@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
 	CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error
@@ -99,6 +100,7 @@ type Querier interface {
 	ListKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error)
 	ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error)
+	ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListRecentDeploymentsBySite(ctx context.Context, arg ListRecentDeploymentsBySiteParams) ([]Deployment, error)

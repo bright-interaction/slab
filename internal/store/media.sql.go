@@ -10,6 +10,17 @@ import (
 	"strings"
 )
 
+const countMediaBySite = `-- name: CountMediaBySite :one
+SELECT COUNT(*) FROM media WHERE site_id = ?
+`
+
+func (q *Queries) CountMediaBySite(ctx context.Context, siteID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMediaBySite, siteID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMedia = `-- name: CreateMedia :exec
 INSERT INTO media (id, site_id, filename, alt_text, mime_type, file_size, width, height, original_path)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -133,6 +144,53 @@ SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blu
 
 func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error) {
 	rows, err := q.db.QueryContext(ctx, listMediaBySite, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Medium{}
+	for rows.Next() {
+		var i Medium
+		if err := rows.Scan(
+			&i.ID,
+			&i.SiteID,
+			&i.Filename,
+			&i.AltText,
+			&i.MimeType,
+			&i.FileSize,
+			&i.Width,
+			&i.Height,
+			&i.Blurhash,
+			&i.VariantsJson,
+			&i.OriginalPath,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMediaBySitePaginated = `-- name: ListMediaBySitePaginated :many
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+`
+
+type ListMediaBySitePaginatedParams struct {
+	SiteID string `json:"site_id"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+func (q *Queries) ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error) {
+	rows, err := q.db.QueryContext(ctx, listMediaBySitePaginated, arg.SiteID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

@@ -66,6 +66,11 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 		return fail("render config: " + err.Error())
 	}
 
+	// 6b. Media
+	if err := CopyMedia(ctx, queries, siteID, dataDir, wsDir); err != nil {
+		return fail("copy media: " + err.Error())
+	}
+
 	slog.Info("build: generated files", "pages", pageCount, "workspace", wsDir)
 
 	// 7. Compile

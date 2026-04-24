@@ -20,6 +20,7 @@ import (
 	"github.com/bright-interaction/slab/internal/config"
 	dbpkg "github.com/bright-interaction/slab/internal/db"
 	"github.com/bright-interaction/slab/internal/server"
+	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -63,7 +64,14 @@ func main() {
 		server.FrontendFS = sub
 	}
 
-	srv := server.New(cfg, sqlDB, queries)
+	// Media storage
+	st, err := storage.NewLocalStore(cfg.MediaDir)
+	if err != nil {
+		slog.Error("create storage", "error", err)
+		os.Exit(1)
+	}
+
+	srv := server.New(cfg, sqlDB, queries, st)
 	httpSrv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      srv.Router(),
