@@ -66,6 +66,20 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 		return fail("render config: " + err.Error())
 	}
 
+	// 6a. Security & settings (_headers, humans.txt, llms.txt, nginx.conf)
+	if err := RenderSecurityHeaders(ctx, queries, siteID, wsDir); err != nil {
+		return fail("render security headers: " + err.Error())
+	}
+	if err := RenderHumansTxt(ctx, queries, siteID, wsDir); err != nil {
+		return fail("render humans.txt: " + err.Error())
+	}
+	if err := RenderLLMsTxt(ctx, queries, siteID, wsDir); err != nil {
+		return fail("render llms.txt: " + err.Error())
+	}
+	if err := RenderNginxConfig(ctx, queries, siteID, wsDir); err != nil {
+		return fail("render nginx.conf: " + err.Error())
+	}
+
 	// 6b. Media
 	if err := CopyMedia(ctx, queries, siteID, dataDir, wsDir); err != nil {
 		return fail("copy media: " + err.Error())

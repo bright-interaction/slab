@@ -26,6 +26,8 @@ UPDATE pages SET
     sort_order = ?,
     show_in_nav = ?,
     nav_label = ?,
+    no_index = ?,
+    canonical_url = ?,
     updated_at = datetime('now')
 WHERE id = ?;
 

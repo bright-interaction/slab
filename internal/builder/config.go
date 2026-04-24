@@ -76,10 +76,10 @@ export default defineConfig({
 		}
 	}
 
-	// security.txt
+	// security.txt — scrub CRLF from email to prevent header injection
 	profile, _ := queries.GetSiteProfile(ctx, siteID)
-	if profile.SecurityEmail != "" {
-		secTxt := fmt.Sprintf("Contact: mailto:%s\nPreferred-Languages: en\n", profile.SecurityEmail)
+	if email := stripCtl(profile.SecurityEmail); email != "" {
+		secTxt := fmt.Sprintf("Contact: mailto:%s\nPreferred-Languages: en\n", email)
 		if err := WriteFile(filepath.Join(wsDir, "public", ".well-known", "security.txt"), secTxt); err != nil {
 			return err
 		}

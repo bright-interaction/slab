@@ -169,6 +169,8 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		Layout          *string `json:"layout"`
 		ShowInNav       *int64  `json:"show_in_nav"`
 		NavLabel        *string `json:"nav_label"`
+		NoIndex         *int64  `json:"no_index"`
+		CanonicalURL    *string `json:"canonical_url"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -187,6 +189,8 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		SortOrder:       page.SortOrder,
 		ShowInNav:       page.ShowInNav,
 		NavLabel:        page.NavLabel,
+		NoIndex:         page.NoIndex,
+		CanonicalUrl:    page.CanonicalUrl,
 	}
 
 	if req.Title != nil {
@@ -229,6 +233,12 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.NavLabel != nil {
 		params.NavLabel = *req.NavLabel
+	}
+	if req.NoIndex != nil {
+		params.NoIndex = *req.NoIndex
+	}
+	if req.CanonicalURL != nil {
+		params.CanonicalUrl = *req.CanonicalURL
 	}
 
 	if err := h.queries.UpdatePage(r.Context(), params); err != nil {
