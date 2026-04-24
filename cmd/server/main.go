@@ -20,6 +20,7 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
 	"github.com/brightinteraction/atomicsite/internal/server"
+	"github.com/brightinteraction/atomicsite/internal/storage"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -63,7 +64,14 @@ func main() {
 		server.FrontendFS = sub
 	}
 
-	srv := server.New(cfg, sqlDB, queries)
+	// Media storage
+	st, err := storage.NewLocalStore(cfg.MediaDir)
+	if err != nil {
+		slog.Error("create storage", "error", err)
+		os.Exit(1)
+	}
+
+	srv := server.New(cfg, sqlDB, queries, st)
 	httpSrv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      srv.Router(),
