@@ -4,6 +4,26 @@
 
 package store
 
+type AgentKey struct {
+	ID           string `json:"id"`
+	SiteID       string `json:"site_id"`
+	Name         string `json:"name"`
+	KeyHash      string `json:"key_hash"`
+	Capabilities string `json:"capabilities"`
+	IsActive     int64  `json:"is_active"`
+	LastUsedAt   string `json:"last_used_at"`
+	CreatedAt    string `json:"created_at"`
+}
+
+type AllowedScript struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	Domain    string `json:"domain"`
+	Purpose   string `json:"purpose"`
+	IsActive  int64  `json:"is_active"`
+	CreatedAt string `json:"created_at"`
+}
+
 type Block struct {
 	ID              string `json:"id"`
 	PageID          string `json:"page_id"`
@@ -15,6 +35,31 @@ type Block struct {
 	TemplateVersion int64  `json:"template_version"`
 	CreatedAt       string `json:"created_at"`
 	UpdatedAt       string `json:"updated_at"`
+}
+
+type Component struct {
+	ID          string `json:"id"`
+	SiteID      string `json:"site_id"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	Template    string `json:"template"`
+	PropsSchema string `json:"props_schema"`
+	CssClasses  string `json:"css_classes"`
+	UsageNote   string `json:"usage_note"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type CssClass struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	Name      string `json:"name"`
+	Category  string `json:"category"`
+	Css       string `json:"css"`
+	UsageNote string `json:"usage_note"`
+	SortOrder int64  `json:"sort_order"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type Deployment struct {
@@ -31,6 +76,38 @@ type Deployment struct {
 	CompletedAt  string `json:"completed_at"`
 }
 
+type Evaluation struct {
+	ID         string `json:"id"`
+	BuildID    string `json:"build_id"`
+	SiteID     string `json:"site_id"`
+	Category   string `json:"category"`
+	Score      int64  `json:"score"`
+	MaxScore   int64  `json:"max_score"`
+	Grade      string `json:"grade"`
+	ChecksJson string `json:"checks_json"`
+	CreatedAt  string `json:"created_at"`
+}
+
+type Form struct {
+	ID           string `json:"id"`
+	SiteID       string `json:"site_id"`
+	Name         string `json:"name"`
+	FieldsJson   string `json:"fields_json"`
+	Action       string `json:"action"`
+	ActionConfig string `json:"action_config"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type FormSubmission struct {
+	ID        string `json:"id"`
+	FormID    string `json:"form_id"`
+	SiteID    string `json:"site_id"`
+	DataJson  string `json:"data_json"`
+	IpHash    string `json:"ip_hash"`
+	CreatedAt string `json:"created_at"`
+}
+
 type GlobalBlock struct {
 	ID              string `json:"id"`
 	SiteID          string `json:"site_id"`
@@ -44,6 +121,29 @@ type GlobalBlock struct {
 	TemplateVersion int64  `json:"template_version"`
 	CreatedAt       string `json:"created_at"`
 	UpdatedAt       string `json:"updated_at"`
+}
+
+type GuardrailRule struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	RuleType  string `json:"rule_type"`
+	Target    string `json:"target"`
+	Value     string `json:"value"`
+	Severity  string `json:"severity"`
+	IsActive  int64  `json:"is_active"`
+	CreatedAt string `json:"created_at"`
+}
+
+type KnowledgebaseEntry struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	Category  string `json:"category"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	IsActive  int64  `json:"is_active"`
+	SortOrder int64  `json:"sort_order"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type Medium struct {
@@ -79,6 +179,16 @@ type Page struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type Redirect struct {
+	ID         string `json:"id"`
+	SiteID     string `json:"site_id"`
+	FromPath   string `json:"from_path"`
+	ToPath     string `json:"to_path"`
+	StatusCode int64  `json:"status_code"`
+	IsAuto     int64  `json:"is_auto"`
+	CreatedAt  string `json:"created_at"`
+}
+
 type Setting struct {
 	Key       string `json:"key"`
 	Value     string `json:"value"`
@@ -86,32 +196,77 @@ type Setting struct {
 }
 
 type Site struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Slug            string `json:"slug"`
-	Domain          string `json:"domain"`
-	Status          string `json:"status"`
-	PrimaryColor    string `json:"primary_color"`
-	SecondaryColor  string `json:"secondary_color"`
-	BgColor         string `json:"bg_color"`
-	TextColor       string `json:"text_color"`
-	FontHeading     string `json:"font_heading"`
-	FontBody        string `json:"font_body"`
-	MetaTitle       string `json:"meta_title"`
-	MetaDescription string `json:"meta_description"`
-	OgImageID       string `json:"og_image_id"`
-	FaviconID       string `json:"favicon_id"`
-	Ga4ID           string `json:"ga4_id"`
-	UmamiID         string `json:"umami_id"`
-	UmamiUrl        string `json:"umami_url"`
-	CookiebitDomain string `json:"cookieproof_domain"`
-	Lang            string `json:"lang"`
-	LastBuildAt     string `json:"last_build_at"`
-	LastBuildStatus string `json:"last_build_status"`
-	LastBuildError  string `json:"last_build_error"`
-	LastDeployAt    string `json:"last_deploy_at"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Slug              string `json:"slug"`
+	Domain            string `json:"domain"`
+	Status            string `json:"status"`
+	PrimaryColor      string `json:"primary_color"`
+	SecondaryColor    string `json:"secondary_color"`
+	BgColor           string `json:"bg_color"`
+	TextColor         string `json:"text_color"`
+	FontHeading       string `json:"font_heading"`
+	FontBody          string `json:"font_body"`
+	MetaTitle         string `json:"meta_title"`
+	MetaDescription   string `json:"meta_description"`
+	OgImageID         string `json:"og_image_id"`
+	FaviconID         string `json:"favicon_id"`
+	Ga4ID             string `json:"ga4_id"`
+	UmamiID           string `json:"umami_id"`
+	UmamiUrl          string `json:"umami_url"`
+	CookieproofDomain string `json:"cookieproof_domain"`
+	Lang              string `json:"lang"`
+	LastBuildAt       string `json:"last_build_at"`
+	LastBuildStatus   string `json:"last_build_status"`
+	LastBuildError    string `json:"last_build_error"`
+	LastDeployAt      string `json:"last_deploy_at"`
+	CreatedAt         string `json:"created_at"`
+	UpdatedAt         string `json:"updated_at"`
+}
+
+type SiteArchitecture struct {
+	ID            string `json:"id"`
+	SiteID        string `json:"site_id"`
+	StructureType string `json:"structure_type"`
+	MaxDepth      int64  `json:"max_depth"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+type SiteProfile struct {
+	ID             string `json:"id"`
+	SiteID         string `json:"site_id"`
+	BusinessName   string `json:"business_name"`
+	RegistrationNr string `json:"registration_nr"`
+	Country        string `json:"country"`
+	ContactEmail   string `json:"contact_email"`
+	ContactPhone   string `json:"contact_phone"`
+	PrivacyEmail   string `json:"privacy_email"`
+	SecurityEmail  string `json:"security_email"`
+	AddressLine1   string `json:"address_line1"`
+	AddressLine2   string `json:"address_line2"`
+	City           string `json:"city"`
+	PostalCode     string `json:"postal_code"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+}
+
+type SiteSetting struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	Category  string `json:"category"`
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type SiteSilo struct {
+	ID         string `json:"id"`
+	SiteID     string `json:"site_id"`
+	Name       string `json:"name"`
+	SlugPrefix string `json:"slug_prefix"`
+	SortOrder  int64  `json:"sort_order"`
+	CreatedAt  string `json:"created_at"`
 }
 
 type User struct {

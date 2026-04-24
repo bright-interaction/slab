@@ -10,47 +10,129 @@ import (
 
 type Querier interface {
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
+	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
+	CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error
 	CreateBlock(ctx context.Context, arg CreateBlockParams) error
+	CreateCSSClass(ctx context.Context, arg CreateCSSClassParams) error
+	CreateComponent(ctx context.Context, arg CreateComponentParams) error
+	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
+	CreateEvaluation(ctx context.Context, arg CreateEvaluationParams) error
+	CreateForm(ctx context.Context, arg CreateFormParams) error
+	CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) error
 	CreateGlobalBlock(ctx context.Context, arg CreateGlobalBlockParams) error
+	CreateGuardrail(ctx context.Context, arg CreateGuardrailParams) error
+	CreateKnowledgebaseEntry(ctx context.Context, arg CreateKnowledgebaseEntryParams) error
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
+	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
+	CreateSilo(ctx context.Context, arg CreateSiloParams) error
 	CreateSite(ctx context.Context, arg CreateSiteParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeactivateAgentKey(ctx context.Context, id string) error
+	DeleteAgentKey(ctx context.Context, id string) error
+	DeleteAllowedScript(ctx context.Context, id string) error
 	DeleteBlock(ctx context.Context, id string) error
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
+	DeleteCSSClass(ctx context.Context, id string) error
+	DeleteComponent(ctx context.Context, id string) error
+	DeleteDeployment(ctx context.Context, id string) error
+	DeleteEvaluationsByBuild(ctx context.Context, buildID string) error
+	DeleteForm(ctx context.Context, id string) error
+	DeleteFormSubmission(ctx context.Context, id string) error
 	DeleteGlobalBlock(ctx context.Context, id string) error
+	DeleteGuardrail(ctx context.Context, id string) error
+	DeleteKnowledgebaseEntry(ctx context.Context, id string) error
 	DeleteMedia(ctx context.Context, id string) error
 	DeletePage(ctx context.Context, id string) error
+	DeleteRedirect(ctx context.Context, id string) error
+	DeleteSetting(ctx context.Context, id string) error
+	DeleteSettingsByCategory(ctx context.Context, arg DeleteSettingsByCategoryParams) error
+	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
+	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
+	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
 	GetBlockByID(ctx context.Context, id string) (Block, error)
+	GetCSSClassByID(ctx context.Context, id string) (CssClass, error)
+	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
+	GetComponentByID(ctx context.Context, id string) (Component, error)
+	GetComponentByName(ctx context.Context, arg GetComponentByNameParams) (Component, error)
+	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
+	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
+	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
+	GetKnowledgebaseByID(ctx context.Context, id string) (KnowledgebaseEntry, error)
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
+	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
+	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
+	GetSetting(ctx context.Context, arg GetSettingParams) (SiteSetting, error)
+	GetSiloByID(ctx context.Context, id string) (SiteSilo, error)
+	// Site architecture
+	GetSiteArchitecture(ctx context.Context, siteID string) (SiteArchitecture, error)
 	GetSiteByID(ctx context.Context, id string) (Site, error)
 	GetSiteBySlug(ctx context.Context, slug string) (Site, error)
+	// Site profiles
+	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	IncrementTokenVersion(ctx context.Context, id string) error
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
+	ListActiveGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
+	ListActiveKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
+	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
+	// Allowed scripts
+	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
+	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
+	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
+	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
+	// Evaluations
+	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
+	ListEvaluationsBySite(ctx context.Context, arg ListEvaluationsBySiteParams) ([]Evaluation, error)
+	// Form submissions
+	ListFormSubmissions(ctx context.Context, formID string) ([]FormSubmission, error)
+	ListFormSubmissionsBySite(ctx context.Context, arg ListFormSubmissionsBySiteParams) ([]FormSubmission, error)
+	// Forms
+	ListFormsBySite(ctx context.Context, siteID string) ([]Form, error)
 	ListGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
+	ListGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
+	ListKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error)
 	ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
+	ListRecentDeploymentsBySite(ctx context.Context, arg ListRecentDeploymentsBySiteParams) ([]Deployment, error)
+	ListRedirectsBySite(ctx context.Context, siteID string) ([]Redirect, error)
+	ListSettingsByCategory(ctx context.Context, arg ListSettingsByCategoryParams) ([]SiteSetting, error)
+	ListSettingsBySite(ctx context.Context, siteID string) ([]SiteSetting, error)
+	// Silos
+	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	UpdateAgentKeyLastUsed(ctx context.Context, id string) error
+	UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScriptParams) error
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error
 	UpdateBlockOrder(ctx context.Context, arg UpdateBlockOrderParams) error
+	UpdateCSSClass(ctx context.Context, arg UpdateCSSClassParams) error
+	UpdateComponent(ctx context.Context, arg UpdateComponentParams) error
+	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error
+	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error
+	UpdateGuardrail(ctx context.Context, arg UpdateGuardrailParams) error
+	UpdateKnowledgebaseEntry(ctx context.Context, arg UpdateKnowledgebaseEntryParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) error
 	UpdateMediaVariants(ctx context.Context, arg UpdateMediaVariantsParams) error
 	UpdatePage(ctx context.Context, arg UpdatePageParams) error
 	UpdatePageOrder(ctx context.Context, arg UpdatePageOrderParams) error
+	UpdateRedirect(ctx context.Context, arg UpdateRedirectParams) error
+	UpdateSilo(ctx context.Context, arg UpdateSiloParams) error
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) error
 	UpdateSiteBuildStatus(ctx context.Context, arg UpdateSiteBuildStatusParams) error
 	UpdateSiteDeployAt(ctx context.Context, arg UpdateSiteDeployAtParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
+	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
+	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -83,6 +83,37 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 	return i, err
 }
 
+const getPageBySiteAndSlug = `-- name: GetPageBySiteAndSlug :one
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, created_at, updated_at FROM pages WHERE site_id = ? AND slug = ?
+`
+
+type GetPageBySiteAndSlugParams struct {
+	SiteID string `json:"site_id"`
+	Slug   string `json:"slug"`
+}
+
+func (q *Queries) GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error) {
+	row := q.db.QueryRowContext(ctx, getPageBySiteAndSlug, arg.SiteID, arg.Slug)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.SiteID,
+		&i.Title,
+		&i.Slug,
+		&i.Status,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.OgImageID,
+		&i.Layout,
+		&i.SortOrder,
+		&i.ShowInNav,
+		&i.NavLabel,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listPagesBySite = `-- name: ListPagesBySite :many
 SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, created_at, updated_at FROM pages WHERE site_id = ? ORDER BY sort_order ASC
 `

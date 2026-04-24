@@ -134,3 +134,196 @@ CREATE TABLE IF NOT EXISTS settings (
     value      TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============================================================
+-- Atomicsite AI Website Builder: Agent API + Evaluation Engine
+-- ============================================================
+
+-- Business profile (auto-fills legal pages, schema, security.txt)
+CREATE TABLE IF NOT EXISTS site_profiles (
+    id                TEXT PRIMARY KEY,
+    site_id           TEXT NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
+    business_name     TEXT NOT NULL DEFAULT '',
+    registration_nr   TEXT NOT NULL DEFAULT '',
+    country           TEXT NOT NULL DEFAULT 'SE',
+    contact_email     TEXT NOT NULL DEFAULT '',
+    contact_phone     TEXT NOT NULL DEFAULT '',
+    privacy_email     TEXT NOT NULL DEFAULT '',
+    security_email    TEXT NOT NULL DEFAULT '',
+    address_line1     TEXT NOT NULL DEFAULT '',
+    address_line2     TEXT NOT NULL DEFAULT '',
+    city              TEXT NOT NULL DEFAULT '',
+    postal_code       TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Site architecture (one-pager, soft-silo, hard-silo)
+CREATE TABLE IF NOT EXISTS site_architecture (
+    id              TEXT PRIMARY KEY,
+    site_id         TEXT NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
+    structure_type  TEXT NOT NULL DEFAULT 'soft-silo',
+    max_depth       INTEGER NOT NULL DEFAULT 3,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Silos/sections within a site architecture
+CREATE TABLE IF NOT EXISTS site_silos (
+    id          TEXT PRIMARY KEY,
+    site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    slug_prefix TEXT NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, slug_prefix)
+);
+CREATE INDEX IF NOT EXISTS idx_site_silos_site ON site_silos(site_id);
+
+-- Agent API keys (scoped per site with capability declarations)
+CREATE TABLE IF NOT EXISTS agent_keys (
+    id           TEXT PRIMARY KEY,
+    site_id      TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    key_hash     TEXT NOT NULL,
+    capabilities TEXT NOT NULL DEFAULT '["read","write"]',
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    last_used_at TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_keys_site ON agent_keys(site_id);
+
+-- Knowledgebase entries (per-site brand/voice/technical rules for AI context)
+CREATE TABLE IF NOT EXISTS knowledgebase_entries (
+    id         TEXT PRIMARY KEY,
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    category   TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    is_active  INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_knowledgebase_site ON knowledgebase_entries(site_id);
+
+-- Guardrail rules (validated on every agent write operation)
+CREATE TABLE IF NOT EXISTS guardrail_rules (
+    id         TEXT PRIMARY KEY,
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    rule_type  TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    severity   TEXT NOT NULL DEFAULT 'error',
+    is_active  INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_guardrail_rules_site ON guardrail_rules(site_id);
+
+-- Reusable components with typed props (JSON Schema)
+CREATE TABLE IF NOT EXISTS components (
+    id           TEXT PRIMARY KEY,
+    site_id      TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    category     TEXT NOT NULL DEFAULT 'section',
+    template     TEXT NOT NULL,
+    props_schema TEXT NOT NULL DEFAULT '{}',
+    css_classes  TEXT NOT NULL DEFAULT '[]',
+    usage_note   TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_components_site ON components(site_id);
+
+-- Global CSS classes (first-class entities, not embedded in blocks)
+CREATE TABLE IF NOT EXISTS css_classes (
+    id         TEXT PRIMARY KEY,
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    category   TEXT NOT NULL DEFAULT 'utility',
+    css        TEXT NOT NULL,
+    usage_note TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_css_classes_site ON css_classes(site_id);
+
+-- Per-site settings (security headers, robots, nginx, analytics, SEO)
+CREATE TABLE IF NOT EXISTS site_settings (
+    id         TEXT PRIMARY KEY,
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    category   TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, category, key)
+);
+CREATE INDEX IF NOT EXISTS idx_site_settings_site ON site_settings(site_id);
+
+-- Allowlisted external scripts (feeds CSP generation + guardrails)
+CREATE TABLE IF NOT EXISTS allowed_scripts (
+    id         TEXT PRIMARY KEY,
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    domain     TEXT NOT NULL,
+    purpose    TEXT NOT NULL DEFAULT '',
+    is_active  INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, domain)
+);
+CREATE INDEX IF NOT EXISTS idx_allowed_scripts_site ON allowed_scripts(site_id);
+
+-- 301/302 redirects (auto-created on slug changes, manual management)
+CREATE TABLE IF NOT EXISTS redirects (
+    id          TEXT PRIMARY KEY,
+    site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    from_path   TEXT NOT NULL,
+    to_path     TEXT NOT NULL,
+    status_code INTEGER NOT NULL DEFAULT 301,
+    is_auto     INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, from_path)
+);
+CREATE INDEX IF NOT EXISTS idx_redirects_site ON redirects(site_id);
+
+-- Form definitions (contact, lead capture, newsletter)
+CREATE TABLE IF NOT EXISTS forms (
+    id            TEXT PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    fields_json   TEXT NOT NULL DEFAULT '[]',
+    action        TEXT NOT NULL DEFAULT 'store',
+    action_config TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_forms_site ON forms(site_id);
+
+-- Form submissions
+CREATE TABLE IF NOT EXISTS form_submissions (
+    id         TEXT PRIMARY KEY,
+    form_id    TEXT NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    data_json  TEXT NOT NULL DEFAULT '{}',
+    ip_hash    TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_form_submissions_form ON form_submissions(form_id);
+CREATE INDEX IF NOT EXISTS idx_form_submissions_site ON form_submissions(site_id);
+
+-- Build evaluation results (130+ checks from site-inspector)
+CREATE TABLE IF NOT EXISTS evaluations (
+    id          TEXT PRIMARY KEY,
+    build_id    TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+    site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    category    TEXT NOT NULL,
+    score       INTEGER NOT NULL,
+    max_score   INTEGER NOT NULL,
+    grade       TEXT NOT NULL,
+    checks_json TEXT NOT NULL DEFAULT '[]',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_evaluations_build ON evaluations(build_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_site ON evaluations(site_id);
