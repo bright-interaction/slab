@@ -126,6 +126,14 @@ func (s *Server) Router() http.Handler {
 		r.Put("/api/sites/{siteID}/settings/bulk", seth.BulkUpsert)
 		r.Delete("/api/sites/{siteID}/settings/{settingID}", seth.Delete)
 
+		// Guardrails
+		grh := handlers.NewGuardrailHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/guardrails", grh.List)
+		r.Post("/api/sites/{siteID}/guardrails", grh.Create)
+		r.Get("/api/sites/{siteID}/guardrails/{ruleID}", grh.Get)
+		r.Patch("/api/sites/{siteID}/guardrails/{ruleID}", grh.Update)
+		r.Delete("/api/sites/{siteID}/guardrails/{ruleID}", grh.Delete)
+
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)
