@@ -7,6 +7,9 @@ SELECT * FROM pages WHERE site_id = ? AND status = 'published' ORDER BY sort_ord
 -- name: GetPageByID :one
 SELECT * FROM pages WHERE id = ?;
 
+-- name: GetPageBySiteAndSlug :one
+SELECT * FROM pages WHERE site_id = ? AND slug = ?;
+
 -- name: CreatePage :exec
 INSERT INTO pages (id, site_id, title, slug, layout, sort_order, show_in_nav)
 VALUES (?, ?, ?, ?, ?, ?, ?);

@@ -136,7 +136,7 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Ga4ID           *string `json:"ga4_id"`
 		UmamiID         *string `json:"umami_id"`
 		UmamiURL        *string `json:"umami_url"`
-		CookiebitDomain *string `json:"cookieproof_domain"`
+		CookieproofDomain *string `json:"cookieproof_domain"`
 		Lang            *string `json:"lang"`
 	}
 	if err := parseJSON(r, &req); err != nil {
@@ -162,7 +162,7 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Ga4ID:           existing.Ga4ID,
 		UmamiID:         existing.UmamiID,
 		UmamiUrl:        existing.UmamiUrl,
-		CookiebitDomain: existing.CookiebitDomain,
+		CookieproofDomain: existing.CookieproofDomain,
 		Lang:            existing.Lang,
 		ID:              siteID,
 	}
@@ -218,8 +218,8 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.UmamiURL != nil {
 		params.UmamiUrl = *req.UmamiURL
 	}
-	if req.CookiebitDomain != nil {
-		params.CookiebitDomain = *req.CookiebitDomain
+	if req.CookieproofDomain != nil {
+		params.CookieproofDomain = *req.CookieproofDomain
 	}
 	if req.Lang != nil {
 		params.Lang = *req.Lang

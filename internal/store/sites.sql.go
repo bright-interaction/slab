@@ -80,7 +80,7 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 		&i.Ga4ID,
 		&i.UmamiID,
 		&i.UmamiUrl,
-		&i.CookiebitDomain,
+		&i.CookieproofDomain,
 		&i.Lang,
 		&i.LastBuildAt,
 		&i.LastBuildStatus,
@@ -118,7 +118,7 @@ func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) 
 		&i.Ga4ID,
 		&i.UmamiID,
 		&i.UmamiUrl,
-		&i.CookiebitDomain,
+		&i.CookieproofDomain,
 		&i.Lang,
 		&i.LastBuildAt,
 		&i.LastBuildStatus,
@@ -162,7 +162,7 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.Ga4ID,
 			&i.UmamiID,
 			&i.UmamiUrl,
-			&i.CookiebitDomain,
+			&i.CookieproofDomain,
 			&i.Lang,
 			&i.LastBuildAt,
 			&i.LastBuildStatus,
@@ -210,26 +210,26 @@ WHERE id = ?
 `
 
 type UpdateSiteParams struct {
-	Name            string `json:"name"`
-	Slug            string `json:"slug"`
-	Domain          string `json:"domain"`
-	Status          string `json:"status"`
-	PrimaryColor    string `json:"primary_color"`
-	SecondaryColor  string `json:"secondary_color"`
-	BgColor         string `json:"bg_color"`
-	TextColor       string `json:"text_color"`
-	FontHeading     string `json:"font_heading"`
-	FontBody        string `json:"font_body"`
-	MetaTitle       string `json:"meta_title"`
-	MetaDescription string `json:"meta_description"`
-	OgImageID       string `json:"og_image_id"`
-	FaviconID       string `json:"favicon_id"`
-	Ga4ID           string `json:"ga4_id"`
-	UmamiID         string `json:"umami_id"`
-	UmamiUrl        string `json:"umami_url"`
-	CookiebitDomain string `json:"cookieproof_domain"`
-	Lang            string `json:"lang"`
-	ID              string `json:"id"`
+	Name              string `json:"name"`
+	Slug              string `json:"slug"`
+	Domain            string `json:"domain"`
+	Status            string `json:"status"`
+	PrimaryColor      string `json:"primary_color"`
+	SecondaryColor    string `json:"secondary_color"`
+	BgColor           string `json:"bg_color"`
+	TextColor         string `json:"text_color"`
+	FontHeading       string `json:"font_heading"`
+	FontBody          string `json:"font_body"`
+	MetaTitle         string `json:"meta_title"`
+	MetaDescription   string `json:"meta_description"`
+	OgImageID         string `json:"og_image_id"`
+	FaviconID         string `json:"favicon_id"`
+	Ga4ID             string `json:"ga4_id"`
+	UmamiID           string `json:"umami_id"`
+	UmamiUrl          string `json:"umami_url"`
+	CookieproofDomain string `json:"cookieproof_domain"`
+	Lang              string `json:"lang"`
+	ID                string `json:"id"`
 }
 
 func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) error {
@@ -251,7 +251,7 @@ func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) error {
 		arg.Ga4ID,
 		arg.UmamiID,
 		arg.UmamiUrl,
-		arg.CookiebitDomain,
+		arg.CookieproofDomain,
 		arg.Lang,
 		arg.ID,
 	)

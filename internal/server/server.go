@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -20,10 +21,11 @@ var FrontendFS fs.FS
 
 // Server holds all dependencies.
 type Server struct {
-	cfg     *config.Config
-	db      *sql.DB
-	queries *store.Queries
-	authMW  *authmw.AuthMiddleware
+	cfg      *config.Config
+	db       *sql.DB
+	queries  *store.Queries
+	authMW   *authmw.AuthMiddleware
+	agentMW  *authmw.AgentAuthMiddleware
 }
 
 // New creates a Server.
@@ -33,6 +35,7 @@ func New(cfg *config.Config, db *sql.DB, queries *store.Queries) *Server {
 		db:      db,
 		queries: queries,
 		authMW:  authmw.NewAuthMiddleware(cfg, queries),
+		agentMW: authmw.NewAgentAuthMiddleware(queries),
 	}
 }
 
@@ -57,7 +60,7 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/auth/login", ah.Login)
 	r.Post("/api/auth/logout", ah.Logout)
 
-	// Authenticated routes
+	// Authenticated admin routes
 	r.Group(func(r chi.Router) {
 		r.Use(s.authMW.Middleware)
 
@@ -90,6 +93,82 @@ func (s *Server) Router() http.Handler {
 		r.Delete("/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}", bh.Delete)
 		r.Post("/api/sites/{siteID}/pages/{pageID}/blocks/reorder", bh.Reorder)
 		r.Put("/api/sites/{siteID}/pages/{pageID}/blocks/bulk", bh.BulkSave)
+
+		// Knowledgebase
+		kbh := handlers.NewKnowledgebaseHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/knowledgebase", kbh.List)
+		r.Post("/api/sites/{siteID}/knowledgebase", kbh.Create)
+		r.Get("/api/sites/{siteID}/knowledgebase/{entryID}", kbh.Get)
+		r.Patch("/api/sites/{siteID}/knowledgebase/{entryID}", kbh.Update)
+		r.Delete("/api/sites/{siteID}/knowledgebase/{entryID}", kbh.Delete)
+
+		// Components
+		ch := handlers.NewComponentHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/components", ch.List)
+		r.Post("/api/sites/{siteID}/components", ch.Create)
+		r.Get("/api/sites/{siteID}/components/{componentID}", ch.Get)
+		r.Patch("/api/sites/{siteID}/components/{componentID}", ch.Update)
+		r.Delete("/api/sites/{siteID}/components/{componentID}", ch.Delete)
+
+		// CSS Classes
+		cch := handlers.NewCSSClassHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/css-classes", cch.List)
+		r.Post("/api/sites/{siteID}/css-classes", cch.Create)
+		r.Get("/api/sites/{siteID}/css-classes/{classID}", cch.Get)
+		r.Patch("/api/sites/{siteID}/css-classes/{classID}", cch.Update)
+		r.Delete("/api/sites/{siteID}/css-classes/{classID}", cch.Delete)
+
+		// Settings
+		seth := handlers.NewSettingsHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/settings", seth.List)
+		r.Get("/api/sites/{siteID}/settings/{category}", seth.ListByCategory)
+		r.Put("/api/sites/{siteID}/settings", seth.Upsert)
+		r.Put("/api/sites/{siteID}/settings/bulk", seth.BulkUpsert)
+		r.Delete("/api/sites/{siteID}/settings/{settingID}", seth.Delete)
+
+		// Agent keys (admin management)
+		agh := handlers.NewAgentHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)
+		r.Post("/api/sites/{siteID}/agent-keys", agh.GenerateAgentKey)
+		r.Delete("/api/sites/{siteID}/agent-keys/{keyID}", agh.RevokeAgentKey)
+	})
+
+	// Agent API routes (API key auth)
+	r.Group(func(r chi.Router) {
+		r.Use(s.agentMW.Middleware)
+
+		agentH := handlers.NewAgentHandler(s.cfg, s.queries)
+
+		// Context
+		r.Get("/api/agent/context", agentH.Context)
+
+		// Pages (slug via path or ?page= query param)
+		r.Post("/api/agent/pages", agentH.CreatePage)
+		r.Patch("/api/agent/pages/{slug}", agentH.UpdatePage)
+		r.Delete("/api/agent/pages/{slug}", agentH.DeletePage)
+
+		// Blocks (page slug via ?page= query param)
+		r.Post("/api/agent/blocks", agentH.CreateBlock)
+		r.Post("/api/agent/pages/{slug}/blocks", agentH.CreateBlock)
+		r.Patch("/api/agent/blocks/{blockID}", agentH.UpdateBlock)
+		r.Delete("/api/agent/blocks/{blockID}", agentH.DeleteBlock)
+
+		// Components
+		r.Post("/api/agent/components", agentH.CreateComponent)
+		r.Patch("/api/agent/components/{name}", agentH.UpdateComponent)
+
+		// CSS Classes
+		r.Post("/api/agent/css-classes", agentH.CreateCSSClass)
+		r.Patch("/api/agent/css-classes/{name}", agentH.UpdateCSSClass)
+
+		// Global Blocks
+		r.Put("/api/agent/global/{slot}", agentH.UpdateGlobalBlock)
+
+		// Evaluation
+		r.Get("/api/agent/evaluation/{buildID}", agentH.GetEvaluation)
+
+		// Media
+		r.Get("/api/agent/media", agentH.ListMedia)
 	})
 
 	// Serve embedded frontend (SPA)
@@ -121,11 +200,11 @@ func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin != "" {
+			if origin != "" && isAllowedOrigin(cfg, origin) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Agent-Key")
 			}
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
@@ -134,4 +213,20 @@ func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func isAllowedOrigin(cfg *config.Config, origin string) bool {
+	// In development, allow localhost origins
+	if strings.HasPrefix(cfg.BaseURL, "http://localhost") {
+		if strings.HasPrefix(origin, "http://localhost") {
+			return true
+		}
+	}
+	// Allow the configured base URL origin
+	if strings.HasPrefix(origin, cfg.BaseURL) {
+		return true
+	}
+	// Agent API requests use API keys, not cookies, so CORS is less critical.
+	// But we still restrict to known origins for cookie-based admin endpoints.
+	return false
 }
