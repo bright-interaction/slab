@@ -62,6 +62,17 @@ type CssClass struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type DeployTarget struct {
+	ID         string `json:"id"`
+	SiteID     string `json:"site_id"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	ConfigJson string `json:"config_json"`
+	IsDefault  int64  `json:"is_default"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
 type Deployment struct {
 	ID           string `json:"id"`
 	SiteID       string `json:"site_id"`
@@ -72,6 +83,9 @@ type Deployment struct {
 	PagesBuilt   int64  `json:"pages_built"`
 	DurationMs   int64  `json:"duration_ms"`
 	Error        string `json:"error"`
+	TargetID     string `json:"target_id"`
+	DeployUrl    string `json:"deploy_url"`
+	DeployedAt   string `json:"deployed_at"`
 	CreatedAt    string `json:"created_at"`
 	CompletedAt  string `json:"completed_at"`
 }

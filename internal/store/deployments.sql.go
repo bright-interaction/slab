@@ -41,7 +41,7 @@ func (q *Queries) DeleteDeployment(ctx context.Context, id string) error {
 }
 
 const getDeploymentByID = `-- name: GetDeploymentByID :one
-SELECT id, site_id, status, build_log, deploy_target, deploy_config, pages_built, duration_ms, error, created_at, completed_at FROM deployments WHERE id = ?
+SELECT id, site_id, status, build_log, deploy_target, deploy_config, pages_built, duration_ms, error, target_id, deploy_url, deployed_at, created_at, completed_at FROM deployments WHERE id = ?
 `
 
 func (q *Queries) GetDeploymentByID(ctx context.Context, id string) (Deployment, error) {
@@ -57,6 +57,9 @@ func (q *Queries) GetDeploymentByID(ctx context.Context, id string) (Deployment,
 		&i.PagesBuilt,
 		&i.DurationMs,
 		&i.Error,
+		&i.TargetID,
+		&i.DeployUrl,
+		&i.DeployedAt,
 		&i.CreatedAt,
 		&i.CompletedAt,
 	)
@@ -64,7 +67,7 @@ func (q *Queries) GetDeploymentByID(ctx context.Context, id string) (Deployment,
 }
 
 const listDeploymentsBySite = `-- name: ListDeploymentsBySite :many
-SELECT id, site_id, status, build_log, deploy_target, deploy_config, pages_built, duration_ms, error, created_at, completed_at FROM deployments WHERE site_id = ? ORDER BY created_at DESC
+SELECT id, site_id, status, build_log, deploy_target, deploy_config, pages_built, duration_ms, error, target_id, deploy_url, deployed_at, created_at, completed_at FROM deployments WHERE site_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error) {
@@ -86,6 +89,9 @@ func (q *Queries) ListDeploymentsBySite(ctx context.Context, siteID string) ([]D
 			&i.PagesBuilt,
 			&i.DurationMs,
 			&i.Error,
+			&i.TargetID,
+			&i.DeployUrl,
+			&i.DeployedAt,
 			&i.CreatedAt,
 			&i.CompletedAt,
 		); err != nil {
@@ -103,7 +109,7 @@ func (q *Queries) ListDeploymentsBySite(ctx context.Context, siteID string) ([]D
 }
 
 const listRecentDeploymentsBySite = `-- name: ListRecentDeploymentsBySite :many
-SELECT id, site_id, status, build_log, deploy_target, deploy_config, pages_built, duration_ms, error, created_at, completed_at FROM deployments WHERE site_id = ? ORDER BY created_at DESC LIMIT ?
+SELECT id, site_id, status, build_log, deploy_target, deploy_config, pages_built, duration_ms, error, target_id, deploy_url, deployed_at, created_at, completed_at FROM deployments WHERE site_id = ? ORDER BY created_at DESC LIMIT ?
 `
 
 type ListRecentDeploymentsBySiteParams struct {
@@ -130,6 +136,9 @@ func (q *Queries) ListRecentDeploymentsBySite(ctx context.Context, arg ListRecen
 			&i.PagesBuilt,
 			&i.DurationMs,
 			&i.Error,
+			&i.TargetID,
+			&i.DeployUrl,
+			&i.DeployedAt,
 			&i.CreatedAt,
 			&i.CompletedAt,
 		); err != nil {
