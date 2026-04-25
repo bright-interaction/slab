@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import Button from '$lib/components/ui/Button.svelte';
 	import StepType from '$lib/components/wizard/StepType.svelte';
+	import StepKit from '$lib/components/wizard/StepKit.svelte';
 	import StepInfo from '$lib/components/wizard/StepInfo.svelte';
 	import StepStructure from '$lib/components/wizard/StepStructure.svelte';
 	import StepBranding from '$lib/components/wizard/StepBranding.svelte';
@@ -47,6 +48,8 @@
 		switch (currentStep) {
 			case 'type':
 				return { valid: ws.type !== null, message: 'Pick a site type to continue.' };
+			case 'kit':
+				return { valid: true, message: '' };
 			case 'info': {
 				const info = ws.info;
 				if (info.name.trim().length < 2) {
@@ -109,6 +112,8 @@
 	<section class="animate-fadeIn">
 		{#if currentStep === 'type'}
 			<StepType />
+		{:else if currentStep === 'kit'}
+			<StepKit />
 		{:else if currentStep === 'info'}
 			<StepInfo />
 		{:else if currentStep === 'structure'}

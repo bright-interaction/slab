@@ -62,7 +62,7 @@
 	function selectType(opt: TypeOption): void {
 		if (opt.disabled) return;
 		setType(opt.value as SiteType);
-		void goto('/sites/new/wizard/info');
+		void goto('/sites/new/wizard/kit');
 	}
 
 	function isSelected(opt: TypeOption): boolean {

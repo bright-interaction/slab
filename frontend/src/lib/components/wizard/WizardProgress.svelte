@@ -5,6 +5,7 @@
 
 	const labels: Record<WizardStep, string> = {
 		type: 'Type',
+		kit: 'Kit',
 		info: 'Info',
 		structure: 'Structure',
 		branding: 'Branding',

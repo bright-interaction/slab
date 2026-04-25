@@ -8,10 +8,11 @@ import type {
 	StructureType
 } from '$lib/api/sites';
 
-export type WizardStep = 'type' | 'info' | 'structure' | 'branding' | 'confirm';
+export type WizardStep = 'type' | 'kit' | 'info' | 'structure' | 'branding' | 'confirm';
 
 export const WIZARD_STEPS: WizardStep[] = [
 	'type',
+	'kit',
 	'info',
 	'structure',
 	'branding',
@@ -31,6 +32,7 @@ export interface WizardInfo {
 export interface WizardState {
 	step: WizardStep;
 	type: SiteType | null;
+	starterKit: string | null;
 	info: WizardInfo;
 	structure: SeedSiteStructure;
 	silos: SeedSiteSilo[];
@@ -43,6 +45,7 @@ function defaultState(): WizardState {
 	return {
 		step: 'type',
 		type: null,
+		starterKit: null,
 		info: {
 			name: '',
 			slug: '',
@@ -78,6 +81,10 @@ function readInitial(): WizardState {
 		return {
 			step: (parsed.step as WizardStep) ?? base.step,
 			type: (parsed.type as SiteType | null) ?? base.type,
+			starterKit:
+				typeof parsed.starterKit === 'string' || parsed.starterKit === null
+					? (parsed.starterKit as string | null)
+					: base.starterKit,
 			info: { ...base.info, ...(parsed.info ?? {}) },
 			structure: { ...base.structure, ...(parsed.structure ?? {}) },
 			silos: Array.isArray(parsed.silos) ? parsed.silos : base.silos,
@@ -112,6 +119,11 @@ export function setStep(step: WizardStep): void {
 
 export function setType(type: SiteType): void {
 	current = { ...current, type };
+	persist();
+}
+
+export function setStarterKit(kitID: string | null): void {
+	current = { ...current, starterKit: kitID };
 	persist();
 }
 
@@ -166,7 +178,7 @@ export function buildSeedRequest(state: WizardState): SeedSiteRequest {
 	const structure = state.structure;
 	const isOnePager =
 		state.type === 'one-pager' || structure.structure_type === 'one-pager';
-	return {
+	const req: SeedSiteRequest = {
 		type: (state.type ?? 'b2b') as SiteType,
 		info: {
 			name: info.name.trim(),
@@ -186,6 +198,10 @@ export function buildSeedRequest(state: WizardState): SeedSiteRequest {
 		silos: isOnePager ? [] : state.silos,
 		branding: { ...branding }
 	};
+	if (state.starterKit) {
+		req.starter_kit = state.starterKit;
+	}
+	return req;
 }
 
 export async function submit(api: SeedApiClient): Promise<SeedSiteResponse> {
