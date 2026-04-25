@@ -165,6 +165,60 @@ func (h *BuildHandler) BuildStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// BuildStatusAdmin returns the status of a build for a site via admin auth.
+// Mirrors BuildStatus but scoped to siteID to prevent cross-site ID guessing.
+func (h *BuildHandler) BuildStatusAdmin(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+	buildID := urlParam(r, "buildID")
+	if buildID == "" {
+		writeError(w, http.StatusBadRequest, "Invalid build ID")
+		return
+	}
+
+	// Look up the deployment so we can verify it belongs to this site.
+	deploy, err := h.queries.GetDeploymentByID(r.Context(), buildID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Build not found")
+		return
+	}
+	if deploy.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Build not found")
+		return
+	}
+
+	// Prefer in-memory state for active builds (has dist_dir + live build_log).
+	h.mu.Lock()
+	state, ok := h.builds[buildID]
+	h.mu.Unlock()
+
+	if ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":      state.Status,
+			"build_log":   state.BuildLog,
+			"pages_built": state.PagesBuilt,
+			"duration_ms": state.DurationMs,
+			"error":       state.Error,
+			"dist_dir":    state.DistDir,
+			"created_at":  deploy.CreatedAt,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":      deploy.Status,
+		"build_log":   deploy.BuildLog,
+		"pages_built": deploy.PagesBuilt,
+		"duration_ms": deploy.DurationMs,
+		"error":       deploy.Error,
+		"dist_dir":    "",
+		"created_at":  deploy.CreatedAt,
+	})
+}
+
 // TriggerBuildAdmin starts a build for a site via admin auth.
 func (h *BuildHandler) TriggerBuildAdmin(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
