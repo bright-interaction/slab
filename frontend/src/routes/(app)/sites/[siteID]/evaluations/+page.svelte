@@ -7,9 +7,7 @@
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
-	import ScoreHistoryChart, {
-		type BuildHistoryEntry
-	} from '$lib/components/evaluations/ScoreHistoryChart.svelte';
+	import CategoryDonut from '$lib/components/evaluations/CategoryDonut.svelte';
 	import type { Site, Evaluation } from '$lib/api/types';
 
 	let { data }: { data: { site: Site } } = $props();
@@ -77,15 +75,12 @@
 		return out;
 	});
 
-	const chartData = $derived<BuildHistoryEntry[]>(
-		rows
-			.slice(0, 10)
-			.map((r) => ({
-				build_id: r.buildID,
-				created_at: r.created_at,
-				evaluations: r.evaluations
-			}))
-	);
+	const latestBuild = $derived<BuildRow | null>(rows[0] ?? null);
+
+	function evalForCategory(row: BuildRow | null, cat: string): Evaluation | null {
+		if (!row) return null;
+		return row.evaluations.find((e) => e.category === cat) ?? null;
+	}
 
 	async function load() {
 		loading = true;
@@ -145,15 +140,32 @@
 		<Card padding="md">
 			<div class="flex items-baseline justify-between">
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-					Score history
+					Latest scores
 				</h2>
-				<span class="text-[11px] text-text-muted">last {Math.min(10, chartData.length)} builds</span>
+				{#if latestBuild}
+					<span class="text-[11px] text-text-muted">{formatDate(latestBuild.created_at)}</span>
+				{/if}
 			</div>
-			<div class="mt-3">
+			<div class="mt-5">
 				{#if loading}
-					<Skeleton width="100%" height="220px" />
+					<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+						{#each CATEGORIES as cat (cat)}
+							<div class="flex flex-col items-center gap-2">
+								<Skeleton width="8rem" height="8rem" rounded="full" />
+								<Skeleton width="3rem" height="0.7rem" />
+							</div>
+						{/each}
+					</div>
+				{:else if !latestBuild}
+					<p class="py-6 text-center text-[12px] text-text-muted">
+						No build scores yet.
+					</p>
 				{:else}
-					<ScoreHistoryChart builds={chartData} />
+					<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+						{#each CATEGORIES as cat (cat)}
+							<CategoryDonut category={cat} evaluation={evalForCategory(latestBuild, cat)} />
+						{/each}
+					</div>
 				{/if}
 			</div>
 		</Card>
