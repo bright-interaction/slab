@@ -291,8 +291,16 @@ func HasErrors(violations []Violation) bool {
 	return false
 }
 
-// SeedDefaultGuardrails creates default guardrail rules for a new site.
+// SeedDefaultGuardrails creates default guardrail rules for a new site
+// using the engine's bound Queries handle. Use SeedDefaultGuardrailsWith
+// when you need to run inside a transaction.
 func (g *GuardrailEngine) SeedDefaultGuardrails(ctx context.Context, siteID string) error {
+	return SeedDefaultGuardrailsWith(ctx, g.queries, siteID)
+}
+
+// SeedDefaultGuardrailsWith creates default guardrail rules using the supplied
+// Queries handle, allowing callers to pass a tx-bound *store.Queries.
+func SeedDefaultGuardrailsWith(ctx context.Context, q *store.Queries, siteID string) error {
 	defaults := []struct {
 		ruleType string
 		target   string
@@ -310,14 +318,16 @@ func (g *GuardrailEngine) SeedDefaultGuardrails(ctx context.Context, siteID stri
 	}
 
 	for _, d := range defaults {
-		_ = g.queries.CreateGuardrail(ctx, store.CreateGuardrailParams{
+		if err := q.CreateGuardrail(ctx, store.CreateGuardrailParams{
 			ID:       newAgentID(),
 			SiteID:   siteID,
 			RuleType: d.ruleType,
 			Target:   d.target,
 			Value:    d.value,
 			Severity: d.severity,
-		})
+		}); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -325,6 +335,12 @@ func (g *GuardrailEngine) SeedDefaultGuardrails(ctx context.Context, siteID stri
 
 // SeedDefaultKnowledgebase creates default knowledgebase entries for a new site.
 func (g *GuardrailEngine) SeedDefaultKnowledgebase(ctx context.Context, siteID string) error {
+	return SeedDefaultKnowledgebaseWith(ctx, g.queries, siteID)
+}
+
+// SeedDefaultKnowledgebaseWith creates default knowledgebase entries using the
+// supplied Queries handle, allowing callers to pass a tx-bound *store.Queries.
+func SeedDefaultKnowledgebaseWith(ctx context.Context, q *store.Queries, siteID string) error {
 	defaults := []struct {
 		category string
 		title    string
@@ -358,14 +374,79 @@ func (g *GuardrailEngine) SeedDefaultKnowledgebase(ctx context.Context, siteID s
 	}
 
 	for i, d := range defaults {
-		_ = g.queries.CreateKnowledgebaseEntry(ctx, store.CreateKnowledgebaseEntryParams{
+		if err := q.CreateKnowledgebaseEntry(ctx, store.CreateKnowledgebaseEntryParams{
 			ID:        newAgentID(),
 			SiteID:    siteID,
 			Category:  d.category,
 			Title:     d.title,
 			Content:   d.content,
 			SortOrder: int64(i),
-		})
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SeedDefaultGlobalBlocksWith creates the default header and footer global blocks
+// for a new site using the supplied Queries handle.
+func SeedDefaultGlobalBlocksWith(ctx context.Context, q *store.Queries, siteID string) error {
+	defaults := []struct {
+		name      string
+		slot      string
+		blockType string
+		dataJSON  string
+	}{
+		{"Site Header", "header", "header", `{"links":[{"label":"Home","href":"/"}]}`},
+		{"Site Footer", "footer", "footer", `{"copyright":"All rights reserved.","links":[{"label":"Privacy","href":"/privacy"},{"label":"Terms","href":"/terms"},{"label":"Cookies","href":"/cookies"}]}`},
+	}
+
+	for i, d := range defaults {
+		if err := q.CreateGlobalBlock(ctx, store.CreateGlobalBlockParams{
+			ID:        newAgentID(),
+			SiteID:    siteID,
+			Name:      d.name,
+			Slot:      d.slot,
+			BlockType: d.blockType,
+			DataJson:  d.dataJSON,
+			StyleJson: "{}",
+			SortOrder: int64(i),
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SeedEssentialPagesWith creates the privacy, terms, cookie, and 404 placeholder
+// pages for a new site using the supplied Queries handle.
+func SeedEssentialPagesWith(ctx context.Context, q *store.Queries, siteID string) error {
+	defaults := []struct {
+		title     string
+		slug      string
+		layout    string
+		showInNav int64
+	}{
+		{"Privacy Policy", "/privacy", "default", 0},
+		{"Terms of Service", "/terms", "default", 0},
+		{"Cookie Policy", "/cookies", "default", 0},
+		{"Page Not Found", "/404", "default", 0},
+	}
+
+	for i, d := range defaults {
+		if err := q.CreatePage(ctx, store.CreatePageParams{
+			ID:        newAgentID(),
+			SiteID:    siteID,
+			Title:     d.title,
+			Slug:      d.slug,
+			Layout:    d.layout,
+			SortOrder: int64(100 + i),
+			ShowInNav: d.showInNav,
+		}); err != nil {
+			return err
+		}
 	}
 
 	return nil

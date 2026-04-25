@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"database/sql"
+	"context"
+	"errors"
+	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
@@ -12,15 +17,60 @@ import (
 type SiteHandler struct {
 	cfg        *config.Config
 	queries    *store.Queries
+	db         *sql.DB
 	guardrails *agent.GuardrailEngine
 }
 
-func NewSiteHandler(cfg *config.Config, queries *store.Queries) *SiteHandler {
+func NewSiteHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *SiteHandler {
 	return &SiteHandler{
 		cfg:        cfg,
 		queries:    queries,
+		db:         db,
 		guardrails: agent.NewGuardrailEngine(queries),
 	}
+}
+
+var (
+	slugPattern  = regexp.MustCompile(`^[a-z0-9-]+$`)
+	colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+)
+
+// applyDefaultSiteSettings inserts the security and server best-practice settings
+// for a freshly created site using the supplied Queries handle.
+func applyDefaultSiteSettings(ctx context.Context, q *store.Queries, siteID string) error {
+	defaults := []struct{ category, key, value string }{
+		// Security headers
+		{"security", "csp_enabled", "true"},
+		{"security", "csp_policy", "auto"},
+		{"security", "hsts_enabled", "true"},
+		{"security", "hsts_max_age", "31536000"},
+		{"security", "hsts_preload", "false"},
+		{"security", "x_frame_options", "DENY"},
+		{"security", "x_content_type", "nosniff"},
+		{"security", "referrer_policy", "strict-origin-when-cross-origin"},
+		{"security", "permissions_policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()"},
+		{"security", "coop", "same-origin"},
+		{"security", "corp", "same-origin"},
+		// Nginx/server
+		{"server", "gzip_enabled", "true"},
+		{"server", "brotli_enabled", "false"},
+		{"server", "cache_static_max_age", "31536000"},
+		{"server", "cache_html_max_age", "3600"},
+		{"server", "rate_limit_enabled", "false"},
+		{"server", "rate_limit_rps", "10"},
+	}
+	for _, d := range defaults {
+		if err := q.UpsertSetting(ctx, store.UpsertSettingParams{
+			ID:       newID(),
+			SiteID:   siteID,
+			Category: d.category,
+			Key:      d.key,
+			Value:    d.value,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *SiteHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -113,8 +163,8 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Seed defaults for the new site
-	_ = h.guardrails.SeedDefaultGuardrails(r.Context(), id)
-	_ = h.guardrails.SeedDefaultKnowledgebase(r.Context(), id)
+	_ = agent.SeedDefaultGuardrailsWith(r.Context(), h.queries, id)
+	_ = agent.SeedDefaultKnowledgebaseWith(r.Context(), h.queries, id)
 
 	// Create default architecture
 	_ = h.queries.UpsertSiteArchitecture(r.Context(), store.UpsertSiteArchitectureParams{
@@ -126,39 +176,258 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Seed default security + server settings (best-practice defaults).
 	// All toggles can be flipped via PATCH /api/sites/{id}/settings.
-	defaultSettings := []struct{ category, key, value string }{
-		// Security headers
-		{"security", "csp_enabled", "true"},
-		{"security", "csp_policy", "auto"},
-		{"security", "hsts_enabled", "true"},
-		{"security", "hsts_max_age", "31536000"},
-		{"security", "hsts_preload", "false"},
-		{"security", "x_frame_options", "DENY"},
-		{"security", "x_content_type", "nosniff"},
-		{"security", "referrer_policy", "strict-origin-when-cross-origin"},
-		{"security", "permissions_policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()"},
-		{"security", "coop", "same-origin"},
-		{"security", "corp", "same-origin"},
-		// Nginx/server
-		{"server", "gzip_enabled", "true"},
-		{"server", "brotli_enabled", "false"},
-		{"server", "cache_static_max_age", "31536000"},
-		{"server", "cache_html_max_age", "3600"},
-		{"server", "rate_limit_enabled", "false"},
-		{"server", "rate_limit_rps", "10"},
-	}
-	for _, d := range defaultSettings {
-		_ = h.queries.UpsertSetting(r.Context(), store.UpsertSettingParams{
-			ID:       newID(),
-			SiteID:   id,
-			Category: d.category,
-			Key:      d.key,
-			Value:    d.value,
-		})
-	}
+	_ = applyDefaultSiteSettings(r.Context(), h.queries, id)
 
 	site, _ := h.queries.GetSiteByID(r.Context(), id)
 	writeJSON(w, http.StatusCreated, site)
+}
+
+// seedSiteRequest is the wizard payload for POST /api/sites/seed.
+type seedSiteRequest struct {
+	Type string `json:"type"`
+	Info struct {
+		Name         string `json:"name"`
+		Slug         string `json:"slug"`
+		Domain       string `json:"domain"`
+		Lang         string `json:"lang"`
+		BusinessName string `json:"business_name"`
+		ContactEmail string `json:"contact_email"`
+		Country      string `json:"country"`
+	} `json:"info"`
+	Structure struct {
+		StructureType string `json:"structure_type"`
+		MaxDepth      int64  `json:"max_depth"`
+	} `json:"structure"`
+	Silos []struct {
+		Name       string `json:"name"`
+		SlugPrefix string `json:"slug_prefix"`
+	} `json:"silos"`
+	Branding struct {
+		PrimaryColor   string `json:"primary_color"`
+		SecondaryColor string `json:"secondary_color"`
+		BgColor        string `json:"bg_color"`
+		TextColor      string `json:"text_color"`
+		FontHeading    string `json:"font_heading"`
+		FontBody       string `json:"font_body"`
+	} `json:"branding"`
+}
+
+// validateSeedRequest checks the wizard payload and applies defaults.
+// It returns a user-facing error message if validation fails.
+func (req *seedSiteRequest) normalize() error {
+	// Type
+	allowedTypes := map[string]bool{
+		"b2b": true, "b2c": true, "personal": true,
+		"blog": true, "agency": true, "one-pager": true,
+	}
+	if req.Type == "" {
+		req.Type = "b2b"
+	}
+	if !allowedTypes[req.Type] {
+		return errors.New("invalid type")
+	}
+
+	// Info
+	req.Info.Name = strings.TrimSpace(req.Info.Name)
+	req.Info.Slug = strings.ToLower(strings.TrimSpace(req.Info.Slug))
+	if req.Info.Name == "" {
+		return errors.New("info.name is required")
+	}
+	if req.Info.Slug == "" || len(req.Info.Slug) > 50 || !slugPattern.MatchString(req.Info.Slug) {
+		return errors.New("info.slug must match ^[a-z0-9-]+$ (1-50 chars)")
+	}
+	if req.Info.Lang == "" {
+		req.Info.Lang = "en"
+	}
+
+	// Structure
+	allowedStructures := map[string]bool{
+		"one-pager": true, "soft-silo": true, "hard-silo": true,
+	}
+	if req.Structure.StructureType == "" {
+		req.Structure.StructureType = "soft-silo"
+	}
+	if !allowedStructures[req.Structure.StructureType] {
+		return errors.New("structure.structure_type invalid")
+	}
+	if req.Structure.MaxDepth == 0 {
+		req.Structure.MaxDepth = 3
+	}
+	if req.Structure.MaxDepth < 1 || req.Structure.MaxDepth > 3 {
+		return errors.New("structure.max_depth must be 1, 2, or 3")
+	}
+
+	// Silos
+	for i, s := range req.Silos {
+		s.Name = strings.TrimSpace(s.Name)
+		s.SlugPrefix = strings.TrimSpace(s.SlugPrefix)
+		if s.Name == "" || s.SlugPrefix == "" {
+			return errors.New("each silo requires name and slug_prefix")
+		}
+		req.Silos[i] = s
+	}
+
+	// Branding defaults + validation
+	if req.Branding.PrimaryColor == "" {
+		req.Branding.PrimaryColor = "#D4AF37"
+	}
+	if req.Branding.SecondaryColor == "" {
+		req.Branding.SecondaryColor = "#935FA7"
+	}
+	if req.Branding.BgColor == "" {
+		req.Branding.BgColor = "#FFFFFF"
+	}
+	if req.Branding.TextColor == "" {
+		req.Branding.TextColor = "#1A1A1A"
+	}
+	if req.Branding.FontHeading == "" {
+		req.Branding.FontHeading = "Inter"
+	}
+	if req.Branding.FontBody == "" {
+		req.Branding.FontBody = "Inter"
+	}
+	for _, c := range []string{
+		req.Branding.PrimaryColor, req.Branding.SecondaryColor,
+		req.Branding.BgColor, req.Branding.TextColor,
+	} {
+		if !colorPattern.MatchString(c) {
+			return errors.New("branding colors must match ^#[0-9a-fA-F]{6}$")
+		}
+	}
+
+	return nil
+}
+
+// Seed creates a fully provisioned site (sites + profile + architecture + silos +
+// guardrails + knowledgebase + global blocks + essential pages + settings) inside a
+// single transaction. Used by the Phase 7 onboarding wizard.
+func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+
+	var req seedSiteRequest
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if err := req.normalize(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ctx := r.Context()
+
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		slog.Error("seed: begin tx", "error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to start transaction")
+		return
+	}
+	defer tx.Rollback()
+
+	qtx := h.queries.WithTx(tx)
+	siteID := newID()
+
+	// 1. sites row
+	if err := qtx.CreateSite(ctx, store.CreateSiteParams{
+		ID:             siteID,
+		Name:           req.Info.Name,
+		Slug:           req.Info.Slug,
+		Domain:         req.Info.Domain,
+		PrimaryColor:   req.Branding.PrimaryColor,
+		SecondaryColor: req.Branding.SecondaryColor,
+		BgColor:        req.Branding.BgColor,
+		TextColor:      req.Branding.TextColor,
+		FontHeading:    req.Branding.FontHeading,
+		FontBody:       req.Branding.FontBody,
+		Lang:           req.Info.Lang,
+	}); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			writeError(w, http.StatusConflict, "A site with this slug already exists")
+			return
+		}
+		slog.Error("seed: create site", "error", err, "slug", req.Info.Slug)
+		writeError(w, http.StatusInternalServerError, "Failed to create site")
+		return
+	}
+
+	// 2. site_profiles row
+	if err := qtx.UpsertSiteProfile(ctx, store.UpsertSiteProfileParams{
+		ID:           newID(),
+		SiteID:       siteID,
+		BusinessName: sanitizeLine(req.Info.BusinessName),
+		Country:      sanitizeLine(req.Info.Country),
+		ContactEmail: strings.TrimSpace(req.Info.ContactEmail),
+	}); err != nil {
+		slog.Error("seed: upsert profile", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to create profile")
+		return
+	}
+
+	// 3. site_architecture row
+	if err := qtx.UpsertSiteArchitecture(ctx, store.UpsertSiteArchitectureParams{
+		ID:            newID(),
+		SiteID:        siteID,
+		StructureType: req.Structure.StructureType,
+		MaxDepth:      req.Structure.MaxDepth,
+	}); err != nil {
+		slog.Error("seed: upsert architecture", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to create architecture")
+		return
+	}
+
+	// 4. site_silos rows
+	for i, s := range req.Silos {
+		if err := qtx.CreateSilo(ctx, store.CreateSiloParams{
+			ID:         newID(),
+			SiteID:     siteID,
+			Name:       s.Name,
+			SlugPrefix: s.SlugPrefix,
+			SortOrder:  int64(i),
+		}); err != nil {
+			if strings.Contains(err.Error(), "UNIQUE") {
+				writeError(w, http.StatusBadRequest, "Duplicate silo slug_prefix")
+				return
+			}
+			slog.Error("seed: create silo", "error", err, "site_id", siteID)
+			writeError(w, http.StatusInternalServerError, "Failed to create silo")
+			return
+		}
+	}
+
+	// 5. Phase 2 auto-seeding (guardrails, knowledgebase, global blocks, essential pages, settings)
+	if err := agent.SeedDefaultGuardrailsWith(ctx, qtx, siteID); err != nil {
+		slog.Error("seed: guardrails", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed guardrails")
+		return
+	}
+	if err := agent.SeedDefaultKnowledgebaseWith(ctx, qtx, siteID); err != nil {
+		slog.Error("seed: knowledgebase", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed knowledgebase")
+		return
+	}
+	if err := agent.SeedDefaultGlobalBlocksWith(ctx, qtx, siteID); err != nil {
+		slog.Error("seed: global blocks", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed global blocks")
+		return
+	}
+	if err := agent.SeedEssentialPagesWith(ctx, qtx, siteID); err != nil {
+		slog.Error("seed: essential pages", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed essential pages")
+		return
+	}
+	if err := applyDefaultSiteSettings(ctx, qtx, siteID); err != nil {
+		slog.Error("seed: settings", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed settings")
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("seed: commit", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to commit transaction")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"site_id": siteID})
 }
 
 func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
