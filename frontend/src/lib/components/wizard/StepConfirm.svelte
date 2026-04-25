@@ -1,12 +1,32 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import Button from '$lib/components/ui/Button.svelte';
 	import * as sitesApi from '$lib/api/sites';
+	import * as starterKitsApi from '$lib/api/starterKits';
+	import type { StarterKit } from '$lib/api/starterKits';
 	import { ApiError } from '$lib/api/client';
 	import { reset, submit, wizard } from '$lib/stores/wizard.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
 	const ws = $derived(wizard.value);
+
+	let kits = $state<StarterKit[]>([]);
+
+	onMount(async () => {
+		try {
+			const list = await starterKitsApi.list();
+			kits = Array.isArray(list) ? list : [];
+		} catch {
+			kits = [];
+		}
+	});
+
+	const selectedKitName = $derived.by<string>(() => {
+		if (!ws.starterKit) return 'Start blank';
+		const found = kits.find((k) => k.id === ws.starterKit);
+		return found ? found.name : ws.starterKit;
+	});
 
 	const seedItems = [
 		'Privacy policy, terms, cookie policy, and 404 pages',
@@ -52,6 +72,7 @@
 
 	const summaryRows = $derived([
 		summaryRow('Type', ws.type ?? 'not set'),
+		summaryRow('Starter kit', selectedKitName),
 		summaryRow('Site name', ws.info.name),
 		summaryRow('Slug', ws.info.slug),
 		summaryRow('Domain', ws.info.domain || 'not set'),

@@ -98,6 +98,7 @@ export interface SeedSiteRequest {
 	structure: SeedSiteStructure;
 	silos: SeedSiteSilo[];
 	branding: SeedSiteBranding;
+	starter_kit?: string;
 }
 
 export interface SeedSiteResponse {
