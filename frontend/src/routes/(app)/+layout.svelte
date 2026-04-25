@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import CommandPalette from '$lib/components/ui/CommandPalette.svelte';
 	import { currentSite } from '$lib/stores/currentSite.svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -27,3 +28,5 @@
 		{@render children()}
 	</main>
 </div>
+
+<CommandPalette />
