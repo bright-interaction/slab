@@ -12,6 +12,7 @@
 		{ id: 'media', label: 'Media', href: `/sites/${siteID}/media` },
 		{ id: 'build', label: 'Build', href: `/sites/${siteID}/build` },
 		{ id: 'evals', label: 'Evals', href: `/sites/${siteID}/evaluations` },
+		{ id: 'analytics', label: 'Analytics', href: `/sites/${siteID}/analytics` },
 		{ id: 'settings', label: 'Settings', href: `/sites/${siteID}/settings` }
 	]);
 

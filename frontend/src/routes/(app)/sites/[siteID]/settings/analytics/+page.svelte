@@ -24,34 +24,40 @@
 	let saving = $state(false);
 
 	let cookieproofEnabled = $state(false);
-	let cookieproofWidgetId = $state('');
+	let cookieproofOrgId = $state('');
+	let atomicsiteTrackingEnabled = $state(true);
 	let ga4Enabled = $state(false);
 	let ga4Id = $state('');
 	let umamiEnabled = $state(false);
 	let umamiUrl = $state('');
 	let umamiSiteId = $state('');
 	let crmWebhookUrl = $state('');
+	let crmWebhookSecret = $state('');
 
 	type State = {
 		cookieproofEnabled: boolean;
-		cookieproofWidgetId: string;
+		cookieproofOrgId: string;
+		atomicsiteTrackingEnabled: boolean;
 		ga4Enabled: boolean;
 		ga4Id: string;
 		umamiEnabled: boolean;
 		umamiUrl: string;
 		umamiSiteId: string;
 		crmWebhookUrl: string;
+		crmWebhookSecret: string;
 	};
 
 	let initial: State = {
 		cookieproofEnabled: false,
-		cookieproofWidgetId: '',
+		cookieproofOrgId: '',
+		atomicsiteTrackingEnabled: true,
 		ga4Enabled: false,
 		ga4Id: '',
 		umamiEnabled: false,
 		umamiUrl: '',
 		umamiSiteId: '',
-		crmWebhookUrl: ''
+		crmWebhookUrl: '',
+		crmWebhookSecret: ''
 	};
 
 	async function load() {
@@ -61,23 +67,30 @@
 			const m = categoryMap(rows);
 
 			cookieproofEnabled = toBool(m.cookieproof_enabled);
-			cookieproofWidgetId = m.cookieproof_widget_id || '';
+			cookieproofOrgId = m.cookieproof_org_id || m.cookieproof_widget_id || '';
+			atomicsiteTrackingEnabled =
+				m.atomicsite_tracking_enabled === undefined
+					? true
+					: toBool(m.atomicsite_tracking_enabled);
 			ga4Id = m.ga4_id || '';
 			ga4Enabled = ga4Id.length > 0 || toBool(m.ga4_enabled);
 			umamiUrl = m.umami_url || '';
 			umamiSiteId = m.umami_site_id || '';
 			umamiEnabled = (umamiUrl.length > 0 && umamiSiteId.length > 0) || toBool(m.umami_enabled);
 			crmWebhookUrl = m.crm_webhook_url || '';
+			crmWebhookSecret = m.crm_webhook_secret || '';
 
 			initial = {
 				cookieproofEnabled,
-				cookieproofWidgetId,
+				cookieproofOrgId,
+				atomicsiteTrackingEnabled,
 				ga4Enabled,
 				ga4Id,
 				umamiEnabled,
 				umamiUrl,
 				umamiSiteId,
-				crmWebhookUrl
+				crmWebhookUrl,
+				crmWebhookSecret
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -92,24 +105,28 @@
 
 	const dirty = $derived(
 		cookieproofEnabled !== initial.cookieproofEnabled ||
-			cookieproofWidgetId !== initial.cookieproofWidgetId ||
+			cookieproofOrgId !== initial.cookieproofOrgId ||
+			atomicsiteTrackingEnabled !== initial.atomicsiteTrackingEnabled ||
 			ga4Enabled !== initial.ga4Enabled ||
 			ga4Id !== initial.ga4Id ||
 			umamiEnabled !== initial.umamiEnabled ||
 			umamiUrl !== initial.umamiUrl ||
 			umamiSiteId !== initial.umamiSiteId ||
-			crmWebhookUrl !== initial.crmWebhookUrl
+			crmWebhookUrl !== initial.crmWebhookUrl ||
+			crmWebhookSecret !== initial.crmWebhookSecret
 	);
 
 	function discard() {
 		cookieproofEnabled = initial.cookieproofEnabled;
-		cookieproofWidgetId = initial.cookieproofWidgetId;
+		cookieproofOrgId = initial.cookieproofOrgId;
+		atomicsiteTrackingEnabled = initial.atomicsiteTrackingEnabled;
 		ga4Enabled = initial.ga4Enabled;
 		ga4Id = initial.ga4Id;
 		umamiEnabled = initial.umamiEnabled;
 		umamiUrl = initial.umamiUrl;
 		umamiSiteId = initial.umamiSiteId;
 		crmWebhookUrl = initial.crmWebhookUrl;
+		crmWebhookSecret = initial.crmWebhookSecret;
 	}
 
 	function b(v: boolean): string {
@@ -124,8 +141,13 @@
 				{ category: 'analytics', key: 'cookieproof_enabled', value: b(cookieproofEnabled) },
 				{
 					category: 'analytics',
-					key: 'cookieproof_widget_id',
-					value: cookieproofEnabled ? cookieproofWidgetId : ''
+					key: 'cookieproof_org_id',
+					value: cookieproofEnabled ? cookieproofOrgId : ''
+				},
+				{
+					category: 'analytics',
+					key: 'atomicsite_tracking_enabled',
+					value: b(atomicsiteTrackingEnabled)
 				},
 				{ category: 'analytics', key: 'ga4_enabled', value: b(ga4Enabled) },
 				{ category: 'analytics', key: 'ga4_id', value: ga4Enabled ? ga4Id : '' },
@@ -136,19 +158,22 @@
 					key: 'umami_site_id',
 					value: umamiEnabled ? umamiSiteId : ''
 				},
-				{ category: 'analytics', key: 'crm_webhook_url', value: crmWebhookUrl }
+				{ category: 'analytics', key: 'crm_webhook_url', value: crmWebhookUrl },
+				{ category: 'analytics', key: 'crm_webhook_secret', value: crmWebhookSecret }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
 			initial = {
 				cookieproofEnabled,
-				cookieproofWidgetId,
+				cookieproofOrgId,
+				atomicsiteTrackingEnabled,
 				ga4Enabled,
 				ga4Id,
 				umamiEnabled,
 				umamiUrl,
 				umamiSiteId,
-				crmWebhookUrl
+				crmWebhookUrl,
+				crmWebhookSecret
 			};
 			toast.success('Analytics settings saved.');
 		} catch (err) {
@@ -177,6 +202,52 @@
 	{:else}
 		<div class="mt-8 flex flex-col gap-5">
 			<Card padding="md">
+				<div class="flex gap-3">
+					<div
+						class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"
+					>
+						<svg
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="2"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+							/>
+						</svg>
+					</div>
+					<div class="flex-1">
+						<p class="text-[13px] text-text-primary">
+							Analytics start collecting once a site is deployed and the next build runs.
+						</p>
+						<p class="mt-1 text-[12px] text-text-muted">
+							Server-side tracking via Nginx is immune to ad blockers. Identification only happens
+							after the visitor accepts marketing consent.
+						</p>
+					</div>
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Atomicsite tracking
+				</h2>
+				<div class="mt-4 flex items-center justify-between gap-4">
+					<div class="flex flex-col">
+						<span class="text-[13px] text-text-primary">Server-side visit tracking</span>
+						<span class="text-[12px] text-text-muted">
+							Logs page views from Nginx access logs. No client-side script.
+						</span>
+					</div>
+					<Switch bind:checked={atomicsiteTrackingEnabled} />
+				</div>
+			</Card>
+
+			<Card padding="md">
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 					CookieProof consent
 				</h2>
@@ -192,9 +263,9 @@
 					</div>
 					{#if cookieproofEnabled}
 						<Input
-							label="Widget ID"
-							placeholder="cp_xxxxxxxxxxxx"
-							bind:value={cookieproofWidgetId}
+							label="Organisation ID"
+							placeholder="cp_org_xxxxxxxxxxxx"
+							bind:value={cookieproofOrgId}
 						/>
 					{/if}
 				</div>
@@ -257,12 +328,19 @@
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 					CRM webhook
 				</h2>
-				<div class="mt-4">
+				<div class="mt-4 flex flex-col gap-3">
 					<Input
 						label="Webhook URL"
 						placeholder="https://crm.example.com/api/leads"
-						hint="Form submissions on this site POST here."
+						hint="Form submissions and identification events on this site POST here."
 						bind:value={crmWebhookUrl}
+					/>
+					<Input
+						label="Webhook secret"
+						type="password"
+						placeholder="shared signing secret"
+						hint="Sent as X-Atomicsite-Signature for HMAC verification."
+						bind:value={crmWebhookSecret}
 					/>
 				</div>
 			</Card>
