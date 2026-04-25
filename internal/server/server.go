@@ -210,7 +210,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/sites/{siteID}/evaluations", evalH.ListBySite)
 		r.Get("/api/sites/{siteID}/evaluations/{buildID}", evalH.ListByBuild)
 
-		// Analytics reads (admin) — visit_events populated by the nginx log tailer.
+		// Analytics reads (admin) - visit_events populated by the nginx log tailer.
 		anH := handlers.NewAnalyticsHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/visit-events", anH.VisitEvents)
 
