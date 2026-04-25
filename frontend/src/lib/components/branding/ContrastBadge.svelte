@@ -1,16 +1,19 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { contrastRatio, passesAA, passesAAA } from '$lib/wcag';
 
 	let {
 		fg,
 		bg,
 		largeText = false,
-		label
+		label,
+		fix
 	}: {
 		fg: string;
 		bg: string;
 		largeText?: boolean;
 		label?: string;
+		fix?: Snippet;
 	} = $props();
 
 	const ratio = $derived(contrastRatio(fg, bg));
@@ -43,4 +46,7 @@
 	<span class="text-[10px] uppercase tracking-wide opacity-80">
 		{aaa ? 'AAA' : aa ? 'AA' : 'fail'}
 	</span>
+	{#if fix && !aa}
+		{@render fix()}
+	{/if}
 </span>

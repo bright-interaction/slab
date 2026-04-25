@@ -3,7 +3,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import { updateBranding, wizard } from '$lib/stores/wizard.svelte';
 	import { contrastRatio, passesAA, suggestDarken } from '$lib/wcag';
-	import ContrastBadge from './ContrastBadge.svelte';
+	import ContrastBadge from '$lib/components/branding/ContrastBadge.svelte';
 
 	const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
