@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -35,10 +35,13 @@
 		setStep(segment as WizardStep);
 	});
 
+	// Track step changes after mount when the user navigates between wizard
+	// steps via the URL. Don't read the wizard store inside the effect or the
+	// setStep mutation re-triggers it (Svelte 5 effect_update_depth_exceeded).
 	$effect(() => {
-		if (WIZARD_STEPS.includes(currentStep)) {
-			setStep(currentStep);
-		}
+		const step = currentStep;
+		if (!WIZARD_STEPS.includes(step)) return;
+		untrack(() => setStep(step));
 	});
 
 	const currentIndex = $derived(WIZARD_STEPS.indexOf(currentStep));

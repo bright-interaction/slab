@@ -112,38 +112,43 @@ export const wizard = {
 	}
 };
 
+// Mutate the existing $state proxy in place instead of reassigning. Svelte 5
+// tracks deep property access on the proxy, so nested writes (current.info.name
+// = ...) propagate to readers like wizard.value.info.name. Reassigning current
+// can break tracked dependency graphs in some flows (validation $derived.by
+// reading wizard.value through a getter).
 export function setStep(step: WizardStep): void {
-	current = { ...current, step };
+	current.step = step;
 	persist();
 }
 
 export function setType(type: SiteType): void {
-	current = { ...current, type };
+	current.type = type;
 	persist();
 }
 
 export function setStarterKit(kitID: string | null): void {
-	current = { ...current, starterKit: kitID };
+	current.starterKit = kitID;
 	persist();
 }
 
 export function updateInfo(partial: Partial<WizardInfo>): void {
-	current = { ...current, info: { ...current.info, ...partial } };
+	Object.assign(current.info, partial);
 	persist();
 }
 
 export function updateStructure(partial: Partial<SeedSiteStructure>): void {
-	current = { ...current, structure: { ...current.structure, ...partial } };
+	Object.assign(current.structure, partial);
 	persist();
 }
 
 export function updateSilos(silos: SeedSiteSilo[]): void {
-	current = { ...current, silos };
+	current.silos = silos;
 	persist();
 }
 
 export function updateBranding(partial: Partial<SeedSiteBranding>): void {
-	current = { ...current, branding: { ...current.branding, ...partial } };
+	Object.assign(current.branding, partial);
 	persist();
 }
 
