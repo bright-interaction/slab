@@ -59,11 +59,11 @@ SELECT * FROM site_silos WHERE site_id = ? ORDER BY sort_order;
 SELECT * FROM site_silos WHERE id = ?;
 
 -- name: CreateSilo :exec
-INSERT INTO site_silos (id, site_id, name, slug_prefix, sort_order, created_at)
-VALUES (?, ?, ?, ?, ?, datetime('now'));
+INSERT INTO site_silos (id, site_id, name, slug_prefix, silo_type, sort_order, created_at)
+VALUES (?, ?, ?, ?, ?, ?, datetime('now'));
 
 -- name: UpdateSilo :exec
-UPDATE site_silos SET name = ?, slug_prefix = ?, sort_order = ? WHERE id = ?;
+UPDATE site_silos SET name = ?, slug_prefix = ?, silo_type = ?, sort_order = ? WHERE id = ?;
 
 -- name: DeleteSilo :exec
 DELETE FROM site_silos WHERE id = ?;

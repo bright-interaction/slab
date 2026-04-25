@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GripVertical, Pencil, Trash2 } from 'lucide-svelte';
+	import { GripVertical, Pencil, Trash2, FolderTree } from 'lucide-svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import type { Page } from '$lib/api/types';
 
@@ -8,8 +8,10 @@
 		dragging = false,
 		depth = 0,
 		isSiloHub = false,
+		siloType = '',
 		onOpen,
 		onDelete,
+		onMove,
 		ondragstart,
 		ondragover,
 		ondragend,
@@ -19,8 +21,10 @@
 		dragging?: boolean;
 		depth?: number;
 		isSiloHub?: boolean;
+		siloType?: string;
 		onOpen: () => void;
 		onDelete: () => void;
+		onMove?: () => void;
 		ondragstart?: (e: DragEvent) => void;
 		ondragover?: (e: DragEvent) => void;
 		ondragend?: (e: DragEvent) => void;
@@ -85,6 +89,14 @@
 	<div class="flex items-center gap-3 text-[11px] text-text-muted">
 		{#if isSiloHub}
 			<Badge variant="default" dot>silo hub</Badge>
+			{#if siloType && siloType !== 'inherit'}
+				<span
+					class="rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[10px] uppercase tracking-wide text-text-muted"
+					title={siloType === 'hard' ? 'No cross-silo links' : 'Cross-silo links allowed'}
+				>
+					{siloType}
+				</span>
+			{/if}
 		{/if}
 		<Badge variant={statusVariant(page.status)} dot>
 			{page.status || 'draft'}
@@ -101,6 +113,17 @@
 	<div
 		class="row-actions flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
 	>
+		{#if onMove}
+			<button
+				type="button"
+				class="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+				aria-label="Move page"
+				title="Move to another silo or top-level"
+				onclick={onMove}
+			>
+				<FolderTree class="h-3.5 w-3.5" />
+			</button>
+		{/if}
 		<button
 			type="button"
 			class="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"

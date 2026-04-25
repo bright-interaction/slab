@@ -107,7 +107,12 @@
 					<dt class="text-[12px] text-text-muted">Silos</dt>
 					<dd class="flex flex-col gap-1 text-[13px] text-text-primary">
 						{#each ws.silos as silo, idx (idx)}
-							<span class="font-mono text-[12px]">/{silo.slug_prefix}</span>
+							<span class="flex items-center gap-2">
+								<span class="font-mono text-[12px]">/{silo.slug_prefix}</span>
+								<span class="rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-[10px] uppercase tracking-wide text-text-muted">
+									{silo.silo_type ?? 'inherit'}
+								</span>
+							</span>
 						{/each}
 					</dd>
 				{/if}

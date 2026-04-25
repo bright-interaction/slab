@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import {
 		updateSilos,
 		updateStructure,
@@ -8,7 +9,13 @@
 		deriveSlug,
 		transliterateSlugChars
 	} from '$lib/stores/wizard.svelte';
-	import type { SeedSiteSilo, StructureType } from '$lib/api/sites';
+	import type { SeedSiteSilo, SiloType, StructureType } from '$lib/api/sites';
+
+	const siloTypeOptions = [
+		{ value: 'inherit', label: 'Inherit (use site default)' },
+		{ value: 'soft', label: 'Soft (cross-silo links allowed)' },
+		{ value: 'hard', label: 'Hard (strict isolation)' }
+	];
 
 	interface StructureOption {
 		value: StructureType;
@@ -40,10 +47,10 @@
 
 	const initialSilos: SeedSiteSilo[] =
 		wizard.value.silos.length > 0
-			? [...wizard.value.silos]
+			? wizard.value.silos.map((s) => ({ silo_type: 'inherit', ...s }))
 			: [
-					{ name: 'Services', slug_prefix: 'services' },
-					{ name: 'About', slug_prefix: 'about' }
+					{ name: 'Services', slug_prefix: 'services', silo_type: 'inherit' },
+					{ name: 'About', slug_prefix: 'about', silo_type: 'inherit' }
 				];
 
 	let silos = $state<SeedSiteSilo[]>(initialSilos);
@@ -61,7 +68,11 @@
 		});
 	}
 
-	function updateSilo(idx: number, field: 'name' | 'slug_prefix', value: string): void {
+	function updateSilo(
+		idx: number,
+		field: 'name' | 'slug_prefix' | 'silo_type',
+		value: string
+	): void {
 		const next = [...silos];
 		const existing = next[idx];
 		if (!existing) return;
@@ -75,7 +86,7 @@
 
 	function addSilo(): void {
 		if (silos.length >= 8) return;
-		silos = [...silos, { name: '', slug_prefix: '' }];
+		silos = [...silos, { name: '', slug_prefix: '', silo_type: 'inherit' }];
 	}
 
 	function removeSilo(idx: number): void {
@@ -154,32 +165,42 @@
 			<div class="flex flex-col gap-3">
 				{#each silos as silo, idx (idx)}
 					<div
-						class="grid grid-cols-1 gap-3 rounded-xl border border-border-light bg-bg-surface p-4 md:grid-cols-[1fr_1fr_auto]"
+						class="flex flex-col gap-3 rounded-xl border border-border-light bg-bg-surface p-4"
 					>
-						<Input
-							label="Name"
-							placeholder="Services"
-							value={silo.name}
-							oninput={(e) =>
-								updateSilo(idx, 'name', (e.currentTarget as HTMLInputElement).value)}
-						/>
-						<Input
-							label="Slug prefix"
-							placeholder="services"
-							value={silo.slug_prefix}
-							oninput={(e) =>
-								updateSilo(
-									idx,
-									'slug_prefix',
-									transliterateSlugChars(
-										(e.currentTarget as HTMLInputElement).value
-									).replace(/[^a-z0-9-]/g, '')
-								)}
-						/>
-						<div class="flex items-end">
-							<Button variant="ghost" size="sm" onclick={() => removeSilo(idx)}>
-								Remove
-							</Button>
+						<div class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
+							<Input
+								label="Name"
+								placeholder="Services"
+								value={silo.name}
+								oninput={(e) =>
+									updateSilo(idx, 'name', (e.currentTarget as HTMLInputElement).value)}
+							/>
+							<Input
+								label="Slug prefix"
+								placeholder="services"
+								value={silo.slug_prefix}
+								oninput={(e) =>
+									updateSilo(
+										idx,
+										'slug_prefix',
+										transliterateSlugChars(
+											(e.currentTarget as HTMLInputElement).value
+										).replace(/[^a-z0-9-]/g, '')
+									)}
+							/>
+							<div class="flex items-end">
+								<Button variant="ghost" size="sm" onclick={() => removeSilo(idx)}>
+									Remove
+								</Button>
+							</div>
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<span class="text-[12px] font-medium text-text-secondary">Silo type</span>
+							<Select
+								options={siloTypeOptions}
+								value={silo.silo_type ?? 'inherit'}
+								onchange={(value: string) => updateSilo(idx, 'silo_type', value)}
+							/>
 						</div>
 					</div>
 				{/each}
