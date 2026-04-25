@@ -12,6 +12,7 @@
 	import { confirm } from '$lib/components/ui/ConfirmDialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import PageRow from '$lib/components/pages/PageRow.svelte';
+	import { transliterateSlugChars } from '$lib/stores/wizard.svelte';
 	import type { Page } from '$lib/api/types';
 
 	const siteID = $derived(pageState.params.siteID as string);
@@ -27,6 +28,9 @@
 	let newSlug = $state('');
 	let newLayout = $state('default');
 	let newSlugTouched = $state(false);
+	// Parent silo for new page. '' means top-level. Otherwise a silo prefix
+	// like 'tjanster' meaning the new slug becomes 'tjanster/<your-slug>'.
+	let newParentSilo = $state('');
 
 	const layoutOptions = [
 		{ value: 'default', label: 'Default' },
@@ -36,10 +40,7 @@
 	];
 
 	function slugify(input: string): string {
-		return input
-			.toLowerCase()
-			.normalize('NFKD')
-			.replace(/[̀-ͯ]/g, '')
+		return transliterateSlugChars(input)
 			.replace(/[^a-z0-9]+/g, '-')
 			.replace(/^-+|-+$/g, '')
 			.slice(0, 60);
@@ -50,6 +51,83 @@
 			newSlug = slugify(newTitle);
 		}
 	});
+
+	function normalizeSlug(s: string): string {
+		return s.replace(/^\/+/, '').replace(/\/+$/, '');
+	}
+
+	function siloOf(slug: string): string {
+		const norm = normalizeSlug(slug);
+		if (!norm) return '';
+		const idx = norm.indexOf('/');
+		return idx === -1 ? '' : norm.slice(0, idx);
+	}
+
+	function isUnderSilo(page: Page): boolean {
+		const norm = normalizeSlug(page.slug);
+		return norm.includes('/');
+	}
+
+	// Compute which top-level pages are silo hubs (have at least one child page
+	// whose slug starts with `<this slug>/`).
+	const siloHubs = $derived.by<Set<string>>(() => {
+		const set = new Set<string>();
+		for (const p of pages) {
+			const silo = siloOf(p.slug);
+			if (silo) set.add(silo);
+		}
+		return set;
+	});
+
+	// Group pages: top-level rendered first in their original order (preserving
+	// drag-reorder), with each silo hub immediately followed by its children
+	// (also in their saved order).
+	type Grouped = { page: Page; depth: number; isHub: boolean };
+	const groupedPages = $derived.by<Grouped[]>(() => {
+		const out: Grouped[] = [];
+		const childrenBySilo = new Map<string, Page[]>();
+		const topLevel: Page[] = [];
+		for (const p of pages) {
+			if (isUnderSilo(p)) {
+				const silo = siloOf(p.slug);
+				const existing = childrenBySilo.get(silo) ?? [];
+				existing.push(p);
+				childrenBySilo.set(silo, existing);
+			} else {
+				topLevel.push(p);
+			}
+		}
+		for (const p of topLevel) {
+			const norm = normalizeSlug(p.slug);
+			const isHub = siloHubs.has(norm) && norm.length > 0;
+			out.push({ page: p, depth: 0, isHub });
+			if (isHub) {
+				for (const child of childrenBySilo.get(norm) ?? []) {
+					out.push({ page: child, depth: 1, isHub: false });
+				}
+				childrenBySilo.delete(norm);
+			}
+		}
+		// Orphan children whose silo hub doesn't exist as a top-level page yet:
+		// render them grouped at depth 1 under a synthetic header in the future.
+		// For v1, append them at the end at depth 1 so they're at least visible.
+		for (const [, children] of childrenBySilo) {
+			for (const child of children) {
+				out.push({ page: child, depth: 1, isHub: false });
+			}
+		}
+		return out;
+	});
+
+	const siloOptions = $derived.by<{ value: string; label: string }[]>(() => {
+		const options = [{ value: '', label: '(top-level page)' }];
+		for (const hub of siloHubs) {
+			options.push({ value: hub, label: `Under /${hub}` });
+		}
+		return options;
+	});
+
+	const parentSiloPath = $derived(newParentSilo ? `${newParentSilo}/` : '');
 
 	async function loadPages(id: string) {
 		loading = true;
@@ -68,30 +146,32 @@
 		void loadPages(siteID);
 	});
 
-	function openNewDialog() {
+	function openNewDialog(parentSilo = '') {
 		newTitle = '';
 		newSlug = '';
 		newLayout = 'default';
 		newSlugTouched = false;
+		newParentSilo = parentSilo;
 		newDialogOpen = true;
 	}
 
 	async function createPage() {
 		const title = newTitle.trim();
-		const slug = newSlug.trim();
+		const localSlug = newSlug.trim();
 		if (title.length < 2) {
 			toast.error('Title must be at least 2 characters.');
 			return;
 		}
-		if (!/^[a-z0-9-]+$/.test(slug)) {
+		if (!/^[a-z0-9-]+$/.test(localSlug)) {
 			toast.error('Slug must use lowercase letters, numbers, and hyphens.');
 			return;
 		}
+		const fullSlug = newParentSilo ? `${newParentSilo}/${localSlug}` : localSlug;
 		creating = true;
 		try {
 			const created = await pagesApi.create(siteID, {
 				title,
-				slug,
+				slug: fullSlug,
 				layout: newLayout
 			});
 			newDialogOpen = false;
@@ -187,7 +267,7 @@
 				Drag rows to reorder. Click a page to open the editor.
 			</p>
 		</div>
-		<Button variant="primary" onclick={openNewDialog}>New page</Button>
+		<Button variant="primary" onclick={() => openNewDialog()}>New page</Button>
 	</header>
 
 	<section class="mt-6">
@@ -213,23 +293,46 @@
 					description="Pages are the top-level URLs of your site. Add a homepage, an about page, or a legal page."
 				>
 					{#snippet action()}
-						<Button variant="primary" onclick={openNewDialog}>Create page</Button>
+						<Button variant="primary" onclick={() => openNewDialog()}>Create page</Button>
 					{/snippet}
 				</EmptyState>
 			</Card>
 		{:else}
 			<div class="flex flex-col gap-2" role="list">
-				{#each pages as p (p.id)}
+				{#each groupedPages as g (g.page.id)}
 					<PageRow
-						page={p}
-						dragging={draggingId === p.id}
-						onOpen={() => openPage(p)}
-						onDelete={() => deletePage(p)}
-						ondragstart={(e) => handleDragStart(p.id, e)}
-						ondragover={(e) => handleDragOver(p.id, e)}
+						page={g.page}
+						depth={g.depth}
+						isSiloHub={g.isHub}
+						dragging={draggingId === g.page.id}
+						onOpen={() => openPage(g.page)}
+						onDelete={() => deletePage(g.page)}
+						ondragstart={(e) => handleDragStart(g.page.id, e)}
+						ondragover={(e) => handleDragOver(g.page.id, e)}
 						ondragend={handleDragEnd}
 						ondrop={handleDrop}
 					/>
+					{#if g.isHub}
+						{@const childCount = groupedPages.filter(
+							(x) => x.depth === 1 && normalizeSlug(x.page.slug).startsWith(normalizeSlug(g.page.slug) + '/')
+						).length}
+						<div
+							class="-mt-1 ml-6 flex items-center justify-between border-l-2 border-l-accent/30 pl-4 pb-1 text-[11px] text-text-muted"
+						>
+							<span>
+								{childCount === 0
+									? 'No pages under this silo yet.'
+									: `${childCount} page${childCount === 1 ? '' : 's'} under /${normalizeSlug(g.page.slug)}`}
+							</span>
+							<button
+								type="button"
+								class="text-accent hover:underline"
+								onclick={() => openNewDialog(normalizeSlug(g.page.slug))}
+							>
+								+ Add page under this silo
+							</button>
+						</div>
+					{/if}
 				{/each}
 			</div>
 		{/if}
@@ -246,6 +349,15 @@
 			}}
 			placeholder="About us"
 		/>
+		{#if siloOptions.length > 1}
+			<div class="flex flex-col gap-1.5">
+				<span class="text-[12px] font-medium text-text-secondary">Parent</span>
+				<Select options={siloOptions} bind:value={newParentSilo} />
+				<span class="text-[11px] text-text-muted">
+					Pick a silo to nest this page under. Stays inline with the silo hub in the page list.
+				</span>
+			</div>
+		{/if}
 		<Input
 			label="Slug"
 			value={newSlug}
@@ -254,7 +366,9 @@
 				newSlugTouched = true;
 			}}
 			placeholder="about"
-			hint="Lowercase letters, numbers, hyphens. Used in the URL."
+			hint={newParentSilo
+				? `Final URL will be /${parentSiloPath}${newSlug || 'your-slug'}`
+				: 'Lowercase letters, numbers, hyphens. Used in the URL.'}
 		/>
 		<div class="flex flex-col gap-1.5">
 			<span class="text-[12px] font-medium text-text-secondary">Layout</span>

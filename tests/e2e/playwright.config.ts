@@ -24,10 +24,12 @@ export default defineConfig({
 	},
 
 	webServer: {
-		command: `./bin/atomicsite`,
+		// Wipe the test DB on every run so the seed step always starts fresh
+		// (the slug uniqueness check would 409 on a re-run otherwise).
+		command: `bash -lc 'rm -rf "$DATA_DIR" && ./bin/atomicsite'`,
 		cwd: path.resolve(__dirname, '../..'),
 		url: `${BASE_URL}/api/health`,
-		reuseExistingServer: !process.env.CI,
+		reuseExistingServer: false,
 		timeout: 60_000,
 		stdout: 'pipe',
 		stderr: 'pipe',

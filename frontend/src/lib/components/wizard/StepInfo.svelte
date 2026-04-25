@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
-	import { deriveSlug, updateInfo, wizard } from '$lib/stores/wizard.svelte';
+	import { deriveSlug, transliterateSlugChars, updateInfo, wizard } from '$lib/stores/wizard.svelte';
 
 	const SLUG_RE = /^[a-z0-9-]+$/;
 	const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -64,6 +64,9 @@
 		if (slugTouched) return;
 		if (slugDebounce) clearTimeout(slugDebounce);
 		slugDebounce = setTimeout(() => {
+			// Re-check slugTouched at fire time. If the user typed into slug
+			// during the 200ms debounce, don't clobber their value.
+			if (slugTouched) return;
 			const next = deriveSlug(value);
 			slugValue = next;
 			updateInfo({ slug: next });
@@ -72,7 +75,10 @@
 
 	function commitSlug(value: string): void {
 		slugTouched = true;
-		const sanitized = value.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 50);
+		// Transliterate first so ÅÄÖÜ etc. become A/A/O/U instead of being stripped.
+		const sanitized = transliterateSlugChars(value)
+			.replace(/[^a-z0-9-]/g, '')
+			.slice(0, 50);
 		slugValue = sanitized;
 		updateInfo({ slug: sanitized });
 	}
