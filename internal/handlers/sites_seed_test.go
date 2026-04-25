@@ -1,0 +1,194 @@
+package handlers
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+
+	_ "modernc.org/sqlite"
+
+	"github.com/bright-interaction/slab/internal/config"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
+)
+
+func setupSeedTestDB(t *testing.T) (*sql.DB, *store.Queries) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.sqlite")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
+		t.Fatalf("apply schema: %v", err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	return sqlDB, store.New(sqlDB)
+}
+
+func mustCount(t *testing.T, sqlDB *sql.DB, query string, args ...any) int64 {
+	t.Helper()
+	row := sqlDB.QueryRowContext(context.Background(), query, args...)
+	var n int64
+	if err := row.Scan(&n); err != nil {
+		t.Fatalf("count %q: %v", query, err)
+	}
+	return n
+}
+
+func TestSiteHandler_Seed_HappyPath(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	body := `{
+		"type": "b2b",
+		"info": {
+			"name": "Acme",
+			"slug": "acme",
+			"domain": "acme.test",
+			"lang": "sv",
+			"business_name": "Acme AB",
+			"contact_email": "hello@acme.test",
+			"country": "SE"
+		},
+		"structure": {"structure_type": "soft-silo", "max_depth": 3},
+		"silos": [
+			{"name": "Services", "slug_prefix": "/services"},
+			{"name": "Industries", "slug_prefix": "/industries"}
+		],
+		"branding": {
+			"primary_color": "#112233",
+			"secondary_color": "#445566",
+			"bg_color": "#FFFFFF",
+			"text_color": "#1A1A1A",
+			"font_heading": "Inter",
+			"font_body": "Inter"
+		}
+	}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	siteID := resp["site_id"]
+	if siteID == "" {
+		t.Fatalf("expected site_id in response, got %s", rr.Body.String())
+	}
+
+	// Verify all rows were created
+	if got := mustCount(t, sqlDB, "select count(*) from sites where id=?", siteID); got != 1 {
+		t.Errorf("sites: want 1, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from site_profiles where site_id=?", siteID); got != 1 {
+		t.Errorf("site_profiles: want 1, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from site_architecture where site_id=?", siteID); got != 1 {
+		t.Errorf("site_architecture: want 1, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from site_silos where site_id=?", siteID); got != 2 {
+		t.Errorf("site_silos: want 2, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from knowledgebase_entries where site_id=?", siteID); got < 3 {
+		t.Errorf("knowledgebase_entries: want >=3, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from guardrail_rules where site_id=?", siteID); got < 2 {
+		t.Errorf("guardrail_rules: want >=2, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from global_blocks where site_id=?", siteID); got != 2 {
+		t.Errorf("global_blocks: want 2, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from pages where site_id=? and slug in ('/privacy','/terms','/cookies','/404')", siteID); got != 4 {
+		t.Errorf("essential pages: want 4, got %d", got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from site_settings where site_id=?", siteID); got < 10 {
+		t.Errorf("site_settings: want >=10, got %d", got)
+	}
+}
+
+func TestSiteHandler_Seed_DuplicateSlug_RollsBack(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	body := `{
+		"type": "b2b",
+		"info": {"name": "Acme", "slug": "acme"},
+		"structure": {"structure_type": "soft-silo", "max_depth": 3},
+		"silos": [{"name": "S", "slug_prefix": "/s"}],
+		"branding": {}
+	}`
+
+	// First call succeeds
+	req1 := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req1.Header.Set("Content-Type", "application/json")
+	rr1 := httptest.NewRecorder()
+	h.Seed(rr1, req1)
+	if rr1.Code != http.StatusOK {
+		t.Fatalf("first seed: expected 200, got %d: %s", rr1.Code, rr1.Body.String())
+	}
+
+	siteCountBefore := mustCount(t, sqlDB, "select count(*) from sites")
+	siloCountBefore := mustCount(t, sqlDB, "select count(*) from site_silos")
+	kbCountBefore := mustCount(t, sqlDB, "select count(*) from knowledgebase_entries")
+
+	// Second call with same slug: must 409 and not add any rows
+	req2 := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req2.Header.Set("Content-Type", "application/json")
+	rr2 := httptest.NewRecorder()
+	h.Seed(rr2, req2)
+	if rr2.Code != http.StatusConflict {
+		t.Fatalf("second seed: expected 409, got %d: %s", rr2.Code, rr2.Body.String())
+	}
+
+	if got := mustCount(t, sqlDB, "select count(*) from sites"); got != siteCountBefore {
+		t.Errorf("rollback failed: sites changed from %d to %d", siteCountBefore, got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from site_silos"); got != siloCountBefore {
+		t.Errorf("rollback failed: site_silos changed from %d to %d", siloCountBefore, got)
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from knowledgebase_entries"); got != kbCountBefore {
+		t.Errorf("rollback failed: kb changed from %d to %d", kbCountBefore, got)
+	}
+}
+
+func TestSiteHandler_Seed_BadSlug(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	body := `{"type":"b2b","info":{"name":"X","slug":"BAD SLUG"},"structure":{},"branding":{}}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestSiteHandler_Seed_BadColor(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	body := `{"type":"b2b","info":{"name":"X","slug":"x"},"structure":{},"branding":{"primary_color":"red"}}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}

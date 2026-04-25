@@ -78,9 +78,10 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/auth/change-password", ah.ChangePassword)
 
 		// Sites
-		sh := handlers.NewSiteHandler(s.cfg, s.queries)
+		sh := handlers.NewSiteHandler(s.cfg, s.queries, s.db)
 		r.Get("/api/sites", sh.List)
 		r.Post("/api/sites", sh.Create)
+		r.Post("/api/sites/seed", sh.Seed)
 		r.Get("/api/sites/{siteID}", sh.Get)
 		r.Patch("/api/sites/{siteID}", sh.Update)
 		r.Delete("/api/sites/{siteID}", sh.Delete)
