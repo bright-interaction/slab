@@ -24,7 +24,7 @@ import (
 	"github.com/bright-interaction/slab/internal/store"
 )
 
-//go:embed frontend/build
+//go:embed all:frontend/build
 var frontendFiles embed.FS
 
 func main() {

@@ -2,10 +2,16 @@
 package server
 
 import (
+	"bytes"
 	"database/sql"
+	"io"
 	"io/fs"
+	"log/slog"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -237,18 +243,58 @@ func (s *Server) mountFrontend(r chi.Router) {
 	if FrontendFS == nil {
 		return
 	}
-	staticFS := http.FS(FrontendFS)
-	fileServer := http.FileServer(staticFS)
+	indexHTML, err := fs.ReadFile(FrontendFS, "index.html")
+	if err != nil {
+		slog.Warn("frontend index.html missing", "error", err)
+		return
+	}
+	startedAt := time.Now()
+
+	serveIndex := func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(indexHTML)
+	}
+
 	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
-		f, err := FrontendFS.Open(req.URL.Path[1:]) // strip leading /
-		if err != nil {
-			// SPA fallback: serve index.html
-			req.URL.Path = "/index.html"
-			fileServer.ServeHTTP(w, req)
+		path := strings.TrimPrefix(req.URL.Path, "/")
+		if path == "" {
+			serveIndex(w)
 			return
 		}
-		f.Close()
-		fileServer.ServeHTTP(w, req)
+		// Reject path traversal.
+		if strings.Contains(path, "..") {
+			http.NotFound(w, req)
+			return
+		}
+		f, err := FrontendFS.Open(path)
+		if err != nil {
+			// Unknown path: SPA client-side router takes over.
+			serveIndex(w)
+			return
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil || info.IsDir() {
+			serveIndex(w)
+			return
+		}
+		seeker, ok := f.(io.ReadSeeker)
+		if !ok {
+			data, err := io.ReadAll(f)
+			if err != nil {
+				http.Error(w, "read embed", http.StatusInternalServerError)
+				return
+			}
+			seeker = bytes.NewReader(data)
+		}
+		if ct := mime.TypeByExtension(filepath.Ext(path)); ct != "" {
+			w.Header().Set("Content-Type", ct)
+		}
+		if strings.HasPrefix(path, "_app/immutable/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		http.ServeContent(w, req, info.Name(), startedAt, seeker)
 	})
 }
 

@@ -3,11 +3,14 @@ node_modules/
 .pnp
 .pnp.js
 
-# Build
+# Build artifacts (run `make frontend` to regenerate before `go build`)
 dist/
 build/
 .next/
 out/
+frontend/.svelte-kit/
+frontend/build/
+cmd/server/frontend/build/
 
 # Environment
 .env
