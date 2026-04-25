@@ -1,0 +1,77 @@
+name: Atomicsite E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'atomicsite/**'
+  pull_request:
+    paths:
+      - 'atomicsite/**'
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: atomicsite
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: atomicsite/go.mod
+          cache: true
+          cache-dependency-path: atomicsite/go.sum
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install frontend deps
+        working-directory: atomicsite/frontend
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend (embedded into Go binary)
+        working-directory: atomicsite
+        run: make frontend
+
+      - name: Build atomicsite Go binary
+        working-directory: atomicsite
+        run: go build -o bin/atomicsite ./cmd/server
+
+      - name: Install E2E deps
+        working-directory: atomicsite/tests/e2e
+        run: bun install --frozen-lockfile
+
+      - name: Patch playwright-core for Bun compat
+        working-directory: atomicsite/tests/e2e
+        run: bun scripts/patch-playwright.mjs
+
+      - name: Install Playwright Chromium
+        working-directory: atomicsite/tests/e2e
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E
+        working-directory: atomicsite/tests/e2e
+        env:
+          CI: '1'
+        run: bunx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: atomicsite/tests/e2e/playwright-report/
+          retention-days: 30
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: atomicsite/tests/e2e/test-results/
+          retention-days: 14

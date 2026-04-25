@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from '../fixtures/auth';
+import { loginAsAdmin } from '../../fixtures/auth';
 
 test.describe('Onboarding wizard', () => {
 	test('walk all 6 steps and create a site', async ({ page }) => {

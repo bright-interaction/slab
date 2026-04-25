@@ -4,10 +4,19 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"postinstall": "bun scripts/patch-playwright.mjs",
 		"test": "playwright test",
 		"test:headed": "playwright test --headed",
 		"test:debug": "playwright test --debug",
-		"test:wizard": "playwright test specs/wizard.spec.ts",
+		"test:smoke": "playwright test specs/smoke specs/auth",
+		"test:api": "playwright test specs/admin-api specs/agent-api",
+		"test:build": "playwright test specs/build-pipeline specs/evaluation-engine",
+		"test:guardrails": "playwright test specs/guardrails specs/negative",
+		"test:deploy": "playwright test specs/deploy",
+		"test:analytics": "playwright test specs/analytics specs/integrations",
+		"test:ui": "playwright test specs/admin-ui",
+		"test:security": "playwright test specs/security",
+		"test:wizard": "playwright test specs/admin-ui/wizard.spec.ts",
 		"report": "playwright show-report"
 	},
 	"devDependencies": {
