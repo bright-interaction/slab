@@ -127,6 +127,7 @@ func applySchema(sqlDB *sql.DB) error {
 		{"deployments", "target_id", "TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "deploy_url", "TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "deployed_at", "TEXT NOT NULL DEFAULT ''"},
+		{"site_silos", "silo_type", "TEXT NOT NULL DEFAULT 'inherit'"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

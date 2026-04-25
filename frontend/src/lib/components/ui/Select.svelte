@@ -6,19 +6,30 @@
 		value = $bindable(),
 		placeholder = 'Select an option',
 		disabled = false,
+		onchange,
 		class: className = ''
 	}: {
 		options: { value: string; label: string; disabled?: boolean }[];
 		value?: string;
 		placeholder?: string;
 		disabled?: boolean;
+		onchange?: (value: string) => void;
 		class?: string;
 	} = $props();
 
 	const selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? '');
 </script>
 
-<BitsSelect.Root type="single" bind:value items={options} {disabled}>
+<BitsSelect.Root
+	type="single"
+	bind:value
+	items={options}
+	{disabled}
+	onValueChange={(v: string) => {
+		value = v;
+		onchange?.(v);
+	}}
+>
 	<BitsSelect.Trigger
 		class="h-9 w-full inline-flex items-center justify-between rounded-lg border border-border bg-bg-elevated px-3 text-[13px] text-text-primary transition-colors focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:cursor-not-allowed disabled:opacity-50 {className}"
 	>

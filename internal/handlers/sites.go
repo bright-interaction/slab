@@ -92,6 +92,22 @@ func (h *SiteHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, site)
 }
 
+// ListSilos returns the site's declared silos with their type. Used by the
+// admin pages list to badge silo hubs as soft / hard / inherit.
+func (h *SiteHandler) ListSilos(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+		writeError(w, http.StatusNotFound, "Site not found")
+		return
+	}
+	silos, err := h.queries.ListSilosBySite(r.Context(), siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list silos")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"silos": silos})
+}
+
 type createSiteRequest struct {
 	Name           string `json:"name"`
 	Slug           string `json:"slug"`
@@ -202,6 +218,7 @@ type seedSiteRequest struct {
 	Silos []struct {
 		Name       string `json:"name"`
 		SlugPrefix string `json:"slug_prefix"`
+		SiloType   string `json:"silo_type,omitempty"`
 	} `json:"silos"`
 	Branding struct {
 		PrimaryColor   string `json:"primary_color"`
@@ -260,11 +277,19 @@ func (req *seedSiteRequest) normalize() error {
 	}
 
 	// Silos
+	allowedSiloTypes := map[string]bool{"inherit": true, "soft": true, "hard": true}
 	for i, s := range req.Silos {
 		s.Name = strings.TrimSpace(s.Name)
 		s.SlugPrefix = strings.TrimSpace(s.SlugPrefix)
+		s.SiloType = strings.TrimSpace(s.SiloType)
 		if s.Name == "" || s.SlugPrefix == "" {
 			return errors.New("each silo requires name and slug_prefix")
+		}
+		if s.SiloType == "" {
+			s.SiloType = "inherit"
+		}
+		if !allowedSiloTypes[s.SiloType] {
+			return errors.New("silo silo_type must be 'inherit', 'soft', or 'hard'")
 		}
 		req.Silos[i] = s
 	}
@@ -392,6 +417,7 @@ func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
 			SiteID:     siteID,
 			Name:       s.Name,
 			SlugPrefix: s.SlugPrefix,
+			SiloType:   s.SiloType,
 			SortOrder:  int64(i),
 		}); err != nil {
 			if strings.Contains(err.Error(), "UNIQUE") {

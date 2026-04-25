@@ -32,6 +32,13 @@
 	// like 'tjanster' meaning the new slug becomes 'tjanster/<your-slug>'.
 	let newParentSilo = $state('');
 
+	// Move dialog state
+	let moveDialogOpen = $state(false);
+	let moving = $state(false);
+	let movePage = $state<Page | null>(null);
+	let moveParent = $state('');
+	let moveLocalSlug = $state('');
+
 	const layoutOptions = [
 		{ value: 'default', label: 'Default' },
 		{ value: 'landing', label: 'Landing' },
@@ -82,7 +89,29 @@
 	// Group pages: top-level rendered first in their original order (preserving
 	// drag-reorder), with each silo hub immediately followed by its children
 	// (also in their saved order).
-	type Grouped = { page: Page; depth: number; isHub: boolean };
+	type Grouped = { page: Page; depth: number; isHub: boolean; siloType: string };
+
+	let siloTypesByPrefix = $state<Record<string, string>>({});
+
+	async function loadSiloTypes(id: string) {
+		try {
+			const res = await fetch(`/api/sites/${id}/silos`, { credentials: 'include' });
+			if (!res.ok) return;
+			const data = (await res.json()) as { silos?: { slug_prefix: string; silo_type: string }[] };
+			const map: Record<string, string> = {};
+			for (const s of data.silos ?? []) {
+				map[s.slug_prefix.replace(/^\/+|\/+$/g, '')] = s.silo_type;
+			}
+			siloTypesByPrefix = map;
+		} catch {
+			// Endpoint may not exist yet on older servers; silently degrade.
+		}
+	}
+
+	$effect(() => {
+		void loadSiloTypes(siteID);
+	});
+
 	const groupedPages = $derived.by<Grouped[]>(() => {
 		const out: Grouped[] = [];
 		const childrenBySilo = new Map<string, Page[]>();
@@ -100,20 +129,18 @@
 		for (const p of topLevel) {
 			const norm = normalizeSlug(p.slug);
 			const isHub = siloHubs.has(norm) && norm.length > 0;
-			out.push({ page: p, depth: 0, isHub });
+			const siloType = isHub ? (siloTypesByPrefix[norm] ?? '') : '';
+			out.push({ page: p, depth: 0, isHub, siloType });
 			if (isHub) {
 				for (const child of childrenBySilo.get(norm) ?? []) {
-					out.push({ page: child, depth: 1, isHub: false });
+					out.push({ page: child, depth: 1, isHub: false, siloType: '' });
 				}
 				childrenBySilo.delete(norm);
 			}
 		}
-		// Orphan children whose silo hub doesn't exist as a top-level page yet:
-		// render them grouped at depth 1 under a synthetic header in the future.
-		// For v1, append them at the end at depth 1 so they're at least visible.
 		for (const [, children] of childrenBySilo) {
 			for (const child of children) {
-				out.push({ page: child, depth: 1, isHub: false });
+				out.push({ page: child, depth: 1, isHub: false, siloType: '' });
 			}
 		}
 		return out;
@@ -187,6 +214,55 @@
 
 	function openPage(p: Page) {
 		void goto(`/sites/${siteID}/pages/${p.id}`);
+	}
+
+	function openMoveDialog(p: Page) {
+		movePage = p;
+		const norm = normalizeSlug(p.slug);
+		const idx = norm.indexOf('/');
+		moveParent = idx === -1 ? '' : norm.slice(0, idx);
+		moveLocalSlug = idx === -1 ? norm : norm.slice(idx + 1);
+		moveDialogOpen = true;
+	}
+
+	const moveOptions = $derived.by<{ value: string; label: string }[]>(() => {
+		const opts = [{ value: '', label: '(top-level)' }];
+		for (const hub of siloHubs) {
+			// Don't let a page move into its own subtree
+			if (movePage && normalizeSlug(movePage.slug) === hub) continue;
+			opts.push({ value: hub, label: `Under /${hub}` });
+		}
+		return opts;
+	});
+
+	const movePreviewSlug = $derived(
+		moveParent ? `/${moveParent}/${moveLocalSlug}` : `/${moveLocalSlug}`
+	);
+
+	async function applyMove() {
+		if (!movePage) return;
+		const local = moveLocalSlug.trim();
+		if (!/^[a-z0-9-]+$/.test(local)) {
+			toast.error('Slug must use lowercase letters, numbers, hyphens.');
+			return;
+		}
+		const newSlugFull = moveParent ? `${moveParent}/${local}` : local;
+		if (normalizeSlug(movePage.slug) === newSlugFull) {
+			moveDialogOpen = false;
+			return;
+		}
+		moving = true;
+		try {
+			await pagesApi.update(siteID, movePage.id, { slug: newSlugFull });
+			toast.success('Page moved.');
+			moveDialogOpen = false;
+			await loadPages(siteID);
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Failed to move page';
+			toast.error(msg);
+		} finally {
+			moving = false;
+		}
 	}
 
 	async function deletePage(p: Page) {
@@ -304,9 +380,11 @@
 						page={g.page}
 						depth={g.depth}
 						isSiloHub={g.isHub}
+						siloType={g.siloType}
 						dragging={draggingId === g.page.id}
 						onOpen={() => openPage(g.page)}
 						onDelete={() => deletePage(g.page)}
+						onMove={() => openMoveDialog(g.page)}
 						ondragstart={(e) => handleDragStart(g.page.id, e)}
 						ondragover={(e) => handleDragOver(g.page.id, e)}
 						ondragend={handleDragEnd}
@@ -378,5 +456,34 @@
 	{#snippet footer()}
 		<Button variant="secondary" onclick={() => (newDialogOpen = false)}>Cancel</Button>
 		<Button variant="primary" loading={creating} onclick={createPage}>Create</Button>
+	{/snippet}
+</Dialog>
+
+<Dialog bind:open={moveDialogOpen} title="Move page" size="sm">
+	<div class="flex flex-col gap-3">
+		{#if movePage}
+			<p class="text-[13px] text-text-secondary">
+				Currently <span class="font-mono text-[12px] text-text-primary">{movePage.slug}</span>
+			</p>
+		{/if}
+		<div class="flex flex-col gap-1.5">
+			<span class="text-[12px] font-medium text-text-secondary">Parent</span>
+			<Select options={moveOptions} bind:value={moveParent} />
+			<span class="text-[11px] text-text-muted">
+				Pick a silo or move to top-level. Children of this page move with it.
+			</span>
+		</div>
+		<Input
+			label="Slug"
+			value={moveLocalSlug}
+			oninput={(e) => {
+				moveLocalSlug = (e.currentTarget as HTMLInputElement).value;
+			}}
+			hint="New URL: {movePreviewSlug}"
+		/>
+	</div>
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (moveDialogOpen = false)}>Cancel</Button>
+		<Button variant="primary" loading={moving} onclick={applyMove}>Move</Button>
 	{/snippet}
 </Dialog>

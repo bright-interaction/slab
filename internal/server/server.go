@@ -103,6 +103,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/sites/{siteID}", sh.Get)
 		r.Patch("/api/sites/{siteID}", sh.Update)
 		r.Delete("/api/sites/{siteID}", sh.Delete)
+		r.Get("/api/sites/{siteID}/silos", sh.ListSilos)
 
 		// Pages
 		ph := handlers.NewPageHandler(s.cfg, s.queries)

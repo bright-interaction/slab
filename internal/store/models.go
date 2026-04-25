@@ -281,6 +281,7 @@ type SiteSilo struct {
 	SiteID     string `json:"site_id"`
 	Name       string `json:"name"`
 	SlugPrefix string `json:"slug_prefix"`
+	SiloType   string `json:"silo_type"`
 	SortOrder  int64  `json:"sort_order"`
 	CreatedAt  string `json:"created_at"`
 }

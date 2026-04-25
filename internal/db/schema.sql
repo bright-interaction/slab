@@ -186,12 +186,15 @@ CREATE TABLE IF NOT EXISTS site_architecture (
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Silos/sections within a site architecture
+-- Silos/sections within a site architecture. silo_type allows hybrid
+-- structures: 'inherit' uses site_architecture.structure_type, 'soft' allows
+-- cross-silo links, 'hard' enforces strict topical isolation.
 CREATE TABLE IF NOT EXISTS site_silos (
     id          TEXT PRIMARY KEY,
     site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     slug_prefix TEXT NOT NULL,
+    silo_type   TEXT NOT NULL DEFAULT 'inherit' CHECK (silo_type IN ('inherit','soft','hard')),
     sort_order  INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(site_id, slug_prefix)

@@ -32,8 +32,8 @@ func (q *Queries) CreateAllowedScript(ctx context.Context, arg CreateAllowedScri
 }
 
 const createSilo = `-- name: CreateSilo :exec
-INSERT INTO site_silos (id, site_id, name, slug_prefix, sort_order, created_at)
-VALUES (?, ?, ?, ?, ?, datetime('now'))
+INSERT INTO site_silos (id, site_id, name, slug_prefix, silo_type, sort_order, created_at)
+VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
 `
 
 type CreateSiloParams struct {
@@ -41,6 +41,7 @@ type CreateSiloParams struct {
 	SiteID     string `json:"site_id"`
 	Name       string `json:"name"`
 	SlugPrefix string `json:"slug_prefix"`
+	SiloType   string `json:"silo_type"`
 	SortOrder  int64  `json:"sort_order"`
 }
 
@@ -50,6 +51,7 @@ func (q *Queries) CreateSilo(ctx context.Context, arg CreateSiloParams) error {
 		arg.SiteID,
 		arg.Name,
 		arg.SlugPrefix,
+		arg.SiloType,
 		arg.SortOrder,
 	)
 	return err
@@ -121,7 +123,7 @@ func (q *Queries) GetSetting(ctx context.Context, arg GetSettingParams) (SiteSet
 }
 
 const getSiloByID = `-- name: GetSiloByID :one
-SELECT id, site_id, name, slug_prefix, sort_order, created_at FROM site_silos WHERE id = ?
+SELECT id, site_id, name, slug_prefix, silo_type, sort_order, created_at FROM site_silos WHERE id = ?
 `
 
 func (q *Queries) GetSiloByID(ctx context.Context, id string) (SiteSilo, error) {
@@ -132,6 +134,7 @@ func (q *Queries) GetSiloByID(ctx context.Context, id string) (SiteSilo, error) 
 		&i.SiteID,
 		&i.Name,
 		&i.SlugPrefix,
+		&i.SiloType,
 		&i.SortOrder,
 		&i.CreatedAt,
 	)
@@ -294,7 +297,7 @@ func (q *Queries) ListSettingsBySite(ctx context.Context, siteID string) ([]Site
 }
 
 const listSilosBySite = `-- name: ListSilosBySite :many
-SELECT id, site_id, name, slug_prefix, sort_order, created_at FROM site_silos WHERE site_id = ? ORDER BY sort_order
+SELECT id, site_id, name, slug_prefix, silo_type, sort_order, created_at FROM site_silos WHERE site_id = ? ORDER BY sort_order
 `
 
 // Silos
@@ -312,6 +315,7 @@ func (q *Queries) ListSilosBySite(ctx context.Context, siteID string) ([]SiteSil
 			&i.SiteID,
 			&i.Name,
 			&i.SlugPrefix,
+			&i.SiloType,
 			&i.SortOrder,
 			&i.CreatedAt,
 		); err != nil {
@@ -350,12 +354,13 @@ func (q *Queries) UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScri
 }
 
 const updateSilo = `-- name: UpdateSilo :exec
-UPDATE site_silos SET name = ?, slug_prefix = ?, sort_order = ? WHERE id = ?
+UPDATE site_silos SET name = ?, slug_prefix = ?, silo_type = ?, sort_order = ? WHERE id = ?
 `
 
 type UpdateSiloParams struct {
 	Name       string `json:"name"`
 	SlugPrefix string `json:"slug_prefix"`
+	SiloType   string `json:"silo_type"`
 	SortOrder  int64  `json:"sort_order"`
 	ID         string `json:"id"`
 }
@@ -364,6 +369,7 @@ func (q *Queries) UpdateSilo(ctx context.Context, arg UpdateSiloParams) error {
 	_, err := q.db.ExecContext(ctx, updateSilo,
 		arg.Name,
 		arg.SlugPrefix,
+		arg.SiloType,
 		arg.SortOrder,
 		arg.ID,
 	)

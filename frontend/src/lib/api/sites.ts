@@ -78,9 +78,12 @@ export interface SeedSiteStructure {
 	max_depth: number;
 }
 
+export type SiloType = 'inherit' | 'soft' | 'hard';
+
 export interface SeedSiteSilo {
 	name: string;
 	slug_prefix: string;
+	silo_type?: SiloType;
 }
 
 export interface SeedSiteBranding {
