@@ -83,3 +83,153 @@ html {
 		background-color var(--motion-normal) var(--ease-premium),
 		color var(--motion-normal) var(--ease-premium);
 }
+
+/* ============================================================
+   Heading defaults: premium feel with display family + extralight
+   ============================================================ */
+h1,
+h2,
+h3 {
+	font-family: var(--font-display);
+	font-weight: 200;
+	letter-spacing: -0.025em;
+	color: var(--t-text-primary);
+}
+
+/* ============================================================
+   Component utility classes (Swiss Minimal)
+   ============================================================ */
+@layer components {
+	.btn-primary {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-accent-fg hover:bg-accent-hover transition-all duration-200 active:scale-[0.98] disabled:opacity-50;
+	}
+	.btn-secondary {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-bg-elevated px-4 py-2 text-[13px] font-medium text-text-primary hover:bg-bg-hover transition-all duration-200 active:scale-[0.98] disabled:opacity-50;
+	}
+	.btn-ghost {
+		@apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all duration-200 active:scale-[0.98];
+	}
+	.btn-danger {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg border border-danger/40 bg-danger/10 px-4 py-2 text-[13px] font-medium text-danger hover:bg-danger/20 transition-all duration-200 active:scale-[0.98] disabled:opacity-50;
+	}
+
+	.input-field {
+		@apply w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-[13px] text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors;
+	}
+
+	.card {
+		@apply rounded-xl bg-bg-surface border border-border-light;
+	}
+	.detail-card {
+		@apply rounded-xl bg-bg-surface border border-border-light p-5;
+	}
+
+	.status-dot {
+		@apply inline-block h-1.5 w-1.5 rounded-full shrink-0;
+	}
+	.status-dot-success {
+		@apply inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-success;
+	}
+	.status-dot-warning {
+		@apply inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-warning;
+	}
+	.status-dot-danger {
+		@apply inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-danger;
+	}
+
+	.row-actions {
+		opacity: 0;
+		transition: opacity var(--motion-normal) var(--ease-premium);
+	}
+	.group:hover .row-actions,
+	.group:focus-within .row-actions {
+		opacity: 1;
+	}
+	.row-actions-always {
+		opacity: 1;
+	}
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+.animate-fadeIn {
+	animation: fadeIn 0.18s var(--ease-premium);
+}
+
+@keyframes scaleIn {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+.animate-scaleIn {
+	animation: scaleIn 0.18s var(--ease-premium);
+}
+
+@keyframes staggerUp {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+.animate-stagger-1 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.05s both;
+}
+.animate-stagger-2 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.1s both;
+}
+.animate-stagger-3 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.15s both;
+}
+.animate-stagger-4 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.2s both;
+}
+.animate-stagger-5 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.25s both;
+}
+.animate-stagger-6 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.3s both;
+}
+.animate-stagger-7 {
+	animation: staggerUp 0.4s var(--ease-stagger) 0.35s both;
+}
+
+/* ============================================================
+   Skeleton shimmer
+   ============================================================ */
+@keyframes shimmer {
+	0% {
+		transform: translateX(-100%);
+	}
+	100% {
+		transform: translateX(100%);
+	}
+}
+.skeleton-shimmer {
+	background: linear-gradient(
+		90deg,
+		transparent 0%,
+		var(--t-bg-elevated) 50%,
+		transparent 100%
+	);
+	animation: shimmer 1.6s ease-in-out infinite;
+}
