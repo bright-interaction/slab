@@ -42,7 +42,7 @@
 	let domainAliases = $state('');
 	let additionalLangs = $state('');
 
-	let initial = {
+	let initial = $state({
 		name: '',
 		domain: '',
 		lang: 'en',
@@ -51,7 +51,7 @@
 		canonicalBase: '',
 		domainAliases: '',
 		additionalLangs: ''
-	};
+	});
 
 	async function load() {
 		loading = true;

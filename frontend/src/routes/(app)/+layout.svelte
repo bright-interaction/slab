@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import CommandPalette from '$lib/components/ui/CommandPalette.svelte';
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { currentSite } from '$lib/stores/currentSite.svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -30,3 +31,4 @@
 </div>
 
 <CommandPalette />
+<ConfirmDialog />

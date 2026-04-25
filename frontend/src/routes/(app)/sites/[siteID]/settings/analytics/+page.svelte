@@ -47,7 +47,7 @@
 		crmWebhookSecret: string;
 	};
 
-	let initial: State = {
+	let initial: State = $state({
 		cookieproofEnabled: false,
 		cookieproofOrgId: '',
 		atomicsiteTrackingEnabled: true,
@@ -58,7 +58,7 @@
 		umamiSiteId: '',
 		crmWebhookUrl: '',
 		crmWebhookSecret: ''
-	};
+	});
 
 	async function load() {
 		loading = true;
@@ -243,7 +243,7 @@
 							Logs page views from Nginx access logs. No client-side script.
 						</span>
 					</div>
-					<Switch bind:checked={atomicsiteTrackingEnabled} />
+					<Switch bind:checked={atomicsiteTrackingEnabled} ariaLabel="Enable Atomicsite tracking" />
 				</div>
 			</Card>
 
@@ -259,7 +259,7 @@
 								Loads CookieProof widget on every page.
 							</span>
 						</div>
-						<Switch bind:checked={cookieproofEnabled} />
+						<Switch bind:checked={cookieproofEnabled} ariaLabel="Enable CookieProof" />
 					</div>
 					{#if cookieproofEnabled}
 						<Input
@@ -283,7 +283,7 @@
 								Loaded only after consent if CookieProof is on.
 							</span>
 						</div>
-						<Switch bind:checked={ga4Enabled} />
+						<Switch bind:checked={ga4Enabled} ariaLabel="Enable GA4" />
 					</div>
 					{#if ga4Enabled}
 						<Input
@@ -305,7 +305,7 @@
 								Cookieless privacy-friendly analytics.
 							</span>
 						</div>
-						<Switch bind:checked={umamiEnabled} />
+						<Switch bind:checked={umamiEnabled} ariaLabel="Enable Umami" />
 					</div>
 					{#if umamiEnabled}
 						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
