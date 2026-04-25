@@ -295,3 +295,29 @@ type User struct {
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 }
+
+type VisitEvent struct {
+	ID          string `json:"id"`
+	SiteID      string `json:"site_id"`
+	Fingerprint string `json:"fingerprint"`
+	SessionID   string `json:"session_id"`
+	Path        string `json:"path"`
+	Referer     string `json:"referer"`
+	Status      int64  `json:"status"`
+	Ms          int64  `json:"ms"`
+	Ts          string `json:"ts"`
+}
+
+type VisitSession struct {
+	ID                    string `json:"id"`
+	SiteID                string `json:"site_id"`
+	Fingerprint           string `json:"fingerprint"`
+	VisitorID             string `json:"visitor_id"`
+	Email                 string `json:"email"`
+	ConsentMethod         string `json:"consent_method"`
+	ConsentCategoriesJson string `json:"consent_categories_json"`
+	StartedAt             string `json:"started_at"`
+	LastSeenAt            string `json:"last_seen_at"`
+	PageCount             int64  `json:"page_count"`
+	IdentifiedAt          string `json:"identified_at"`
+}

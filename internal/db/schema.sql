@@ -345,3 +345,41 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 CREATE INDEX IF NOT EXISTS idx_evaluations_build ON evaluations(build_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_site ON evaluations(site_id);
+
+-- ============================================================
+-- Analytics moat: server-side visit tracking + consent stitching
+-- ============================================================
+
+-- Individual visit events parsed from Nginx JSON access logs
+CREATE TABLE IF NOT EXISTS visit_events (
+    id           TEXT PRIMARY KEY,
+    site_id      TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    fingerprint  TEXT NOT NULL,
+    session_id   TEXT NOT NULL DEFAULT '',
+    path         TEXT NOT NULL,
+    referer      TEXT NOT NULL DEFAULT '',
+    status       INTEGER NOT NULL DEFAULT 200,
+    ms           INTEGER NOT NULL DEFAULT 0,
+    ts           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_visit_events_site_ts ON visit_events(site_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_visit_events_fingerprint ON visit_events(site_id, fingerprint);
+CREATE INDEX IF NOT EXISTS idx_visit_events_session ON visit_events(site_id, session_id);
+
+-- Aggregated visit sessions (one per site/fingerprint), stitched on consent
+CREATE TABLE IF NOT EXISTS visit_sessions (
+    id              TEXT PRIMARY KEY,
+    site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    fingerprint     TEXT NOT NULL,
+    visitor_id      TEXT NOT NULL DEFAULT '',
+    email           TEXT NOT NULL DEFAULT '',
+    consent_method  TEXT NOT NULL DEFAULT '',
+    consent_categories_json TEXT NOT NULL DEFAULT '{}',
+    started_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    page_count      INTEGER NOT NULL DEFAULT 0,
+    identified_at   TEXT NOT NULL DEFAULT '',
+    UNIQUE(site_id, fingerprint)
+);
+CREATE INDEX IF NOT EXISTS idx_visit_sessions_site_seen ON visit_sessions(site_id, last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_visit_sessions_identified ON visit_sessions(site_id, identified_at) WHERE identified_at != '';

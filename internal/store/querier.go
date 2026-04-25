@@ -12,6 +12,8 @@ type Querier interface {
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
+	CountVisitsByPath(ctx context.Context, arg CountVisitsByPathParams) ([]CountVisitsByPathRow, error)
+	CountVisitsBySite(ctx context.Context, arg CountVisitsBySiteParams) (int64, error)
 	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
 	CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error
 	CreateBlock(ctx context.Context, arg CreateBlockParams) error
@@ -70,6 +72,7 @@ type Querier interface {
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
+	GetSessionByFingerprint(ctx context.Context, arg GetSessionByFingerprintParams) (VisitSession, error)
 	GetSetting(ctx context.Context, arg GetSettingParams) (SiteSetting, error)
 	GetSiloByID(ctx context.Context, id string) (SiteSilo, error)
 	// Site architecture
@@ -80,6 +83,7 @@ type Querier interface {
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
+	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	ListActiveGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
@@ -102,6 +106,7 @@ type Querier interface {
 	ListFormsBySite(ctx context.Context, siteID string) ([]Form, error)
 	ListGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	ListGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
+	ListIdentifiedSessions(ctx context.Context, arg ListIdentifiedSessionsParams) ([]VisitSession, error)
 	ListKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error)
 	ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error)
@@ -116,7 +121,10 @@ type Querier interface {
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
+	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
+	TopReferers(ctx context.Context, arg TopReferersParams) ([]TopReferersRow, error)
 	UpdateAgentKeyLastUsed(ctx context.Context, id string) error
 	UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScriptParams) error
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error
@@ -143,6 +151,7 @@ type Querier interface {
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error
+	UpsertVisitSession(ctx context.Context, arg UpsertVisitSessionParams) error
 }
 
 var _ Querier = (*Queries)(nil)
