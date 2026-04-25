@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import * as buildsApi from '$lib/api/builds';
 	import * as evaluationsApi from '$lib/api/evaluations';
+	import * as deployApi from '$lib/api/deploy';
 	import {
 		pollBuild,
 		getState,
@@ -16,7 +17,9 @@
 	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
-	import type { Site, Evaluation } from '$lib/api/types';
+	import Select from '$lib/components/ui/Select.svelte';
+	import type { Site, Evaluation, DeployTarget, DeployResult } from '$lib/api/types';
+	import { Copy as CopyIcon, ExternalLink } from 'lucide-svelte';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -35,6 +38,14 @@
 	let recentLoading = $state(true);
 	let recentRows = $state<RecentBuildRow[]>([]);
 	let recentError = $state<string | null>(null);
+
+	let deployTargets = $state<DeployTarget[]>([]);
+	let deployTargetsLoading = $state(true);
+	let deployTargetID = $state<string>('');
+	let deploying = $state(false);
+	let deployResult = $state<DeployResult | null>(null);
+	let deployedAt = $state<string | null>(null);
+	let deployTargetUsedID = $state<string | null>(null);
 
 	type Grade = 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F';
 	const validGrades: Grade[] = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F'];
@@ -57,6 +68,10 @@
 		created_at: string;
 		composite: Grade | null;
 		categoryCount: number;
+		targetID?: string;
+		deployURL?: string;
+		deployedAt?: string;
+		targetName?: string;
 	}
 
 	function compositeGrade(evals: Evaluation[]): Grade | null {
@@ -98,7 +113,25 @@
 		recentError = null;
 		try {
 			const evals = await evaluationsApi.listBySite(siteID);
-			recentRows = groupRecentBuilds(evals);
+			const rows = groupRecentBuilds(evals);
+			// Best-effort augmentation: if the build status response carries deploy
+			// info (target_id/deploy_url/deployed_at), surface it on the row.
+			const enriched = await Promise.all(
+				rows.map(async (row) => {
+					try {
+						const status = await buildsApi.getBuildStatus(siteID, row.buildID);
+						return {
+							...row,
+							targetID: status.target_id,
+							deployURL: status.deploy_url,
+							deployedAt: status.deployed_at
+						};
+					} catch {
+						return row;
+					}
+				})
+			);
+			recentRows = enriched;
 		} catch (err) {
 			recentError = err instanceof Error ? err.message : 'Failed to load build history';
 			recentRows = [];
@@ -107,8 +140,82 @@
 		}
 	}
 
+	async function loadDeployTargets() {
+		deployTargetsLoading = true;
+		try {
+			deployTargets = await deployApi.listTargets(siteID);
+			if (deployTargets.length > 0 && !deployTargetID) {
+				const def = deployTargets.find((t) => t.is_default);
+				const first = deployTargets[0];
+				deployTargetID = def?.id ?? first?.id ?? '';
+			}
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to load deploy targets.');
+		} finally {
+			deployTargetsLoading = false;
+		}
+	}
+
+	async function onDeploy() {
+		if (!activeBuildID || !deployTargetID || deploying) return;
+		deploying = true;
+		try {
+			const resp = await deployApi.triggerDeploy(siteID, {
+				build_id: activeBuildID,
+				target_id: deployTargetID
+			});
+			deployResult = resp;
+			deployedAt = new Date().toISOString();
+			deployTargetUsedID = deployTargetID;
+			toast.success('Deploy started.');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to deploy.');
+		} finally {
+			deploying = false;
+		}
+	}
+
+	async function copyDeployURL() {
+		if (!deployResult?.deploy_url) return;
+		try {
+			await navigator.clipboard.writeText(deployResult.deploy_url);
+			toast.success('URL copied.');
+		} catch {
+			toast.error('Failed to copy URL.');
+		}
+	}
+
+	function formatRelative(ts: string): string {
+		const d = new Date(ts);
+		if (Number.isNaN(d.getTime())) return '';
+		const diffMs = nowTick - d.getTime();
+		const sec = Math.max(0, Math.floor(diffMs / 1000));
+		if (sec < 60) return `${sec}s ago`;
+		const min = Math.floor(sec / 60);
+		if (min < 60) return `${min}m ago`;
+		const hr = Math.floor(min / 60);
+		if (hr < 24) return `${hr}h ago`;
+		const days = Math.floor(hr / 24);
+		return `${days}d ago`;
+	}
+
+	const deployTargetOptions = $derived(
+		deployTargets.map((t) => ({
+			value: t.id,
+			label: t.is_default ? `${t.name} (default)` : t.name
+		}))
+	);
+
+	const deployTargetUsed = $derived(
+		deployTargetUsedID ? deployTargets.find((t) => t.id === deployTargetUsedID) : null
+	);
+
 	$effect(() => {
 		void loadRecent();
+	});
+
+	$effect(() => {
+		void loadDeployTargets();
 	});
 
 	$effect(() => {
@@ -300,6 +407,99 @@
 		</section>
 	{/if}
 
+	{#if buildState && buildState.status === 'success'}
+		<section class="mt-6">
+			<Card padding="md">
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<h2 class="text-[13px] font-medium text-text-primary">Deploy</h2>
+						<p class="mt-1 text-[12px] text-text-muted">Publish this build to a configured target.</p>
+					</div>
+				</div>
+
+				{#if deployTargetsLoading}
+					<div class="mt-4 flex items-center gap-2 text-[12px] text-text-muted">
+						<Skeleton width="16rem" height="2.25rem" />
+					</div>
+				{:else if deployTargets.length === 0}
+					<div
+						class="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border-light bg-bg-elevated p-3"
+					>
+						<p class="text-[12px] text-text-muted">
+							No deploy targets configured. Add one to publish this build.
+						</p>
+						<a
+							href={`/sites/${siteID}/settings/deployment`}
+							class="text-[12px] font-medium text-accent hover:underline"
+						>
+							Add target
+						</a>
+					</div>
+				{:else}
+					<div class="mt-4 flex flex-wrap items-end gap-3">
+						<div class="flex-1 min-w-[16rem]">
+							<label for="deploy-target" class="text-[12px] font-medium text-text-secondary"
+								>Target</label
+							>
+							<div class="mt-1.5">
+								<Select options={deployTargetOptions} bind:value={deployTargetID} />
+							</div>
+						</div>
+						<Button
+							variant="primary"
+							loading={deploying}
+							disabled={deploying || !deployTargetID}
+							onclick={onDeploy}
+						>
+							Deploy
+						</Button>
+					</div>
+
+					{#if deployResult}
+						<div class="mt-4 rounded-lg border border-border-light bg-bg-elevated p-3">
+							<div class="flex flex-wrap items-center justify-between gap-2">
+								<div class="flex items-center gap-2">
+									<Badge variant="success" dot>deployed</Badge>
+									{#if deployTargetUsed}
+										<span class="text-[12px] text-text-muted">via {deployTargetUsed.name}</span>
+									{/if}
+									{#if deployedAt}
+										<span class="text-[12px] text-text-muted">{formatRelative(deployedAt)}</span>
+									{/if}
+								</div>
+							</div>
+							{#if deployResult.deploy_url}
+								<div class="mt-2 flex flex-wrap items-center gap-2">
+									<code class="font-mono text-[12px] text-text-primary truncate">
+										{deployResult.deploy_url}
+									</code>
+									<button
+										type="button"
+										class="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border-light bg-bg-surface px-2 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+										onclick={copyDeployURL}
+										aria-label="Copy URL"
+									>
+										<CopyIcon size={12} strokeWidth={1.75} />
+										Copy
+									</button>
+									<a
+										href={deployResult.deploy_url}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border-light bg-bg-surface px-2 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+									>
+										<ExternalLink size={12} strokeWidth={1.75} />
+										Open
+									</a>
+								</div>
+							{/if}
+						</div>
+					{/if}
+				{/if}
+			</Card>
+		</section>
+	{/if}
+
 	<section class="mt-8">
 		<div class="flex items-baseline justify-between">
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
@@ -362,6 +562,22 @@
 									<p class="text-[11px] text-text-muted">
 										{row.categoryCount} categor{row.categoryCount === 1 ? 'y' : 'ies'} scored
 									</p>
+									{#if row.deployURL && row.deployedAt}
+										<div class="mt-1 flex items-center gap-2">
+											<Badge variant="success" dot>deployed</Badge>
+											<a
+												href={row.deployURL}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="font-mono text-[11px] text-text-muted hover:text-text-primary truncate transition-colors"
+											>
+												{row.deployURL}
+											</a>
+											<span class="text-[11px] text-text-muted">
+												{formatRelative(row.deployedAt)}
+											</span>
+										</div>
+									{/if}
 								</div>
 								<a
 									href={`/sites/${siteID}/evaluations/${row.buildID}`}
