@@ -45,9 +45,16 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 func renderPage(page store.Page, blocks []store.Block, components map[string]bool) string {
 	var b strings.Builder
 
+	// Depth-aware import prefix. Pages live under src/pages/{slug}.astro;
+	// nested slugs like /tjanster/avtal land at src/pages/tjanster/avtal.astro
+	// which needs ../../components/ to climb back to src/. Without this,
+	// every page deeper than one level fails astro build with "could not
+	// resolve '../components/foo.astro'".
+	prefix := strings.Repeat("../", pageDepth(page.Slug)+1)
+
 	// Frontmatter
 	b.WriteString("---\n")
-	b.WriteString("import Base from '../layouts/Base.astro';\n")
+	b.WriteString(fmt.Sprintf("import Base from '%slayouts/Base.astro';\n", prefix))
 
 	// Collect component imports
 	imports := make(map[string]bool)
@@ -61,7 +68,7 @@ func renderPage(page store.Page, blocks []store.Block, components map[string]boo
 		}
 	}
 	for name := range imports {
-		b.WriteString(fmt.Sprintf("import %s from '../components/%s.astro';\n", pascalCase(name), name))
+		b.WriteString(fmt.Sprintf("import %s from '%scomponents/%s.astro';\n", pascalCase(name), prefix, name))
 	}
 
 	b.WriteString("---\n\n")
@@ -208,6 +215,18 @@ func slugToFilePath(slug string, wsDir string) string {
 		return filepath.Join(wsDir, "src", "pages", "index.astro")
 	}
 	return filepath.Join(wsDir, "src", "pages", slug+".astro")
+}
+
+// pageDepth returns how many subdirectories deep under src/pages the page
+// file sits. Used to emit the correct number of ../ in import paths so
+// pages at any depth can resolve ../layouts/Base.astro and
+// ../components/{name}.astro consistently.
+func pageDepth(slug string) int {
+	slug = strings.Trim(slug, "/")
+	if slug == "" {
+		return 0
+	}
+	return strings.Count(slug, "/")
 }
 
 func pascalCase(s string) string {
