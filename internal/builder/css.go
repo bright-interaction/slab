@@ -36,11 +36,45 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 
 	// Reset
 	b.WriteString("*, *::before, *::after { box-sizing: border-box; margin: 0; }\n")
-	b.WriteString("html { font-family: var(--font-body); color: var(--color-text); background-color: var(--color-bg); line-height: 1.6; }\n")
+	b.WriteString("html { font-family: var(--font-body); color: var(--color-text); background-color: var(--color-bg); line-height: 1.6; -webkit-font-smoothing: antialiased; }\n")
 	b.WriteString("body { min-height: 100dvh; }\n")
-	b.WriteString("h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); line-height: 1.2; }\n")
-	b.WriteString("a { color: var(--color-primary); }\n")
+	b.WriteString("h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); line-height: 1.15; letter-spacing: -0.01em; }\n")
+	b.WriteString("a { color: var(--color-primary); text-decoration: none; }\n")
+	b.WriteString("a:hover { text-decoration: underline; }\n")
 	b.WriteString("img { max-width: 100%; height: auto; display: block; }\n\n")
+
+	// Baseline utility layer. These classes are common across most starter
+	// kits and components, so the build pipeline ships them by default
+	// regardless of which CSS rows the site has registered. Sites can
+	// override any of these by writing a class with the same name in their
+	// css_classes table; the user-defined block runs after this layer.
+	b.WriteString("/* --- Atomicsite baseline utilities --- */\n\n")
+	b.WriteString(".container { width: 100%; max-width: 64rem; margin-inline: auto; padding-inline: 1.5rem; }\n")
+	b.WriteString("main { display: block; }\n")
+	b.WriteString("section { padding-block: 4rem; }\n")
+	b.WriteString(".lede { font-size: 1.25rem; color: color-mix(in oklab, var(--color-text) 75%, transparent); max-width: 60ch; margin-block-start: 1rem; }\n")
+	b.WriteString(".actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-block-start: 1.75rem; }\n")
+	b.WriteString(".btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border-radius: 0.5rem; font-weight: 500; transition: transform 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out; }\n")
+	b.WriteString(".btn:active { transform: scale(0.98); }\n")
+	b.WriteString(".btn-primary { background: var(--color-primary); color: white; text-decoration: none; }\n")
+	b.WriteString(".btn-primary:hover { background: color-mix(in oklab, var(--color-primary) 85%, black); text-decoration: none; }\n")
+	b.WriteString(".btn-secondary { background: transparent; color: var(--color-text); border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent); text-decoration: none; }\n")
+	b.WriteString(".btn-secondary:hover { background: color-mix(in oklab, var(--color-text) 5%, transparent); text-decoration: none; }\n")
+	b.WriteString(".btn-link { background: transparent; color: var(--color-primary); padding-inline: 0; }\n")
+	b.WriteString(".services-grid, .feature-grid, .team-grid, .project-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem; margin-block-start: 2rem; }\n")
+	b.WriteString(".service-card, .feature-tile, .project-card { padding: 1.5rem; border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent); border-radius: 0.75rem; background: color-mix(in oklab, var(--color-bg) 92%, white); transition: transform 200ms ease-out, box-shadow 200ms ease-out; }\n")
+	b.WriteString(".service-card:hover, .feature-tile:hover, .project-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+	b.WriteString(".service-card h3, .feature-tile h3, .project-card h3 { font-size: 1.125rem; margin-block-end: 0.5rem; }\n")
+	b.WriteString(".service-card p, .feature-tile p, .project-card p { color: color-mix(in oklab, var(--color-text) 70%, transparent); margin-block-end: 1rem; }\n")
+	b.WriteString(".role { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); text-transform: uppercase; letter-spacing: 0.05em; }\n")
+	b.WriteString(".bio { font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 75%, transparent); }\n")
+	b.WriteString(".gdpr-notice { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 65%, transparent); margin-block-start: 1rem; }\n")
+	b.WriteString(".block { padding-block: 3rem; }\n")
+	b.WriteString(".block--text { max-width: 42rem; margin-inline: auto; padding-inline: 1.5rem; font-size: 1.0625rem; }\n")
+	b.WriteString(".pricing-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem; margin-block-start: 2rem; }\n")
+	b.WriteString(".faq-accordion { margin-block-start: 2rem; }\n")
+	b.WriteString("h2 { font-size: 2rem; margin-block-end: 1rem; }\n")
+	b.WriteString("h3 { font-size: 1.25rem; }\n\n")
 
 	// User-defined CSS classes
 	if len(classes) > 0 {
