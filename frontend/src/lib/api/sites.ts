@@ -59,3 +59,51 @@ export function update(siteID: string, patch: UpdateSitePatch): Promise<Site> {
 export function remove(siteID: string): Promise<{ status: string }> {
 	return apiDelete<{ status: string }>(`/sites/${siteID}`);
 }
+
+export type SiteType = 'b2b' | 'b2c' | 'personal' | 'blog' | 'agency' | 'one-pager';
+export type StructureType = 'one-pager' | 'soft-silo' | 'hard-silo';
+
+export interface SeedSiteInfo {
+	name: string;
+	slug: string;
+	domain?: string;
+	lang: string;
+	business_name: string;
+	contact_email: string;
+	country: string;
+}
+
+export interface SeedSiteStructure {
+	structure_type: StructureType;
+	max_depth: number;
+}
+
+export interface SeedSiteSilo {
+	name: string;
+	slug_prefix: string;
+}
+
+export interface SeedSiteBranding {
+	primary_color: string;
+	secondary_color: string;
+	bg_color: string;
+	text_color: string;
+	font_heading: string;
+	font_body: string;
+}
+
+export interface SeedSiteRequest {
+	type: SiteType;
+	info: SeedSiteInfo;
+	structure: SeedSiteStructure;
+	silos: SeedSiteSilo[];
+	branding: SeedSiteBranding;
+}
+
+export interface SeedSiteResponse {
+	site_id: string;
+}
+
+export function seed(input: SeedSiteRequest): Promise<SeedSiteResponse> {
+	return apiPost<SeedSiteResponse>('/sites/seed', input);
+}
