@@ -74,7 +74,18 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".pricing-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem; margin-block-start: 2rem; }\n")
 	b.WriteString(".faq-accordion { margin-block-start: 2rem; }\n")
 	b.WriteString("h2 { font-size: 2rem; margin-block-end: 1rem; }\n")
-	b.WriteString("h3 { font-size: 1.25rem; }\n\n")
+	b.WriteString("h3 { font-size: 1.25rem; }\n")
+
+	// Site header + footer chrome (rendered from global blocks).
+	b.WriteString(".site-header { padding-block: 1.25rem; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); position: sticky; top: 0; background: color-mix(in oklab, var(--color-bg) 90%, white); backdrop-filter: blur(8px); z-index: 10; }\n")
+	b.WriteString(".site-nav ul { display: flex; flex-wrap: wrap; gap: 1.75rem; list-style: none; padding: 0; margin: 0; }\n")
+	b.WriteString(".site-nav a { color: var(--color-text); font-weight: 500; font-size: 0.9375rem; text-decoration: none; }\n")
+	b.WriteString(".site-nav a:hover { color: var(--color-primary); }\n")
+	b.WriteString(".site-footer { padding-block: 3rem; margin-block-start: 6rem; border-top: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+	b.WriteString(".site-footer nav ul { display: flex; flex-wrap: wrap; gap: 1.5rem; list-style: none; padding: 0; margin: 0 0 1rem 0; font-size: 0.875rem; }\n")
+	b.WriteString(".site-footer a { color: color-mix(in oklab, var(--color-text) 70%, transparent); text-decoration: none; }\n")
+	b.WriteString(".site-footer a:hover { color: var(--color-primary); }\n")
+	b.WriteString(".site-footer-copy { font-size: 0.8125rem; color: color-mix(in oklab, var(--color-text) 55%, transparent); margin: 0; }\n\n")
 
 	// User-defined CSS classes
 	if len(classes) > 0 {

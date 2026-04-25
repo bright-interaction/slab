@@ -390,16 +390,53 @@ func SeedDefaultKnowledgebaseWith(ctx context.Context, q *store.Queries, siteID 
 }
 
 // SeedDefaultGlobalBlocksWith creates the default header and footer global blocks
-// for a new site using the supplied Queries handle.
+// for a new site using the supplied Queries handle. The header nav is built from
+// the site's silos so wizard'd structures show up in the deployed site's menu
+// (Home plus each silo as a top-level link).
 func SeedDefaultGlobalBlocksWith(ctx context.Context, q *store.Queries, siteID string) error {
+	type navLink struct {
+		Label string `json:"label"`
+		Href  string `json:"href"`
+	}
+
+	links := []navLink{{Label: "Home", Href: "/"}}
+
+	silos, err := q.ListSilosBySite(ctx, siteID)
+	if err == nil {
+		for _, s := range silos {
+			label := strings.TrimSpace(s.Name)
+			if label == "" {
+				continue
+			}
+			href := strings.TrimSpace(s.SlugPrefix)
+			if href == "" {
+				continue
+			}
+			href = strings.TrimPrefix(href, "/")
+			links = append(links, navLink{Label: label, Href: "/" + href})
+		}
+	}
+
+	headerData, _ := json.Marshal(map[string]any{"links": links})
+
+	footerLinks := []navLink{
+		{Label: "Privacy", Href: "/privacy"},
+		{Label: "Terms", Href: "/terms"},
+		{Label: "Cookies", Href: "/cookies"},
+	}
+	footerData, _ := json.Marshal(map[string]any{
+		"copyright": "All rights reserved.",
+		"links":     footerLinks,
+	})
+
 	defaults := []struct {
 		name      string
 		slot      string
 		blockType string
 		dataJSON  string
 	}{
-		{"Site Header", "header", "header", `{"links":[{"label":"Home","href":"/"}]}`},
-		{"Site Footer", "footer", "footer", `{"copyright":"All rights reserved.","links":[{"label":"Privacy","href":"/privacy"},{"label":"Terms","href":"/terms"},{"label":"Cookies","href":"/cookies"}]}`},
+		{"Site Header", "header", "header", string(headerData)},
+		{"Site Footer", "footer", "footer", string(footerData)},
 	}
 
 	for i, d := range defaults {

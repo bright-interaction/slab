@@ -74,7 +74,7 @@
 	}
 
 	function addSilo(): void {
-		if (silos.length >= 5) return;
+		if (silos.length >= 8) return;
 		silos = [...silos, { name: '', slug_prefix: '' }];
 	}
 
@@ -139,13 +139,13 @@
 				<div class="flex flex-col">
 					<h3 class="text-[14px] font-medium text-text-primary">Silos</h3>
 					<p class="text-[12px] text-text-secondary">
-						Up to 5 top-level URL prefixes. Examples: services, blog, cases.
+						Up to 8 top-level menu items. Examples: services, insights, pricing, about. Each silo becomes both a navigation link and a topic cluster for SEO.
 					</p>
 				</div>
 				<Button
 					variant="secondary"
 					size="sm"
-					disabled={silos.length >= 5}
+					disabled={silos.length >= 8}
 					onclick={addSilo}
 				>
 					Add silo
