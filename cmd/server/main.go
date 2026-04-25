@@ -17,6 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/brightinteraction/atomicsite/internal/analytics"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
 	"github.com/brightinteraction/atomicsite/internal/server"
@@ -71,6 +72,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Analytics manager: tails per-site Nginx JSON logs and writes visit_events.
+	// Reload-on-settings-change is delegated to handlers (they call Reload after
+	// toggling analytics.atomicsite_tracking_enabled).
+	analyticsMgr := analytics.NewManager(queries, cfg.AnalyticsSalt)
+	mgrCtx, mgrCancel := context.WithCancel(context.Background())
+	defer mgrCancel()
+	if err := analyticsMgr.Start(mgrCtx); err != nil {
+		slog.Warn("analytics: initial start failed", "error", err)
+	}
+
 	srv := server.New(cfg, sqlDB, queries, st)
 	httpSrv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -98,6 +109,7 @@ func main() {
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)
+	analyticsMgr.Stop(shutCtx)
 
 	slog.Info("atomicsite: stopped")
 }
