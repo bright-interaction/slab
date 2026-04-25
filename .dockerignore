@@ -1,0 +1,10 @@
+cmd/server/frontend/build
+frontend/build
+frontend/node_modules
+frontend/.svelte-kit
+bin
+data
+*.log
+.git
+.env
+.env.*
