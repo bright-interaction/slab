@@ -155,6 +155,23 @@ func (q *Queries) ListRecentDeploymentsBySite(ctx context.Context, arg ListRecen
 	return items, nil
 }
 
+const updateDeploymentDeployed = `-- name: UpdateDeploymentDeployed :exec
+UPDATE deployments
+SET target_id = ?, deploy_url = ?, deployed_at = datetime('now')
+WHERE id = ?
+`
+
+type UpdateDeploymentDeployedParams struct {
+	TargetID  string `json:"target_id"`
+	DeployUrl string `json:"deploy_url"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateDeploymentDeployed(ctx context.Context, arg UpdateDeploymentDeployedParams) error {
+	_, err := q.db.ExecContext(ctx, updateDeploymentDeployed, arg.TargetID, arg.DeployUrl, arg.ID)
+	return err
+}
+
 const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :exec
 UPDATE deployments
 SET status = ?, build_log = ?, pages_built = ?, duration_ms = ?, error = ?, completed_at = datetime('now')

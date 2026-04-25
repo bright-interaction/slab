@@ -42,7 +42,7 @@ func New(kind string) (Deployer, error) {
 	case "rsync":
 		return &RsyncDeployer{}, nil
 	case "dockyard":
-		return &DockyardDeployer{}, nil
+		return NewDockyardDeployer(), nil
 	}
 	return nil, fmt.Errorf("unknown deployer kind: %s", kind)
 }

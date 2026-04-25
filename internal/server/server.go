@@ -174,6 +174,7 @@ func (s *Server) Router() http.Handler {
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
 		r.Get("/api/sites/{siteID}/builds/{buildID}/status", buildH.BuildStatusAdmin)
+		r.Post("/api/sites/{siteID}/deploy", buildH.Deploy)
 
 		// Deploy targets (admin)
 		dh := handlers.NewDeployHandler(s.cfg, s.queries, s.db)
