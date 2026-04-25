@@ -8,6 +8,7 @@
 		Code2,
 		Building2,
 		Server,
+		Cloud,
 		AlertTriangle
 	} from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
@@ -97,6 +98,12 @@
 			'Nginx',
 			'Preview the generated server config.',
 			Server
+		)}
+		{@render sectionCard(
+			`/sites/${siteID}/settings/deployment`,
+			'Deployment',
+			'Targets for publishing built sites.',
+			Cloud
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/danger`,

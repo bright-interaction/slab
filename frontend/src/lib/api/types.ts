@@ -262,8 +262,61 @@ export interface Deployment {
 	pages_built: number;
 	duration_ms: number;
 	error: string;
+	target_id?: string;
+	deploy_url?: string;
+	deployed_at?: Timestamp;
 	created_at: Timestamp;
 	completed_at: Timestamp;
+}
+
+export type DeployKind = 'local' | 'rsync' | 'dockyard';
+
+export interface DeployTargetLocalConfig {
+	path?: string;
+	public_url?: string;
+}
+
+export interface DeployTargetRsyncConfig {
+	host?: string;
+	user?: string;
+	port?: number;
+	path?: string;
+	public_url?: string;
+	private_key_pem?: string;
+}
+
+export interface DeployTargetDockyardConfig {
+	dockyard_url?: string;
+	api_key?: string;
+	server_id?: string;
+	domain?: string;
+	host?: string;
+	user?: string;
+	port?: number;
+	host_path?: string;
+	private_key_pem?: string;
+}
+
+export type DeployTargetConfig =
+	| DeployTargetLocalConfig
+	| DeployTargetRsyncConfig
+	| DeployTargetDockyardConfig
+	| Record<string, unknown>;
+
+export interface DeployTarget {
+	id: string;
+	site_id: string;
+	name: string;
+	kind: DeployKind;
+	config: DeployTargetConfig;
+	is_default: boolean;
+	created_at: Timestamp;
+	updated_at: Timestamp;
+}
+
+export interface DeployResult {
+	deploy_url: string;
+	deployment_id: string;
 }
 
 export interface Evaluation {

@@ -12,6 +12,9 @@ export interface BuildStatusResponse {
 	duration_ms: number;
 	error: string;
 	dist_dir?: string;
+	target_id?: string;
+	deploy_url?: string;
+	deployed_at?: string;
 }
 
 export function triggerBuild(siteID: string): Promise<TriggerBuildResponse> {
