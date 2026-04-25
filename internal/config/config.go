@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -17,6 +18,19 @@ type Config struct {
 	BaseURL       string
 	MaxUploadSize int64
 	MediaVariants []int
+
+	// Analytics + CookieProof integration (Phase 10).
+	TrackPath             string // public tracking endpoint prefix, default "/t"
+	AnalyticsSalt         string // server secret mixed into visitor fingerprints
+	CookieProofAPIBase    string // e.g. https://consent.example.com
+	CookieProofAdminToken string // bearer token for provisioning calls
+
+	// BrightCRM analytics sync (Phase 10 C2). When either the URL or secret
+	// is empty, crmsync becomes a no-op so dev environments don't crash.
+	// CRMSyncMinInterval throttles non-identified events per (site, visitor).
+	BrightCRMWebhookURL    string
+	BrightCRMWebhookSecret string
+	CRMSyncMinInterval     time.Duration
 }
 
 func Load() *Config {
@@ -30,6 +44,15 @@ func Load() *Config {
 		BaseURL:       envOr("BASE_URL", "http://localhost:8080"),
 		MaxUploadSize: envInt64("MAX_UPLOAD_SIZE", 20<<20), // 20 MB
 		MediaVariants: envIntList("MEDIA_VARIANTS", []int{320, 640, 1280, 1920}),
+
+		TrackPath:             envOr("TRACK_PATH", "/t"),
+		AnalyticsSalt:         envOr("ANALYTICS_SALT", "atomicsite-default-fingerprint-salt-change-me"),
+		CookieProofAPIBase:    envOr("COOKIEPROOF_API_BASE", "https://consent.example.com"),
+		CookieProofAdminToken: os.Getenv("COOKIEPROOF_ADMIN_TOKEN"),
+
+		BrightCRMWebhookURL:    envOr("BRIGHTCRM_WEBHOOK_URL", ""),
+		BrightCRMWebhookSecret: envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),
+		CRMSyncMinInterval:     time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
 	}
 }
 

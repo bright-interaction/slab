@@ -64,6 +64,18 @@ func (s *Server) Router() http.Handler {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// Public analytics receiver (/t/*). Mounted high in the router so it
+	// can't be shadowed by the SPA fallback. No auth: built sites POST
+	// here cross-origin (same-origin if behind same hostname). Fingerprint
+	// middleware runs only on this group so admin requests don't pick up
+	// visitor cookies.
+	trackH := handlers.NewTrackHandler(s.cfg, s.queries, s.db)
+	r.Group(func(r chi.Router) {
+		r.Use(authmw.FingerprintMiddleware(s.cfg))
+		r.Post("/t/consent", trackH.Consent)
+		r.Post("/t/pageview", trackH.PageView)
+	})
+
 	// Auth (public)
 	ah := handlers.NewAuthHandler(s.cfg, s.queries)
 	r.Post("/api/auth/login", ah.Login)
