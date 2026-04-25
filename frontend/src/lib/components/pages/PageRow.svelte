@@ -6,6 +6,8 @@
 	let {
 		page,
 		dragging = false,
+		depth = 0,
+		isSiloHub = false,
 		onOpen,
 		onDelete,
 		ondragstart,
@@ -15,6 +17,8 @@
 	}: {
 		page: Page;
 		dragging?: boolean;
+		depth?: number;
+		isSiloHub?: boolean;
 		onOpen: () => void;
 		onDelete: () => void;
 		ondragstart?: (e: DragEvent) => void;
@@ -53,8 +57,11 @@
 	{ondragover}
 	{ondragend}
 	{ondrop}
+	style:margin-left="{depth * 1.5}rem"
 	class="group relative flex items-center gap-3 rounded-lg border border-border-light bg-bg-surface px-3 py-2.5 transition-colors hover:bg-bg-elevated/40 {dragging
 		? 'ring-1 ring-accent opacity-60'
+		: ''} {depth > 0
+		? 'border-l-2 border-l-accent/30 pl-4'
 		: ''}"
 >
 	<span
@@ -76,6 +83,9 @@
 	</button>
 
 	<div class="flex items-center gap-3 text-[11px] text-text-muted">
+		{#if isSiloHub}
+			<Badge variant="default" dot>silo hub</Badge>
+		{/if}
 		<Badge variant={statusVariant(page.status)} dot>
 			{page.status || 'draft'}
 		</Badge>

@@ -22,6 +22,9 @@ test.describe('Onboarding wizard', () => {
 
 		// Step 3: Info. Each oninput commits to the wizard store.
 		await page.getByLabel('Site name', { exact: true }).fill('Lab Test Site');
+		// Wait past the 200ms slug auto-derive debounce, then mark slug as
+		// user-touched by typing the desired slug.
+		await page.waitForTimeout(250);
 		await page.getByLabel('Slug', { exact: true }).fill('lab-e2e');
 		await page.getByLabel('Business name', { exact: true }).fill('Lab Test AB');
 		await page.getByLabel('Contact email', { exact: true }).fill('hej@labtest.example');
@@ -57,6 +60,35 @@ test.describe('Onboarding wizard', () => {
 		await page.goto('/sites/new/wizard/type');
 		const ecom = page.getByRole('button', { name: /e-commerce/i });
 		await expect(ecom).toBeDisabled();
+	});
+
+	test('Nordic and accented characters transliterate to ASCII in slug + silo prefix', async ({ page }) => {
+		await loginAsAdmin(page);
+		await page.goto('/sites/new/wizard/info');
+
+		// Title with ÅÄÖ ÜßÉ should auto-derive a clean ASCII slug.
+		await page.getByLabel('Site name', { exact: true }).fill('Tjänster Åre & Östergötland Café');
+		// Wait past the slug auto-derive debounce.
+		await page.waitForTimeout(300);
+		const slugInput = page.getByLabel('Slug', { exact: true });
+		const slug = await slugInput.inputValue();
+		expect(slug).toBe('tjanster-are-ostergotland-cafe');
+
+		// Typing accented chars directly into slug also normalizes.
+		await slugInput.fill('tjänster');
+		expect(await slugInput.inputValue()).toBe('tjanster');
+
+		// And the silo slug_prefix in the structure step normalizes too.
+		await page.getByLabel('Business name', { exact: true }).fill('Acme AB');
+		await page.getByLabel('Contact email', { exact: true }).fill('a@b.example');
+		await page.getByRole('button', { name: 'Next', exact: true }).click();
+		await expect(page).toHaveURL(/\/sites\/new\/wizard\/structure/);
+		await page.getByRole('button', { name: /soft silo/i }).click();
+		// Type accented characters into the first silo's Name; slug_prefix
+		// auto-derives without stripping ÅÄÖ.
+		await page.getByLabel('Name', { exact: true }).first().fill('Tjänster');
+		const slugPrefixInputs = page.getByLabel('Slug prefix', { exact: true });
+		await expect(slugPrefixInputs.first()).toHaveValue('tjanster');
 	});
 
 	test('no Svelte effect_update_depth_exceeded errors during the wizard flow', async ({ page }) => {

@@ -5,7 +5,8 @@
 		updateSilos,
 		updateStructure,
 		wizard,
-		deriveSlug
+		deriveSlug,
+		transliterateSlugChars
 	} from '$lib/stores/wizard.svelte';
 	import type { SeedSiteSilo, StructureType } from '$lib/api/sites';
 
@@ -170,9 +171,9 @@
 								updateSilo(
 									idx,
 									'slug_prefix',
-									(e.currentTarget as HTMLInputElement).value
-										.toLowerCase()
-										.replace(/[^a-z0-9-]/g, '')
+									transliterateSlugChars(
+										(e.currentTarget as HTMLInputElement).value
+									).replace(/[^a-z0-9-]/g, '')
 								)}
 						/>
 						<div class="flex items-end">

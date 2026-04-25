@@ -163,9 +163,35 @@ export function reset(): void {
 	}
 }
 
+// Transliteration map for common Latin-script accents and Nordic letters so
+// names like "Tjänster" produce slug "tjanster" (not "tjnster"). Covers
+// Swedish, Norwegian, Danish, Finnish, German, French, Spanish, Portuguese,
+// Polish, Czech, plus ß and the standard á/é/í/ó/ú family.
+const SLUG_CHAR_MAP: Record<string, string> = {
+	å: 'a', ä: 'a', á: 'a', à: 'a', â: 'a', ã: 'a', ą: 'a',
+	ö: 'o', ø: 'o', ó: 'o', ò: 'o', ô: 'o', õ: 'o', œ: 'oe',
+	é: 'e', è: 'e', ê: 'e', ë: 'e', ę: 'e',
+	í: 'i', ì: 'i', î: 'i', ï: 'i',
+	ú: 'u', ù: 'u', û: 'u', ü: 'u',
+	ý: 'y', ÿ: 'y',
+	ñ: 'n', ń: 'n',
+	ç: 'c', č: 'c', ć: 'c',
+	š: 's', ś: 's',
+	ž: 'z', ź: 'z', ż: 'z',
+	ł: 'l', đ: 'd',
+	ß: 'ss'
+};
+
+export function transliterateSlugChars(input: string): string {
+	let out = '';
+	for (const ch of input.toLowerCase()) {
+		out += SLUG_CHAR_MAP[ch] ?? ch;
+	}
+	return out;
+}
+
 export function deriveSlug(name: string): string {
-	return name
-		.toLowerCase()
+	return transliterateSlugChars(name)
 		.replace(/\s+/g, '-')
 		.replace(/[^a-z0-9-]/g, '')
 		.replace(/-+/g, '-')
