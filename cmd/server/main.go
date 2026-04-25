@@ -112,6 +112,9 @@ func applySchema(sqlDB *sql.DB) error {
 	migrations := []struct{ table, column, spec string }{
 		{"pages", "no_index", "INTEGER NOT NULL DEFAULT 0"},
 		{"pages", "canonical_url", "TEXT NOT NULL DEFAULT ''"},
+		{"deployments", "target_id", "TEXT NOT NULL DEFAULT ''"},
+		{"deployments", "deploy_url", "TEXT NOT NULL DEFAULT ''"},
+		{"deployments", "deployed_at", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

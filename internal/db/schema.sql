@@ -126,10 +126,26 @@ CREATE TABLE IF NOT EXISTS deployments (
     pages_built   INTEGER NOT NULL DEFAULT 0,
     duration_ms   INTEGER NOT NULL DEFAULT 0,
     error         TEXT NOT NULL DEFAULT '',
+    target_id     TEXT NOT NULL DEFAULT '',
+    deploy_url    TEXT NOT NULL DEFAULT '',
+    deployed_at   TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_deployments_site ON deployments(site_id);
+
+CREATE TABLE IF NOT EXISTS deploy_targets (
+  id          TEXT PRIMARY KEY,
+  site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  kind        TEXT NOT NULL CHECK (kind IN ('dockyard','rsync','local')),
+  config_json TEXT NOT NULL DEFAULT '{}',
+  is_default  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(site_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_deploy_targets_site ON deploy_targets(site_id);
 
 CREATE TABLE IF NOT EXISTS settings (
     key        TEXT PRIMARY KEY,

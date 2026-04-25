@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
@@ -16,6 +17,7 @@ type Querier interface {
 	CreateBlock(ctx context.Context, arg CreateBlockParams) error
 	CreateCSSClass(ctx context.Context, arg CreateCSSClassParams) error
 	CreateComponent(ctx context.Context, arg CreateComponentParams) error
+	CreateDeployTarget(ctx context.Context, arg CreateDeployTargetParams) error
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
 	CreateEvaluation(ctx context.Context, arg CreateEvaluationParams) error
 	CreateForm(ctx context.Context, arg CreateFormParams) error
@@ -36,6 +38,7 @@ type Querier interface {
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
 	DeleteComponent(ctx context.Context, id string) error
+	DeleteDeployTarget(ctx context.Context, id string) error
 	DeleteDeployment(ctx context.Context, id string) error
 	DeleteEvaluationsByBuild(ctx context.Context, buildID string) error
 	DeleteForm(ctx context.Context, id string) error
@@ -57,6 +60,7 @@ type Querier interface {
 	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
 	GetComponentByID(ctx context.Context, id string) (Component, error)
 	GetComponentByName(ctx context.Context, arg GetComponentByNameParams) (Component, error)
+	GetDeployTarget(ctx context.Context, id string) (DeployTarget, error)
 	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
 	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
@@ -86,6 +90,7 @@ type Querier interface {
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
 	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
+	ListDeployTargetsBySite(ctx context.Context, siteID string) ([]DeployTarget, error)
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
 	// Evaluations
 	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
@@ -111,12 +116,14 @@ type Querier interface {
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	SetDeployTargetDefault(ctx context.Context, id string) error
 	UpdateAgentKeyLastUsed(ctx context.Context, id string) error
 	UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScriptParams) error
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error
 	UpdateBlockOrder(ctx context.Context, arg UpdateBlockOrderParams) error
 	UpdateCSSClass(ctx context.Context, arg UpdateCSSClassParams) error
 	UpdateComponent(ctx context.Context, arg UpdateComponentParams) error
+	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) error
 	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error
