@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import KeyboardHint from '$lib/components/ui/KeyboardHint.svelte';
 	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 	import SiteSwitcher from './SiteSwitcher.svelte';
 	import UserMenu from './UserMenu.svelte';
+	import { openPalette } from '$lib/stores/commandPalette.svelte';
 
 	let {
 		currentSiteId = null
@@ -23,7 +23,7 @@
 		<div class="flex shrink-0 items-center gap-1">
 			<button
 				type="button"
-				onclick={() => goto('/search')}
+				onclick={() => openPalette()}
 				class="inline-flex h-9 items-center gap-2 rounded-md px-2.5 text-[12px] text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
 				aria-label="Open command palette"
 			>
