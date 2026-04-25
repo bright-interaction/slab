@@ -161,6 +161,11 @@ func (s *Server) Router() http.Handler {
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
 
+		// Evaluations (admin)
+		evalH := handlers.NewEvaluationHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/evaluations", evalH.ListBySite)
+		r.Get("/api/sites/{siteID}/evaluations/{buildID}", evalH.ListByBuild)
+
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)
