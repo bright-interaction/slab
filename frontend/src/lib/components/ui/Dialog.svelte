@@ -1,0 +1,86 @@
+<script lang="ts">
+	import { Dialog as BitsDialog } from 'bits-ui';
+	import type { Snippet } from 'svelte';
+
+	let {
+		open = $bindable(false),
+		title,
+		description,
+		size = 'md',
+		onOpenChange,
+		children,
+		footer
+	}: {
+		open?: boolean;
+		title?: string;
+		description?: string;
+		size?: 'sm' | 'md' | 'lg';
+		onOpenChange?: (open: boolean) => void;
+		children?: Snippet;
+		footer?: Snippet;
+	} = $props();
+
+	const sizeClasses: Record<string, string> = {
+		sm: 'max-w-md',
+		md: 'max-w-lg',
+		lg: 'max-w-2xl'
+	};
+</script>
+
+<BitsDialog.Root bind:open {onOpenChange}>
+	<BitsDialog.Portal>
+		<BitsDialog.Overlay
+			class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-fadeIn"
+		/>
+		<BitsDialog.Content
+			class="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] {sizeClasses[
+				size
+			]} -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-bg-surface shadow-2xl focus:outline-none data-[state=open]:animate-scaleIn"
+		>
+			{#if title || description}
+				<div class="flex items-start justify-between gap-4 px-6 pt-6 pb-2">
+					<div class="flex flex-col gap-1">
+						{#if title}
+							<BitsDialog.Title
+								class="font-display text-xl font-extralight tracking-tight text-text-primary"
+							>
+								{title}
+							</BitsDialog.Title>
+						{/if}
+						{#if description}
+							<BitsDialog.Description class="text-[13px] text-text-secondary">
+								{description}
+							</BitsDialog.Description>
+						{/if}
+					</div>
+					<BitsDialog.Close
+						class="rounded-lg p-1 text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors"
+						aria-label="Close"
+					>
+						<svg
+							class="h-4 w-4"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="2"
+							stroke="currentColor"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</BitsDialog.Close>
+				</div>
+			{/if}
+
+			{#if children}
+				<div class="px-6 py-4">
+					{@render children()}
+				</div>
+			{/if}
+
+			{#if footer}
+				<div class="flex justify-end gap-2 border-t border-border-light px-6 py-4">
+					{@render footer()}
+				</div>
+			{/if}
+		</BitsDialog.Content>
+	</BitsDialog.Portal>
+</BitsDialog.Root>
