@@ -1,0 +1,285 @@
+<script lang="ts">
+	import * as settingsApi from '$lib/api/settings';
+	import { ApiError } from '$lib/api/client';
+	import Input from '$lib/components/ui/Input.svelte';
+	import Switch from '$lib/components/ui/Switch.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
+	import { categoryMap } from '$lib/settings/nginxPreview';
+	import type { Site } from '$lib/api/types';
+
+	let { data }: { data: { site: Site } } = $props();
+
+	const siteID = $derived(data.site.id);
+
+	function toBool(v: string | undefined): boolean {
+		if (!v) return false;
+		const s = v.toLowerCase();
+		return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+	}
+
+	let loading = $state(true);
+	let saving = $state(false);
+
+	let cookieproofEnabled = $state(false);
+	let cookieproofWidgetId = $state('');
+	let ga4Enabled = $state(false);
+	let ga4Id = $state('');
+	let umamiEnabled = $state(false);
+	let umamiUrl = $state('');
+	let umamiSiteId = $state('');
+	let crmWebhookUrl = $state('');
+
+	type State = {
+		cookieproofEnabled: boolean;
+		cookieproofWidgetId: string;
+		ga4Enabled: boolean;
+		ga4Id: string;
+		umamiEnabled: boolean;
+		umamiUrl: string;
+		umamiSiteId: string;
+		crmWebhookUrl: string;
+	};
+
+	let initial: State = {
+		cookieproofEnabled: false,
+		cookieproofWidgetId: '',
+		ga4Enabled: false,
+		ga4Id: '',
+		umamiEnabled: false,
+		umamiUrl: '',
+		umamiSiteId: '',
+		crmWebhookUrl: ''
+	};
+
+	async function load() {
+		loading = true;
+		try {
+			const rows = await settingsApi.listByCategory(siteID, 'analytics');
+			const m = categoryMap(rows);
+
+			cookieproofEnabled = toBool(m.cookieproof_enabled);
+			cookieproofWidgetId = m.cookieproof_widget_id || '';
+			ga4Id = m.ga4_id || '';
+			ga4Enabled = ga4Id.length > 0 || toBool(m.ga4_enabled);
+			umamiUrl = m.umami_url || '';
+			umamiSiteId = m.umami_site_id || '';
+			umamiEnabled = (umamiUrl.length > 0 && umamiSiteId.length > 0) || toBool(m.umami_enabled);
+			crmWebhookUrl = m.crm_webhook_url || '';
+
+			initial = {
+				cookieproofEnabled,
+				cookieproofWidgetId,
+				ga4Enabled,
+				ga4Id,
+				umamiEnabled,
+				umamiUrl,
+				umamiSiteId,
+				crmWebhookUrl
+			};
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
+		} finally {
+			loading = false;
+		}
+	}
+
+	$effect(() => {
+		void load();
+	});
+
+	const dirty = $derived(
+		cookieproofEnabled !== initial.cookieproofEnabled ||
+			cookieproofWidgetId !== initial.cookieproofWidgetId ||
+			ga4Enabled !== initial.ga4Enabled ||
+			ga4Id !== initial.ga4Id ||
+			umamiEnabled !== initial.umamiEnabled ||
+			umamiUrl !== initial.umamiUrl ||
+			umamiSiteId !== initial.umamiSiteId ||
+			crmWebhookUrl !== initial.crmWebhookUrl
+	);
+
+	function discard() {
+		cookieproofEnabled = initial.cookieproofEnabled;
+		cookieproofWidgetId = initial.cookieproofWidgetId;
+		ga4Enabled = initial.ga4Enabled;
+		ga4Id = initial.ga4Id;
+		umamiEnabled = initial.umamiEnabled;
+		umamiUrl = initial.umamiUrl;
+		umamiSiteId = initial.umamiSiteId;
+		crmWebhookUrl = initial.crmWebhookUrl;
+	}
+
+	function b(v: boolean): string {
+		return v ? '1' : '0';
+	}
+
+	async function save() {
+		if (saving || !dirty) return;
+		saving = true;
+		try {
+			const items: settingsApi.SettingUpsertInput[] = [
+				{ category: 'analytics', key: 'cookieproof_enabled', value: b(cookieproofEnabled) },
+				{
+					category: 'analytics',
+					key: 'cookieproof_widget_id',
+					value: cookieproofEnabled ? cookieproofWidgetId : ''
+				},
+				{ category: 'analytics', key: 'ga4_enabled', value: b(ga4Enabled) },
+				{ category: 'analytics', key: 'ga4_id', value: ga4Enabled ? ga4Id : '' },
+				{ category: 'analytics', key: 'umami_enabled', value: b(umamiEnabled) },
+				{ category: 'analytics', key: 'umami_url', value: umamiEnabled ? umamiUrl : '' },
+				{
+					category: 'analytics',
+					key: 'umami_site_id',
+					value: umamiEnabled ? umamiSiteId : ''
+				},
+				{ category: 'analytics', key: 'crm_webhook_url', value: crmWebhookUrl }
+			];
+			await settingsApi.bulkUpsert(siteID, items);
+
+			initial = {
+				cookieproofEnabled,
+				cookieproofWidgetId,
+				ga4Enabled,
+				ga4Id,
+				umamiEnabled,
+				umamiUrl,
+				umamiSiteId,
+				crmWebhookUrl
+			};
+			toast.success('Analytics settings saved.');
+		} catch (err) {
+			const msg = err instanceof ApiError ? err.message : 'Failed to save settings.';
+			toast.error(msg);
+		} finally {
+			saving = false;
+		}
+	}
+</script>
+
+<div class="mx-auto max-w-3xl px-6 py-8">
+	<header class="flex flex-col gap-1.5">
+		<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
+			Analytics
+		</h1>
+		<p class="text-[13px] text-text-secondary">
+			Tracking, consent and CRM hooks. All optional, all GDPR-aware.
+		</p>
+	</header>
+
+	{#if loading}
+		<div class="mt-8 flex items-center justify-center py-12">
+			<Spinner />
+		</div>
+	{:else}
+		<div class="mt-8 flex flex-col gap-5">
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					CookieProof consent
+				</h2>
+				<div class="mt-4 flex flex-col gap-3">
+					<div class="flex items-center justify-between gap-4">
+						<div class="flex flex-col">
+							<span class="text-[13px] text-text-primary">Enable consent banner</span>
+							<span class="text-[12px] text-text-muted">
+								Loads CookieProof widget on every page.
+							</span>
+						</div>
+						<Switch bind:checked={cookieproofEnabled} />
+					</div>
+					{#if cookieproofEnabled}
+						<Input
+							label="Widget ID"
+							placeholder="cp_xxxxxxxxxxxx"
+							bind:value={cookieproofWidgetId}
+						/>
+					{/if}
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Google Analytics 4
+				</h2>
+				<div class="mt-4 flex flex-col gap-3">
+					<div class="flex items-center justify-between gap-4">
+						<div class="flex flex-col">
+							<span class="text-[13px] text-text-primary">Enable GA4</span>
+							<span class="text-[12px] text-text-muted">
+								Loaded only after consent if CookieProof is on.
+							</span>
+						</div>
+						<Switch bind:checked={ga4Enabled} />
+					</div>
+					{#if ga4Enabled}
+						<Input
+							label="Measurement ID"
+							placeholder="G-XXXXXXXXXX"
+							bind:value={ga4Id}
+						/>
+					{/if}
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Umami</h2>
+				<div class="mt-4 flex flex-col gap-3">
+					<div class="flex items-center justify-between gap-4">
+						<div class="flex flex-col">
+							<span class="text-[13px] text-text-primary">Enable Umami</span>
+							<span class="text-[12px] text-text-muted">
+								Cookieless privacy-friendly analytics.
+							</span>
+						</div>
+						<Switch bind:checked={umamiEnabled} />
+					</div>
+					{#if umamiEnabled}
+						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+							<Input
+								label="Umami URL"
+								placeholder="https://analytics.example.com"
+								bind:value={umamiUrl}
+							/>
+							<Input
+								label="Site ID"
+								placeholder="00000000-0000-0000-0000-000000000000"
+								bind:value={umamiSiteId}
+							/>
+						</div>
+					{/if}
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					CRM webhook
+				</h2>
+				<div class="mt-4">
+					<Input
+						label="Webhook URL"
+						placeholder="https://crm.example.com/api/leads"
+						hint="Form submissions on this site POST here."
+						bind:value={crmWebhookUrl}
+					/>
+				</div>
+			</Card>
+
+			<div
+				class="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t border-border-light bg-bg-surface/85 px-6 py-3 backdrop-blur"
+			>
+				<span class="text-[12px] text-text-muted">
+					{dirty ? 'Unsaved changes.' : 'Up to date.'}
+				</span>
+				<div class="flex items-center gap-2">
+					<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>Discard</Button>
+					<Button variant="primary" onclick={save} loading={saving} disabled={!dirty}>
+						Save
+					</Button>
+				</div>
+			</div>
+		</div>
+	{/if}
+</div>
