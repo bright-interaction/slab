@@ -11,6 +11,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/brightinteraction/atomicsite/internal/cookieproof"
 	"github.com/brightinteraction/atomicsite/internal/deploy"
 	"github.com/brightinteraction/atomicsite/internal/eval"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
@@ -50,6 +51,51 @@ func NewBuildHandler(cfg *config.Config, queries *store.Queries) *BuildHandler {
 	}
 }
 
+// provisionCookieProof runs the best-effort CookieProof EnsureDomain step
+// before a build. Failure is logged + ignored: the build still ships even
+// if CookieProof is unreachable. Skips entirely if analytics is off, the
+// site has no domain yet, or the admin token isn't configured.
+func (h *BuildHandler) provisionCookieProof(ctx context.Context, siteID string) {
+	if h.cfg == nil || h.cfg.CookieProofAdminToken == "" || h.cfg.CookieProofAPIBase == "" {
+		return
+	}
+	site, err := h.queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return
+	}
+	domain := strings.TrimSpace(site.CookieproofDomain)
+	if domain == "" {
+		domain = strings.TrimSpace(site.Domain)
+	}
+	if domain == "" {
+		return
+	}
+
+	// Gated on the same setting that drives the layout snippet, so we don't
+	// register every site with CookieProof unless analytics is actually on.
+	settings, _ := h.queries.ListSettingsBySite(ctx, siteID)
+	enabled := false
+	for _, s := range settings {
+		if s.Category == "analytics" && s.Key == "cookieproof_enabled" {
+			v := strings.ToLower(strings.TrimSpace(s.Value))
+			enabled = v == "1" || v == "true" || v == "yes" || v == "on"
+			break
+		}
+	}
+	if !enabled {
+		return
+	}
+
+	cp := cookieproof.New(h.cfg.CookieProofAPIBase, h.cfg.CookieProofAdminToken)
+	if err := cp.EnsureDomain(ctx, domain); err != nil {
+		slog.Warn("cookieproof ensure domain failed; build will continue",
+			"site_id", siteID,
+			"domain", domain,
+			"err", err,
+		)
+	}
+}
+
 // TriggerBuild starts an async build for the agent's site.
 func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 	a := authmw.GetAgent(r)
@@ -80,6 +126,7 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 	siteID := a.SiteID
 	go func() {
 		bgCtx := context.Background()
+		h.provisionCookieProof(bgCtx, siteID)
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 
 		// Run evaluation against the built dist/ if compile succeeded.
@@ -373,6 +420,7 @@ func (h *BuildHandler) TriggerBuildAdmin(w http.ResponseWriter, r *http.Request)
 	adminSiteID := siteID
 	go func() {
 		bgCtx := context.Background()
+		h.provisionCookieProof(bgCtx, adminSiteID)
 		result := builder.Build(bgCtx, h.queries, adminSiteID, h.cfg.DataDir)
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, adminSiteID, deployID, result.DistDir); err != nil {

@@ -99,8 +99,27 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	if site.UmamiID != "" && site.UmamiUrl != "" {
 		b.WriteString(fmt.Sprintf("  <script defer src=\"%s/script.js\" data-website-id=\"%s\"></script>\n", site.UmamiUrl, site.UmamiID))
 	}
-	if site.CookieproofDomain != "" {
-		b.WriteString(fmt.Sprintf("  <script defer src=\"https://%s/cookieproof.js\"></script>\n", site.CookieproofDomain))
+
+	// CookieProof + Atomicsite consent relay. Gated on
+	// analytics.cookieproof_enabled. siteDomain comes from the site row
+	// (CookieProof keys multi-tenant configs by domain), site_id is baked
+	// into the relay so /t/consent knows which site posted.
+	cookieProofEnabled := boolSetting(settingsMap["analytics.cookieproof_enabled"], false)
+	if cookieProofEnabled {
+		cpDomain := site.CookieproofDomain
+		if cpDomain == "" {
+			cpDomain = site.Domain
+		}
+		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
+		snippet := RenderCookieProofSnippet(site.ID, cpDomain, trackPath)
+		// Indent two spaces so the snippet sits flush with surrounding <head> children.
+		for _, line := range strings.Split(strings.TrimRight(snippet, "\n"), "\n") {
+			if line == "" {
+				b.WriteString("\n")
+				continue
+			}
+			b.WriteString("  " + line + "\n")
+		}
 	}
 
 	b.WriteString("</head>\n<body>\n")
