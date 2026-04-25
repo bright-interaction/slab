@@ -167,6 +167,7 @@ func (s *Server) Router() http.Handler {
 		// Builds (admin)
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
+		r.Get("/api/sites/{siteID}/builds/{buildID}/status", buildH.BuildStatusAdmin)
 
 		// Evaluations (admin)
 		evalH := handlers.NewEvaluationHandler(s.cfg, s.queries)
