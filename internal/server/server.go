@@ -3,6 +3,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"io"
 	"io/fs"
@@ -34,6 +35,9 @@ type Server struct {
 	storage storage.Store
 	authMW  *authmw.AuthMiddleware
 	agentMW *authmw.AgentAuthMiddleware
+	// OnAnalyticsSettingsChange, when set, is invoked after settings writes that
+	// touch the analytics category so the analytics Manager can rescan parsers.
+	OnAnalyticsSettingsChange func(context.Context)
 }
 
 // New creates a Server.
@@ -149,6 +153,9 @@ func (s *Server) Router() http.Handler {
 
 		// Settings
 		seth := handlers.NewSettingsHandler(s.cfg, s.queries)
+		if s.OnAnalyticsSettingsChange != nil {
+			seth.OnAnalyticsChange(s.OnAnalyticsSettingsChange)
+		}
 		r.Get("/api/sites/{siteID}/settings", seth.List)
 		r.Get("/api/sites/{siteID}/settings/{category}", seth.ListByCategory)
 		r.Put("/api/sites/{siteID}/settings", seth.Upsert)
@@ -202,6 +209,10 @@ func (s *Server) Router() http.Handler {
 		evalH := handlers.NewEvaluationHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/evaluations", evalH.ListBySite)
 		r.Get("/api/sites/{siteID}/evaluations/{buildID}", evalH.ListByBuild)
+
+		// Analytics reads (admin) — visit_events populated by the nginx log tailer.
+		anH := handlers.NewAnalyticsHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/visit-events", anH.VisitEvents)
 
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)

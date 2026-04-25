@@ -3,22 +3,39 @@ package builder
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
+// nginxLogDir returns the directory nginx writes per-site JSON access logs to.
+// Defaults to /var/log/atomicsite; overridable via ATOMICSITE_LOG_DIR for tests
+// and dev environments without /var/log write access.
+func nginxLogDir() string {
+	if d := strings.TrimSpace(os.Getenv("ATOMICSITE_LOG_DIR")); d != "" {
+		return d
+	}
+	return "/var/log/atomicsite"
+}
+
 // nginxLogPath returns the canonical JSON access log path for a site.
 // Centralised so the builder + analytics parser stay in sync.
 func nginxLogPath(siteID string) string {
-	return "/var/log/atomicsite/" + siteID + ".json.log"
+	return filepath.Join(nginxLogDir(), siteID+".json.log")
 }
 
 // NginxLogPath is the exported version of nginxLogPath for use by the analytics
 // parser/manager which needs to know where Nginx will be writing log lines.
 func NginxLogPath(siteID string) string {
 	return nginxLogPath(siteID)
+}
+
+// NginxLogDir is the exported log directory for callers that need to ensure
+// the directory exists before tailing.
+func NginxLogDir() string {
+	return nginxLogDir()
 }
 
 // RenderNginxConfig writes an nginx.conf snippet to the workspace root. Deployment

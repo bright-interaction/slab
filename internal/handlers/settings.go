@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/brightinteraction/atomicsite/internal/config"
@@ -11,10 +12,19 @@ import (
 type SettingsHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
+	// onAnalyticsChange is invoked after any write that touches the analytics
+	// category, so the analytics Manager can rescan and (re)spawn parsers for
+	// sites that just had tracking flipped on.
+	onAnalyticsChange func(context.Context)
 }
 
 func NewSettingsHandler(cfg *config.Config, queries *store.Queries) *SettingsHandler {
 	return &SettingsHandler{cfg: cfg, queries: queries}
+}
+
+// OnAnalyticsChange registers a callback invoked after analytics-category writes.
+func (h *SettingsHandler) OnAnalyticsChange(fn func(context.Context)) {
+	h.onAnalyticsChange = fn
 }
 
 func (h *SettingsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +80,10 @@ func (h *SettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Category == "analytics" && h.onAnalyticsChange != nil {
+		h.onAnalyticsChange(r.Context())
+	}
+
 	setting, _ := h.queries.GetSetting(r.Context(), store.GetSettingParams{
 		SiteID:   siteID,
 		Category: req.Category,
@@ -90,9 +104,13 @@ func (h *SettingsHandler) BulkUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	touchedAnalytics := false
 	for _, s := range req {
 		if s.Category == "" || s.Key == "" {
 			continue
+		}
+		if s.Category == "analytics" {
+			touchedAnalytics = true
 		}
 		_ = h.queries.UpsertSetting(r.Context(), store.UpsertSettingParams{
 			ID:       newID(),
@@ -101,6 +119,10 @@ func (h *SettingsHandler) BulkUpsert(w http.ResponseWriter, r *http.Request) {
 			Key:      s.Key,
 			Value:    s.Value,
 		})
+	}
+
+	if touchedAnalytics && h.onAnalyticsChange != nil {
+		h.onAnalyticsChange(r.Context())
 	}
 
 	settings, _ := h.queries.ListSettingsBySite(r.Context(), siteID)

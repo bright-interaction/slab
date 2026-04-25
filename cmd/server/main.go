@@ -83,6 +83,14 @@ func main() {
 	}
 
 	srv := server.New(cfg, sqlDB, queries, st)
+	srv.OnAnalyticsSettingsChange = func(_ context.Context) {
+		// Use a fresh background context: the request that triggered this may
+		// finish before Reload completes, and we don't want a cancelled context
+		// to abort the rescan.
+		if err := analyticsMgr.Reload(context.Background()); err != nil {
+			slog.Warn("analytics: reload after settings change failed", "error", err)
+		}
+	}
 	httpSrv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      srv.Router(),
