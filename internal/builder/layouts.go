@@ -150,11 +150,102 @@ func extractHTMLFromGlobalBlock(gb store.GlobalBlock) string {
 	if err := json.Unmarshal([]byte(gb.DataJson), &data); err != nil {
 		return ""
 	}
-	if html, ok := data["html"].(string); ok {
+	// Raw HTML override: if the block stores `data.html`, use that verbatim.
+	if html, ok := data["html"].(string); ok && html != "" {
 		return html
 	}
-	// If no raw HTML, try to serialize the data as a simple representation
+
+	// Structured data path. Render the canonical header/footer shapes so the
+	// deployed site has a real <header><nav> and <footer> instead of empty
+	// strings.
+	switch gb.Slot {
+	case "header":
+		return renderHeaderHTML(data)
+	case "footer":
+		return renderFooterHTML(data)
+	}
 	return ""
+}
+
+func renderHeaderHTML(data map[string]any) string {
+	links := extractNavLinks(data["links"])
+	if len(links) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(`<header class="site-header"><div class="container"><nav class="site-nav" aria-label="Primary"><ul>`)
+	for _, l := range links {
+		b.WriteString(`<li><a href="`)
+		b.WriteString(escapeAttr(l.href))
+		b.WriteString(`">`)
+		b.WriteString(escapeText(l.label))
+		b.WriteString(`</a></li>`)
+	}
+	b.WriteString(`</ul></nav></div></header>`)
+	return b.String()
+}
+
+func renderFooterHTML(data map[string]any) string {
+	links := extractNavLinks(data["links"])
+	copyright, _ := data["copyright"].(string)
+	if len(links) == 0 && copyright == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(`<footer class="site-footer"><div class="container">`)
+	if len(links) > 0 {
+		b.WriteString(`<nav aria-label="Footer"><ul>`)
+		for _, l := range links {
+			b.WriteString(`<li><a href="`)
+			b.WriteString(escapeAttr(l.href))
+			b.WriteString(`">`)
+			b.WriteString(escapeText(l.label))
+			b.WriteString(`</a></li>`)
+		}
+		b.WriteString(`</ul></nav>`)
+	}
+	if copyright != "" {
+		b.WriteString(`<p class="site-footer-copy">&copy; `)
+		b.WriteString(escapeText(copyright))
+		b.WriteString(`</p>`)
+	}
+	b.WriteString(`</div></footer>`)
+	return b.String()
+}
+
+type navLink struct {
+	label string
+	href  string
+}
+
+func extractNavLinks(raw any) []navLink {
+	arr, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]navLink, 0, len(arr))
+	for _, item := range arr {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		label, _ := obj["label"].(string)
+		href, _ := obj["href"].(string)
+		label = strings.TrimSpace(label)
+		href = strings.TrimSpace(href)
+		if label == "" || href == "" {
+			continue
+		}
+		out = append(out, navLink{label: label, href: href})
+	}
+	return out
+}
+
+func escapeText(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
 }
 
 func escapeAstroString(s string) string {
