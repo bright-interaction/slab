@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   Atomicsite design tokens (mirrors BrightCRM Swiss Minimal).
+   Light = default. Dark applied via [data-theme="dark"] on <html>.
+   ============================================================ */
+
+@theme {
+	--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+	--font-display: 'Geist', 'Inter', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+	--color-bg: var(--t-bg);
+	--color-bg-surface: var(--t-bg-surface);
+	--color-bg-elevated: var(--t-bg-elevated);
+	--color-bg-hover: var(--t-bg-hover);
+	--color-border: var(--t-border);
+	--color-border-light: var(--t-border-light);
+	--color-text-primary: var(--t-text-primary);
+	--color-text-secondary: var(--t-text-secondary);
+	--color-text-muted: var(--t-text-muted);
+	--color-accent: var(--t-accent);
+	--color-accent-hover: var(--t-accent-hover);
+	--color-accent-fg: var(--t-accent-fg);
+	--color-success: var(--t-success);
+	--color-warning: var(--t-warning);
+	--color-danger: var(--t-danger);
+	--color-info: var(--t-info);
+}
+
+:root {
+	--t-bg: #f7f7f7;
+	--t-bg-surface: #ffffff;
+	--t-bg-elevated: #fafafa;
+	--t-bg-hover: #f0f0f0;
+	--t-border: #e5e5e5;
+	--t-border-light: #ededed;
+	--t-text-primary: #0a0a0a;
+	--t-text-secondary: #525252;
+	--t-text-muted: #a3a3a3;
+	--t-accent: #171717;
+	--t-accent-hover: #262626;
+	--t-accent-fg: #ffffff;
+	--t-success: #15803d;
+	--t-warning: #d97706;
+	--t-danger: #dc2626;
+	--t-info: #4f46e5;
+
+	--motion-fast: 150ms;
+	--motion-normal: 200ms;
+	--motion-slow: 300ms;
+	--ease-premium: cubic-bezier(0.32, 0.72, 0, 1);
+	--ease-stagger: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme='dark'] {
+	--t-bg: #0c0a09;
+	--t-bg-surface: #1c1917;
+	--t-bg-elevated: #292524;
+	--t-bg-hover: #292524;
+	--t-border: #2a2724;
+	--t-border-light: #1f1d1b;
+	--t-text-primary: #fafaf9;
+	--t-text-secondary: #a8a29e;
+	--t-text-muted: #78716c;
+	--t-accent: #fafaf9;
+	--t-accent-hover: #e7e5e4;
+	--t-accent-fg: #0c0a09;
+}
+
+html,
+body {
+	background: var(--t-bg);
+	color: var(--t-text-primary);
+	font-family: var(--font-sans);
+	font-feature-settings: 'cv11', 'ss01';
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+html {
+	transition:
+		background-color var(--motion-normal) var(--ease-premium),
+		color var(--motion-normal) var(--ease-premium);
+}
