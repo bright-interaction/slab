@@ -11,6 +11,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
 	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/brightinteraction/atomicsite/internal/starterkits"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -210,6 +211,7 @@ type seedSiteRequest struct {
 		FontHeading    string `json:"font_heading"`
 		FontBody       string `json:"font_body"`
 	} `json:"branding"`
+	StarterKit string `json:"starter_kit,omitempty"`
 }
 
 // validateSeedRequest checks the wizard payload and applies defaults.
@@ -292,6 +294,14 @@ func (req *seedSiteRequest) normalize() error {
 	} {
 		if !colorPattern.MatchString(c) {
 			return errors.New("branding colors must match ^#[0-9a-fA-F]{6}$")
+		}
+	}
+
+	// Starter kit (optional). If set, must reference a registered kit ID.
+	req.StarterKit = strings.TrimSpace(req.StarterKit)
+	if req.StarterKit != "" {
+		if _, ok := starterkits.Default.Get(req.StarterKit); !ok {
+			return errors.New("starter_kit references an unknown kit")
 		}
 	}
 
@@ -419,6 +429,24 @@ func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
 		slog.Error("seed: settings", "error", err, "site_id", siteID)
 		writeError(w, http.StatusInternalServerError, "Failed to seed settings")
 		return
+	}
+
+	// 6. Optional starter kit. If set, apply inside the same tx so a failure
+	// rolls back everything we just created.
+	if req.StarterKit != "" {
+		kit, ok := starterkits.Default.Get(req.StarterKit)
+		if !ok {
+			// Should never happen because normalize() validated this, but
+			// guard against a registry mutation between validate and apply.
+			slog.Error("seed: starter kit disappeared", "kit", req.StarterKit, "site_id", siteID)
+			writeError(w, http.StatusInternalServerError, "Failed to apply starter kit")
+			return
+		}
+		if err := kit.Apply(ctx, qtx, siteID); err != nil {
+			slog.Error("seed: apply starter kit", "error", err, "kit", req.StarterKit, "site_id", siteID)
+			writeError(w, http.StatusInternalServerError, "Failed to apply starter kit")
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -556,6 +584,28 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	site, _ := h.queries.GetSiteByID(r.Context(), siteID)
 	writeJSON(w, http.StatusOK, site)
+}
+
+// ListStarterKits returns the catalog of registered starter kits for the
+// onboarding wizard. Public endpoint: only kit metadata is exposed and the
+// wizard fetches it before any site exists / before login. Concrete kit
+// content lives in code.
+func (h *SiteHandler) ListStarterKits(w http.ResponseWriter, r *http.Request) {
+	kits := starterkits.Default.List()
+	out := make([]map[string]any, 0, len(kits))
+	for _, k := range kits {
+		targets := k.TargetSiteTypes()
+		if targets == nil {
+			targets = []string{}
+		}
+		out = append(out, map[string]any{
+			"id":                k.ID(),
+			"name":              k.Name(),
+			"description":       k.Description(),
+			"target_site_types": targets,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {

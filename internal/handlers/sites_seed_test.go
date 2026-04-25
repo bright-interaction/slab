@@ -14,8 +14,28 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
+	"github.com/brightinteraction/atomicsite/internal/starterkits"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
+
+type seedFakeKit struct {
+	id          string
+	calls       int
+	lastSiteID  string
+	lastQueries *store.Queries
+	err         error
+}
+
+func (f *seedFakeKit) ID() string                { return f.id }
+func (f *seedFakeKit) Name() string              { return "Fake" }
+func (f *seedFakeKit) Description() string       { return "fake kit for tests" }
+func (f *seedFakeKit) TargetSiteTypes() []string { return []string{"b2b"} }
+func (f *seedFakeKit) Apply(_ context.Context, q *store.Queries, siteID string) error {
+	f.calls++
+	f.lastSiteID = siteID
+	f.lastQueries = q
+	return f.err
+}
 
 func setupSeedTestDB(t *testing.T) (*sql.DB, *store.Queries) {
 	t.Helper()
@@ -192,3 +212,151 @@ func TestSiteHandler_Seed_BadColor(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestSiteHandler_Seed_StarterKit_Applied(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	// Register a fake kit on the package-level registry. Use a unique id to
+	// avoid collisions with kits registered via init() by Worker P9-B.
+	fk := &seedFakeKit{id: "fake-applied"}
+	starterkits.Default.Register(fk)
+
+	body := `{
+		"type": "b2b",
+		"info": {"name": "Acme", "slug": "acme-applied"},
+		"structure": {"structure_type": "soft-silo", "max_depth": 3},
+		"silos": [{"name": "S", "slug_prefix": "/s"}],
+		"branding": {},
+		"starter_kit": "fake-applied"
+	}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if fk.calls != 1 {
+		t.Fatalf("expected Apply to be called once, got %d", fk.calls)
+	}
+	if fk.lastSiteID == "" {
+		t.Fatalf("expected Apply to receive a non-empty siteID")
+	}
+	if fk.lastQueries == nil {
+		t.Fatalf("expected Apply to receive a tx-bound *store.Queries")
+	}
+}
+
+func TestSiteHandler_Seed_StarterKit_Unknown_Rejected(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	body := `{
+		"type": "b2b",
+		"info": {"name": "Acme", "slug": "acme-unknown"},
+		"structure": {"structure_type": "soft-silo", "max_depth": 3},
+		"silos": [{"name": "S", "slug_prefix": "/s"}],
+		"branding": {},
+		"starter_kit": "definitely-not-registered"
+	}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown kit, got %d: %s", rr.Code, rr.Body.String())
+	}
+	// Nothing should have been written.
+	if got := mustCount(t, sqlDB, "select count(*) from sites where slug=?", "acme-unknown"); got != 0 {
+		t.Fatalf("expected no site row for unknown kit, got %d", got)
+	}
+}
+
+func TestSiteHandler_Seed_StarterKit_ApplyError_RollsBack(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	fk := &seedFakeKit{id: "fake-fails", err: errKitBoom}
+	starterkits.Default.Register(fk)
+
+	body := `{
+		"type": "b2b",
+		"info": {"name": "Acme", "slug": "acme-fail"},
+		"structure": {"structure_type": "soft-silo", "max_depth": 3},
+		"silos": [{"name": "S", "slug_prefix": "/s"}],
+		"branding": {},
+		"starter_kit": "fake-fails"
+	}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when kit Apply fails, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := mustCount(t, sqlDB, "select count(*) from sites where slug=?", "acme-fail"); got != 0 {
+		t.Fatalf("expected rollback (no site row), got %d", got)
+	}
+}
+
+func TestSiteHandler_Seed_NoKit_StillWorks(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	body := `{
+		"type": "b2b",
+		"info": {"name": "Acme", "slug": "acme-nokit"},
+		"structure": {"structure_type": "soft-silo", "max_depth": 3},
+		"silos": [{"name": "S", "slug_prefix": "/s"}],
+		"branding": {}
+	}`
+	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Seed(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 without a kit, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestSiteHandler_ListStarterKits(t *testing.T) {
+	sqlDB, q := setupSeedTestDB(t)
+	h := NewSiteHandler(&config.Config{}, q, sqlDB)
+
+	starterkits.Default.Register(&seedFakeKit{id: "fake-listed"})
+
+	req := httptest.NewRequest("GET", "/api/starter-kits", nil)
+	rr := httptest.NewRecorder()
+	h.ListStarterKits(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var kits []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &kits); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	found := false
+	for _, k := range kits {
+		if k["id"] == "fake-listed" {
+			found = true
+			if k["name"] == nil || k["description"] == nil || k["target_site_types"] == nil {
+				t.Fatalf("expected all fields populated, got %+v", k)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected fake-listed in catalog, got %+v", kits)
+	}
+}
+
+var errKitBoom = errKitBoomT("kit boom")
+
+type errKitBoomT string
+
+func (e errKitBoomT) Error() string { return string(e) }

@@ -69,6 +69,13 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/auth/login", ah.Login)
 	r.Post("/api/auth/logout", ah.Logout)
 
+	// Sites handler (used by both public and authenticated routes).
+	sh := handlers.NewSiteHandler(s.cfg, s.queries, s.db)
+
+	// Starter kit catalog (public): the onboarding wizard fetches this
+	// before any site exists / before the admin is logged in.
+	r.Get("/api/starter-kits", sh.ListStarterKits)
+
 	// Authenticated admin routes
 	r.Group(func(r chi.Router) {
 		r.Use(s.authMW.Middleware)
@@ -78,7 +85,6 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/auth/change-password", ah.ChangePassword)
 
 		// Sites
-		sh := handlers.NewSiteHandler(s.cfg, s.queries, s.db)
 		r.Get("/api/sites", sh.List)
 		r.Post("/api/sites", sh.Create)
 		r.Post("/api/sites/seed", sh.Seed)
@@ -168,6 +174,15 @@ func (s *Server) Router() http.Handler {
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
 		r.Get("/api/sites/{siteID}/builds/{buildID}/status", buildH.BuildStatusAdmin)
+
+		// Deploy targets (admin)
+		dh := handlers.NewDeployHandler(s.cfg, s.queries, s.db)
+		r.Get("/api/sites/{siteID}/deploy-targets", dh.ListTargets)
+		r.Post("/api/sites/{siteID}/deploy-targets", dh.CreateTarget)
+		r.Get("/api/sites/{siteID}/deploy-targets/{targetID}", dh.GetTarget)
+		r.Patch("/api/sites/{siteID}/deploy-targets/{targetID}", dh.UpdateTarget)
+		r.Delete("/api/sites/{siteID}/deploy-targets/{targetID}", dh.DeleteTarget)
+		r.Post("/api/sites/{siteID}/deploy-targets/{targetID}/default", dh.SetDefault)
 
 		// Evaluations (admin)
 		evalH := handlers.NewEvaluationHandler(s.cfg, s.queries)
