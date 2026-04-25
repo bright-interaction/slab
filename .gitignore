@@ -47,3 +47,8 @@ coverage/
 
 # Atomicsite runtime data (DB, workspaces, media)
 data/
+
+# Playwright e2e artifacts
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/node_modules/
