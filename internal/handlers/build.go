@@ -2,12 +2,16 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/brightinteraction/atomicsite/internal/deploy"
 	"github.com/brightinteraction/atomicsite/internal/eval"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -216,6 +220,129 @@ func (h *BuildHandler) BuildStatusAdmin(w http.ResponseWriter, r *http.Request) 
 		"error":       deploy.Error,
 		"dist_dir":    "",
 		"created_at":  deploy.CreatedAt,
+	})
+}
+
+// deployRequest is the body for POST /api/sites/{siteID}/deploy.
+type deployRequest struct {
+	BuildID  string `json:"build_id"`
+	TargetID string `json:"target_id"`
+}
+
+// Deploy ships a previously-built deployment to a configured deploy_target.
+// Looks up the deployment row (must belong to siteID), looks up the target
+// (must belong to siteID), then runs the kind-specific Deployer against the
+// build's dist_dir. On success the deployment row gets target_id, deploy_url,
+// deployed_at filled in.
+func (h *BuildHandler) Deploy(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	var req deployRequest
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	req.BuildID = strings.TrimSpace(req.BuildID)
+	req.TargetID = strings.TrimSpace(req.TargetID)
+	if req.BuildID == "" {
+		writeError(w, http.StatusBadRequest, "build_id is required")
+		return
+	}
+	if req.TargetID == "" {
+		writeError(w, http.StatusBadRequest, "target_id is required")
+		return
+	}
+
+	deploymentRow, err := h.queries.GetDeploymentByID(r.Context(), req.BuildID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Build not found")
+		return
+	}
+	if deploymentRow.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Build not found")
+		return
+	}
+
+	targetRow, err := h.queries.GetDeployTarget(r.Context(), req.TargetID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Deploy target not found")
+		return
+	}
+	if targetRow.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Deploy target not found")
+		return
+	}
+
+	// Pull the build's dist_dir from the in-memory build state. We deliberately
+	// do not persist dist paths to DB (they're ephemeral workspace artifacts),
+	// so a deploy after server restart will fail loudly here.
+	h.mu.Lock()
+	state, ok := h.builds[req.BuildID]
+	h.mu.Unlock()
+	if !ok || state == nil || state.DistDir == "" {
+		writeError(w, http.StatusBadRequest, "Build dist_dir not available; trigger a fresh build before deploying")
+		return
+	}
+	if state.Status != "success" {
+		writeError(w, http.StatusBadRequest, "Build did not succeed; cannot deploy")
+		return
+	}
+
+	cfg := map[string]any{}
+	if strings.TrimSpace(targetRow.ConfigJson) != "" {
+		_ = json.Unmarshal([]byte(targetRow.ConfigJson), &cfg)
+	}
+	target := deploy.Target{
+		ID:     targetRow.ID,
+		SiteID: targetRow.SiteID,
+		Name:   targetRow.Name,
+		Kind:   targetRow.Kind,
+		Config: cfg,
+	}
+
+	deployer, err := deploy.New(target.Kind)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	result, err := deployer.Deploy(r.Context(), state.DistDir, target)
+	if err != nil {
+		slog.Error("deploy failed",
+			"site_id", siteID,
+			"build_id", req.BuildID,
+			"target_id", req.TargetID,
+			"kind", target.Kind,
+			"err", err,
+		)
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	if err := h.queries.UpdateDeploymentDeployed(r.Context(), store.UpdateDeploymentDeployedParams{
+		TargetID:  req.TargetID,
+		DeployUrl: result.URL,
+		ID:        req.BuildID,
+	}); err != nil {
+		slog.Error("update deployment deployed",
+			"build_id", req.BuildID,
+			"err", err,
+		)
+		writeError(w, http.StatusInternalServerError, "Deploy succeeded but DB update failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"deployment_id": req.BuildID,
+		"deploy_url":    result.URL,
+		"deployed_at":   result.DeployedAt,
+		"size_bytes":    result.SizeBytes,
+		"file_count":    result.FileCount,
 	})
 }
 

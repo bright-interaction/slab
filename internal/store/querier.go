@@ -124,6 +124,7 @@ type Querier interface {
 	UpdateCSSClass(ctx context.Context, arg UpdateCSSClassParams) error
 	UpdateComponent(ctx context.Context, arg UpdateComponentParams) error
 	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) error
+	UpdateDeploymentDeployed(ctx context.Context, arg UpdateDeploymentDeployedParams) error
 	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error

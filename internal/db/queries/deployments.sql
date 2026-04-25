@@ -16,5 +16,10 @@ UPDATE deployments
 SET status = ?, build_log = ?, pages_built = ?, duration_ms = ?, error = ?, completed_at = datetime('now')
 WHERE id = ?;
 
+-- name: UpdateDeploymentDeployed :exec
+UPDATE deployments
+SET target_id = ?, deploy_url = ?, deployed_at = datetime('now')
+WHERE id = ?;
+
 -- name: DeleteDeployment :exec
 DELETE FROM deployments WHERE id = ?;
