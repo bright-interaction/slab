@@ -77,6 +77,7 @@
 					{@const Icon = iconFor(opt.type)}
 					<button
 						type="button"
+						aria-label={opt.label}
 						class="flex items-start gap-3 rounded-lg border border-border-light bg-bg p-3 text-left transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
 						onclick={() => pick(opt.type)}
 					>

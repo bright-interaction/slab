@@ -52,7 +52,7 @@
 		hreflangJson: string;
 	};
 
-	let initial: State = {
+	let initial: State = $state({
 		metaTitleTemplate: '',
 		metaDescriptionTemplate: '',
 		canonicalBase: '',
@@ -61,7 +61,7 @@
 		llmsTxt: '',
 		sitemapEnabled: true,
 		hreflangJson: '[]'
-	};
+	});
 
 	function parseHreflang(raw: string): HreflangRow[] {
 		if (!raw.trim()) return [];

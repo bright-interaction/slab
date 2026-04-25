@@ -65,7 +65,7 @@
 		httpsRedirect: boolean;
 	};
 
-	let initial: State = {
+	let initial: State = $state({
 		hstsEnabled: false,
 		hstsMaxAge: 31536000,
 		hstsPreload: false,
@@ -76,7 +76,7 @@
 		referrerPolicy: 'strict-origin-when-cross-origin',
 		permissionsPolicy: 'camera=(), microphone=(), geolocation=()',
 		httpsRedirect: true
-	};
+	});
 
 	async function load() {
 		loading = true;
@@ -216,7 +216,7 @@
 							<span class="text-[13px] text-text-primary">HTTPS redirect</span>
 							<span class="text-[12px] text-text-muted">Force HTTP to HTTPS at the edge.</span>
 						</div>
-						<Switch bind:checked={httpsRedirect} />
+						<Switch bind:checked={httpsRedirect} ariaLabel="Force HTTPS redirect" />
 					</div>
 					<div class="flex items-center justify-between gap-4">
 						<div class="flex flex-col">
@@ -225,7 +225,7 @@
 								Strict-Transport-Security header.
 							</span>
 						</div>
-						<Switch bind:checked={hstsEnabled} />
+						<Switch bind:checked={hstsEnabled} ariaLabel="Enable HSTS" />
 					</div>
 					{#if hstsEnabled}
 						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -239,7 +239,7 @@
 							<div class="flex items-end">
 								<div class="flex items-center justify-between gap-4 w-full pb-2">
 									<span class="text-[13px] text-text-primary">Preload</span>
-									<Switch bind:checked={hstsPreload} />
+									<Switch bind:checked={hstsPreload} ariaLabel="Enable HSTS preload" />
 								</div>
 							</div>
 						</div>
@@ -259,7 +259,7 @@
 								Content-Security-Policy with strict defaults.
 							</span>
 						</div>
-						<Switch bind:checked={cspEnabled} />
+						<Switch bind:checked={cspEnabled} ariaLabel="Enable CSP" />
 					</div>
 					{#if cspEnabled}
 						<Textarea
@@ -292,7 +292,7 @@
 						<span class="text-[13px] text-text-primary">X-Content-Type-Options</span>
 						<span class="text-[12px] text-text-muted">Send nosniff. Recommended on.</span>
 					</div>
-					<Switch bind:checked={xContentTypeOptions} />
+					<Switch bind:checked={xContentTypeOptions} ariaLabel="Send X-Content-Type-Options nosniff" />
 				</div>
 				<div class="mt-4">
 					<Textarea

@@ -56,7 +56,7 @@
 		postalCode: string;
 	};
 
-	let initial: State = {
+	let initial: State = $state({
 		businessName: '',
 		registrationNr: '',
 		country: '',
@@ -68,7 +68,7 @@
 		addressLine2: '',
 		city: '',
 		postalCode: ''
-	};
+	});
 
 	function isProfile(v: profileApi.ProfileResponse): v is SiteProfile {
 		return 'business_name' in v;

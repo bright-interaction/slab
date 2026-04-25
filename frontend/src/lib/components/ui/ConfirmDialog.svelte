@@ -1,40 +1,13 @@
 <script lang="ts" module>
-	type ConfirmOptions = {
-		title: string;
-		message: string;
-		confirmText?: string;
-		cancelText?: string;
-		variant?: 'danger' | 'primary';
-	};
-
-	type State = ConfirmOptions & {
-		open: boolean;
-		resolve: (v: boolean) => void;
-	};
-
-	let state = $state<State | null>(null);
-
-	export function confirm(opts: ConfirmOptions): Promise<boolean> {
-		return new Promise((resolve) => {
-			state = { ...opts, open: true, resolve };
-		});
-	}
-
-	export function _state() {
-		return state;
-	}
-
-	export function _close(result: boolean) {
-		if (state) {
-			state.resolve(result);
-			state = null;
-		}
-	}
+	// Re-export from the shared store so existing imports keep working:
+	//   import { confirm } from '$lib/components/ui/ConfirmDialog.svelte';
+	export { confirm } from '$lib/stores/confirm.svelte';
 </script>
 
 <script lang="ts">
 	import Dialog from './Dialog.svelte';
 	import Button from './Button.svelte';
+	import { getConfirmState, closeConfirm } from '$lib/stores/confirm.svelte';
 
 	let {
 		open = $bindable(false),
@@ -58,7 +31,7 @@
 
 	const inline = $derived(title !== undefined || message !== undefined);
 
-	const ambient = $derived(state);
+	const ambient = $derived(getConfirmState());
 	const showAmbient = $derived(!inline && ambient !== null && ambient.open);
 
 	const finalTitle = $derived(inline ? title : (ambient?.title ?? ''));
@@ -76,7 +49,7 @@
 			onconfirm?.();
 			open = false;
 		} else {
-			_close(true);
+			closeConfirm(true);
 		}
 	}
 
@@ -85,7 +58,7 @@
 			oncancel?.();
 			open = false;
 		} else {
-			_close(false);
+			closeConfirm(false);
 		}
 	}
 </script>

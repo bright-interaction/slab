@@ -43,14 +43,14 @@
 	let fontHeading = $state(initial('font_heading'));
 	let fontBody = $state(initial('font_body'));
 
-	const initialState = {
+	const initialState = $state({
 		primary_color: initial('primary_color'),
 		secondary_color: initial('secondary_color'),
 		bg_color: initial('bg_color'),
 		text_color: initial('text_color'),
 		font_heading: initial('font_heading'),
 		font_body: initial('font_body')
-	};
+	});
 
 	let saving = $state(false);
 
