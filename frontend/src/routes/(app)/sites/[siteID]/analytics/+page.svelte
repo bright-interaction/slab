@@ -142,13 +142,13 @@
 	}
 
 	const topPagesMax = $derived(
-		overview && overview.top_pages.length > 0
+		overview && overview.top_pages && overview.top_pages.length > 0
 			? Math.max(...overview.top_pages.map((p) => p.count), 1)
 			: 1
 	);
 
 	const topReferersMax = $derived(
-		overview && overview.top_referers.length > 0
+		overview && overview.top_referers && overview.top_referers.length > 0
 			? Math.max(...overview.top_referers.map((r) => r.count), 1)
 			: 1
 	);
@@ -269,7 +269,7 @@
 					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 						Top pages
 					</h2>
-					{#if overview && overview.top_pages.length > 0}
+					{#if overview && overview.top_pages && overview.top_pages.length > 0}
 						<span class="text-[11px] text-text-muted">visits</span>
 					{/if}
 				</div>
@@ -283,7 +283,7 @@
 								</div>
 							{/each}
 						</div>
-					{:else if !overview || overview.top_pages.length === 0}
+					{:else if !overview || !overview.top_pages || overview.top_pages.length === 0}
 						<p class="py-6 text-center text-[12px] text-text-muted">No page views yet.</p>
 					{:else}
 						<ul class="space-y-1.5">
@@ -315,7 +315,7 @@
 					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 						Top referers
 					</h2>
-					{#if overview && overview.top_referers.length > 0}
+					{#if overview && overview.top_referers && overview.top_referers.length > 0}
 						<span class="text-[11px] text-text-muted">visits</span>
 					{/if}
 				</div>
@@ -329,7 +329,7 @@
 								</div>
 							{/each}
 						</div>
-					{:else if !overview || overview.top_referers.length === 0}
+					{:else if !overview || !overview.top_referers || overview.top_referers.length === 0}
 						<p class="py-6 text-center text-[12px] text-text-muted">
 							No referer data yet.
 						</p>
