@@ -135,12 +135,18 @@ func main() {
 }
 
 func applySchema(sqlDB *sql.DB) error {
-	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
-		return err
-	}
-	// Idempotent column additions for pre-existing tables (CREATE TABLE IF NOT
-	// EXISTS above doesn't alter existing tables). addColumnIfMissing silently
-	// no-ops when the column already exists.
+	// Run column migrations FIRST. addColumnIfMissing is now table-aware: if
+	// the table doesn't exist (fresh DB), it no-ops and the schema below
+	// will create the table with all columns. If the table exists from an
+	// earlier deploy with fewer columns, the missing columns are ALTER-ADDed
+	// here so that subsequent CREATE INDEX statements in the schema (which
+	// reference these columns) don't fail with "no such column".
+	//
+	// This ordering matters: a 502 incident on 2026-04-26 was caused by the
+	// analytics enrichment columns (browser, os, device, country, lang,
+	// utm_*) being added to schema.sql + indexed in the same statement-set
+	// without ALTER migrations, so existing prod DBs failed to apply the
+	// schema (CREATE INDEX referenced country which didn't exist).
 	migrations := []struct{ table, column, spec string }{
 		{"pages", "no_index", "INTEGER NOT NULL DEFAULT 0"},
 		{"pages", "canonical_url", "TEXT NOT NULL DEFAULT ''"},
@@ -148,19 +154,50 @@ func applySchema(sqlDB *sql.DB) error {
 		{"deployments", "deploy_url", "TEXT NOT NULL DEFAULT ''"},
 		{"deployments", "deployed_at", "TEXT NOT NULL DEFAULT ''"},
 		{"site_silos", "silo_type", "TEXT NOT NULL DEFAULT 'inherit'"},
+		// Analytics enrichment (Phase 12.5) added 2026-04-26.
+		{"visit_events", "browser", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "os", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "device", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "country", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "lang", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "utm_source", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "utm_medium", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_events", "utm_campaign", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {
 			return fmt.Errorf("migrate %s.%s: %w", m.table, m.column, err)
 		}
 	}
+	// Now apply the full schema. CREATE TABLE IF NOT EXISTS is a no-op for
+	// existing tables; CREATE INDEX IF NOT EXISTS now succeeds because the
+	// referenced columns exist (newly added by the migrations above on
+	// existing DBs, or about to be created on fresh DBs).
+	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
+		return err
+	}
 	return nil
 }
 
 // addColumnIfMissing checks PRAGMA table_info and adds the column only if it's
-// not present. Works on all SQLite versions (doesn't require ALTER TABLE IF NOT
-// EXISTS which is SQLite 3.35+).
+// not present. No-ops when the table itself does not exist yet (fresh DB),
+// in which case the caller's schema apply will create the table with the
+// column already declared. Works on all SQLite versions (doesn't require
+// ALTER TABLE IF NOT EXISTS which is SQLite 3.35+).
 func addColumnIfMissing(sqlDB *sql.DB, table, column, spec string) error {
+	// Probe table existence first. Without this, PRAGMA returns no rows on
+	// a non-existent table and the subsequent ALTER TABLE fails with
+	// "no such table". When applySchema runs migrations BEFORE the schema
+	// exec (the safe ordering), fresh DBs have no tables yet, so we must
+	// no-op here and let CREATE TABLE handle column declarations.
+	var name string
+	if err := sqlDB.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
 	rows, err := sqlDB.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return err
@@ -168,13 +205,13 @@ func addColumnIfMissing(sqlDB *sql.DB, table, column, spec string) error {
 	defer rows.Close()
 	for rows.Next() {
 		var cid int
-		var name, ctype string
+		var colName, ctype string
 		var notnull, pk int
 		var dflt any
-		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+		if err := rows.Scan(&cid, &colName, &ctype, &notnull, &dflt, &pk); err != nil {
 			return err
 		}
-		if name == column {
+		if colName == column {
 			return nil // already present
 		}
 	}
