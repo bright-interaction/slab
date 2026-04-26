@@ -11,7 +11,7 @@
 <script lang="ts">
 	let {
 		builds,
-		height = 220
+		height = 240
 	}: {
 		builds: BuildHistoryEntry[];
 		height?: number;
@@ -25,22 +25,31 @@
 		'accessibility',
 		'privacy'
 	];
+	const CATEGORY_LABEL: Record<CategoryKey, string> = {
+		security: 'Security',
+		seo: 'SEO',
+		performance: 'Performance',
+		accessibility: 'Accessibility',
+		privacy: 'Privacy'
+	};
 
-	// CSS variable token names per the design system.
-	const COLOR_VAR: Record<CategoryKey, string> = {
-		security: 'var(--color-danger, #ef4444)',
-		seo: 'var(--color-accent, #6366f1)',
-		performance: 'var(--color-info, #0ea5e9)',
-		accessibility: 'var(--color-warning, #f59e0b)',
-		privacy: 'var(--color-success, #10b981)'
+	// Tone-aware palette. Mirrors the donut + grade badge colours so the
+	// trend chart reads in the same colour vocabulary as the rest of the
+	// evaluation UI.
+	const COLOR: Record<CategoryKey, string> = {
+		security: '#ef4444',
+		seo: '#6366f1',
+		performance: '#0ea5e9',
+		accessibility: '#f59e0b',
+		privacy: '#10b981'
 	};
 
 	const VIEW_W = 800;
-	const VIEW_H = 240;
-	const PAD_L = 36;
-	const PAD_R = 12;
-	const PAD_T = 14;
-	const PAD_B = 28;
+	const VIEW_H = 260;
+	const PAD_L = 40;
+	const PAD_R = 16;
+	const PAD_T = 16;
+	const PAD_B = 36;
 
 	const sorted = $derived(
 		[...builds].sort(
@@ -73,7 +82,8 @@
 			if (!entry) continue;
 			const v = categoryPercent(entry, cat);
 			if (v === null) continue;
-			const x = PAD_L + step * i;
+			// Centre the single point when only one build is present.
+			const x = n === 1 ? PAD_L + innerW / 2 : PAD_L + step * i;
 			const y = PAD_T + innerH - (v / 100) * innerH;
 			pts.push({ x, y, v });
 		}
@@ -97,7 +107,17 @@
 		return d;
 	}
 
-	let hover = $state<{ idx: number; x: number; y: number } | null>(null);
+	// Closes the line into a filled area for the gradient under each line.
+	function areaPath(pts: Point[]): string {
+		if (pts.length === 0) return '';
+		const first = pts[0];
+		const last = pts[pts.length - 1];
+		if (!first || !last) return '';
+		const baseY = VIEW_H - PAD_B;
+		return `${smoothPath(pts)} L ${last.x} ${baseY} L ${first.x} ${baseY} Z`;
+	}
+
+	let hover = $state<{ idx: number; x: number } | null>(null);
 
 	function onPointerMove(e: PointerEvent) {
 		if (sorted.length === 0) return;
@@ -111,8 +131,8 @@
 			idx = Math.round((px - PAD_L) / step);
 			idx = Math.max(0, Math.min(sorted.length - 1, idx));
 		}
-		const x = PAD_L + step * idx;
-		hover = { idx, x, y: 0 };
+		const x = sorted.length === 1 ? PAD_L + innerW / 2 : PAD_L + step * idx;
+		hover = { idx, x };
 	}
 
 	function onPointerLeave() {
@@ -127,6 +147,29 @@
 			day: 'numeric'
 		});
 	}
+
+	// Sparse x-axis labels: first, last, plus a couple in the middle when
+	// there are enough builds. Avoids overlapping labels.
+	const xLabels = $derived.by<{ x: number; label: string }[]>(() => {
+		const n = sorted.length;
+		if (n === 0) return [];
+		const innerW = VIEW_W - PAD_L - PAD_R;
+		if (n === 1) {
+			const e = sorted[0];
+			if (!e) return [];
+			return [{ x: PAD_L + innerW / 2, label: formatDate(e.created_at) }];
+		}
+		const step = innerW / (n - 1);
+		const indices: number[] = [];
+		const ticks = Math.min(5, n);
+		for (let i = 0; i < ticks; i++) {
+			indices.push(Math.round((i * (n - 1)) / (ticks - 1)));
+		}
+		return indices.map((i) => {
+			const e = sorted[i];
+			return { x: PAD_L + step * i, label: e ? formatDate(e.created_at) : '' };
+		});
+	});
 </script>
 
 <div class="relative w-full" style="height: {height}px;">
@@ -136,18 +179,35 @@
 		>
 			No build history yet.
 		</div>
+	{:else if sorted.length === 1}
+		<div
+			class="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-border-light bg-bg-surface px-6 text-center"
+		>
+			<p class="text-[12px] text-text-muted">
+				Need at least 2 builds to plot a trend. The current scores are shown above.
+			</p>
+		</div>
 	{:else}
 		<svg
 			viewBox="0 0 {VIEW_W} {VIEW_H}"
-			preserveAspectRatio="none"
-			class="h-full w-full"
+			preserveAspectRatio="xMidYMid meet"
+			class="h-full w-full overflow-visible"
 			role="img"
 			aria-label="Score history per category over recent builds"
 			onpointermove={onPointerMove}
 			onpointerleave={onPointerLeave}
 		>
-			<!-- Y axis grid lines at 0, 25, 50, 75, 100 -->
-			{#each [0, 25, 50, 75, 100] as level (level)}
+			<defs>
+				{#each CATEGORIES as cat (cat)}
+					<linearGradient id="grad-{cat}" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color={COLOR[cat]} stop-opacity="0.18" />
+						<stop offset="100%" stop-color={COLOR[cat]} stop-opacity="0" />
+					</linearGradient>
+				{/each}
+			</defs>
+
+			<!-- Y axis grid lines at 0/50/100. Less noise than 5 levels. -->
+			{#each [0, 50, 100] as level (level)}
 				{@const innerH = VIEW_H - PAD_T - PAD_B}
 				{@const y = PAD_T + innerH - (level / 100) * innerH}
 				<line
@@ -155,12 +215,13 @@
 					x2={VIEW_W - PAD_R}
 					y1={y}
 					y2={y}
-					stroke="var(--color-border-light, rgba(0,0,0,0.08))"
+					stroke="var(--color-border-light, rgba(0,0,0,0.06))"
 					stroke-width="1"
+					stroke-dasharray={level === 0 ? '0' : '3 4'}
 				/>
 				<text
-					x={PAD_L - 6}
-					y={y + 3}
+					x={PAD_L - 8}
+					y={y + 4}
 					text-anchor="end"
 					font-size="10"
 					fill="var(--color-text-muted, #9aa0a6)"
@@ -169,27 +230,8 @@
 				</text>
 			{/each}
 
-			<!-- Lines per category -->
-			{#each CATEGORIES as cat (cat)}
-				{@const pts = pointsFor(cat)}
-				{#if pts.length > 0}
-					<path
-						d={smoothPath(pts)}
-						fill="none"
-						stroke={COLOR_VAR[cat]}
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-					{#each pts as p, i (`${cat}-${i}`)}
-						<circle cx={p.x} cy={p.y} r="2.5" fill={COLOR_VAR[cat]} />
-					{/each}
-				{/if}
-			{/each}
-
-			<!-- Hover guide line -->
-			{#if hover && sorted[hover.idx]}
-				{@const hoverEntry = sorted[hover.idx] as BuildHistoryEntry}
+			<!-- Hover guide first so lines paint on top. -->
+			{#if hover}
 				<line
 					x1={hover.x}
 					x2={hover.x}
@@ -198,16 +240,70 @@
 					stroke="var(--color-text-muted, #9aa0a6)"
 					stroke-width="1"
 					stroke-dasharray="3 3"
-					opacity="0.5"
+					opacity="0.4"
 				/>
+			{/if}
+
+			<!-- Area fills, drawn first so lines sit on top -->
+			{#each CATEGORIES as cat (cat)}
+				{@const pts = pointsFor(cat)}
+				{#if pts.length >= 2}
+					<path d={areaPath(pts)} fill="url(#grad-{cat})" stroke="none" />
+				{/if}
+			{/each}
+
+			<!-- Lines per category with bigger anchor points -->
+			{#each CATEGORIES as cat (cat)}
+				{@const pts = pointsFor(cat)}
+				{#if pts.length > 0}
+					<path
+						d={smoothPath(pts)}
+						fill="none"
+						stroke={COLOR[cat]}
+						stroke-width="2.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+					{#each pts as p, i (`${cat}-${i}`)}
+						<circle
+							cx={p.x}
+							cy={p.y}
+							r="3.5"
+							fill="var(--color-bg-surface, #ffffff)"
+							stroke={COLOR[cat]}
+							stroke-width="2"
+						/>
+					{/each}
+				{/if}
+			{/each}
+
+			<!-- X axis labels -->
+			{#each xLabels as tick (tick.x)}
 				<text
-					x={hover.x}
-					y={VIEW_H - PAD_B + 16}
+					x={tick.x}
+					y={VIEW_H - PAD_B + 18}
 					text-anchor="middle"
 					font-size="10"
 					fill="var(--color-text-muted, #9aa0a6)"
 				>
-					{formatDate(hoverEntry.created_at)}
+					{tick.label}
+				</text>
+			{/each}
+
+			<!-- Latest indicator -->
+			{#if sorted.length > 1}
+				{@const lastIdx = sorted.length - 1}
+				{@const innerW = VIEW_W - PAD_L - PAD_R}
+				{@const step = innerW / (sorted.length - 1)}
+				<text
+					x={PAD_L + step * lastIdx}
+					y={PAD_T - 4}
+					text-anchor="end"
+					font-size="9"
+					font-weight="500"
+					fill="var(--color-text-muted, #9aa0a6)"
+				>
+					LATEST
 				</text>
 			{/if}
 		</svg>
@@ -215,18 +311,21 @@
 		{#if hover && sorted[hover.idx]}
 			{@const hoverEntry = sorted[hover.idx] as BuildHistoryEntry}
 			<div
-				class="pointer-events-none absolute top-2 right-2 rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-[11px] text-text-primary shadow-sm"
+				class="pointer-events-none absolute top-2 right-2 min-w-[160px] rounded-lg border border-border-light bg-bg-elevated px-3 py-2 text-[11px] text-text-primary shadow-md"
 			>
 				<p class="font-medium">{formatDate(hoverEntry.created_at)}</p>
-				<div class="mt-1 space-y-0.5">
+				<p class="mt-0.5 font-mono text-[10px] text-text-muted truncate">
+					{hoverEntry.build_id.slice(0, 12)}
+				</p>
+				<div class="mt-1.5 space-y-0.5">
 					{#each CATEGORIES as cat (cat)}
 						{@const pct = categoryPercent(hoverEntry, cat)}
 						<div class="flex items-center gap-1.5">
 							<span
 								class="inline-block h-2 w-2 rounded-full"
-								style="background: {COLOR_VAR[cat]};"
+								style="background: {COLOR[cat]};"
 							></span>
-							<span class="capitalize text-text-secondary">{cat}</span>
+							<span class="text-text-secondary">{CATEGORY_LABEL[cat]}</span>
 							<span class="ml-auto font-mono">{pct === null ? '-' : pct.toFixed(0)}</span>
 						</div>
 					{/each}
@@ -236,14 +335,14 @@
 	{/if}
 
 	<!-- Legend -->
-	<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted">
+	<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted">
 		{#each CATEGORIES as cat (cat)}
-			<span class="inline-flex items-center gap-1.5 capitalize">
+			<span class="inline-flex items-center gap-1.5">
 				<span
 					class="inline-block h-2 w-2 rounded-full"
-					style="background: {COLOR_VAR[cat]};"
+					style="background: {COLOR[cat]};"
 				></span>
-				{cat}
+				{CATEGORY_LABEL[cat]}
 			</span>
 		{/each}
 	</div>

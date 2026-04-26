@@ -4,12 +4,10 @@
 	import * as evaluationsApi from '$lib/api/evaluations';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import GradeBadge from '$lib/components/ui/GradeBadge.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import CategoryDonut from '$lib/components/evaluations/CategoryDonut.svelte';
 	import CategoryGradeCard from '$lib/components/evaluations/CategoryGradeCard.svelte';
 	import type { Site, Evaluation } from '$lib/api/types';
-	import { compositeGrade } from '$lib/evaluations/grade';
 
 	let { data }: { data: { site: Site } } = $props();
 	const siteID = $derived(data.site.id);
@@ -38,7 +36,6 @@
 		void load(buildID);
 	});
 
-	const composite = $derived(compositeGrade(buildEvals));
 	const buildCreatedAt = $derived(buildEvals[0]?.created_at ?? '');
 
 	const evalByCategory = $derived.by<Record<string, Evaluation | null>>(() => {
@@ -80,25 +77,9 @@
 				<p class="mt-0.5 text-[12px] text-text-secondary">{formatDate(buildCreatedAt)}</p>
 			{/if}
 		</div>
-		<div class="flex items-center gap-3">
-			<div class="text-right">
-				<p class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Composite</p>
-				<div class="mt-1">
-					{#if composite}
-						<GradeBadge grade={composite} size="lg" />
-					{:else}
-						<span
-							class="inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-bg-elevated text-text-muted text-4xl"
-						>
-							?
-						</span>
-					{/if}
-				</div>
-			</div>
-			<Button variant="secondary" onclick={() => goto(`/sites/${siteID}/build`)}>
-				Trigger new build
-			</Button>
-		</div>
+		<Button variant="primary" onclick={() => goto(`/sites/${siteID}/build`)}>
+			Trigger new build
+		</Button>
 	</div>
 
 	{#if loading}

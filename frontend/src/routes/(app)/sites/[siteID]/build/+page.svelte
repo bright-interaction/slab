@@ -414,31 +414,22 @@
 </script>
 
 <div class="mx-auto max-w-7xl px-6 py-8">
-	<header class="mb-6">
-		<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">Build</h1>
-		<p class="mt-1 text-[13px] text-text-secondary">
-			Compile your site to a static Astro project.
-		</p>
-	</header>
-
-	<Card padding="md">
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<div>
-				<h2 class="text-[13px] font-medium text-text-primary">Trigger build</h2>
-				<p class="mt-1 text-[12px] text-text-muted">
-					Generates the Astro workspace, runs bun build, and scores the output.
-				</p>
-			</div>
-			<Button
-				variant="primary"
-				loading={triggering || (buildState !== null && !isTerminal)}
-				disabled={triggering || (buildState !== null && !isTerminal)}
-				onclick={onTrigger}
-			>
-				{buildState && !isTerminal ? 'Building...' : 'Trigger build'}
-			</Button>
+	<header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+		<div>
+			<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">Build</h1>
+			<p class="mt-1 text-[13px] text-text-secondary">
+				Compile your site to a static Astro project.
+			</p>
 		</div>
-	</Card>
+		<Button
+			variant="primary"
+			loading={triggering || (buildState !== null && !isTerminal)}
+			disabled={triggering || (buildState !== null && !isTerminal)}
+			onclick={onTrigger}
+		>
+			{buildState && !isTerminal ? 'Building...' : 'Trigger build'}
+		</Button>
+	</header>
 
 	<!-- Latest scores: 5-up donut row from the most recent build's evaluations. -->
 	<section class="mt-6">
