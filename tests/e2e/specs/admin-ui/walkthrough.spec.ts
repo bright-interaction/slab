@@ -12,14 +12,14 @@ import type { ConsoleMessage, Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/auth';
 import { createSite, deleteSite, type Site } from '../../fixtures/data';
 
-// SectionNav.svelte ships exactly these 8 top-level tabs.
+// SectionNav.svelte ships exactly these 7 top-level tabs (Evals merged
+// into Build in Phase 12.7).
 const SECTION_TABS = [
 	{ tab: 'Overview', urlSuffix: '' },
 	{ tab: 'Pages', urlSuffix: '/pages' },
 	{ tab: 'Branding', urlSuffix: '/branding' },
 	{ tab: 'Media', urlSuffix: '/media' },
 	{ tab: 'Build', urlSuffix: '/build' },
-	{ tab: 'Evals', urlSuffix: '/evaluations' },
 	{ tab: 'Analytics', urlSuffix: '/analytics' },
 	{ tab: 'Settings', urlSuffix: '/settings' }
 ] as const;
