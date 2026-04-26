@@ -19,13 +19,24 @@ func NewContextBuilder(queries *store.Queries) *ContextBuilder {
 
 // SiteContext is the full context payload returned to AI agents.
 type SiteContext struct {
-	Site          SiteInfo          `json:"site"`
-	Structure     Structure         `json:"structure"`
-	Knowledgebase []KBEntry         `json:"knowledgebase"`
-	Components    []ComponentInfo   `json:"components"`
-	CSSClasses    []CSSClassInfo    `json:"css_classes"`
-	Constraints   Constraints       `json:"constraints"`
-	Architecture  ArchitectureInfo  `json:"architecture"`
+	Site             SiteInfo              `json:"site"`
+	Structure        Structure             `json:"structure"`
+	Knowledgebase    []KBEntry             `json:"knowledgebase"`
+	Components       []ComponentInfo       `json:"components"`
+	CSSClasses       []CSSClassInfo        `json:"css_classes"`
+	Constraints      Constraints           `json:"constraints"`
+	Architecture     ArchitectureInfo      `json:"architecture"`
+	DesignReferences []DesignReferenceInfo `json:"design_references"`
+}
+
+// DesignReferenceInfo surfaces a fetched GitHub bundle so the AI agent
+// has the user's preferred design vocabulary to compose with. The bundle
+// is read-only pattern reference, not a code-copy mechanism.
+type DesignReferenceInfo struct {
+	URL     string         `json:"url"`
+	Label   string         `json:"label"`
+	RefType string         `json:"ref_type"`
+	Bundle  map[string]any `json:"bundle"`
 }
 
 type SiteInfo struct {
@@ -252,6 +263,25 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 
 	constraints := b.buildConstraints(ctx, siteID)
 
+	// Design references: pull every saved GitHub bundle so the agent can
+	// borrow vocabulary (component shapes, naming, tailwind config). The
+	// bundle JSON is whatever the design-references handler stored at
+	// fetch / refresh time. Failures here are non-fatal: an agent without
+	// references is still a useful agent.
+	var refInfos []DesignReferenceInfo
+	if refRows, err := b.queries.ListDesignReferences(ctx, siteID); err == nil {
+		for _, r := range refRows {
+			var bundle map[string]any
+			_ = json.Unmarshal([]byte(r.FetchedJson), &bundle)
+			refInfos = append(refInfos, DesignReferenceInfo{
+				URL:     r.Url,
+				Label:   r.Label,
+				RefType: r.RefType,
+				Bundle:  bundle,
+			})
+		}
+	}
+
 	arch, _ := b.queries.GetSiteArchitecture(ctx, siteID)
 	archInfo := ArchitectureInfo{
 		StructureType: "soft-silo",
@@ -289,11 +319,12 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 			GlobalBlocks: gbInfos,
 			Silos:        siloInfos,
 		},
-		Knowledgebase: kbInfos,
-		Components:    compInfos,
-		CSSClasses:    cssInfos,
-		Constraints:   constraints,
-		Architecture:  archInfo,
+		Knowledgebase:    kbInfos,
+		Components:       compInfos,
+		CSSClasses:       cssInfos,
+		Constraints:      constraints,
+		Architecture:     archInfo,
+		DesignReferences: refInfos,
 	}, nil
 }
 

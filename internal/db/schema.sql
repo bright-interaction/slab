@@ -443,3 +443,41 @@ CREATE TABLE IF NOT EXISTS visit_engagement (
 CREATE INDEX IF NOT EXISTS idx_visit_engagement_site_ts ON visit_engagement(site_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_visit_engagement_path ON visit_engagement(site_id, path);
 CREATE INDEX IF NOT EXISTS idx_visit_engagement_fingerprint ON visit_engagement(site_id, fingerprint);
+
+-- Per-site uploaded fonts (Phase 12.8). Self-hosted woff2 only: best
+-- compression, universal browser support since 2020. The file lands on
+-- disk at {storage}/fonts/{site_id}/{id}.woff2; this row carries the
+-- metadata the Astro Layout needs to emit @font-face and the dropdown
+-- needs to render an option.
+CREATE TABLE IF NOT EXISTS site_fonts (
+    id            TEXT PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    family_name   TEXT NOT NULL,
+    weight        INTEGER NOT NULL DEFAULT 400,
+    style         TEXT NOT NULL DEFAULT 'normal',
+    file_path     TEXT NOT NULL,
+    file_size     INTEGER NOT NULL DEFAULT 0,
+    original_name TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_site_fonts_site ON site_fonts(site_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_site_fonts_per_family ON site_fonts(site_id, family_name, weight, style);
+
+-- GitHub design references (Phase 12.8). Site owners paste a public
+-- repo URL; atomicsite pre-fetches a small bundle of representative
+-- files (package.json, README.md, tailwind.config, app.css, plus 3-5
+-- component files) and surfaces the bundle to AI agents via the
+-- /api/agent/context endpoint as "design vocabulary the user wants
+-- atomicsite to feel like." Read-only pattern reference, not code copy.
+CREATE TABLE IF NOT EXISTS design_references (
+    id            TEXT PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    url           TEXT NOT NULL,
+    label         TEXT NOT NULL DEFAULT '',
+    ref_type      TEXT NOT NULL DEFAULT 'design-system',
+    fetched_json  TEXT NOT NULL DEFAULT '{}',
+    fetched_at    TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, url)
+);
+CREATE INDEX IF NOT EXISTS idx_design_references_site ON design_references(site_id);

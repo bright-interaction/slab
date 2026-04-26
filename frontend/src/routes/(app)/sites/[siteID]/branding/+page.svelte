@@ -1,14 +1,20 @@
 <script lang="ts">
 	import * as sitesApi from '$lib/api/sites';
+	import * as fontsApi from '$lib/api/fonts';
+	import * as designRefsApi from '$lib/api/designRefs';
 	import { ApiError } from '$lib/api/client';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Badge from '$lib/components/ui/Badge.svelte';
 	import ColorSlot from '$lib/components/branding/ColorSlot.svelte';
 	import ContrastMatrix from '$lib/components/branding/ContrastMatrix.svelte';
 	import type { SlotKey } from '$lib/components/branding/ContrastMatrix.svelte';
 	import BrandingPreview from '$lib/components/branding/BrandingPreview.svelte';
 	import { setSite } from '$lib/stores/currentSite.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { Trash2, RefreshCw, Github, Upload as UploadIcon } from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
 
 	let { data }: { data: { site: Site } } = $props();
@@ -22,13 +28,22 @@
 		font_body: 'Inter'
 	};
 
-	const fontOptions = [
+	// Curated set of self-hosted woff2-friendly fonts. Keep this list in
+	// sync with the build pipeline's bundled fonts. Ten balanced choices
+	// across geometric sans, humanist sans, mono, and serif.
+	const builtInFonts = [
 		{ value: 'Inter', label: 'Inter' },
 		{ value: 'Geist', label: 'Geist' },
+		{ value: 'Geist Mono', label: 'Geist Mono' },
 		{ value: 'Space Grotesk', label: 'Space Grotesk' },
+		{ value: 'Space Mono', label: 'Space Mono' },
+		{ value: 'JetBrains Mono', label: 'JetBrains Mono' },
+		{ value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans' },
+		{ value: 'Manrope', label: 'Manrope' },
+		{ value: 'IBM Plex Sans', label: 'IBM Plex Sans' },
 		{ value: 'Playfair Display', label: 'Playfair Display' },
-		{ value: 'Merriweather', label: 'Merriweather' },
-		{ value: 'JetBrains Mono', label: 'JetBrains Mono' }
+		{ value: 'Lora', label: 'Lora' },
+		{ value: 'Source Serif 4', label: 'Source Serif 4' }
 	];
 
 	function initial(field: keyof typeof DEFAULTS): string {
@@ -55,6 +70,40 @@
 	let saving = $state(false);
 
 	const colors = $derived({ primary, secondary, bg, text });
+
+	// Custom fonts uploaded via /api/sites/{id}/fonts. Listed once on
+	// mount and refreshed after every successful upload / delete.
+	let customFonts = $state<fontsApi.SiteFont[]>([]);
+	let customFontsLoading = $state(true);
+
+	async function loadCustomFonts(): Promise<void> {
+		customFontsLoading = true;
+		try {
+			const r = await fontsApi.list(data.site.id);
+			customFonts = r.fonts;
+		} catch {
+			customFonts = [];
+		} finally {
+			customFontsLoading = false;
+		}
+	}
+
+	$effect(() => {
+		void loadCustomFonts();
+		void loadDesignRefs();
+	});
+
+	const fontOptions = $derived(() => {
+		const builtIns = builtInFonts.map((f) => ({ value: f.value, label: f.label }));
+		const customFamilies = Array.from(
+			new Set(customFonts.map((f) => f.family_name))
+		).sort();
+		const customOptions = customFamilies.map((fam) => ({
+			value: fam,
+			label: `${fam} (custom)`
+		}));
+		return [...builtIns, ...customOptions];
+	});
 
 	const dirty = $derived(
 		primary !== initialState.primary_color ||
@@ -127,16 +176,176 @@
 			saving = false;
 		}
 	}
+
+	// ---- Custom font upload ----
+	let uploadFile = $state<File | null>(null);
+	let uploadFamily = $state('');
+	let uploadWeight = $state(400);
+	let uploadStyle = $state<'normal' | 'italic'>('normal');
+	let uploading = $state(false);
+	let uploadError = $state<string | null>(null);
+
+	function onFilePick(e: Event): void {
+		const target = e.currentTarget as HTMLInputElement;
+		const f = target.files?.[0] ?? null;
+		uploadFile = f;
+		uploadError = null;
+		if (f && !uploadFamily) {
+			// Derive a family name from the filename (strip .woff2 + clean it up).
+			const stem = f.name.replace(/\.woff2$/i, '').replace(/[._-]+/g, ' ').trim();
+			uploadFamily = stem;
+		}
+		if (f && !f.name.toLowerCase().endsWith('.woff2')) {
+			uploadError = 'Only .woff2 files are accepted (best compression, universal support).';
+		}
+	}
+
+	async function uploadFont(): Promise<void> {
+		if (uploading) return;
+		if (!uploadFile) {
+			uploadError = 'Pick a .woff2 file first.';
+			return;
+		}
+		if (!uploadFamily.trim()) {
+			uploadError = 'Family name required.';
+			return;
+		}
+		uploading = true;
+		uploadError = null;
+		try {
+			await fontsApi.upload(
+				data.site.id,
+				uploadFile,
+				uploadFamily.trim(),
+				uploadWeight,
+				uploadStyle
+			);
+			toast.success(`Uploaded ${uploadFamily.trim()} ${uploadWeight} ${uploadStyle}.`);
+			uploadFile = null;
+			uploadFamily = '';
+			uploadWeight = 400;
+			uploadStyle = 'normal';
+			await loadCustomFonts();
+		} catch (err) {
+			uploadError = err instanceof Error ? err.message : 'Upload failed.';
+		} finally {
+			uploading = false;
+		}
+	}
+
+	async function removeFont(font: fontsApi.SiteFont): Promise<void> {
+		try {
+			await fontsApi.remove(data.site.id, font.id);
+			toast.success(`Removed ${font.family_name} ${font.weight} ${font.style}.`);
+			await loadCustomFonts();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to remove font.');
+		}
+	}
+
+	function formatBytes(n: number): string {
+		if (n < 1024) return `${n} B`;
+		if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+		return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+	}
+
+	// ---- Design references ----
+	let designRefs = $state<designRefsApi.DesignReference[]>([]);
+	let designRefsLoading = $state(true);
+
+	let refURL = $state('');
+	let refLabel = $state('');
+	let refType = $state<designRefsApi.DesignReference['ref_type']>('design-system');
+	let addingRef = $state(false);
+	let refError = $state<string | null>(null);
+
+	async function loadDesignRefs(): Promise<void> {
+		designRefsLoading = true;
+		try {
+			const r = await designRefsApi.list(data.site.id);
+			designRefs = r.references;
+		} catch {
+			designRefs = [];
+		} finally {
+			designRefsLoading = false;
+		}
+	}
+
+	async function addDesignRef(): Promise<void> {
+		if (addingRef || !refURL.trim()) return;
+		addingRef = true;
+		refError = null;
+		try {
+			await designRefsApi.create(data.site.id, refURL.trim(), refLabel.trim(), refType);
+			toast.success('Design reference added. The AI agent now has its design vocabulary.');
+			refURL = '';
+			refLabel = '';
+			refType = 'design-system';
+			await loadDesignRefs();
+		} catch (err) {
+			refError = err instanceof ApiError ? err.message : 'Failed to add reference.';
+		} finally {
+			addingRef = false;
+		}
+	}
+
+	async function refreshDesignRef(ref: designRefsApi.DesignReference): Promise<void> {
+		try {
+			await designRefsApi.refresh(data.site.id, ref.id);
+			toast.success('Reference refreshed.');
+			await loadDesignRefs();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to refresh.');
+		}
+	}
+
+	async function removeDesignRef(ref: designRefsApi.DesignReference): Promise<void> {
+		try {
+			await designRefsApi.remove(data.site.id, ref.id);
+			toast.success('Reference removed.');
+			await loadDesignRefs();
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to remove.');
+		}
+	}
+
+	function fileCount(ref: designRefsApi.DesignReference): number {
+		try {
+			const j = JSON.parse(ref.fetched_json);
+			return Array.isArray(j.files) ? j.files.length : 0;
+		} catch {
+			return 0;
+		}
+	}
 </script>
 
 <div class="mx-auto max-w-7xl px-6 py-8">
-	<header class="flex flex-col gap-1.5">
-		<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
-			Branding
-		</h1>
-		<p class="text-[13px] text-text-secondary">
-			Set the colors and fonts for this site. Changes apply to the next build.
-		</p>
+	<header class="flex flex-wrap items-start justify-between gap-4">
+		<div>
+			<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
+				Branding
+			</h1>
+			<p class="mt-1 text-[13px] text-text-secondary">
+				Set the colors and fonts for this site. Changes apply to the next build.
+			</p>
+		</div>
+		<div class="flex items-center gap-2">
+			<span class="hidden text-[12px] text-text-muted sm:inline">
+				{#if !valid}
+					Some hex values are invalid.
+				{:else if dirty}
+					Unsaved changes.
+				{:else}
+					Up to date.
+				{/if}
+			</span>
+			<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>
+				Discard
+			</Button>
+			<Button variant="primary" onclick={save} loading={saving} disabled={!dirty || !valid}>
+				Save
+			</Button>
+		</div>
 	</header>
 
 	<div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_28rem]">
@@ -193,37 +402,233 @@
 					<div class="flex flex-col gap-1.5">
 						<span class="text-[12px] font-medium text-text-primary">Heading font</span>
 						<p class="text-[11px] text-text-muted">Used for H1 through H4.</p>
-						<Select options={fontOptions} bind:value={fontHeading} />
+						<Select options={fontOptions()} bind:value={fontHeading} />
 					</div>
 					<div class="flex flex-col gap-1.5">
 						<span class="text-[12px] font-medium text-text-primary">Body font</span>
 						<p class="text-[11px] text-text-muted">Body copy, navigation, buttons.</p>
-						<Select options={fontOptions} bind:value={fontBody} />
+						<Select options={fontOptions()} bind:value={fontBody} />
 					</div>
 				</div>
 			</section>
 
-			<div
-				class="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t border-border-light bg-bg-surface/85 px-6 py-3 backdrop-blur"
-			>
-				<span class="text-[12px] text-text-muted">
-					{#if !valid}
-						Some hex values are invalid.
-					{:else if dirty}
-						Unsaved changes.
-					{:else}
-						Up to date.
-					{/if}
-				</span>
-				<div class="flex items-center gap-2">
-					<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>
-						Discard
-					</Button>
-					<Button variant="primary" onclick={save} loading={saving} disabled={!dirty || !valid}>
-						Save
-					</Button>
+			<section class="flex flex-col gap-3">
+				<div class="flex items-baseline justify-between">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Custom fonts
+					</h2>
+					<span class="text-[11px] text-text-muted">.woff2 only</span>
 				</div>
-			</div>
+
+				<Card padding="md">
+					<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+						<div class="sm:col-span-2">
+							<label
+								class="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed border-border-light bg-bg-elevated p-3 hover:bg-bg-hover"
+							>
+								<div class="flex items-center gap-2 text-[13px] text-text-secondary">
+									<UploadIcon size={16} strokeWidth={1.75} />
+									{uploadFile ? uploadFile.name : 'Pick a .woff2 file...'}
+								</div>
+								<span class="text-[11px] text-text-muted">
+									{uploadFile ? formatBytes(uploadFile.size) : 'click to choose'}
+								</span>
+								<input
+									type="file"
+									accept=".woff2"
+									class="hidden"
+									onchange={onFilePick}
+								/>
+							</label>
+						</div>
+						<Input label="Family name" placeholder="Acme Sans" bind:value={uploadFamily} />
+						<div class="grid grid-cols-2 gap-3">
+							<div class="flex flex-col gap-1.5">
+								<span class="text-[12px] font-medium text-text-primary">Weight</span>
+								<select
+									class="h-9 w-full rounded-lg border border-border bg-bg-surface px-3 text-[13px]"
+									bind:value={uploadWeight}
+								>
+									<option value={100}>100 Thin</option>
+									<option value={200}>200 ExtraLight</option>
+									<option value={300}>300 Light</option>
+									<option value={400}>400 Regular</option>
+									<option value={500}>500 Medium</option>
+									<option value={600}>600 SemiBold</option>
+									<option value={700}>700 Bold</option>
+									<option value={800}>800 ExtraBold</option>
+									<option value={900}>900 Black</option>
+								</select>
+							</div>
+							<div class="flex flex-col gap-1.5">
+								<span class="text-[12px] font-medium text-text-primary">Style</span>
+								<select
+									class="h-9 w-full rounded-lg border border-border bg-bg-surface px-3 text-[13px]"
+									bind:value={uploadStyle}
+								>
+									<option value="normal">Normal</option>
+									<option value="italic">Italic</option>
+								</select>
+							</div>
+						</div>
+					</div>
+					{#if uploadError}
+						<p class="mt-3 text-[12px] text-danger">{uploadError}</p>
+					{/if}
+					<div class="mt-3 flex items-center justify-between gap-2">
+						<p class="text-[11px] text-text-muted">
+							Self-hosted from /atomicsite-fonts. No external CDN; matches the perfect-foundation
+							SEO + privacy posture.
+						</p>
+						<Button
+							variant="primary"
+							onclick={uploadFont}
+							loading={uploading}
+							disabled={uploading || !uploadFile}
+						>
+							Upload font
+						</Button>
+					</div>
+				</Card>
+
+				{#if customFontsLoading}
+					<p class="text-[12px] text-text-muted">Loading...</p>
+				{:else if customFonts.length > 0}
+					<Card padding="none">
+						<ul class="divide-y divide-border-light">
+							{#each customFonts as f (f.id)}
+								<li class="flex items-center gap-4 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										<p
+											class="truncate text-[13px] text-text-primary"
+											style="font-family: '{f.family_name}', system-ui, sans-serif;"
+										>
+											{f.family_name}
+										</p>
+										<p class="mt-0.5 text-[11px] text-text-muted">
+											{f.weight}
+											{f.style}
+											{#if f.original_name}
+												· <span class="font-mono">{f.original_name}</span>
+											{/if}
+											· {formatBytes(f.file_size)}
+										</p>
+									</div>
+									<button
+										type="button"
+										aria-label="Remove font"
+										class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-danger/10 hover:text-danger"
+										onclick={() => removeFont(f)}
+									>
+										<Trash2 size={14} strokeWidth={1.75} />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</Card>
+				{/if}
+			</section>
+
+			<section class="flex flex-col gap-3">
+				<div class="flex items-baseline justify-between">
+					<div>
+						<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+							Design references
+						</h2>
+						<p class="mt-1 text-[12px] text-text-muted">
+							Public GitHub repos that the AI agent reads as design vocabulary. Atomicsite
+							pre-fetches package.json, README, tailwind config, global stylesheet, and a few
+							component files. Read-only pattern reference, never code copy.
+						</p>
+					</div>
+					<Github size={16} strokeWidth={1.75} class="text-text-muted" />
+				</div>
+
+				<Card padding="md">
+					<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+						<div class="sm:col-span-2">
+							<Input
+								label="GitHub repo URL"
+								placeholder="https://github.com/owner/repo"
+								bind:value={refURL}
+							/>
+						</div>
+						<Input label="Label (optional)" placeholder="e.g. Taste UI" bind:value={refLabel} />
+						<div class="flex flex-col gap-1.5 sm:col-span-2">
+							<span class="text-[12px] font-medium text-text-primary">Type</span>
+							<select
+								class="h-9 w-full rounded-lg border border-border bg-bg-surface px-3 text-[13px]"
+								bind:value={refType}
+							>
+								<option value="design-system">Design system</option>
+								<option value="component-library">Component library</option>
+								<option value="reference-site">Reference site</option>
+							</select>
+						</div>
+						<div class="flex items-end justify-end">
+							<Button
+								variant="primary"
+								onclick={addDesignRef}
+								loading={addingRef}
+								disabled={addingRef || !refURL.trim()}
+							>
+								Add reference
+							</Button>
+						</div>
+					</div>
+					{#if refError}
+						<p class="mt-3 text-[12px] text-danger">{refError}</p>
+					{/if}
+				</Card>
+
+				{#if designRefsLoading}
+					<p class="text-[12px] text-text-muted">Loading...</p>
+				{:else if designRefs.length > 0}
+					<Card padding="none">
+						<ul class="divide-y divide-border-light">
+							{#each designRefs as r (r.id)}
+								<li class="flex items-center gap-3 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										<div class="flex flex-wrap items-center gap-2">
+											<a
+												href={r.url}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="truncate text-[13px] font-medium text-text-primary hover:underline"
+											>
+												{r.label || r.url.replace('https://github.com/', '')}
+											</a>
+											<Badge variant="default">{r.ref_type}</Badge>
+											<span class="text-[11px] text-text-muted">
+												{fileCount(r)} file{fileCount(r) === 1 ? '' : 's'} fetched
+											</span>
+										</div>
+										<p class="mt-0.5 truncate font-mono text-[11px] text-text-muted">
+											{r.url}
+										</p>
+									</div>
+									<button
+										type="button"
+										aria-label="Refresh reference"
+										class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-hover hover:text-text-primary"
+										onclick={() => refreshDesignRef(r)}
+									>
+										<RefreshCw size={14} strokeWidth={1.75} />
+									</button>
+									<button
+										type="button"
+										aria-label="Remove reference"
+										class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-danger/10 hover:text-danger"
+										onclick={() => removeDesignRef(r)}
+									>
+										<Trash2 size={14} strokeWidth={1.75} />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</Card>
+				{/if}
+			</section>
 		</div>
 
 		<aside class="lg:sticky lg:top-24 lg:self-start">
