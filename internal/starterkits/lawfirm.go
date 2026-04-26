@@ -15,12 +15,18 @@ func init() {
 
 type lawFirmKit struct{}
 
-func (k *lawFirmKit) ID() string          { return "law-firm" }
-func (k *lawFirmKit) Name() string        { return "Law Firm (Swedish)" }
+func (k *lawFirmKit) ID() string   { return "law-firm" }
+func (k *lawFirmKit) Name() string { return "Law Firm (Swedish)" }
 func (k *lawFirmKit) Description() string {
 	return "Formal Swedish business site for advokatbyråer. GDPR-confident, services silo, contact-form first."
 }
 func (k *lawFirmKit) TargetSiteTypes() []string { return []string{"b2b"} }
+
+// Hidden marks law-firm as a legacy / niche industry kit. The general
+// "B2B Services" kit (b2b-services) covers law firms, agencies, consultancies
+// in one preset; users who want the Swedish-formal flavor can opt in via the
+// wizard's "Show all kits" toggle.
+func (k *lawFirmKit) Hidden() bool { return true }
 
 func (k *lawFirmKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
 	if err := k.applyComponents(ctx, q, siteID); err != nil {

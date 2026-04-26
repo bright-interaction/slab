@@ -238,6 +238,10 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)
 		r.Post("/api/sites/{siteID}/agent-keys", agh.GenerateAgentKey)
 		r.Delete("/api/sites/{siteID}/agent-keys/{keyID}", agh.RevokeAgentKey)
+
+		// Figma design-tokens import (admin)
+		fh := handlers.NewFigmaHandler(s.cfg, s.queries)
+		r.Post("/api/sites/{siteID}/figma/import", fh.ImportDesignTokens)
 	})
 
 	// Agent API routes (API key auth)

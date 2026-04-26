@@ -60,7 +60,14 @@ export function remove(siteID: string): Promise<{ status: string }> {
 	return apiDelete<{ status: string }>(`/sites/${siteID}`);
 }
 
-export type SiteType = 'b2b' | 'b2c' | 'personal' | 'blog' | 'agency' | 'one-pager';
+export type SiteType =
+	| 'b2b'
+	| 'b2c'
+	| 'personal'
+	| 'blog'
+	| 'agency'
+	| 'one-pager'
+	| 'ecommerce';
 export type StructureType = 'one-pager' | 'soft-silo' | 'hard-silo';
 
 export interface SeedSiteInfo {

@@ -55,11 +55,13 @@ test.describe('Onboarding wizard', () => {
 		await expect(page).toHaveURL(/\/sites\/new\/wizard\/kit/, { timeout: 5_000 });
 	});
 
-	test('disabled E-commerce card does not advance', async ({ page }) => {
+	test('E-commerce card advances to kit step', async ({ page }) => {
 		await loginAsAdmin(page);
 		await page.goto('/sites/new/wizard/type');
 		const ecom = page.getByRole('button', { name: /e-commerce/i });
-		await expect(ecom).toBeDisabled();
+		await expect(ecom).toBeEnabled();
+		await ecom.click();
+		await expect(page).toHaveURL(/\/sites\/new\/wizard\/kit/, { timeout: 5_000 });
 	});
 
 	test('Nordic and accented characters transliterate to ASCII in slug + silo prefix', async ({ page }) => {
