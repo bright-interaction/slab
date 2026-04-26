@@ -247,7 +247,24 @@ func (s *Server) Router() http.Handler {
 		// Figma design-tokens import (admin)
 		fh := handlers.NewFigmaHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/figma/import", fh.ImportDesignTokens)
+
+		// Self-hosted woff2 fonts (admin upload + delete; public serves Serve below)
+		fonth := handlers.NewFontsHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/fonts", fonth.List)
+		r.Post("/api/sites/{siteID}/fonts", fonth.Upload)
+		r.Delete("/api/sites/{siteID}/fonts/{fontID}", fonth.Delete)
+
+		// GitHub design references (admin)
+		drh := handlers.NewDesignReferencesHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/design-references", drh.List)
+		r.Post("/api/sites/{siteID}/design-references", drh.Create)
+		r.Post("/api/sites/{siteID}/design-references/{refID}/refresh", drh.Refresh)
+		r.Delete("/api/sites/{siteID}/design-references/{refID}", drh.Delete)
 	})
+
+	// Public font serving (no auth, long cache, CORS *).
+	publicFontsH := handlers.NewFontsHandler(s.cfg, s.queries)
+	r.Get("/atomicsite-fonts/{siteID}/{fontID}.woff2", publicFontsH.Serve)
 
 	// Agent API routes (API key auth)
 	r.Group(func(r chi.Router) {

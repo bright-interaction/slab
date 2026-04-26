@@ -134,6 +134,38 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		}
 	}
 
+	// @font-face emissions for any site_fonts uploaded via /api/sites/{id}/fonts.
+	// Self-hosted woff2 only; served by /atomicsite-fonts/{site}/{id}.woff2.
+	// font-display:swap so headers don't render invisibly while the file
+	// downloads.
+	if fontRows, err := queries.ListSiteFonts(ctx, siteID); err == nil && len(fontRows) > 0 {
+		b.WriteString("  <style>\n")
+		for _, f := range fontRows {
+			src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, f.ID)
+			b.WriteString(fmt.Sprintf(
+				"    @font-face { font-family: %q; font-style: %s; font-weight: %d; font-display: swap; src: url(%q) format('woff2'); }\n",
+				f.FamilyName, f.Style, f.Weight, src,
+			))
+			// Hint the browser to start fetching the file as soon as the
+			// document parses; matters most for above-the-fold heading
+			// fonts.
+			b.WriteString(fmt.Sprintf(
+				"    /* preload-hint: %q (rel=preload emitted as <link> below) */\n",
+				f.FamilyName,
+			))
+		}
+		b.WriteString("  </style>\n")
+		// Emit one <link rel="preload"> per uploaded font so above-the-fold
+		// renders don't FOUT.
+		for _, f := range fontRows {
+			src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, f.ID)
+			b.WriteString(fmt.Sprintf(
+				"  <link rel=\"preload\" as=\"font\" type=\"font/woff2\" crossorigin=\"anonymous\" href=%q />\n",
+				src,
+			))
+		}
+	}
+
 	b.WriteString("</head>\n<body>\n")
 
 	// Header

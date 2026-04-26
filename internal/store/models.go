@@ -90,6 +90,17 @@ type Deployment struct {
 	CompletedAt  string `json:"completed_at"`
 }
 
+type DesignReference struct {
+	ID          string `json:"id"`
+	SiteID      string `json:"site_id"`
+	Url         string `json:"url"`
+	Label       string `json:"label"`
+	RefType     string `json:"ref_type"`
+	FetchedJson string `json:"fetched_json"`
+	FetchedAt   string `json:"fetched_at"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type Evaluation struct {
 	ID         string `json:"id"`
 	BuildID    string `json:"build_id"`
@@ -258,6 +269,18 @@ type SiteArchitecture struct {
 	MaxDepth      int64  `json:"max_depth"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+}
+
+type SiteFont struct {
+	ID           string `json:"id"`
+	SiteID       string `json:"site_id"`
+	FamilyName   string `json:"family_name"`
+	Weight       int64  `json:"weight"`
+	Style        string `json:"style"`
+	FilePath     string `json:"file_path"`
+	FileSize     int64  `json:"file_size"`
+	OriginalName string `json:"original_name"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type SiteProfile struct {

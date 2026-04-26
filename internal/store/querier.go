@@ -34,6 +34,7 @@ type Querier interface {
 	CreateComponent(ctx context.Context, arg CreateComponentParams) error
 	CreateDeployTarget(ctx context.Context, arg CreateDeployTargetParams) error
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
+	CreateDesignReference(ctx context.Context, arg CreateDesignReferenceParams) error
 	CreateEvaluation(ctx context.Context, arg CreateEvaluationParams) error
 	CreateForm(ctx context.Context, arg CreateFormParams) error
 	CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) error
@@ -46,6 +47,7 @@ type Querier interface {
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
 	CreateSilo(ctx context.Context, arg CreateSiloParams) error
 	CreateSite(ctx context.Context, arg CreateSiteParams) error
+	CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DeactivateAgentKey(ctx context.Context, id string) error
 	DeleteAgentKey(ctx context.Context, id string) error
@@ -56,6 +58,7 @@ type Querier interface {
 	DeleteComponent(ctx context.Context, id string) error
 	DeleteDeployTarget(ctx context.Context, id string) error
 	DeleteDeployment(ctx context.Context, id string) error
+	DeleteDesignReference(ctx context.Context, arg DeleteDesignReferenceParams) error
 	DeleteEvaluationsByBuild(ctx context.Context, buildID string) error
 	DeleteForm(ctx context.Context, id string) error
 	DeleteFormSubmission(ctx context.Context, id string) error
@@ -70,6 +73,7 @@ type Querier interface {
 	DeleteSettingsByCategory(ctx context.Context, arg DeleteSettingsByCategoryParams) error
 	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
+	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
 	DeleteUser(ctx context.Context, id string) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
@@ -80,6 +84,7 @@ type Querier interface {
 	GetComponentByName(ctx context.Context, arg GetComponentByNameParams) (Component, error)
 	GetDeployTarget(ctx context.Context, id string) (DeployTarget, error)
 	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
+	GetDesignReference(ctx context.Context, arg GetDesignReferenceParams) (DesignReference, error)
 	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
 	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
@@ -96,6 +101,7 @@ type Querier interface {
 	GetSiteArchitecture(ctx context.Context, siteID string) (SiteArchitecture, error)
 	GetSiteByID(ctx context.Context, id string) (Site, error)
 	GetSiteBySlug(ctx context.Context, slug string) (Site, error)
+	GetSiteFont(ctx context.Context, arg GetSiteFontParams) (SiteFont, error)
 	// Site profiles
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -113,6 +119,8 @@ type Querier interface {
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
 	ListDeployTargetsBySite(ctx context.Context, siteID string) ([]DeployTarget, error)
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
+	ListDesignReferences(ctx context.Context, siteID string) ([]DesignReference, error)
+	ListDistinctFontFamilies(ctx context.Context, siteID string) ([]string, error)
 	// Evaluations
 	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
 	ListEvaluationsBySite(ctx context.Context, arg ListEvaluationsBySiteParams) ([]Evaluation, error)
@@ -137,6 +145,7 @@ type Querier interface {
 	ListSettingsBySite(ctx context.Context, siteID string) ([]SiteSetting, error)
 	// Silos
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
+	ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
@@ -170,6 +179,7 @@ type Querier interface {
 	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) error
 	UpdateDeploymentDeployed(ctx context.Context, arg UpdateDeploymentDeployedParams) error
 	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error
+	UpdateDesignReferenceFetched(ctx context.Context, arg UpdateDesignReferenceFetchedParams) error
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error
 	UpdateGuardrail(ctx context.Context, arg UpdateGuardrailParams) error

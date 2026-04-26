@@ -14,6 +14,7 @@ type Config struct {
 	DataDir       string
 	DBPath        string
 	MediaDir      string
+	FontsDir      string // self-hosted woff2 fonts uploaded per site
 	JWTSecret     string
 	BaseURL       string
 	MaxUploadSize int64
@@ -40,6 +41,7 @@ func Load() *Config {
 		DataDir:       dataDir,
 		DBPath:        filepath.Join(dataDir, "atomicsite.db"),
 		MediaDir:      filepath.Join(dataDir, "media"),
+		FontsDir:      filepath.Join(dataDir, "fonts"),
 		JWTSecret:     envOr("JWT_SECRET", "change-me-in-production"),
 		BaseURL:       envOr("BASE_URL", "http://localhost:8080"),
 		MaxUploadSize: envInt64("MAX_UPLOAD_SIZE", 20<<20), // 20 MB
