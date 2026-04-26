@@ -152,9 +152,54 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString("  </footer>\n")
 	}
 
+	// Engagement beacon (Phase 12.6). Captures the JS-only metrics server
+	// log tail can't see: screen + viewport, prefers-color-scheme, prefers-
+	// reduced-motion, time on page, max scroll depth. Consent-gated when
+	// CookieProof is wired up (waits for `consent:init` with analytics=true);
+	// fires always when there's no consent banner (same legitimate-interest
+	// posture as the always-on nginx log tail).
+	if boolSetting(settingsMap["analytics.engagement_enabled"], true) {
+		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
+		b.WriteString(RenderEngagementBeacon(site.ID, trackPath, cookieProofEnabled))
+	}
+
 	b.WriteString("</body>\n</html>\n")
 
 	return WriteFile(filepath.Join(wsDir, "src", "layouts", "Base.astro"), b.String())
+}
+
+// RenderEngagementBeacon emits a small inline <script> that records JS-only
+// engagement metrics and posts them via navigator.sendBeacon() to
+// /t/engagement on visibilitychange or pagehide. Pure vanilla JS, no deps,
+// ~1.5KB minified-ish. Site ID and track path are baked in at build time.
+//
+// When consentGated=true the script waits for a `consent:init` event from
+// the CookieProof relay with analytics=true before allowing sends. Without
+// CookieProof there's no banner to gate on, so the beacon fires by default
+// (matches the always-on nginx log tail posture).
+func RenderEngagementBeacon(siteID, trackPath string, consentGated bool) string {
+	defaultAllowed := "true"
+	if consentGated {
+		defaultAllowed = "false"
+	}
+	return fmt.Sprintf(`  <script>
+(function(){
+  var SITE_ID=%q;var TRACK_PATH=%q;var ALLOWED=%s;
+  var t0=performance.now();var maxScroll=0;
+  function pct(){var d=document.documentElement;var sh=Math.max(d.scrollHeight,d.clientHeight);if(sh<=0)return 0;var v=window.scrollY+d.clientHeight;var p=Math.round(v*100/sh);return p>100?100:(p<0?0:p);}
+  function tick(){var p=pct();if(p>maxScroll)maxScroll=p;}
+  window.addEventListener("scroll",tick,{passive:true});tick();
+  function send(){if(!ALLOWED)return;
+    var dark=false,rm=false;try{dark=matchMedia("(prefers-color-scheme: dark)").matches;rm=matchMedia("(prefers-reduced-motion: reduce)").matches;}catch(e){}
+    var p={siteId:SITE_ID,path:location.pathname+location.search,screenW:screen.width|0,screenH:screen.height|0,viewportW:innerWidth|0,viewportH:innerHeight|0,prefersDark:dark,prefersReducedMotion:rm,timeOnPageMs:Math.round(performance.now()-t0),maxScrollPct:maxScroll};
+    try{var b=new Blob([JSON.stringify(p)],{type:"application/json"});navigator.sendBeacon(TRACK_PATH+"/engagement",b);}catch(e){}
+  }
+  document.addEventListener("consent:init",function(e){if(e&&e.detail&&e.detail.analytics)ALLOWED=true;});
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")send();});
+  window.addEventListener("pagehide",send);
+})();
+  </script>
+`, siteID, trackPath, defaultAllowed)
 }
 
 // buildOrganizationJSONLD emits a schema.org Organization JSON-LD blob from

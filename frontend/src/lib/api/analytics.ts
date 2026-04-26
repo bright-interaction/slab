@@ -28,6 +28,23 @@ export type TimePoint = {
 	unique_count: number;
 };
 
+export type EngagementRow = {
+	path: string;
+	samples: number;
+	avg_time_on_page_ms: number;
+	avg_scroll_pct: number;
+};
+
+export type EngagementSummary = {
+	samples: number;
+	avg_time_on_page_ms: number;
+	avg_scroll_pct: number;
+	dark_pct: number;
+	reduced_motion_pct: number;
+	by_path: EngagementRow[];
+	viewport_buckets: NameCount[];
+};
+
 export type AnalyticsOverview = {
 	since: string;
 	visits: number;
@@ -45,6 +62,7 @@ export type AnalyticsOverview = {
 	top_utm_campaigns: NameCount[];
 	time_series: TimePoint[];
 	bucket_unit: 'day' | 'hour';
+	engagement: EngagementSummary;
 };
 
 export type VisitSession = {
