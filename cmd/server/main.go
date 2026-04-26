@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"embed"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +31,16 @@ import (
 var frontendFiles embed.FS
 
 func main() {
+	// Subcommand dispatch. Anything other than the (default) HTTP server lands
+	// here. Subcommands open their own DB connection and exit.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "reset-password":
+			resetPasswordCLI(os.Args[2:])
+			return
+		}
+	}
+
 	cfg := config.Load()
 
 	// Ensure data directory exists
@@ -205,4 +217,71 @@ func seedAdminUser(queries *store.Queries, sqlDB *sql.DB) {
 	}
 
 	slog.Info("seeded admin user", "email", email)
+}
+
+// resetPasswordCLI is the `atomicsite reset-password <email>` subcommand.
+// Reads the new password from stdin (one line, no echo-off - run with
+// `docker exec -i` from a terminal you trust). Bumps token_version so any
+// existing JWTs for that user are invalidated.
+//
+// Usage:
+//
+//	docker exec -i atomicsite /app/server reset-password tom@brightinteraction.com
+//	(then type the new password and press enter)
+func resetPasswordCLI(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: atomicsite reset-password <email>")
+		os.Exit(2)
+	}
+	email := strings.TrimSpace(strings.ToLower(args[0]))
+	if email == "" {
+		fmt.Fprintln(os.Stderr, "email is required")
+		os.Exit(2)
+	}
+
+	cfg := config.Load()
+	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "create data dir:", err)
+		os.Exit(1)
+	}
+	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "open db:", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+	queries := store.New(sqlDB)
+
+	ctx := context.Background()
+	user, err := queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "no user with email %q\n", email)
+		os.Exit(1)
+	}
+
+	fmt.Fprintf(os.Stderr, "Enter new password for %s: ", email)
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		fmt.Fprintln(os.Stderr, "no input")
+		os.Exit(1)
+	}
+	newPwd := strings.TrimRight(scanner.Text(), "\r\n")
+	if len(newPwd) < 8 {
+		fmt.Fprintln(os.Stderr, "password must be at least 8 characters")
+		os.Exit(1)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPwd), bcrypt.DefaultCost)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hash:", err)
+		os.Exit(1)
+	}
+	if err := queries.UpdateUserPassword(ctx, store.UpdateUserPasswordParams{
+		PasswordHash: string(hash),
+		ID:           user.ID,
+	}); err != nil {
+		fmt.Fprintln(os.Stderr, "update:", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "password reset for %s (active sessions invalidated)\n", email)
 }

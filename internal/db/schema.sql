@@ -12,6 +12,22 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
+-- One-time signup tokens minted by an admin so a teammate can self-onboard.
+-- Tier-1 invite (no email sending): admin copies the URL, shares it offline,
+-- invitee opens /signup/{token} and sets a password to activate the account.
+CREATE TABLE IF NOT EXISTS invites (
+    id          TEXT PRIMARY KEY,
+    email       TEXT NOT NULL,
+    role        TEXT NOT NULL DEFAULT 'editor',
+    token       TEXT NOT NULL UNIQUE,
+    created_by  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token);
+CREATE INDEX IF NOT EXISTS idx_invites_email ON invites(email);
+
 CREATE TABLE IF NOT EXISTS sites (
     id               TEXT PRIMARY KEY,
     name             TEXT NOT NULL,

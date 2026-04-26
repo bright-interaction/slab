@@ -188,6 +188,9 @@ func RunSEOChecks(site *SiteContext) []CheckResult {
 		return true, ""
 	}, "Add internal links between pages to support crawling and topic clustering."))
 
+	// GEO / AEO checks (AI search readiness), same category, distinct section.
+	checks = append(checks, RunGEOChecks(site)...)
+
 	return checks
 }
 

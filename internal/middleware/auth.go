@@ -94,6 +94,26 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 	})
 }
 
+// RequireAdmin wraps a handler so it 403s for any authenticated non-admin.
+// Must be mounted *inside* an authenticated route group so the user is
+// already attached to the request context.
+func RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u := GetUser(r)
+		if u == nil {
+			http.Error(w, `{"error":"Not authenticated"}`, http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			return
+		}
+		if u.Role != "admin" {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"Admin role required"}`, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (m *AuthMiddleware) authenticate(r *http.Request) (*AuthUser, error) {
 	cookie, err := r.Cookie("atomicsite_token")
 	if err != nil {

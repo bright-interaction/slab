@@ -19,6 +19,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 
 	globalBlocks, _ := queries.ListActiveGlobalBlocksBySite(ctx, siteID)
 	settings, _ := queries.ListSettingsBySite(ctx, siteID)
+	profile, _ := queries.GetSiteProfile(ctx, siteID)
 
 	// Build settings map for quick lookup
 	settingsMap := make(map[string]string)
@@ -52,7 +53,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString(fmt.Sprintf("  title = '%s',\n", escapeAstroString(site.MetaTitle)))
 	b.WriteString(fmt.Sprintf("  description = '%s',\n", escapeAstroString(site.MetaDescription)))
 	b.WriteString(fmt.Sprintf("  ogImage = '%s',\n", site.OgImageID))
-	b.WriteString("  robots = 'index, follow',\n")
+	b.WriteString("  robots = 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',\n")
 	b.WriteString("} = Astro.props;\n")
 
 	// Compute canonical
@@ -93,6 +94,17 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		if metaCSP := CSPForMeta(headers.CSP); metaCSP != "" {
 			b.WriteString(fmt.Sprintf("  <meta http-equiv=\"Content-Security-Policy\" content=\"%s\" />\n", escapeAttr(metaCSP)))
 		}
+	}
+
+	// JSON-LD Organization schema for AI search / knowledge graph entity anchoring.
+	// Emitted whenever the site profile has a business name. sameAs array comes
+	// from the seo.same_as setting (newline-separated URLs); logo URL comes from
+	// seo.logo_url setting (falls back to OG image if absent so the schema is
+	// still present, just without a dedicated logo field).
+	if orgJSON := buildOrganizationJSONLD(site, profile, settingsMap); orgJSON != "" {
+		b.WriteString("  <script type=\"application/ld+json\">")
+		b.WriteString(orgJSON)
+		b.WriteString("</script>\n")
 	}
 
 	// Analytics
@@ -143,6 +155,94 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("</body>\n</html>\n")
 
 	return WriteFile(filepath.Join(wsDir, "src", "layouts", "Base.astro"), b.String())
+}
+
+// buildOrganizationJSONLD emits a schema.org Organization JSON-LD blob from
+// site profile + settings. Returns "" if there's not enough data
+// (no business name), callers should skip emission in that case.
+//
+// Settings consumed:
+//   seo.same_as   newline-separated URLs (LinkedIn, GitHub, etc.)
+//   seo.logo_url  absolute URL to the org logo (falls back to og:image)
+func buildOrganizationJSONLD(site store.Site, profile store.SiteProfile, settings map[string]string) string {
+	name := strings.TrimSpace(profile.BusinessName)
+	if name == "" {
+		name = strings.TrimSpace(site.Name)
+	}
+	if name == "" {
+		return ""
+	}
+
+	domain := strings.TrimSpace(site.Domain)
+	if domain == "" {
+		return "" // no canonical URL means no useful schema
+	}
+	if !strings.HasPrefix(domain, "http") {
+		domain = "https://" + domain
+	}
+
+	logo := strings.TrimSpace(settings["seo.logo_url"])
+	if logo == "" && site.OgImageID != "" {
+		logo = strings.TrimRight(domain, "/") + "/media/" + site.OgImageID
+	}
+
+	sameAs := []string{}
+	for _, line := range strings.Split(settings["seo.same_as"], "\n") {
+		if v := strings.TrimSpace(line); v != "" {
+			sameAs = append(sameAs, v)
+		}
+	}
+
+	org := map[string]any{
+		"@context": "https://schema.org",
+		"@type":    "Organization",
+		"@id":      strings.TrimRight(domain, "/") + "/#organization",
+		"name":     name,
+		"url":      domain,
+	}
+	if logo != "" {
+		org["logo"] = logo
+	}
+	if len(sameAs) > 0 {
+		org["sameAs"] = sameAs
+	}
+
+	if profile.AddressLine1 != "" || profile.City != "" || profile.PostalCode != "" || profile.Country != "" {
+		addr := map[string]any{"@type": "PostalAddress"}
+		if profile.AddressLine1 != "" {
+			addr["streetAddress"] = profile.AddressLine1
+		}
+		if profile.City != "" {
+			addr["addressLocality"] = profile.City
+		}
+		if profile.PostalCode != "" {
+			addr["postalCode"] = profile.PostalCode
+		}
+		if profile.Country != "" {
+			addr["addressCountry"] = profile.Country
+		}
+		org["address"] = addr
+	}
+
+	if profile.ContactEmail != "" || profile.ContactPhone != "" {
+		cp := map[string]any{
+			"@type":       "ContactPoint",
+			"contactType": "customer service",
+		}
+		if profile.ContactEmail != "" {
+			cp["email"] = profile.ContactEmail
+		}
+		if profile.ContactPhone != "" {
+			cp["telephone"] = profile.ContactPhone
+		}
+		org["contactPoint"] = cp
+	}
+
+	out, err := json.Marshal(org)
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func extractHTMLFromGlobalBlock(gb store.GlobalBlock) string {

@@ -18,3 +18,13 @@ WHERE id = ?;
 
 -- name: ListUsers :many
 SELECT * FROM users ORDER BY created_at DESC;
+
+-- name: UpdateUserName :exec
+UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?;
+
+-- name: UpdateUserRole :exec
+UPDATE users SET role = ?, token_version = token_version + 1, updated_at = datetime('now')
+WHERE id = ?;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?;
