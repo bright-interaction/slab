@@ -163,6 +163,12 @@ func applySchema(sqlDB *sql.DB) error {
 		{"visit_events", "utm_source", "TEXT NOT NULL DEFAULT ''"},
 		{"visit_events", "utm_medium", "TEXT NOT NULL DEFAULT ''"},
 		{"visit_events", "utm_campaign", "TEXT NOT NULL DEFAULT ''"},
+		// Branding extra colour slots (Phase 12.9) added 2026-04-27.
+		{"sites", "surface_color", "TEXT NOT NULL DEFAULT '#FFFFFF'"},
+		{"sites", "border_color", "TEXT NOT NULL DEFAULT '#E5E7EB'"},
+		{"sites", "muted_color", "TEXT NOT NULL DEFAULT '#6B7280'"},
+		{"sites", "accent_color", "TEXT NOT NULL DEFAULT ''"},
+		{"sites", "on_primary_color", "TEXT NOT NULL DEFAULT '#FFFFFF'"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

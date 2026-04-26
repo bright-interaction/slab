@@ -30,6 +30,12 @@ export interface Site {
 	secondary_color: string;
 	bg_color: string;
 	text_color: string;
+	// Phase 12.9 colour slots.
+	surface_color: string;
+	border_color: string;
+	muted_color: string;
+	accent_color: string;
+	on_primary_color: string;
 	font_heading: string;
 	font_body: string;
 	meta_title: string;

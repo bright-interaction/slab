@@ -30,6 +30,25 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(fmt.Sprintf("  --color-secondary: %s;\n", site.SecondaryColor))
 	b.WriteString(fmt.Sprintf("  --color-bg: %s;\n", site.BgColor))
 	b.WriteString(fmt.Sprintf("  --color-text: %s;\n", site.TextColor))
+	// Phase 12.9 colour slots. accent_color="" falls back to primary so
+	// existing styles that read `color: var(--color-accent)` keep working.
+	if site.SurfaceColor != "" {
+		b.WriteString(fmt.Sprintf("  --color-surface: %s;\n", site.SurfaceColor))
+	}
+	if site.BorderColor != "" {
+		b.WriteString(fmt.Sprintf("  --color-border: %s;\n", site.BorderColor))
+	}
+	if site.MutedColor != "" {
+		b.WriteString(fmt.Sprintf("  --color-muted: %s;\n", site.MutedColor))
+	}
+	if site.AccentColor != "" {
+		b.WriteString(fmt.Sprintf("  --color-accent: %s;\n", site.AccentColor))
+	} else {
+		b.WriteString("  --color-accent: var(--color-primary);\n")
+	}
+	if site.OnPrimaryColor != "" {
+		b.WriteString(fmt.Sprintf("  --color-on-primary: %s;\n", site.OnPrimaryColor))
+	}
 	b.WriteString(fmt.Sprintf("  --font-heading: '%s', system-ui, sans-serif;\n", site.FontHeading))
 	b.WriteString(fmt.Sprintf("  --font-body: '%s', system-ui, sans-serif;\n", site.FontBody))
 	b.WriteString("}\n\n")

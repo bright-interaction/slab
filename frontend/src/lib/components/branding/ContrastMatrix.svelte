@@ -6,7 +6,8 @@
 		| 'primary_color'
 		| 'secondary_color'
 		| 'bg_color'
-		| 'text_color';
+		| 'text_color'
+		| 'muted_color';
 
 	export interface ContrastColors {
 		primary: string;
@@ -82,8 +83,8 @@
 			label: 'Muted on bg',
 			fg: mutedHex,
 			bg: colors.bg,
-			fixSlot: null,
-			fixOther: null
+			fixSlot: 'muted_color',
+			fixOther: colors.bg
 		}
 	]);
 

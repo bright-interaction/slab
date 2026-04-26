@@ -24,6 +24,11 @@
 		secondary_color: '#52525b',
 		bg_color: '#fafaf9',
 		text_color: '#18181b',
+		surface_color: '#ffffff',
+		border_color: '#e5e7eb',
+		muted_color: '#6b7280',
+		accent_color: '',
+		on_primary_color: '#ffffff',
 		font_heading: 'Inter',
 		font_body: 'Inter'
 	};
@@ -31,6 +36,29 @@
 	// Curated set of self-hosted woff2-friendly fonts. Keep this list in
 	// sync with the build pipeline's bundled fonts. Ten balanced choices
 	// across geometric sans, humanist sans, mono, and serif.
+	// Static option arrays for the Select component (consistent dropdown
+	// chevron alignment vs native <select>).
+	const weightOptions = [
+		{ value: '100', label: '100 Thin' },
+		{ value: '200', label: '200 ExtraLight' },
+		{ value: '300', label: '300 Light' },
+		{ value: '400', label: '400 Regular' },
+		{ value: '500', label: '500 Medium' },
+		{ value: '600', label: '600 SemiBold' },
+		{ value: '700', label: '700 Bold' },
+		{ value: '800', label: '800 ExtraBold' },
+		{ value: '900', label: '900 Black' }
+	];
+	const styleOptions = [
+		{ value: 'normal', label: 'Normal' },
+		{ value: 'italic', label: 'Italic' }
+	];
+	const refTypeOptions = [
+		{ value: 'design-system', label: 'Design system' },
+		{ value: 'component-library', label: 'Component library' },
+		{ value: 'reference-site', label: 'Reference site' }
+	];
+
 	const builtInFonts = [
 		{ value: 'Inter', label: 'Inter' },
 		{ value: 'Geist', label: 'Geist' },
@@ -55,6 +83,11 @@
 	let secondary = $state(initial('secondary_color'));
 	let bg = $state(initial('bg_color'));
 	let text = $state(initial('text_color'));
+	let surface = $state(initial('surface_color'));
+	let border = $state(initial('border_color'));
+	let muted = $state(initial('muted_color'));
+	let accent = $state(initial('accent_color'));
+	let onPrimary = $state(initial('on_primary_color'));
 	let fontHeading = $state(initial('font_heading'));
 	let fontBody = $state(initial('font_body'));
 
@@ -63,6 +96,11 @@
 		secondary_color: initial('secondary_color'),
 		bg_color: initial('bg_color'),
 		text_color: initial('text_color'),
+		surface_color: initial('surface_color'),
+		border_color: initial('border_color'),
+		muted_color: initial('muted_color'),
+		accent_color: initial('accent_color'),
+		on_primary_color: initial('on_primary_color'),
 		font_heading: initial('font_heading'),
 		font_body: initial('font_body')
 	});
@@ -110,16 +148,27 @@
 			secondary !== initialState.secondary_color ||
 			bg !== initialState.bg_color ||
 			text !== initialState.text_color ||
+			surface !== initialState.surface_color ||
+			border !== initialState.border_color ||
+			muted !== initialState.muted_color ||
+			accent !== initialState.accent_color ||
+			onPrimary !== initialState.on_primary_color ||
 			fontHeading !== initialState.font_heading ||
 			fontBody !== initialState.font_body
 	);
 
 	const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+	const validOptional = (v: string) => v === '' || HEX_RE.test(v);
 	const valid = $derived(
 		HEX_RE.test(primary) &&
 			HEX_RE.test(secondary) &&
 			HEX_RE.test(bg) &&
-			HEX_RE.test(text)
+			HEX_RE.test(text) &&
+			HEX_RE.test(surface) &&
+			HEX_RE.test(border) &&
+			HEX_RE.test(muted) &&
+			validOptional(accent) &&
+			HEX_RE.test(onPrimary)
 	);
 
 	function applySuggestion(slot: SlotKey, hex: string): void {
@@ -137,6 +186,9 @@
 			case 'text_color':
 				text = v;
 				break;
+			case 'muted_color':
+				muted = v;
+				break;
 		}
 	}
 
@@ -145,6 +197,11 @@
 		secondary = initialState.secondary_color;
 		bg = initialState.bg_color;
 		text = initialState.text_color;
+		surface = initialState.surface_color;
+		border = initialState.border_color;
+		muted = initialState.muted_color;
+		accent = initialState.accent_color;
+		onPrimary = initialState.on_primary_color;
 		fontHeading = initialState.font_heading;
 		fontBody = initialState.font_body;
 	}
@@ -158,6 +215,11 @@
 				secondary_color: secondary,
 				bg_color: bg,
 				text_color: text,
+				surface_color: surface,
+				border_color: border,
+				muted_color: muted,
+				accent_color: accent,
+				on_primary_color: onPrimary,
 				font_heading: fontHeading,
 				font_body: fontBody
 			});
@@ -166,6 +228,11 @@
 			initialState.secondary_color = secondary;
 			initialState.bg_color = bg;
 			initialState.text_color = text;
+			initialState.surface_color = surface;
+			initialState.border_color = border;
+			initialState.muted_color = muted;
+			initialState.accent_color = accent;
+			initialState.on_primary_color = onPrimary;
 			initialState.font_heading = fontHeading;
 			initialState.font_body = fontBody;
 			toast.success('Branding saved.');
@@ -356,10 +423,10 @@
 						Colors
 					</h2>
 				</div>
-				<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+				<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
 					<ColorSlot
 						label="Primary"
-						helper="CTAs, links, focus rings."
+						helper="CTAs, focus rings."
 						bind:value={primary}
 						onReset={() => (primary = DEFAULTS.primary_color)}
 					/>
@@ -370,16 +437,46 @@
 						onReset={() => (secondary = DEFAULTS.secondary_color)}
 					/>
 					<ColorSlot
+						label="Accent"
+						helper="Links, focus accents. Empty = use primary."
+						bind:value={accent}
+						onReset={() => (accent = DEFAULTS.accent_color)}
+					/>
+					<ColorSlot
 						label="Background"
 						helper="Page surface behind everything."
 						bind:value={bg}
 						onReset={() => (bg = DEFAULTS.bg_color)}
 					/>
 					<ColorSlot
+						label="Surface"
+						helper="Card panels, elevated sections."
+						bind:value={surface}
+						onReset={() => (surface = DEFAULTS.surface_color)}
+					/>
+					<ColorSlot
+						label="Border"
+						helper="Hairlines, card outlines, dividers."
+						bind:value={border}
+						onReset={() => (border = DEFAULTS.border_color)}
+					/>
+					<ColorSlot
 						label="Text"
 						helper="Body copy, headings, default ink."
 						bind:value={text}
 						onReset={() => (text = DEFAULTS.text_color)}
+					/>
+					<ColorSlot
+						label="Muted text"
+						helper="Captions, hints, de-emphasised copy."
+						bind:value={muted}
+						onReset={() => (muted = DEFAULTS.muted_color)}
+					/>
+					<ColorSlot
+						label="On primary"
+						helper="Text on primary buttons. Use black for light primaries."
+						bind:value={onPrimary}
+						onReset={() => (onPrimary = DEFAULTS.on_primary_color)}
 					/>
 				</div>
 			</section>
@@ -391,7 +488,12 @@
 					</h2>
 					<span class="text-[11px] text-text-muted">WCAG AA target 4.5:1</span>
 				</div>
-				<ContrastMatrix {colors} onSuggest={applySuggestion} />
+				<ContrastMatrix
+					{colors}
+					surfaceHex={surface}
+					mutedHex={muted}
+					onSuggest={applySuggestion}
+				/>
 			</section>
 
 			<section class="flex flex-col gap-5">
@@ -445,46 +547,35 @@
 						<div class="grid grid-cols-2 gap-3">
 							<div class="flex flex-col gap-1.5">
 								<span class="text-[12px] font-medium text-text-primary">Weight</span>
-								<select
-									class="h-9 w-full rounded-lg border border-border bg-bg-surface px-3 text-[13px]"
-									bind:value={uploadWeight}
-								>
-									<option value={100}>100 Thin</option>
-									<option value={200}>200 ExtraLight</option>
-									<option value={300}>300 Light</option>
-									<option value={400}>400 Regular</option>
-									<option value={500}>500 Medium</option>
-									<option value={600}>600 SemiBold</option>
-									<option value={700}>700 Bold</option>
-									<option value={800}>800 ExtraBold</option>
-									<option value={900}>900 Black</option>
-								</select>
+								<Select
+									options={weightOptions}
+									value={String(uploadWeight)}
+									onchange={(v) => (uploadWeight = Number(v))}
+								/>
 							</div>
 							<div class="flex flex-col gap-1.5">
 								<span class="text-[12px] font-medium text-text-primary">Style</span>
-								<select
-									class="h-9 w-full rounded-lg border border-border bg-bg-surface px-3 text-[13px]"
-									bind:value={uploadStyle}
-								>
-									<option value="normal">Normal</option>
-									<option value="italic">Italic</option>
-								</select>
+								<Select
+									options={styleOptions}
+									value={uploadStyle}
+									onchange={(v) => (uploadStyle = v as 'normal' | 'italic')}
+								/>
 							</div>
 						</div>
 					</div>
 					{#if uploadError}
 						<p class="mt-3 text-[12px] text-danger">{uploadError}</p>
 					{/if}
-					<div class="mt-3 flex items-center justify-between gap-2">
+					<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 						<p class="text-[11px] text-text-muted">
-							Self-hosted from /atomicsite-fonts. No external CDN; matches the perfect-foundation
-							SEO + privacy posture.
+							Self-hosted from /atomicsite-fonts. No external CDN.
 						</p>
 						<Button
 							variant="primary"
 							onclick={uploadFont}
 							loading={uploading}
 							disabled={uploading || !uploadFile}
+							class="whitespace-nowrap"
 						>
 							Upload font
 						</Button>
@@ -556,14 +647,12 @@
 						<Input label="Label (optional)" placeholder="e.g. Taste UI" bind:value={refLabel} />
 						<div class="flex flex-col gap-1.5 sm:col-span-2">
 							<span class="text-[12px] font-medium text-text-primary">Type</span>
-							<select
-								class="h-9 w-full rounded-lg border border-border bg-bg-surface px-3 text-[13px]"
-								bind:value={refType}
-							>
-								<option value="design-system">Design system</option>
-								<option value="component-library">Component library</option>
-								<option value="reference-site">Reference site</option>
-							</select>
+							<Select
+								options={refTypeOptions}
+								value={refType}
+								onchange={(v) =>
+									(refType = v as designRefsApi.DesignReference['ref_type'])}
+							/>
 						</div>
 						<div class="flex items-end justify-end">
 							<Button
@@ -571,6 +660,7 @@
 								onclick={addDesignRef}
 								loading={addingRef}
 								disabled={addingRef || !refURL.trim()}
+								class="whitespace-nowrap"
 							>
 								Add reference
 							</Button>
@@ -632,7 +722,19 @@
 		</div>
 
 		<aside class="lg:sticky lg:top-24 lg:self-start">
-			<BrandingPreview {primary} {secondary} {bg} {text} {fontHeading} {fontBody} />
+			<BrandingPreview
+				{primary}
+				{secondary}
+				{bg}
+				{text}
+				{surface}
+				{border}
+				{muted}
+				{accent}
+				{onPrimary}
+				{fontHeading}
+				{fontBody}
+			/>
 		</aside>
 	</div>
 </div>

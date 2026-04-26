@@ -305,6 +305,21 @@ func (s *Server) Router() http.Handler {
 		// Evaluation
 		r.Get("/api/agent/evaluation/{buildID}", agentH.GetEvaluation)
 
+		// Branding (Phase 12.9): agents can read + patch the same fields the
+		// human admin edits in the Branding UI. Writes require "write" cap.
+		r.Get("/api/agent/branding", agentH.GetBranding)
+		r.Patch("/api/agent/branding", agentH.UpdateBranding)
+
+		// Self-hosted woff2 fonts (Phase 12.9 agent parity).
+		r.Get("/api/agent/fonts", agentH.ListFonts)
+		r.Post("/api/agent/fonts", agentH.UploadFont)
+		r.Delete("/api/agent/fonts/{fontID}", agentH.DeleteFont)
+
+		// GitHub design references (Phase 12.9 agent parity).
+		r.Get("/api/agent/design-references", agentH.ListDesignReferences)
+		r.Post("/api/agent/design-references", agentH.AddDesignReference)
+		r.Delete("/api/agent/design-references/{refID}", agentH.DeleteDesignReference)
+
 		// Media
 		agentMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
 		r.Get("/api/agent/media", agentH.ListMedia)

@@ -502,6 +502,11 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SecondaryColor  *string `json:"secondary_color"`
 		BgColor         *string `json:"bg_color"`
 		TextColor       *string `json:"text_color"`
+		SurfaceColor    *string `json:"surface_color"`
+		BorderColor     *string `json:"border_color"`
+		MutedColor      *string `json:"muted_color"`
+		AccentColor     *string `json:"accent_color"`
+		OnPrimaryColor  *string `json:"on_primary_color"`
 		FontHeading     *string `json:"font_heading"`
 		FontBody        *string `json:"font_body"`
 		MetaTitle       *string `json:"meta_title"`
@@ -528,6 +533,11 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SecondaryColor:  existing.SecondaryColor,
 		BgColor:         existing.BgColor,
 		TextColor:       existing.TextColor,
+		SurfaceColor:    existing.SurfaceColor,
+		BorderColor:     existing.BorderColor,
+		MutedColor:      existing.MutedColor,
+		AccentColor:     existing.AccentColor,
+		OnPrimaryColor:  existing.OnPrimaryColor,
 		FontHeading:     existing.FontHeading,
 		FontBody:        existing.FontBody,
 		MetaTitle:       existing.MetaTitle,
@@ -565,6 +575,21 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TextColor != nil {
 		params.TextColor = *req.TextColor
+	}
+	if req.SurfaceColor != nil {
+		params.SurfaceColor = *req.SurfaceColor
+	}
+	if req.BorderColor != nil {
+		params.BorderColor = *req.BorderColor
+	}
+	if req.MutedColor != nil {
+		params.MutedColor = *req.MutedColor
+	}
+	if req.AccentColor != nil {
+		params.AccentColor = *req.AccentColor
+	}
+	if req.OnPrimaryColor != nil {
+		params.OnPrimaryColor = *req.OnPrimaryColor
 	}
 	if req.FontHeading != nil {
 		params.FontHeading = *req.FontHeading
