@@ -369,7 +369,9 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_site ON evaluations(site_id);
 -- Analytics moat: server-side visit tracking + consent stitching
 -- ============================================================
 
--- Individual visit events parsed from Nginx JSON access logs
+-- Individual visit events parsed from Nginx JSON access logs.
+-- Enrichment columns (browser/os/device/country/utm) are filled by the
+-- analytics parser at ingest time; raw IP and full UA are NEVER stored.
 CREATE TABLE IF NOT EXISTS visit_events (
     id           TEXT PRIMARY KEY,
     site_id      TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -379,11 +381,23 @@ CREATE TABLE IF NOT EXISTS visit_events (
     referer      TEXT NOT NULL DEFAULT '',
     status       INTEGER NOT NULL DEFAULT 200,
     ms           INTEGER NOT NULL DEFAULT 0,
-    ts           TEXT NOT NULL DEFAULT (datetime('now'))
+    ts           TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Enrichment (Phase 12.5)
+    browser      TEXT NOT NULL DEFAULT '',  -- e.g. "Chrome", "Safari", "Firefox"
+    os           TEXT NOT NULL DEFAULT '',  -- e.g. "macOS", "Windows", "iOS"
+    device       TEXT NOT NULL DEFAULT '',  -- "desktop" | "mobile" | "tablet" | "bot"
+    country      TEXT NOT NULL DEFAULT '',  -- ISO 3166-1 alpha-2, sourced from CF-IPCountry header
+    lang         TEXT NOT NULL DEFAULT '',  -- primary language tag from Accept-Language ("en", "sv-SE")
+    utm_source   TEXT NOT NULL DEFAULT '',
+    utm_medium   TEXT NOT NULL DEFAULT '',
+    utm_campaign TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_visit_events_site_ts ON visit_events(site_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_visit_events_fingerprint ON visit_events(site_id, fingerprint);
 CREATE INDEX IF NOT EXISTS idx_visit_events_session ON visit_events(site_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_visit_events_country ON visit_events(site_id, country);
+CREATE INDEX IF NOT EXISTS idx_visit_events_browser ON visit_events(site_id, browser);
+CREATE INDEX IF NOT EXISTS idx_visit_events_utm ON visit_events(site_id, utm_source);
 
 -- Aggregated visit sessions (one per site/fingerprint), stitched on consent
 CREATE TABLE IF NOT EXISTS visit_sessions (

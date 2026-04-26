@@ -37,15 +37,16 @@ const pollInterval = 250 * time.Millisecond
 // logLine matches the JSON fields emitted by the nginx log_format we generate
 // in internal/builder/nginx.go. Unknown fields are ignored.
 type logLine struct {
-	TS     string  `json:"ts"`
-	SiteID string  `json:"site_id"`
-	IP     string  `json:"ip"`
-	UA     string  `json:"ua"`
-	AL     string  `json:"al"`
-	Path   string  `json:"path"`
-	Status int     `json:"status"`
-	MS     float64 `json:"ms"`
-	Ref    string  `json:"ref"`
+	TS      string  `json:"ts"`
+	SiteID  string  `json:"site_id"`
+	IP      string  `json:"ip"`
+	UA      string  `json:"ua"`
+	AL      string  `json:"al"`
+	Path    string  `json:"path"`
+	Status  int     `json:"status"`
+	MS      float64 `json:"ms"`
+	Ref     string  `json:"ref"`
+	Country string  `json:"country"` // CF-IPCountry (Cloudflare). Empty when not behind CF.
 }
 
 // Parser tails one site's JSON access log and persists analytics rows.
@@ -243,6 +244,11 @@ func (p *Parser) processLine(ctx context.Context, raw []byte) {
 		ts = time.Now().UTC().Format(time.RFC3339)
 	}
 
+	browser, os, device := ParseUA(ll.UA)
+	lang := ParsePrimaryLanguage(ll.AL)
+	utmSource, utmMedium, utmCampaign := ParseUTMFromPath(ll.Path)
+	country := normaliseCountry(ll.Country)
+
 	if err := p.queries.RecordVisitEvent(ctx, store.RecordVisitEventParams{
 		ID:          newID(),
 		SiteID:      p.siteID,
@@ -253,6 +259,14 @@ func (p *Parser) processLine(ctx context.Context, raw []byte) {
 		Status:      int64(ll.Status),
 		Ms:          int64(ll.MS * 1000),
 		Ts:          ts,
+		Browser:     browser,
+		Os:          os,
+		Device:      device,
+		Country:     country,
+		Lang:        lang,
+		UtmSource:   utmSource,
+		UtmMedium:   utmMedium,
+		UtmCampaign: utmCampaign,
 	}); err != nil {
 		p.logger.Warn("record visit", "error", err)
 		return
@@ -267,6 +281,29 @@ func (p *Parser) processLine(ctx context.Context, raw []byte) {
 	}); err != nil {
 		p.logger.Warn("upsert session", "error", err)
 	}
+}
+
+// normaliseCountry coerces the CF-IPCountry value into a clean ISO 3166-1
+// alpha-2 code, or empty string. Cloudflare emits "XX" for unknown and
+// "T1" for Tor exits — we drop both rather than poisoning aggregations.
+func normaliseCountry(s string) string {
+	if len(s) != 2 {
+		return ""
+	}
+	upper := ""
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' {
+			r -= 32
+		}
+		if r < 'A' || r > 'Z' {
+			return ""
+		}
+		upper += string(r)
+	}
+	if upper == "XX" || upper == "T1" {
+		return ""
+	}
+	return upper
 }
 
 // fingerprint hashes IP + UA + Accept-Language + per-site salt with SHA-256

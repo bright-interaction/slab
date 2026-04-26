@@ -10,8 +10,15 @@ import (
 
 type Querier interface {
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
+	// For every identified session, return its full path history ordered by ts.
+	// The handler groups by session_id / fingerprint to assemble the journey.
+	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
+	// Distinct fingerprints in the last N minutes (caller passes the cutoff
+	// timestamp). Used for the "live now" widget.
+	CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error)
 	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
+	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
 	CountVisitsByPath(ctx context.Context, arg CountVisitsByPathParams) ([]CountVisitsByPathRow, error)
 	CountVisitsBySite(ctx context.Context, arg CountVisitsBySiteParams) (int64, error)
 	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
@@ -128,9 +135,22 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
 	MarkInviteUsed(ctx context.Context, id string) error
+	// Pageviews per UTC day for the requested window. Returned as ISO-date
+	// buckets so the frontend can render a sparkline / bar chart directly.
+	PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error)
+	// Pageviews per UTC hour for the last day window. Used when range = 1d.
+	PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error)
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
+	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
+	TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error)
+	TopDevices(ctx context.Context, arg TopDevicesParams) ([]TopDevicesRow, error)
+	TopLanguages(ctx context.Context, arg TopLanguagesParams) ([]TopLanguagesRow, error)
+	TopOS(ctx context.Context, arg TopOSParams) ([]TopOSRow, error)
 	TopReferers(ctx context.Context, arg TopReferersParams) ([]TopReferersRow, error)
+	TopStatuses(ctx context.Context, arg TopStatusesParams) ([]TopStatusesRow, error)
+	TopUTMCampaigns(ctx context.Context, arg TopUTMCampaignsParams) ([]TopUTMCampaignsRow, error)
+	TopUTMSources(ctx context.Context, arg TopUTMSourcesParams) ([]TopUTMSourcesRow, error)
 	UpdateAgentKeyLastUsed(ctx context.Context, id string) error
 	UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScriptParams) error
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error

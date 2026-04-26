@@ -9,16 +9,115 @@ import (
 	"context"
 )
 
+const conversionPathsForIdentified = `-- name: ConversionPathsForIdentified :many
+SELECT
+    ve.fingerprint,
+    ve.path,
+    ve.ts,
+    vs.email,
+    vs.identified_at
+FROM visit_events ve
+JOIN visit_sessions vs
+  ON vs.site_id = ve.site_id AND vs.fingerprint = ve.fingerprint
+WHERE ve.site_id = ?
+  AND vs.identified_at != ''
+  AND ve.ts <= vs.identified_at
+ORDER BY vs.identified_at DESC, ve.ts ASC
+LIMIT ?
+`
+
+type ConversionPathsForIdentifiedParams struct {
+	SiteID string `json:"site_id"`
+	Limit  int64  `json:"limit"`
+}
+
+type ConversionPathsForIdentifiedRow struct {
+	Fingerprint  string `json:"fingerprint"`
+	Path         string `json:"path"`
+	Ts           string `json:"ts"`
+	Email        string `json:"email"`
+	IdentifiedAt string `json:"identified_at"`
+}
+
+// For every identified session, return its full path history ordered by ts.
+// The handler groups by session_id / fingerprint to assemble the journey.
+func (q *Queries) ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error) {
+	rows, err := q.db.QueryContext(ctx, conversionPathsForIdentified, arg.SiteID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConversionPathsForIdentifiedRow{}
+	for rows.Next() {
+		var i ConversionPathsForIdentifiedRow
+		if err := rows.Scan(
+			&i.Fingerprint,
+			&i.Path,
+			&i.Ts,
+			&i.Email,
+			&i.IdentifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countLiveVisitorsSince = `-- name: CountLiveVisitorsSince :one
+SELECT COUNT(DISTINCT fingerprint) FROM visit_events
+WHERE site_id = ? AND ts >= ?
+`
+
+type CountLiveVisitorsSinceParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+// Distinct fingerprints in the last N minutes (caller passes the cutoff
+// timestamp). Used for the "live now" widget.
+func (q *Queries) CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countLiveVisitorsSince, arg.SiteID, arg.Ts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUniqueVisitorsSince = `-- name: CountUniqueVisitorsSince :one
+SELECT COUNT(DISTINCT fingerprint) FROM visit_events
+WHERE site_id = ? AND ts >= ?
+`
+
+type CountUniqueVisitorsSinceParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+func (q *Queries) CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUniqueVisitorsSince, arg.SiteID, arg.Ts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countVisitsByPath = `-- name: CountVisitsByPath :many
 SELECT path, COUNT(*) AS count FROM visit_events
 WHERE site_id = ? AND ts >= ?
 GROUP BY path
 ORDER BY count DESC
+LIMIT ?
 `
 
 type CountVisitsByPathParams struct {
 	SiteID string `json:"site_id"`
 	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
 }
 
 type CountVisitsByPathRow struct {
@@ -27,7 +126,7 @@ type CountVisitsByPathRow struct {
 }
 
 func (q *Queries) CountVisitsByPath(ctx context.Context, arg CountVisitsByPathParams) ([]CountVisitsByPathRow, error) {
-	rows, err := q.db.QueryContext(ctx, countVisitsByPath, arg.SiteID, arg.Ts)
+	rows, err := q.db.QueryContext(ctx, countVisitsByPath, arg.SiteID, arg.Ts, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +166,7 @@ func (q *Queries) CountVisitsBySite(ctx context.Context, arg CountVisitsBySitePa
 }
 
 const listVisitsBySite = `-- name: ListVisitsBySite :many
-SELECT id, site_id, fingerprint, session_id, path, referer, status, ms, ts FROM visit_events
+SELECT id, site_id, fingerprint, session_id, path, referer, status, ms, ts, browser, os, device, country, lang, utm_source, utm_medium, utm_campaign FROM visit_events
 WHERE site_id = ?
 ORDER BY ts DESC
 LIMIT ? OFFSET ?
@@ -98,6 +197,14 @@ func (q *Queries) ListVisitsBySite(ctx context.Context, arg ListVisitsBySitePara
 			&i.Status,
 			&i.Ms,
 			&i.Ts,
+			&i.Browser,
+			&i.Os,
+			&i.Device,
+			&i.Country,
+			&i.Lang,
+			&i.UtmSource,
+			&i.UtmMedium,
+			&i.UtmCampaign,
 		); err != nil {
 			return nil, err
 		}
@@ -112,9 +219,104 @@ func (q *Queries) ListVisitsBySite(ctx context.Context, arg ListVisitsBySitePara
 	return items, nil
 }
 
+const pageviewsTimeSeriesDaily = `-- name: PageviewsTimeSeriesDaily :many
+SELECT
+    substr(ts, 1, 10) AS day,
+    COUNT(*) AS count,
+    COUNT(DISTINCT fingerprint) AS unique_count
+FROM visit_events
+WHERE site_id = ? AND ts >= ?
+GROUP BY day
+ORDER BY day ASC
+`
+
+type PageviewsTimeSeriesDailyParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+type PageviewsTimeSeriesDailyRow struct {
+	Day         string `json:"day"`
+	Count       int64  `json:"count"`
+	UniqueCount int64  `json:"unique_count"`
+}
+
+// Pageviews per UTC day for the requested window. Returned as ISO-date
+// buckets so the frontend can render a sparkline / bar chart directly.
+func (q *Queries) PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error) {
+	rows, err := q.db.QueryContext(ctx, pageviewsTimeSeriesDaily, arg.SiteID, arg.Ts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PageviewsTimeSeriesDailyRow{}
+	for rows.Next() {
+		var i PageviewsTimeSeriesDailyRow
+		if err := rows.Scan(&i.Day, &i.Count, &i.UniqueCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pageviewsTimeSeriesHourly = `-- name: PageviewsTimeSeriesHourly :many
+SELECT
+    substr(ts, 1, 13) AS hour,
+    COUNT(*) AS count,
+    COUNT(DISTINCT fingerprint) AS unique_count
+FROM visit_events
+WHERE site_id = ? AND ts >= ?
+GROUP BY hour
+ORDER BY hour ASC
+`
+
+type PageviewsTimeSeriesHourlyParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+type PageviewsTimeSeriesHourlyRow struct {
+	Hour        string `json:"hour"`
+	Count       int64  `json:"count"`
+	UniqueCount int64  `json:"unique_count"`
+}
+
+// Pageviews per UTC hour for the last day window. Used when range = 1d.
+func (q *Queries) PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error) {
+	rows, err := q.db.QueryContext(ctx, pageviewsTimeSeriesHourly, arg.SiteID, arg.Ts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PageviewsTimeSeriesHourlyRow{}
+	for rows.Next() {
+		var i PageviewsTimeSeriesHourlyRow
+		if err := rows.Scan(&i.Hour, &i.Count, &i.UniqueCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordVisitEvent = `-- name: RecordVisitEvent :exec
-INSERT INTO visit_events (id, site_id, fingerprint, session_id, path, referer, status, ms, ts)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO visit_events (
+    id, site_id, fingerprint, session_id, path, referer, status, ms, ts,
+    browser, os, device, country, lang, utm_source, utm_medium, utm_campaign
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type RecordVisitEventParams struct {
@@ -127,6 +329,14 @@ type RecordVisitEventParams struct {
 	Status      int64  `json:"status"`
 	Ms          int64  `json:"ms"`
 	Ts          string `json:"ts"`
+	Browser     string `json:"browser"`
+	Os          string `json:"os"`
+	Device      string `json:"device"`
+	Country     string `json:"country"`
+	Lang        string `json:"lang"`
+	UtmSource   string `json:"utm_source"`
+	UtmMedium   string `json:"utm_medium"`
+	UtmCampaign string `json:"utm_campaign"`
 }
 
 func (q *Queries) RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error {
@@ -140,8 +350,226 @@ func (q *Queries) RecordVisitEvent(ctx context.Context, arg RecordVisitEventPara
 		arg.Status,
 		arg.Ms,
 		arg.Ts,
+		arg.Browser,
+		arg.Os,
+		arg.Device,
+		arg.Country,
+		arg.Lang,
+		arg.UtmSource,
+		arg.UtmMedium,
+		arg.UtmCampaign,
 	)
 	return err
+}
+
+const topBrowsers = `-- name: TopBrowsers :many
+SELECT browser AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND browser != ''
+GROUP BY browser
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopBrowsersParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopBrowsersRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, topBrowsers, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopBrowsersRow{}
+	for rows.Next() {
+		var i TopBrowsersRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topCountries = `-- name: TopCountries :many
+SELECT country AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND country != ''
+GROUP BY country
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopCountriesParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopCountriesRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, topCountries, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopCountriesRow{}
+	for rows.Next() {
+		var i TopCountriesRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topDevices = `-- name: TopDevices :many
+SELECT device AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND device != ''
+GROUP BY device
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopDevicesParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopDevicesRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopDevices(ctx context.Context, arg TopDevicesParams) ([]TopDevicesRow, error) {
+	rows, err := q.db.QueryContext(ctx, topDevices, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopDevicesRow{}
+	for rows.Next() {
+		var i TopDevicesRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topLanguages = `-- name: TopLanguages :many
+SELECT lang AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND lang != ''
+GROUP BY lang
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopLanguagesParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopLanguagesRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopLanguages(ctx context.Context, arg TopLanguagesParams) ([]TopLanguagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, topLanguages, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopLanguagesRow{}
+	for rows.Next() {
+		var i TopLanguagesRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topOS = `-- name: TopOS :many
+SELECT os AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND os != ''
+GROUP BY os
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopOSParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopOSRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopOS(ctx context.Context, arg TopOSParams) ([]TopOSRow, error) {
+	rows, err := q.db.QueryContext(ctx, topOS, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopOSRow{}
+	for rows.Next() {
+		var i TopOSRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const topReferers = `-- name: TopReferers :many
@@ -173,6 +601,130 @@ func (q *Queries) TopReferers(ctx context.Context, arg TopReferersParams) ([]Top
 	for rows.Next() {
 		var i TopReferersRow
 		if err := rows.Scan(&i.Referer, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topStatuses = `-- name: TopStatuses :many
+SELECT status, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ?
+GROUP BY status
+ORDER BY count DESC
+`
+
+type TopStatusesParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+type TopStatusesRow struct {
+	Status int64 `json:"status"`
+	Count  int64 `json:"count"`
+}
+
+func (q *Queries) TopStatuses(ctx context.Context, arg TopStatusesParams) ([]TopStatusesRow, error) {
+	rows, err := q.db.QueryContext(ctx, topStatuses, arg.SiteID, arg.Ts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopStatusesRow{}
+	for rows.Next() {
+		var i TopStatusesRow
+		if err := rows.Scan(&i.Status, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topUTMCampaigns = `-- name: TopUTMCampaigns :many
+SELECT utm_campaign AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND utm_campaign != ''
+GROUP BY utm_campaign
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopUTMCampaignsParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopUTMCampaignsRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopUTMCampaigns(ctx context.Context, arg TopUTMCampaignsParams) ([]TopUTMCampaignsRow, error) {
+	rows, err := q.db.QueryContext(ctx, topUTMCampaigns, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopUTMCampaignsRow{}
+	for rows.Next() {
+		var i TopUTMCampaignsRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topUTMSources = `-- name: TopUTMSources :many
+SELECT utm_source AS name, COUNT(*) AS count FROM visit_events
+WHERE site_id = ? AND ts >= ? AND utm_source != ''
+GROUP BY utm_source
+ORDER BY count DESC
+LIMIT ?
+`
+
+type TopUTMSourcesParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+	Limit  int64  `json:"limit"`
+}
+
+type TopUTMSourcesRow struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func (q *Queries) TopUTMSources(ctx context.Context, arg TopUTMSourcesParams) ([]TopUTMSourcesRow, error) {
+	rows, err := q.db.QueryContext(ctx, topUTMSources, arg.SiteID, arg.Ts, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopUTMSourcesRow{}
+	for rows.Next() {
+		var i TopUTMSourcesRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
