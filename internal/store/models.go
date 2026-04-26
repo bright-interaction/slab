@@ -318,6 +318,14 @@ type VisitEvent struct {
 	Status      int64  `json:"status"`
 	Ms          int64  `json:"ms"`
 	Ts          string `json:"ts"`
+	Browser     string `json:"browser"`
+	Os          string `json:"os"`
+	Device      string `json:"device"`
+	Country     string `json:"country"`
+	Lang        string `json:"lang"`
+	UtmSource   string `json:"utm_source"`
+	UtmMedium   string `json:"utm_medium"`
+	UtmCampaign string `json:"utm_campaign"`
 }
 
 type VisitSession struct {

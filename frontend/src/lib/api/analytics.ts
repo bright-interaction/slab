@@ -1,6 +1,9 @@
-// TODO: Backend routes ship with Phase 10-1 / 10-2.
-// Until they land, GET /sites/{id}/analytics/* will 404 and the page will
-// fall back to its empty state. The shape below is the contract we expect.
+// Backend lives in internal/handlers/analytics.go.
+// Endpoints:
+//   GET /sites/{id}/analytics/overview?since=1d|7d|30d|90d|all
+//   GET /sites/{id}/analytics/sessions?identified=true&limit=25
+//   GET /sites/{id}/analytics/conversion-paths?limit=5
+//   GET /sites/{id}/analytics/tracked-fields
 
 import { apiGet } from './client';
 
@@ -14,12 +17,34 @@ export type TopReferer = {
 	count: number;
 };
 
+export type NameCount = {
+	name: string;
+	count: number;
+};
+
+export type TimePoint = {
+	bucket: string;
+	count: number;
+	unique_count: number;
+};
+
 export type AnalyticsOverview = {
+	since: string;
 	visits: number;
 	unique_visitors: number;
 	identified_count: number;
+	live_visitors: number;
 	top_pages: TopPage[];
 	top_referers: TopReferer[];
+	top_browsers: NameCount[];
+	top_os: NameCount[];
+	top_devices: NameCount[];
+	top_countries: NameCount[];
+	top_languages: NameCount[];
+	top_utm_sources: NameCount[];
+	top_utm_campaigns: NameCount[];
+	time_series: TimePoint[];
+	bucket_unit: 'day' | 'hour';
 };
 
 export type VisitSession = {
@@ -46,7 +71,7 @@ export type ConversionPath = {
 	email: string;
 };
 
-export type SinceRange = '7d' | '30d' | '90d' | 'all';
+export type SinceRange = '1d' | '7d' | '30d' | '90d' | 'all';
 
 export interface ListSessionsOpts {
 	identified?: boolean;
@@ -54,16 +79,25 @@ export interface ListSessionsOpts {
 	offset?: number;
 }
 
-function sinceToDays(since: SinceRange): string {
-	if (since === 'all') return 'all';
-	return since;
-}
+export type TrackedField = {
+	field: string;
+	stored: string;
+	source: string;
+	purpose: string;
+};
 
-export function getOverview(
-	siteID: string,
-	since: SinceRange = '7d'
-): Promise<AnalyticsOverview> {
-	const qs = new URLSearchParams({ since: sinceToDays(since) });
+export type NotTrackedField = {
+	field: string;
+	reason: string;
+};
+
+export type TrackedFieldsResponse = {
+	tracked: TrackedField[];
+	not_tracked: NotTrackedField[];
+};
+
+export function getOverview(siteID: string, since: SinceRange = '7d'): Promise<AnalyticsOverview> {
+	const qs = new URLSearchParams({ since });
 	return apiGet<AnalyticsOverview>(`/sites/${siteID}/analytics/overview?${qs.toString()}`);
 }
 
@@ -76,9 +110,7 @@ export function listSessions(
 	if (typeof opts.limit === 'number') qs.set('limit', String(opts.limit));
 	if (typeof opts.offset === 'number') qs.set('offset', String(opts.offset));
 	const suffix = qs.toString() ? `?${qs.toString()}` : '';
-	return apiGet<{ sessions: VisitSession[] }>(
-		`/sites/${siteID}/analytics/sessions${suffix}`
-	);
+	return apiGet<{ sessions: VisitSession[] }>(`/sites/${siteID}/analytics/sessions${suffix}`);
 }
 
 export function listConversionPaths(
@@ -89,4 +121,8 @@ export function listConversionPaths(
 	return apiGet<{ paths: ConversionPath[] }>(
 		`/sites/${siteID}/analytics/conversion-paths?${qs.toString()}`
 	);
+}
+
+export function getTrackedFields(siteID: string): Promise<TrackedFieldsResponse> {
+	return apiGet<TrackedFieldsResponse>(`/sites/${siteID}/analytics/tracked-fields`);
 }

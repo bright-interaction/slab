@@ -232,6 +232,10 @@ func (s *Server) Router() http.Handler {
 		// Analytics reads (admin) - visit_events populated by the nginx log tailer.
 		anH := handlers.NewAnalyticsHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/visit-events", anH.VisitEvents)
+		r.Get("/api/sites/{siteID}/analytics/overview", anH.AnalyticsOverview)
+		r.Get("/api/sites/{siteID}/analytics/sessions", anH.AnalyticsSessions)
+		r.Get("/api/sites/{siteID}/analytics/conversion-paths", anH.AnalyticsConversionPaths)
+		r.Get("/api/sites/{siteID}/analytics/tracked-fields", anH.AnalyticsTrackedFields)
 
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)

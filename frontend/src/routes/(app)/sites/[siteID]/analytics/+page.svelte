@@ -5,6 +5,7 @@
 		AnalyticsOverview,
 		ConversionPath,
 		SinceRange,
+		TrackedFieldsResponse,
 		VisitSession
 	} from '$lib/api/analytics';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -22,7 +23,10 @@
 
 	let sinceValue = $state<string>('7d');
 	const since = $derived<SinceRange>(
-		sinceValue === '30d' || sinceValue === '90d' || sinceValue === 'all'
+		sinceValue === '1d' ||
+			sinceValue === '30d' ||
+			sinceValue === '90d' ||
+			sinceValue === 'all'
 			? (sinceValue as SinceRange)
 			: '7d'
 	);
@@ -39,10 +43,14 @@
 	let pathsLoading = $state(true);
 	let pathsError = $state<string | null>(null);
 
+	let trackedFields = $state<TrackedFieldsResponse | null>(null);
+	let trackedExpanded = $state(false);
+
 	let nowTick = $state(Date.now());
 	let nowInterval: ReturnType<typeof setInterval> | null = null;
 
 	const sinceOptions = [
+		{ value: '1d', label: 'Last 24 hours' },
 		{ value: '7d', label: 'Last 7 days' },
 		{ value: '30d', label: 'Last 30 days' },
 		{ value: '90d', label: 'Last 90 days' },
@@ -97,7 +105,28 @@
 	$effect(() => {
 		void loadSessions(siteID);
 		void loadPaths(siteID);
+		void loadTrackedFields(siteID);
 	});
+
+	async function loadTrackedFields(id: string) {
+		try {
+			trackedFields = await analyticsApi.getTrackedFields(id);
+		} catch {
+			trackedFields = null;
+		}
+	}
+
+	function bucketLabel(b: string): string {
+		// "2026-04-26" or "2026-04-26T14"
+		if (b.length === 10) {
+			const d = new Date(b + 'T00:00:00Z');
+			return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+		}
+		if (b.length === 13) {
+			return b.slice(11, 13) + ':00';
+		}
+		return b;
+	}
 
 	$effect(() => {
 		nowInterval = setInterval(() => {
@@ -208,7 +237,26 @@
 			</EmptyState>
 		</Card>
 	{:else}
-		<section class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+		<section class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+			<div class="animate-stagger-1">
+				<Card padding="md">
+					<p class="text-xs text-text-muted">Live now</p>
+					{#if overviewLoading || !overview}
+						<Skeleton width="3rem" height="2rem" class="mt-2" />
+					{:else}
+						<div class="mt-1 flex items-baseline gap-2">
+							<p
+								class="font-display text-3xl font-extralight tracking-tight text-text-primary"
+							>
+								{formatNumber(overview.live_visitors)}
+							</p>
+							<span class="inline-flex h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+						</div>
+					{/if}
+					<p class="mt-1 text-[11px] text-text-muted">visitors in last 5 min</p>
+				</Card>
+			</div>
+
 			<div class="animate-stagger-1">
 				<Card padding="md">
 					<p class="text-xs text-text-muted">Total visits</p>
@@ -262,6 +310,40 @@
 				</Card>
 			</div>
 		</section>
+
+		{#if overview && overview.time_series && overview.time_series.length > 0}
+			<section class="mt-8">
+				<Card padding="md">
+					<div class="flex items-baseline justify-between">
+						<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+							Pageviews over time
+						</h2>
+						<span class="text-[11px] text-text-muted">
+							{overview.bucket_unit === 'hour' ? 'per hour' : 'per day'}
+						</span>
+					</div>
+					{@const ts = overview.time_series}
+					{@const tsMax = Math.max(...ts.map((p) => p.count), 1)}
+					<div class="mt-4 flex h-32 items-end gap-1">
+						{#each ts as p (p.bucket)}
+							{@const h = Math.max(2, Math.round((p.count / tsMax) * 100))}
+							<div class="group relative flex h-full flex-1 flex-col justify-end" title="{bucketLabel(p.bucket)}: {formatNumber(p.count)} visits, {formatNumber(p.unique_count)} unique">
+								<div
+									class="w-full rounded-t bg-accent/70 transition-colors group-hover:bg-accent"
+									style="height: {h}%"
+									aria-hidden="true"
+								></div>
+							</div>
+						{/each}
+					</div>
+					{@const last = ts[ts.length - 1]}
+					<div class="mt-2 flex justify-between text-[10px] text-text-muted">
+						<span>{ts[0] ? bucketLabel(ts[0].bucket) : ''}</span>
+						<span>{last ? bucketLabel(last.bucket) : ''}</span>
+					</div>
+				</Card>
+			</section>
+		{/if}
 
 		<section class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
 			<Card padding="md">
@@ -356,6 +438,50 @@
 				</div>
 			</Card>
 		</section>
+
+		{#if overview}
+			{@const breakdowns = [
+				{ key: 'browsers', label: 'Browsers', items: overview.top_browsers ?? [] },
+				{ key: 'os', label: 'Operating systems', items: overview.top_os ?? [] },
+				{ key: 'devices', label: 'Devices', items: overview.top_devices ?? [] },
+				{ key: 'countries', label: 'Countries', items: overview.top_countries ?? [] },
+				{ key: 'languages', label: 'Languages', items: overview.top_languages ?? [] },
+				{ key: 'utm_sources', label: 'UTM sources', items: overview.top_utm_sources ?? [] }
+			].filter((b) => b.items.length > 0)}
+			{#if breakdowns.length > 0}
+				<section class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					{#each breakdowns as b (b.key)}
+						{@const max = Math.max(...b.items.map((i) => i.count), 1)}
+						<Card padding="md">
+							<div class="flex items-baseline justify-between">
+								<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+									{b.label}
+								</h2>
+								<span class="text-[11px] text-text-muted">visits</span>
+							</div>
+							<ul class="mt-3 space-y-1.5">
+								{#each b.items.slice(0, 8) as item (item.name)}
+									{@const pct = Math.max(2, Math.round((item.count / max) * 100))}
+									<li class="group relative flex items-center gap-3 rounded-md px-2 py-1.5">
+										<span
+											aria-hidden="true"
+											class="absolute inset-y-0 left-0 rounded-md bg-accent/10"
+											style="width: {pct}%;"
+										></span>
+										<span class="relative z-10 flex-1 truncate text-[12px] text-text-primary">
+											{item.name}
+										</span>
+										<span class="relative z-10 text-[12px] tabular-nums text-text-secondary">
+											{formatNumber(item.count)}
+										</span>
+									</li>
+								{/each}
+							</ul>
+						</Card>
+					{/each}
+				</section>
+			{/if}
+		{/if}
 
 		<section class="mt-8">
 			<Card padding="md">
@@ -505,6 +631,76 @@
 						</ul>
 					{/if}
 				</div>
+			</Card>
+		</section>
+	{/if}
+
+	{#if trackedFields}
+		<section class="mt-12">
+			<Card padding="md">
+				<button
+					type="button"
+					class="flex w-full items-baseline justify-between text-left"
+					onclick={() => (trackedExpanded = !trackedExpanded)}
+					aria-expanded={trackedExpanded}
+				>
+					<div>
+						<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+							What we track
+						</h2>
+						<p class="mt-1 text-[12px] text-text-muted">
+							Server-side, no cookies, no IP storage.
+							{trackedFields.tracked.length} fields recorded,
+							{trackedFields.not_tracked.length} explicitly never recorded.
+							Click to {trackedExpanded ? 'collapse' : 'expand'}.
+						</p>
+					</div>
+					<ChevronRight
+						size={14}
+						strokeWidth={1.75}
+						class="shrink-0 text-text-muted transition-transform {trackedExpanded
+							? 'rotate-90'
+							: ''}"
+					/>
+				</button>
+
+				{#if trackedExpanded}
+					<div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+						<div>
+							<h3 class="text-[12px] font-medium text-text-primary">Tracked</h3>
+							<ul class="mt-2 space-y-2">
+								{#each trackedFields.tracked as t (t.field)}
+									<li class="rounded-md border border-border-light bg-bg-elevated p-2.5">
+										<p class="font-mono text-[12px] text-text-primary">{t.field}</p>
+										<p class="mt-0.5 text-[11px] text-text-muted">
+											<span class="font-medium">Stored:</span>
+											{t.stored}
+										</p>
+										<p class="text-[11px] text-text-muted">
+											<span class="font-medium">Source:</span>
+											{t.source}
+										</p>
+										<p class="text-[11px] text-text-muted">
+											<span class="font-medium">Why:</span>
+											{t.purpose}
+										</p>
+									</li>
+								{/each}
+							</ul>
+						</div>
+						<div>
+							<h3 class="text-[12px] font-medium text-text-primary">Never tracked</h3>
+							<ul class="mt-2 space-y-2">
+								{#each trackedFields.not_tracked as t (t.field)}
+									<li class="rounded-md border border-border-light bg-bg-elevated p-2.5">
+										<p class="font-mono text-[12px] text-text-primary">{t.field}</p>
+										<p class="mt-0.5 text-[11px] text-text-muted">{t.reason}</p>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					</div>
+				{/if}
 			</Card>
 		</section>
 	{/if}

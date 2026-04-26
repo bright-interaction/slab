@@ -127,7 +127,12 @@ func RenderNginxConfig(ctx context.Context, queries *store.Queries, siteID strin
 		b.WriteString("  '\"path\":\"$request_uri\",'\n")
 		b.WriteString("  '\"status\":$status,'\n")
 		b.WriteString("  '\"ms\":$request_time,'\n")
-		b.WriteString("  '\"ref\":\"$http_referer\"'\n")
+		b.WriteString("  '\"ref\":\"$http_referer\",'\n")
+		// CF-IPCountry is the standard ISO 3166-1 alpha-2 country code
+		// Cloudflare adds to every request when the site is fronted by CF.
+		// Empty for non-CF deployments — the analytics parser drops empties
+		// rather than poisoning the country breakdown.
+		b.WriteString("  '\"country\":\"$http_cf_ipcountry\"'\n")
 		b.WriteString("'}';\n")
 		b.WriteString(fmt.Sprintf("access_log %s atomicsite_json;\n\n", nginxLogPath(siteID)))
 	}
