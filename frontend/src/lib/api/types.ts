@@ -16,6 +16,8 @@ export interface AuthUser {
 	email: string;
 	name: string;
 	role: string;
+	created_at?: Timestamp;
+	updated_at?: Timestamp;
 }
 
 export interface Site {

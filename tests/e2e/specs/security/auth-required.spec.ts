@@ -31,7 +31,8 @@ const PROBES: Array<{ method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT'; path:
 	{ method: 'GET', path: '/api/sites/aaaaaaaaaaaaaaaaaaaaaaaa/agent-keys' },
 	{ method: 'POST', path: '/api/sites/aaaaaaaaaaaaaaaaaaaaaaaa/agent-keys' },
 	{ method: 'GET', path: '/api/auth/me' },
-	{ method: 'POST', path: '/api/auth/change-password' }
+	{ method: 'POST', path: '/api/auth/change-password' },
+	{ method: 'POST', path: '/api/auth/sign-out-everywhere' }
 ];
 
 test.describe('security: every admin endpoint requires JWT cookie', () => {

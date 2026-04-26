@@ -36,4 +36,13 @@ test.describe('auth: login / me / logout', () => {
 		});
 		expect(res.status()).toBe(401);
 	});
+
+	test('GET /api/auth/me returns created_at and updated_at', async ({ adminApi }) => {
+		const res = await adminApi.get(u('/api/auth/me'));
+		expect(res.ok()).toBe(true);
+		const body = (await res.json()) as { user: Record<string, unknown> };
+		expect(body.user.created_at).toBeTruthy();
+		expect(body.user.updated_at).toBeTruthy();
+		expect(typeof body.user.created_at).toBe('string');
+	});
 });
