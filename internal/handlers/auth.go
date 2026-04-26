@@ -80,12 +80,19 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
+	row, err := h.queries.GetUserByID(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to load user")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
-			"id":    user.ID,
-			"email": user.Email,
-			"name":  user.Name,
-			"role":  user.Role,
+			"id":         row.ID,
+			"email":      row.Email,
+			"name":       row.Name,
+			"role":       row.Role,
+			"created_at": row.CreatedAt,
+			"updated_at": row.UpdatedAt,
 		},
 	})
 }
@@ -134,6 +141,44 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to update password")
 		return
 	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// SignOutEverywhere revokes every JWT for the current user (including this
+// browser) by bumping token_version, then re-issues a fresh cookie so the
+// caller stays signed in here.
+func (h *AuthHandler) SignOutEverywhere(w http.ResponseWriter, r *http.Request) {
+	user := authmw.GetUser(r)
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+
+	if err := h.queries.IncrementTokenVersion(r.Context(), user.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to revoke sessions")
+		return
+	}
+
+	row, err := h.queries.GetUserByID(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to reload user")
+		return
+	}
+
+	authUser := &authmw.AuthUser{
+		ID:           row.ID,
+		Email:        row.Email,
+		Name:         row.Name,
+		Role:         row.Role,
+		TokenVersion: row.TokenVersion,
+	}
+	tokenStr, err := authmw.SignToken(h.cfg, authUser)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to refresh session")
+		return
+	}
+	authmw.SetTokenCookie(w, h.cfg, tokenStr)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

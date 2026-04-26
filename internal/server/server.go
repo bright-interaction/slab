@@ -104,6 +104,7 @@ func (s *Server) Router() http.Handler {
 		// Auth
 		r.Get("/api/auth/me", ah.Me)
 		r.Post("/api/auth/change-password", ah.ChangePassword)
+		r.Post("/api/auth/sign-out-everywhere", ah.SignOutEverywhere)
 
 		// Account profile + workspace member management.
 		memh := handlers.NewMembersHandler(s.cfg, s.queries)

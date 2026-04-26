@@ -32,6 +32,10 @@ export function updateProfile(name: string): Promise<AuthResponse> {
 	return apiPatch<AuthResponse>('/auth/me', { name });
 }
 
+export function signOutEverywhere(): Promise<StatusResponse> {
+	return apiPost<StatusResponse>('/auth/sign-out-everywhere');
+}
+
 export interface InviteInfo {
 	email: string;
 	role: string;
