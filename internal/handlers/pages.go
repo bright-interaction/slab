@@ -1,12 +1,19 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
+	"github.com/bright-interaction/slab/internal/agent"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
+
+func encodeWarnings(vs []agent.Violation) string {
+	b, _ := json.Marshal(vs)
+	return string(b)
+}
 
 type PageHandler struct {
 	cfg     *config.Config
@@ -184,12 +191,29 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.CanonicalUrl = *req.CanonicalURL
 	}
 
+	// Input-time SEO guardrails (mirrors Site Inspector eval engine).
+	violations := agent.ValidatePageMeta(agent.PageMetaInput{
+		Title:           params.Title,
+		MetaTitle:       params.MetaTitle,
+		MetaDescription: params.MetaDescription,
+	})
+	if agent.HasErrors(violations) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"error":      "Page meta failed guardrail validation",
+			"violations": violations,
+		})
+		return
+	}
+
 	if err := h.queries.UpdatePage(r.Context(), params); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update page")
 		return
 	}
 
 	page, _ := h.queries.GetPageByID(r.Context(), pageID)
+	if len(violations) > 0 {
+		w.Header().Set("X-Atomicsite-Warnings", encodeWarnings(violations))
+	}
 	writeJSON(w, http.StatusOK, page)
 }
 

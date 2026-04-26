@@ -11,6 +11,7 @@ import (
 
 	"github.com/bright-interaction/slab/internal/agent"
 	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/perfectfoundation"
 	"github.com/bright-interaction/slab/internal/starterkits"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -436,9 +437,9 @@ func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to seed guardrails")
 		return
 	}
-	if err := agent.SeedDefaultKnowledgebaseWith(ctx, qtx, siteID); err != nil {
-		slog.Error("seed: knowledgebase", "error", err, "site_id", siteID)
-		writeError(w, http.StatusInternalServerError, "Failed to seed knowledgebase")
+	if err := perfectfoundation.Apply(ctx, qtx, siteID); err != nil {
+		slog.Error("seed: perfect-foundation", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed reference knowledgebase")
 		return
 	}
 	if err := agent.SeedDefaultGlobalBlocksWith(ctx, qtx, siteID); err != nil {
@@ -617,9 +618,13 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 // wizard fetches it before any site exists / before login. Concrete kit
 // content lives in code.
 func (h *SiteHandler) ListStarterKits(w http.ResponseWriter, r *http.Request) {
+	includeHidden := r.URL.Query().Get("include") == "hidden"
 	kits := starterkits.Default.List()
 	out := make([]map[string]any, 0, len(kits))
 	for _, k := range kits {
+		if !includeHidden && starterkits.IsHidden(k) {
+			continue
+		}
 		targets := k.TargetSiteTypes()
 		if targets == nil {
 			targets = []string{}
@@ -629,6 +634,7 @@ func (h *SiteHandler) ListStarterKits(w http.ResponseWriter, r *http.Request) {
 			"name":              k.Name(),
 			"description":       k.Description(),
 			"target_site_types": targets,
+			"hidden":            starterkits.IsHidden(k),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

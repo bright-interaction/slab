@@ -15,19 +15,35 @@ import (
 
 // Kit is the interface every starter kit must implement.
 type Kit interface {
-	// ID is the stable identifier used by API callers (e.g. "law-firm").
+	// ID is the stable identifier used by API callers (e.g. "b2b-services").
 	ID() string
 	// Name is the human-readable name shown in the wizard.
 	Name() string
 	// Description is a short blurb shown in the wizard.
 	Description() string
 	// TargetSiteTypes lists the site types this kit is recommended for
-	// (e.g. ["b2b"] for a law firm kit). Empty means any.
+	// (e.g. ["b2b"]). Empty means any.
 	TargetSiteTypes() []string
 	// Apply runs the kit against an already-seeded site. It must be
 	// transaction-safe: callers pass a queries handle bound to an open
 	// tx (queries.WithTx(tx)) and roll back on error.
 	Apply(ctx context.Context, q *store.Queries, siteID string) error
+}
+
+// HiddenKit is implemented by kits that should not appear in the default
+// wizard list but stay registered for backwards compatibility (sites already
+// created with their ID, tests, programmatic use). The wizard's
+// /api/starter-kits endpoint filters these out unless include=hidden.
+type HiddenKit interface {
+	Hidden() bool
+}
+
+// IsHidden returns true if k implements HiddenKit and reports hidden.
+func IsHidden(k Kit) bool {
+	if hk, ok := k.(HiddenKit); ok {
+		return hk.Hidden()
+	}
+	return false
 }
 
 // Registry holds the registered kits.

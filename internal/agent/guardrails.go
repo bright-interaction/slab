@@ -76,6 +76,13 @@ func (g *GuardrailEngine) ValidateBlock(ctx context.Context, siteID string, bloc
 			Severity: "error",
 		})
 	}
+	if hasInsecureURL(unescaped) {
+		violations = append(violations, Violation{
+			Rule:     "security",
+			Message:  "Mixed content: http:// URLs found. Use https:// for all external resources to avoid mixed-content blocks.",
+			Severity: "error",
+		})
+	}
 	for _, evt := range []string{"onclick=", "onerror=", "onload=", "onmouseover=", "onfocus="} {
 		if strings.Contains(unescaped, evt) {
 			violations = append(violations, Violation{
@@ -86,6 +93,9 @@ func (g *GuardrailEngine) ValidateBlock(ctx context.Context, siteID string, bloc
 			break
 		}
 	}
+
+	// Built-in eval-engine alignment checks (Site Inspector parity).
+	violations = append(violations, validateBlockEvalChecks(blockType, dataJSON, unescaped)...)
 
 	// Best practice warnings
 	if strings.Contains(unescaped, "!important") {
@@ -269,6 +279,266 @@ func (g *GuardrailEngine) ShouldNoindex(ctx context.Context, siteID string, page
 
 	// Multi-level page not in any silo = orphan
 	return true
+}
+
+// validateBlockEvalChecks enforces the input-time guardrails that mirror the
+// post-build Site Inspector eval engine — alt text, image dimensions,
+// descriptive anchor text, button/link labels, no empty headings. Refusing
+// bad input here prevents grades from dropping after build.
+func validateBlockEvalChecks(blockType, dataJSON, unescaped string) []Violation {
+	var out []Violation
+
+	// Image-type blocks: require alt + dimensions.
+	if blockType == "image" {
+		var d struct {
+			ImageID string `json:"image_id"`
+			Alt     string `json:"alt"`
+			Width   any    `json:"width"`
+			Height  any    `json:"height"`
+		}
+		_ = json.Unmarshal([]byte(dataJSON), &d)
+		if strings.TrimSpace(d.Alt) == "" {
+			out = append(out, Violation{
+				Rule:     "alt_text_required",
+				Message:  "Image blocks must have descriptive alt text. Empty or missing alt fails accessibility + SEO checks.",
+				Severity: "error",
+			})
+		} else if isLowQualityAlt(d.Alt) {
+			out = append(out, Violation{
+				Rule:     "descriptive_alt",
+				Message:  fmt.Sprintf("Alt text %q is generic. Describe what's in the image (subject, action, context), not 'image' / 'photo' / 'picture'.", d.Alt),
+				Severity: "warning",
+			})
+		}
+		if !hasNonZeroNumber(d.Width) || !hasNonZeroNumber(d.Height) {
+			out = append(out, Violation{
+				Rule:     "image_dimensions_required",
+				Message:  "Image blocks must include width and height. Missing dimensions cause layout shift (CLS) and fail the perf check.",
+				Severity: "error",
+			})
+		}
+	}
+
+	// CTA / button blocks: require non-generic label.
+	if blockType == "cta" || blockType == "button" {
+		var d struct {
+			Label        string `json:"label"`
+			PrimaryLabel string `json:"primary_label"`
+			CtaLabel     string `json:"cta_label"`
+		}
+		_ = json.Unmarshal([]byte(dataJSON), &d)
+		label := firstNonEmpty(d.Label, d.PrimaryLabel, d.CtaLabel)
+		if strings.TrimSpace(label) == "" {
+			out = append(out, Violation{
+				Rule:     "button_label_required",
+				Message:  "CTA / button blocks need a non-empty label. Empty buttons fail the a11y 'Buttons Have Labels' check.",
+				Severity: "error",
+			})
+		} else if isLowQualityAnchor(label) {
+			out = append(out, Violation{
+				Rule:     "descriptive_anchor",
+				Message:  fmt.Sprintf("Button label %q is generic. Describe the action (e.g. 'Book a discovery call', 'View pricing').", label),
+				Severity: "warning",
+			})
+		}
+	}
+
+	// Hero / text blocks: forbid empty headings.
+	switch blockType {
+	case "hero", "text", "feature_grid":
+		var d struct {
+			Headline   string `json:"headline"`
+			Heading    string `json:"heading"`
+			Title      string `json:"title"`
+			Subheading string `json:"subheading"`
+		}
+		_ = json.Unmarshal([]byte(dataJSON), &d)
+		// If the block clearly carries a heading slot but it's whitespace-only, fail.
+		if hasEmptyHeading(blockType, dataJSON, d.Headline, d.Heading, d.Title) {
+			out = append(out, Violation{
+				Rule:     "empty_heading",
+				Message:  "Heading is whitespace-only. Either provide non-empty heading text or omit the heading field entirely.",
+				Severity: "error",
+			})
+		}
+	}
+
+	// Generic anchor-text quality check on any block carrying links.
+	for _, generic := range genericAnchors {
+		// Match common JSON shapes: "label":"click here", "text":"read more"
+		needle := `:"` + generic + `"`
+		if strings.Contains(strings.ToLower(unescaped), needle) {
+			out = append(out, Violation{
+				Rule:     "descriptive_anchor",
+				Message:  fmt.Sprintf("Generic anchor text %q found. Replace with descriptive text that explains the destination.", generic),
+				Severity: "warning",
+			})
+			break
+		}
+	}
+
+	return out
+}
+
+// PageMetaInput is the subset of page fields the input-time meta guardrails
+// validate. Pass a struct value populated from the create/update request.
+type PageMetaInput struct {
+	Title           string
+	MetaTitle       string
+	MetaDescription string
+}
+
+// ValidatePageMeta enforces title-length and description-length rules at the
+// page CRUD boundary. Mirrors the SEO eval engine's "Title Length 30-60" and
+// "Description Length 120-160" checks. Empty values are allowed (the SEO
+// engine has separate "Has Title" / "Has Meta Description" checks); this
+// function only catches off-range values.
+func ValidatePageMeta(in PageMetaInput) []Violation {
+	var out []Violation
+
+	// Effective title: meta_title overrides the page title when set.
+	title := strings.TrimSpace(in.MetaTitle)
+	if title == "" {
+		title = strings.TrimSpace(in.Title)
+	}
+	if title != "" {
+		n := utf8RuneCount(title)
+		if n < 30 {
+			out = append(out, Violation{
+				Rule:     "title_length",
+				Message:  fmt.Sprintf("Title is %d characters; aim for 30 to 60. Format suggestion: 'Specific value | Brand'.", n),
+				Severity: "warning",
+			})
+		} else if n > 60 {
+			out = append(out, Violation{
+				Rule:     "title_length",
+				Message:  fmt.Sprintf("Title is %d characters; max 60. Search engines truncate longer titles in SERPs.", n),
+				Severity: "error",
+			})
+		}
+	}
+
+	desc := strings.TrimSpace(in.MetaDescription)
+	if desc != "" {
+		n := utf8RuneCount(desc)
+		if n < 120 {
+			out = append(out, Violation{
+				Rule:     "description_length",
+				Message:  fmt.Sprintf("Meta description is %d characters; aim for 120 to 160. Include a verb / call to action.", n),
+				Severity: "warning",
+			})
+		} else if n > 160 {
+			out = append(out, Violation{
+				Rule:     "description_length",
+				Message:  fmt.Sprintf("Meta description is %d characters; max 160. Search engines truncate longer descriptions.", n),
+				Severity: "error",
+			})
+		}
+	}
+
+	return out
+}
+
+var genericAnchors = []string{
+	"click here",
+	"read more",
+	"learn more",
+	"this link",
+	"here",
+	"more",
+}
+
+func isLowQualityAlt(s string) bool {
+	t := strings.ToLower(strings.TrimSpace(s))
+	switch t {
+	case "image", "photo", "picture", "img", "icon", "logo", "graphic":
+		return true
+	}
+	return false
+}
+
+func isLowQualityAnchor(s string) bool {
+	t := strings.ToLower(strings.TrimSpace(s))
+	for _, g := range genericAnchors {
+		if t == g {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNonZeroNumber(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return false
+	case float64:
+		return x > 0
+	case int:
+		return x > 0
+	case int64:
+		return x > 0
+	case string:
+		return strings.TrimSpace(x) != "" && strings.TrimSpace(x) != "0"
+	}
+	return false
+}
+
+func hasInsecureURL(s string) bool {
+	// Match http:// not preceded by https. Lowercase the haystack so we catch
+	// "HTTP://" too. Skip http://localhost (dev) and http://127.0.0.1.
+	low := strings.ToLower(s)
+	idx := 0
+	for {
+		i := strings.Index(low[idx:], "http://")
+		if i < 0 {
+			return false
+		}
+		pos := idx + i
+		// Skip if it's part of "https://" — should never match since we look
+		// for "http://" exactly, but be defensive.
+		if pos >= 1 && low[pos-1] == 's' {
+			idx = pos + 7
+			continue
+		}
+		// Allow loopback for dev / preview links.
+		rest := low[pos+7:]
+		if strings.HasPrefix(rest, "localhost") || strings.HasPrefix(rest, "127.0.0.1") {
+			idx = pos + 7
+			continue
+		}
+		return true
+	}
+}
+
+func hasEmptyHeading(blockType, dataJSON, headline, heading, title string) bool {
+	// Only fail if the block actually carries a heading-shaped key (so we
+	// don't false-positive on text-only blocks that legitimately have no
+	// heading slot). Detect by JSON key presence.
+	hasKey := strings.Contains(dataJSON, `"headline"`) ||
+		strings.Contains(dataJSON, `"heading"`) ||
+		strings.Contains(dataJSON, `"title"`)
+	if !hasKey {
+		return false
+	}
+	val := firstNonEmpty(headline, heading, title)
+	return strings.TrimSpace(val) == ""
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func utf8RuneCount(s string) int {
+	n := 0
+	for range s {
+		n++
+	}
+	return n
 }
 
 // ValidateCapability checks if an agent has the required capability.
