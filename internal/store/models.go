@@ -241,6 +241,11 @@ type Site struct {
 	Status            string `json:"status"`
 	PrimaryColor      string `json:"primary_color"`
 	SecondaryColor    string `json:"secondary_color"`
+	SurfaceColor      string `json:"surface_color"`
+	BorderColor       string `json:"border_color"`
+	MutedColor        string `json:"muted_color"`
+	AccentColor       string `json:"accent_color"`
+	OnPrimaryColor    string `json:"on_primary_color"`
 	BgColor           string `json:"bg_color"`
 	TextColor         string `json:"text_color"`
 	FontHeading       string `json:"font_heading"`

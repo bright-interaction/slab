@@ -20,7 +20,7 @@ test.describe('Branding & WCAG matrix', () => {
 		await expect(loggedInPage.getByText(/contrast matrix/i)).toBeVisible();
 
 		// ColorSlot exposes each hex as an input with aria-label "<Label> hex value".
-		await loggedInPage.getByLabel('Primary hex value').fill('#1d4ed8');
+		await loggedInPage.getByLabel('Primary hex value', { exact: true }).fill('#1d4ed8');
 
 		// Save.
 		const saveBtn = loggedInPage.getByRole('button', { name: 'Save', exact: true });

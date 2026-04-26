@@ -27,6 +27,12 @@ export interface UpdateSitePatch {
 	secondary_color?: string;
 	bg_color?: string;
 	text_color?: string;
+	// Phase 12.9 colour slots (surface, border, muted, accent, on_primary).
+	surface_color?: string;
+	border_color?: string;
+	muted_color?: string;
+	accent_color?: string;
+	on_primary_color?: string;
 	font_heading?: string;
 	font_body?: string;
 	meta_title?: string;
@@ -69,6 +75,18 @@ export type SiteType =
 	| 'one-pager'
 	| 'ecommerce';
 export type StructureType = 'one-pager' | 'soft-silo' | 'hard-silo';
+
+// Update site patch type. Phase 12.9 added 5 colour slots (surface, border,
+// muted, accent, on_primary) to the site row; the Branding page exposes
+// them all so the patch type covers them too.
+
+export interface UpdateSitePatchExtra {
+	surface_color?: string;
+	border_color?: string;
+	muted_color?: string;
+	accent_color?: string;
+	on_primary_color?: string;
+}
 
 export interface SeedSiteInfo {
 	name: string;

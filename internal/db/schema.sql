@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS sites (
     -- Branding
     primary_color    TEXT NOT NULL DEFAULT '#D4AF37',
     secondary_color  TEXT NOT NULL DEFAULT '#935FA7',
+    -- Phase 12.9: extra color slots so the schema covers what the
+    -- preview already implies. Surface = card panels (lighter than bg).
+    -- Border = hairlines around cards / dividers. Muted = de-emphasised
+    -- text (footer, captions). Accent = link / focus ring colour
+    -- distinct from primary CTA. OnPrimary = text on primary buttons
+    -- (white for dark primaries, black for light ones).
+    surface_color    TEXT NOT NULL DEFAULT '#FFFFFF',
+    border_color     TEXT NOT NULL DEFAULT '#E5E7EB',
+    muted_color      TEXT NOT NULL DEFAULT '#6B7280',
+    accent_color     TEXT NOT NULL DEFAULT '',
+    on_primary_color TEXT NOT NULL DEFAULT '#FFFFFF',
     bg_color         TEXT NOT NULL DEFAULT '#FFFFFF',
     text_color       TEXT NOT NULL DEFAULT '#1A1A1A',
     font_heading     TEXT NOT NULL DEFAULT 'Inter',

@@ -54,6 +54,14 @@ type Branding struct {
 	SecondaryColor string `json:"secondary_color"`
 	BgColor        string `json:"bg_color"`
 	TextColor      string `json:"text_color"`
+	// Phase 12.9: extra colour slots so the agent has the same palette
+	// the human admin edits in the Branding UI. accent_color = "" means
+	// "fall back to primary_color" (preserved by the builder).
+	SurfaceColor   string `json:"surface_color"`
+	BorderColor    string `json:"border_color"`
+	MutedColor     string `json:"muted_color"`
+	AccentColor    string `json:"accent_color"`
+	OnPrimaryColor string `json:"on_primary_color"`
 	FontHeading    string `json:"font_heading"`
 	FontBody       string `json:"font_body"`
 }
@@ -304,6 +312,11 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 				SecondaryColor: site.SecondaryColor,
 				BgColor:        site.BgColor,
 				TextColor:      site.TextColor,
+				SurfaceColor:   site.SurfaceColor,
+				BorderColor:    site.BorderColor,
+				MutedColor:     site.MutedColor,
+				AccentColor:    site.AccentColor,
+				OnPrimaryColor: site.OnPrimaryColor,
 				FontHeading:    site.FontHeading,
 				FontBody:       site.FontBody,
 			},

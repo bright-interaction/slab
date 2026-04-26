@@ -55,7 +55,7 @@ func (q *Queries) DeleteSite(ctx context.Context, id string) error {
 }
 
 const getSiteByID = `-- name: GetSiteByID :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE id = ?
+SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE id = ?
 `
 
 func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
@@ -69,6 +69,11 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 		&i.Status,
 		&i.PrimaryColor,
 		&i.SecondaryColor,
+		&i.SurfaceColor,
+		&i.BorderColor,
+		&i.MutedColor,
+		&i.AccentColor,
+		&i.OnPrimaryColor,
 		&i.BgColor,
 		&i.TextColor,
 		&i.FontHeading,
@@ -93,7 +98,7 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 }
 
 const getSiteBySlug = `-- name: GetSiteBySlug :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE slug = ?
+SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE slug = ?
 `
 
 func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) {
@@ -107,6 +112,11 @@ func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) 
 		&i.Status,
 		&i.PrimaryColor,
 		&i.SecondaryColor,
+		&i.SurfaceColor,
+		&i.BorderColor,
+		&i.MutedColor,
+		&i.AccentColor,
+		&i.OnPrimaryColor,
 		&i.BgColor,
 		&i.TextColor,
 		&i.FontHeading,
@@ -131,7 +141,7 @@ func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) 
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, name, slug, domain, status, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites ORDER BY updated_at DESC
+SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites ORDER BY updated_at DESC
 `
 
 func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
@@ -151,6 +161,11 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.Status,
 			&i.PrimaryColor,
 			&i.SecondaryColor,
+			&i.SurfaceColor,
+			&i.BorderColor,
+			&i.MutedColor,
+			&i.AccentColor,
+			&i.OnPrimaryColor,
 			&i.BgColor,
 			&i.TextColor,
 			&i.FontHeading,
@@ -194,6 +209,11 @@ UPDATE sites SET
     secondary_color = ?,
     bg_color = ?,
     text_color = ?,
+    surface_color = ?,
+    border_color = ?,
+    muted_color = ?,
+    accent_color = ?,
+    on_primary_color = ?,
     font_heading = ?,
     font_body = ?,
     meta_title = ?,
@@ -218,6 +238,11 @@ type UpdateSiteParams struct {
 	SecondaryColor    string `json:"secondary_color"`
 	BgColor           string `json:"bg_color"`
 	TextColor         string `json:"text_color"`
+	SurfaceColor      string `json:"surface_color"`
+	BorderColor       string `json:"border_color"`
+	MutedColor        string `json:"muted_color"`
+	AccentColor       string `json:"accent_color"`
+	OnPrimaryColor    string `json:"on_primary_color"`
 	FontHeading       string `json:"font_heading"`
 	FontBody          string `json:"font_body"`
 	MetaTitle         string `json:"meta_title"`
@@ -242,6 +267,11 @@ func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) error {
 		arg.SecondaryColor,
 		arg.BgColor,
 		arg.TextColor,
+		arg.SurfaceColor,
+		arg.BorderColor,
+		arg.MutedColor,
+		arg.AccentColor,
+		arg.OnPrimaryColor,
 		arg.FontHeading,
 		arg.FontBody,
 		arg.MetaTitle,
