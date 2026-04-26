@@ -18,6 +18,11 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
+	import CategoryDonut from '$lib/components/evaluations/CategoryDonut.svelte';
+	import ScoreHistoryChart, {
+		type BuildHistoryEntry
+	} from '$lib/components/evaluations/ScoreHistoryChart.svelte';
+	import { type Grade as SharedGrade, asGrade as asGradeShared, compositeGrade as sharedComposite, gradeTone } from '$lib/evaluations/grade';
 	import type { Site, Evaluation, DeployTarget, DeployResult } from '$lib/api/types';
 	import { Copy as CopyIcon, ExternalLink } from 'lucide-svelte';
 
@@ -38,6 +43,12 @@
 	let recentLoading = $state(true);
 	let recentRows = $state<RecentBuildRow[]>([]);
 	let recentError = $state<string | null>(null);
+	// All evaluation rows for this site, grouped by build_id. Drives both the
+	// "Latest scores" donut row and the score history chart at the top of
+	// this page (the merged Evals tab content).
+	let allEvals = $state<Evaluation[]>([]);
+
+	const CATEGORIES = ['security', 'seo', 'performance', 'accessibility', 'privacy'] as const;
 
 	let deployTargets = $state<DeployTarget[]>([]);
 	let deployTargetsLoading = $state(true);
@@ -68,6 +79,7 @@
 		created_at: string;
 		composite: Grade | null;
 		categoryCount: number;
+		evaluations: Evaluation[];
 		targetID?: string;
 		deployURL?: string;
 		deployedAt?: string;
@@ -101,7 +113,8 @@
 				buildID,
 				created_at: newest.created_at,
 				composite: compositeGrade(group),
-				categoryCount: group.length
+				categoryCount: group.length,
+				evaluations: group
 			});
 		}
 		rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -113,6 +126,7 @@
 		recentError = null;
 		try {
 			const evals = await evaluationsApi.listBySite(siteID);
+			allEvals = evals;
 			const rows = groupRecentBuilds(evals);
 			// Best-effort augmentation: if the build status response carries deploy
 			// info (target_id/deploy_url/deployed_at), surface it on the row.
@@ -197,6 +211,68 @@
 		if (hr < 24) return `${hr}h ago`;
 		const days = Math.floor(hr / 24);
 		return `${days}d ago`;
+	}
+
+	// Latest build's evaluations grouped, used by the donut row.
+	const latestBuildEvals = $derived.by<Evaluation[]>(() => {
+		if (allEvals.length === 0) return [];
+		const map = new Map<string, Evaluation[]>();
+		for (const e of allEvals) {
+			if (!e.build_id) continue;
+			const list = map.get(e.build_id) ?? [];
+			list.push(e);
+			map.set(e.build_id, list);
+		}
+		let newestBid = '';
+		let newestTs = 0;
+		for (const [bid, group] of map.entries()) {
+			const ts = Math.max(...group.map((e) => new Date(e.created_at).getTime()));
+			if (ts > newestTs) {
+				newestTs = ts;
+				newestBid = bid;
+			}
+		}
+		return map.get(newestBid) ?? [];
+	});
+
+	const latestComposite = $derived(sharedComposite(latestBuildEvals));
+
+	function evalForCategory(evals: Evaluation[], cat: string): Evaluation | null {
+		return evals.find((e) => e.category === cat) ?? null;
+	}
+
+	// Build history (last 10) for the score history chart.
+	const chartData = $derived.by<BuildHistoryEntry[]>(() => {
+		const map = new Map<string, Evaluation[]>();
+		for (const e of allEvals) {
+			if (!e.build_id) continue;
+			const list = map.get(e.build_id) ?? [];
+			list.push(e);
+			map.set(e.build_id, list);
+		}
+		const out: BuildHistoryEntry[] = [];
+		for (const [bid, group] of map.entries()) {
+			const newest = group.reduce((acc, cur) =>
+				new Date(cur.created_at).getTime() > new Date(acc.created_at).getTime() ? cur : acc
+			);
+			out.push({ build_id: bid, created_at: newest.created_at, evaluations: group });
+		}
+		out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+		return out.slice(0, 10);
+	});
+
+	function categoryGradeBadgeVariant(g: string): 'success' | 'warning' | 'danger' | 'default' {
+		const grade = asGradeShared(g);
+		if (!grade) return 'default';
+		const tone = gradeTone(grade);
+		if (tone === 'success' || tone === 'success-soft') return 'success';
+		if (tone === 'warning') return 'warning';
+		if (tone === 'warning-strong' || tone === 'danger') return 'danger';
+		return 'default';
+	}
+
+	function categoryGrade(evals: Evaluation[], cat: string): string {
+		return evals.find((e) => e.category === cat)?.grade ?? '-';
 	}
 
 	const deployTargetOptions = $derived(
@@ -364,6 +440,73 @@
 		</div>
 	</Card>
 
+	<!-- Latest scores: 5-up donut row from the most recent build's evaluations. -->
+	<section class="mt-6">
+		<Card padding="md">
+			<div class="flex items-baseline justify-between">
+				<div>
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Latest scores
+					</h2>
+					<p class="mt-1 text-[12px] text-text-muted">
+						Security, SEO, performance, accessibility, and privacy from the most recent build.
+					</p>
+				</div>
+				{#if latestComposite}
+					<div class="flex items-center gap-2 text-right">
+						<span class="text-[11px] text-text-muted">Composite</span>
+						<GradeBadge grade={latestComposite} size="sm" />
+					</div>
+				{/if}
+			</div>
+
+			<div class="mt-5">
+				{#if recentLoading}
+					<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+						{#each CATEGORIES as cat (cat)}
+							<div class="flex flex-col items-center gap-2">
+								<Skeleton width="8rem" height="8rem" rounded="full" />
+								<Skeleton width="3rem" height="0.7rem" />
+							</div>
+						{/each}
+					</div>
+				{:else if latestBuildEvals.length === 0}
+					<p class="py-6 text-center text-[12px] text-text-muted">
+						No scores yet. Trigger a build to score this site.
+					</p>
+				{:else}
+					<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+						{#each CATEGORIES as cat (cat)}
+							<CategoryDonut
+								category={cat}
+								evaluation={evalForCategory(latestBuildEvals, cat)}
+							/>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</Card>
+	</section>
+
+	<!-- Score history: trend chart across the last 10 builds. -->
+	{#if chartData.length > 0}
+		<section class="mt-4">
+			<Card padding="md">
+				<div class="flex items-baseline justify-between">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Score history
+					</h2>
+					<span class="text-[11px] text-text-muted">
+						{chartData.length} build{chartData.length === 1 ? '' : 's'}
+					</span>
+				</div>
+				<div class="mt-3">
+					<ScoreHistoryChart builds={chartData} height={180} />
+				</div>
+			</Card>
+		</section>
+	{/if}
+
 	{#if buildState}
 		<section class="mt-6">
 			<Card padding="md">
@@ -506,12 +649,9 @@
 				Build history
 			</h2>
 			{#if recentRows.length > 0}
-				<a
-					href={`/sites/${siteID}/evaluations`}
-					class="text-[12px] text-text-muted hover:text-text-primary transition-colors"
-				>
-					View all
-				</a>
+				<span class="text-[11px] text-text-muted">
+					last {recentRows.length} build{recentRows.length === 1 ? '' : 's'}
+				</span>
 			{/if}
 		</div>
 
@@ -545,7 +685,7 @@
 				<div class="space-y-2">
 					{#each recentRows as row (row.buildID)}
 						<Card padding="sm" hoverable>
-							<div class="flex items-center gap-4">
+							<div class="flex flex-wrap items-center gap-4">
 								{#if row.composite}
 									<GradeBadge grade={row.composite} size="sm" />
 								{:else}
@@ -555,12 +695,12 @@
 										?
 									</span>
 								{/if}
-								<div class="flex-1 min-w-0">
+								<div class="min-w-0 flex-1">
 									<p class="text-[13px] font-medium text-text-primary">
 										{formatDate(row.created_at)}
 									</p>
-									<p class="text-[11px] text-text-muted">
-										{row.categoryCount} categor{row.categoryCount === 1 ? 'y' : 'ies'} scored
+									<p class="font-mono text-[11px] text-text-muted truncate">
+										{row.buildID}
 									</p>
 									{#if row.deployURL && row.deployedAt}
 										<div class="mt-1 flex items-center gap-2">
@@ -578,6 +718,15 @@
 											</span>
 										</div>
 									{/if}
+								</div>
+								<div class="flex flex-wrap gap-1.5">
+									{#each CATEGORIES as cat (cat)}
+										{@const g = categoryGrade(row.evaluations, cat)}
+										<Badge variant={categoryGradeBadgeVariant(g)}>
+											<span class="capitalize">{cat.slice(0, 3)}</span>
+											<span class="ml-1 font-mono">{g}</span>
+										</Badge>
+									{/each}
 								</div>
 								<a
 									href={`/sites/${siteID}/evaluations/${row.buildID}`}

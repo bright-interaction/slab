@@ -8,9 +8,6 @@
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import CategoryDonut from '$lib/components/evaluations/CategoryDonut.svelte';
 	import CategoryGradeCard from '$lib/components/evaluations/CategoryGradeCard.svelte';
-	import ScoreHistoryChart, {
-		type BuildHistoryEntry
-	} from '$lib/components/evaluations/ScoreHistoryChart.svelte';
 	import type { Site, Evaluation } from '$lib/api/types';
 	import { compositeGrade } from '$lib/evaluations/grade';
 
@@ -23,22 +20,15 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let buildEvals = $state<Evaluation[]>([]);
-	let allEvals = $state<Evaluation[]>([]);
 
 	async function load(id: string) {
 		loading = true;
 		loadError = null;
 		try {
-			const [forBuild, forSite] = await Promise.all([
-				evaluationsApi.listByBuild(siteID, id),
-				evaluationsApi.listBySite(siteID).catch(() => [] as Evaluation[])
-			]);
-			buildEvals = forBuild;
-			allEvals = forSite;
+			buildEvals = await evaluationsApi.listByBuild(siteID, id);
 		} catch (err) {
 			loadError = err instanceof Error ? err.message : 'Failed to load evaluation';
 			buildEvals = [];
-			allEvals = [];
 		} finally {
 			loading = false;
 		}
@@ -59,25 +49,6 @@
 		return map;
 	});
 
-	const chartData = $derived.by<BuildHistoryEntry[]>(() => {
-		const map = new Map<string, Evaluation[]>();
-		for (const e of allEvals) {
-			if (!e.build_id) continue;
-			const list = map.get(e.build_id) ?? [];
-			list.push(e);
-			map.set(e.build_id, list);
-		}
-		const out: BuildHistoryEntry[] = [];
-		for (const [bid, group] of map.entries()) {
-			const newest = group.reduce((acc, cur) =>
-				new Date(cur.created_at).getTime() > new Date(acc.created_at).getTime() ? cur : acc
-			);
-			out.push({ build_id: bid, created_at: newest.created_at, evaluations: group });
-		}
-		out.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-		return out.slice(0, 10);
-	});
-
 	function formatDate(ts: string): string {
 		if (!ts) return '';
 		const d = new Date(ts);
@@ -96,10 +67,10 @@
 	<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<a
-				href={`/sites/${siteID}/evaluations`}
+				href={`/sites/${siteID}/build`}
 				class="text-[12px] text-text-muted hover:text-text-primary transition-colors"
 			>
-				&larr; All evaluations
+				&larr; All builds
 			</a>
 			<h1 class="mt-2 font-display text-3xl font-extralight tracking-tight text-text-primary">
 				Build evaluation
@@ -177,17 +148,6 @@
 					{siteID}
 				/>
 			{/each}
-		</section>
-
-		<section class="mt-8">
-			<Card padding="md">
-				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-					Score history (context)
-				</h2>
-				<div class="mt-3">
-					<ScoreHistoryChart builds={chartData} height={180} />
-				</div>
-			</Card>
 		</section>
 	{/if}
 </div>

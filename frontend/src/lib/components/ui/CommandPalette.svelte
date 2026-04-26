@@ -212,7 +212,6 @@
 			{ label: 'Guardrails', href: `/sites/${id}/guardrails` },
 			{ label: 'Media', href: `/sites/${id}/media` },
 			{ label: 'Build', href: `/sites/${id}/build` },
-			{ label: 'Evaluations', href: `/sites/${id}/evaluations` },
 			{ label: 'Settings', href: `/sites/${id}/settings` },
 			{ label: 'Agent keys', href: `/sites/${id}/agent-keys` }
 		];
