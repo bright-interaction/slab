@@ -416,3 +416,30 @@ CREATE TABLE IF NOT EXISTS visit_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_visit_sessions_site_seen ON visit_sessions(site_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_visit_sessions_identified ON visit_sessions(site_id, identified_at) WHERE identified_at != '';
+
+-- Client-side engagement beacon (Phase 12.6). The public site embeds a tiny
+-- inline JS beacon (see internal/builder/layouts.go). On visibilitychange
+-- to "hidden" or pagehide it sendBeacon's a payload to /t/engagement with
+-- screen + viewport + prefers-color-scheme + time-on-page + max-scroll
+-- depth. Consent-gated: only fires after CookieProof emits consent:init
+-- with analytics=true. Server log tail can't see any of these so the
+-- beacon is the only path. Fingerprint is computed server-side at the
+-- handler from IP+UA+Accept-Language so it correlates with visit_events.
+CREATE TABLE IF NOT EXISTS visit_engagement (
+    id                      TEXT PRIMARY KEY,
+    site_id                 TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    fingerprint             TEXT NOT NULL,
+    path                    TEXT NOT NULL,
+    ts                      TEXT NOT NULL DEFAULT (datetime('now')),
+    screen_w                INTEGER NOT NULL DEFAULT 0,
+    screen_h                INTEGER NOT NULL DEFAULT 0,
+    viewport_w              INTEGER NOT NULL DEFAULT 0,
+    viewport_h              INTEGER NOT NULL DEFAULT 0,
+    prefers_dark            INTEGER NOT NULL DEFAULT 0,
+    prefers_reduced_motion  INTEGER NOT NULL DEFAULT 0,
+    time_on_page_ms         INTEGER NOT NULL DEFAULT 0,
+    max_scroll_pct          INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_visit_engagement_site_ts ON visit_engagement(site_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_visit_engagement_path ON visit_engagement(site_id, path);
+CREATE INDEX IF NOT EXISTS idx_visit_engagement_fingerprint ON visit_engagement(site_id, fingerprint);

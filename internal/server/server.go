@@ -78,6 +78,7 @@ func (s *Server) Router() http.Handler {
 		r.Use(authmw.FingerprintMiddleware(s.cfg))
 		r.Post("/t/consent", trackH.Consent)
 		r.Post("/t/pageview", trackH.PageView)
+		r.Post("/t/engagement", trackH.Engagement)
 	})
 
 	// Auth (public)

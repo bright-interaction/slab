@@ -308,6 +308,22 @@ type User struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
+type VisitEngagement struct {
+	ID                   string `json:"id"`
+	SiteID               string `json:"site_id"`
+	Fingerprint          string `json:"fingerprint"`
+	Path                 string `json:"path"`
+	Ts                   string `json:"ts"`
+	ScreenW              int64  `json:"screen_w"`
+	ScreenH              int64  `json:"screen_h"`
+	ViewportW            int64  `json:"viewport_w"`
+	ViewportH            int64  `json:"viewport_h"`
+	PrefersDark          int64  `json:"prefers_dark"`
+	PrefersReducedMotion int64  `json:"prefers_reduced_motion"`
+	TimeOnPageMs         int64  `json:"time_on_page_ms"`
+	MaxScrollPct         int64  `json:"max_scroll_pct"`
+}
+
 type VisitEvent struct {
 	ID          string `json:"id"`
 	SiteID      string `json:"site_id"`

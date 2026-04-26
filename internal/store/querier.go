@@ -9,6 +9,12 @@ import (
 )
 
 type Querier interface {
+	// Per-path engagement so the dashboard can show "users spend 2m12s on
+	// /pricing but bounce at /blog/x in 8s". Capped at the busiest 10 paths.
+	AvgEngagementByPath(ctx context.Context, arg AvgEngagementByPathParams) ([]AvgEngagementByPathRow, error)
+	// Aggregate metrics across all engagement beacons in a window. NULL-safe
+	// via COALESCE so an empty window returns zeros instead of NaN.
+	AvgEngagementSince(ctx context.Context, arg AvgEngagementSinceParams) (AvgEngagementSinceRow, error)
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	// For every identified session, return its full path history ordered by ts.
 	// The handler groups by session_id / fingerprint to assemble the journey.
@@ -140,6 +146,7 @@ type Querier interface {
 	PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error)
 	// Pageviews per UTC hour for the last day window. Used when range = 1d.
 	PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error)
+	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
@@ -151,6 +158,9 @@ type Querier interface {
 	TopStatuses(ctx context.Context, arg TopStatusesParams) ([]TopStatusesRow, error)
 	TopUTMCampaigns(ctx context.Context, arg TopUTMCampaignsParams) ([]TopUTMCampaignsRow, error)
 	TopUTMSources(ctx context.Context, arg TopUTMSourcesParams) ([]TopUTMSourcesRow, error)
+	// Group by 100px-bucketed viewport width so we don't get a long tail of
+	// one-off sizes. ~16 buckets cover the realistic phone-to-4k range.
+	TopViewports(ctx context.Context, arg TopViewportsParams) ([]TopViewportsRow, error)
 	UpdateAgentKeyLastUsed(ctx context.Context, id string) error
 	UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScriptParams) error
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error

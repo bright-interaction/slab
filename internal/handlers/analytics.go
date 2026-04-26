@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -88,6 +89,26 @@ type analyticsOverview struct {
 	TopUTMCampaigns []nameCount  `json:"top_utm_campaigns"`
 	TimeSeries      []timePoint  `json:"time_series"`
 	BucketUnit      string       `json:"bucket_unit"` // "day" | "hour"
+
+	// Engagement (Phase 12.6, JS beacon-derived)
+	Engagement engagementSummary `json:"engagement"`
+}
+
+type engagementSummary struct {
+	Samples           int64           `json:"samples"`
+	AvgTimeOnPageMs   int64           `json:"avg_time_on_page_ms"`
+	AvgScrollPct      int64           `json:"avg_scroll_pct"`
+	DarkPct           int64           `json:"dark_pct"`
+	ReducedMotionPct  int64           `json:"reduced_motion_pct"`
+	ByPath            []engagementRow `json:"by_path"`
+	ViewportBuckets   []nameCount     `json:"viewport_buckets"`
+}
+
+type engagementRow struct {
+	Path            string `json:"path"`
+	Samples         int64  `json:"samples"`
+	AvgTimeOnPageMs int64  `json:"avg_time_on_page_ms"`
+	AvgScrollPct    int64  `json:"avg_scroll_pct"`
 }
 
 // AnalyticsOverview handles GET /api/sites/{siteID}/analytics/overview?since=7d.
@@ -197,6 +218,34 @@ func (h *AnalyticsHandler) AnalyticsOverview(w http.ResponseWriter, r *http.Requ
 			if s.LastSeenAt >= cutoff {
 				out.IdentifiedCount++
 			}
+		}
+	}
+
+	// Engagement summary (JS beacon data).
+	out.Engagement = engagementSummary{ByPath: []engagementRow{}, ViewportBuckets: []nameCount{}}
+	if v, err := h.queries.AvgEngagementSince(ctx, store.AvgEngagementSinceParams{SiteID: siteID, Ts: cutoff}); err == nil {
+		out.Engagement.Samples = v.Samples
+		out.Engagement.AvgTimeOnPageMs = toInt64(v.AvgTimeOnPageMs)
+		out.Engagement.AvgScrollPct = toInt64(v.AvgScrollPct)
+		out.Engagement.DarkPct = toInt64(v.DarkPct)
+		out.Engagement.ReducedMotionPct = toInt64(v.ReducedMotionPct)
+	}
+	if rows, err := h.queries.AvgEngagementByPath(ctx, store.AvgEngagementByPathParams{SiteID: siteID, Ts: cutoff, Limit: topN}); err == nil {
+		for _, r := range rows {
+			out.Engagement.ByPath = append(out.Engagement.ByPath, engagementRow{
+				Path:            r.Path,
+				Samples:         r.Samples,
+				AvgTimeOnPageMs: toInt64(r.AvgTimeOnPageMs),
+				AvgScrollPct:    toInt64(r.AvgScrollPct),
+			})
+		}
+	}
+	if rows, err := h.queries.TopViewports(ctx, store.TopViewportsParams{SiteID: siteID, Ts: cutoff, Limit: topN}); err == nil {
+		for _, r := range rows {
+			out.Engagement.ViewportBuckets = append(out.Engagement.ViewportBuckets, nameCount{
+				Name:  fmt.Sprintf("%dpx", r.Bucket),
+				Count: r.Count,
+			})
 		}
 	}
 
@@ -311,18 +360,55 @@ func (h *AnalyticsHandler) AnalyticsTrackedFields(w http.ResponseWriter, r *http
 		{"field": "lang", "stored": "primary tag (e.g. sv-SE)", "source": "Accept-Language header", "purpose": "Visitor language signal"},
 		{"field": "utm_source/medium/campaign", "stored": "raw param value", "source": "Query string of request", "purpose": "Campaign attribution"},
 		{"field": "ts", "stored": "ISO-8601 UTC", "source": "$time_iso8601 from nginx", "purpose": "Time-bucketed charts"},
+		{"field": "screen size", "stored": "two integers (px)", "source": "Inline beacon (visibilitychange / pagehide)", "purpose": "Display-density planning, responsive design tuning"},
+		{"field": "viewport size", "stored": "two integers (px)", "source": "Inline beacon", "purpose": "Top viewport widths chart"},
+		{"field": "prefers_dark", "stored": "0 or 1", "source": "matchMedia('(prefers-color-scheme: dark)')", "purpose": "Dark-mode share for design decisions"},
+		{"field": "prefers_reduced_motion", "stored": "0 or 1", "source": "matchMedia('(prefers-reduced-motion)')", "purpose": "Accessibility preference share"},
+		{"field": "time_on_page_ms", "stored": "integer ms (capped 6h)", "source": "Inline beacon: performance.now() delta on hide", "purpose": "Avg time on page, by-page engagement"},
+		{"field": "max_scroll_pct", "stored": "0 to 100", "source": "Inline beacon: scrollY tracker on hide", "purpose": "Deepest scroll position per visit"},
 	}
 	notTracked := []map[string]string{
 		{"field": "ip", "reason": "Hashed into fingerprint then dropped at the parser. Never written to disk."},
 		{"field": "user_agent", "reason": "Parsed for browser/os/device, then dropped. Raw UA is never stored."},
 		{"field": "city / region", "reason": "We use only CF-IPCountry. No IP geo-lookup, no city/region storage."},
-		{"field": "screen / viewport", "reason": "Server-side log tail can't see client-side fields. Add a beacon if needed."},
+		{"field": "click events / mouse coords", "reason": "Out of scope. Beacon collects engagement, not surveillance."},
 		{"field": "cookies", "reason": "No analytics cookies. Visit identification uses the hashed fingerprint."},
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tracked":     tracked,
 		"not_tracked": notTracked,
 	})
+}
+
+// toInt64 coerces sqlc's `interface{}` (returned for COALESCE/AVG over
+// numeric columns in SQLite) to a rounded int64. Returns 0 for nil or
+// unrecognised types so the dashboard never NaNs out.
+func toInt64(v any) int64 {
+	switch x := v.(type) {
+	case nil:
+		return 0
+	case int64:
+		return x
+	case int32:
+		return int64(x)
+	case int:
+		return int64(x)
+	case float64:
+		return int64(x + 0.5)
+	case float32:
+		return int64(float64(x) + 0.5)
+	case []byte:
+		// SQLite text-mode return; parse if it looks numeric.
+		s := strings.TrimSpace(string(x))
+		if n, err := strconv.ParseFloat(s, 64); err == nil {
+			return int64(n + 0.5)
+		}
+	case string:
+		if n, err := strconv.ParseFloat(strings.TrimSpace(x), 64); err == nil {
+			return int64(n + 0.5)
+		}
+	}
+	return 0
 }
 
 // sinceToCutoff turns a since=… string into (cutoffTimestamp, bucketUnit).

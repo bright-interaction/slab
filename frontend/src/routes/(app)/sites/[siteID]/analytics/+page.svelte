@@ -116,6 +116,17 @@
 		}
 	}
 
+	function formatDuration(ms: number): string {
+		if (!Number.isFinite(ms) || ms <= 0) return '0s';
+		const sec = Math.floor(ms / 1000);
+		if (sec < 60) return `${sec}s`;
+		const m = Math.floor(sec / 60);
+		const s = sec % 60;
+		if (m < 60) return `${m}m ${s}s`;
+		const h = Math.floor(m / 60);
+		return `${h}h ${m % 60}m`;
+	}
+
 	function bucketLabel(b: string): string {
 		// "2026-04-26" or "2026-04-26T14"
 		if (b.length === 10) {
@@ -479,6 +490,101 @@
 							</ul>
 						</Card>
 					{/each}
+				</section>
+			{/if}
+		{/if}
+
+		{#if overview && overview.engagement && overview.engagement.samples > 0}
+			{@const eng = overview.engagement}
+			<section class="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+				<Card padding="md">
+					<p class="text-xs text-text-muted">Avg time on page</p>
+					<p class="mt-1 font-display text-2xl font-extralight tracking-tight text-text-primary">
+						{formatDuration(eng.avg_time_on_page_ms)}
+					</p>
+					<p class="mt-1 text-[11px] text-text-muted">
+						from {formatNumber(eng.samples)} sample{eng.samples === 1 ? '' : 's'}
+					</p>
+				</Card>
+				<Card padding="md">
+					<p class="text-xs text-text-muted">Avg scroll depth</p>
+					<p class="mt-1 font-display text-2xl font-extralight tracking-tight text-text-primary">
+						{eng.avg_scroll_pct}%
+					</p>
+					<p class="mt-1 text-[11px] text-text-muted">deepest reached per visit</p>
+				</Card>
+				<Card padding="md">
+					<p class="text-xs text-text-muted">Dark mode</p>
+					<p class="mt-1 font-display text-2xl font-extralight tracking-tight text-text-primary">
+						{eng.dark_pct}%
+					</p>
+					<p class="mt-1 text-[11px] text-text-muted">visitors prefer dark</p>
+				</Card>
+				<Card padding="md">
+					<p class="text-xs text-text-muted">Reduced motion</p>
+					<p class="mt-1 font-display text-2xl font-extralight tracking-tight text-text-primary">
+						{eng.reduced_motion_pct}%
+					</p>
+					<p class="mt-1 text-[11px] text-text-muted">accessibility preference</p>
+				</Card>
+			</section>
+
+			{#if eng.by_path.length > 0 || eng.viewport_buckets.length > 0}
+				<section class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+					{#if eng.by_path.length > 0}
+						<Card padding="md">
+							<div class="flex items-baseline justify-between">
+								<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+									Engagement by page
+								</h2>
+								<span class="text-[11px] text-text-muted">avg time / scroll</span>
+							</div>
+							<ul class="mt-3 space-y-1.5">
+								{#each eng.by_path.slice(0, 8) as row (row.path)}
+									<li class="flex items-center gap-3 rounded-md px-2 py-1.5">
+										<span class="flex-1 truncate font-mono text-[12px] text-text-primary">
+											{row.path || '/'}
+										</span>
+										<span class="text-[12px] tabular-nums text-text-secondary">
+											{formatDuration(row.avg_time_on_page_ms)}
+										</span>
+										<span class="w-12 text-right text-[12px] tabular-nums text-text-secondary">
+											{row.avg_scroll_pct}%
+										</span>
+									</li>
+								{/each}
+							</ul>
+						</Card>
+					{/if}
+					{#if eng.viewport_buckets.length > 0}
+						{@const vpMax = Math.max(...eng.viewport_buckets.map((b) => b.count), 1)}
+						<Card padding="md">
+							<div class="flex items-baseline justify-between">
+								<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+									Top viewport widths
+								</h2>
+								<span class="text-[11px] text-text-muted">visits</span>
+							</div>
+							<ul class="mt-3 space-y-1.5">
+								{#each eng.viewport_buckets.slice(0, 8) as v (v.name)}
+									{@const pct = Math.max(2, Math.round((v.count / vpMax) * 100))}
+									<li class="group relative flex items-center gap-3 rounded-md px-2 py-1.5">
+										<span
+											aria-hidden="true"
+											class="absolute inset-y-0 left-0 rounded-md bg-accent/10"
+											style="width: {pct}%;"
+										></span>
+										<span class="relative z-10 flex-1 truncate text-[12px] text-text-primary">
+											{v.name}
+										</span>
+										<span class="relative z-10 text-[12px] tabular-nums text-text-secondary">
+											{formatNumber(v.count)}
+										</span>
+									</li>
+								{/each}
+							</ul>
+						</Card>
+					{/if}
 				</section>
 			{/if}
 		{/if}

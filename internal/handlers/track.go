@@ -9,11 +9,30 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bright-interaction/slab/internal/analytics"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/crmsync"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/store"
 )
+
+// normaliseCFCountry mirrors internal/analytics.normaliseCountry without
+// importing it: validates the 2-letter alpha-2 code and drops XX/T1.
+func normaliseCFCountry(s string) string {
+	if len(s) != 2 {
+		return ""
+	}
+	upper := strings.ToUpper(s)
+	for _, r := range upper {
+		if r < 'A' || r > 'Z' {
+			return ""
+		}
+	}
+	if upper == "XX" || upper == "T1" {
+		return ""
+	}
+	return upper
+}
 
 // trackBodyMaxBytes caps the request body for /t/* receivers. Consent payloads
 // are tiny (~1 KB); anything bigger is either malicious or a bug.
@@ -248,6 +267,14 @@ func (h *TrackHandler) PageView(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("track: get session for pageview", "site_id", siteID, "err", err)
 	}
 
+	// Enrich with the same UA/lang/UTM/country fields the nginx-tail parser
+	// fills, but computed server-side from the request's own headers since
+	// the public receiver doesn't get the nginx log line.
+	browser, osName, device := analytics.ParseUA(r.UserAgent())
+	lang := analytics.ParsePrimaryLanguage(r.Header.Get("Accept-Language"))
+	utmSource, utmMedium, utmCampaign := analytics.ParseUTMFromPath(path)
+	country := normaliseCFCountry(r.Header.Get("CF-IPCountry"))
+
 	if err := h.queries.RecordVisitEvent(r.Context(), store.RecordVisitEventParams{
 		ID:          newID(),
 		SiteID:      siteID,
@@ -258,11 +285,114 @@ func (h *TrackHandler) PageView(w http.ResponseWriter, r *http.Request) {
 		Status:      200,
 		Ms:          0,
 		Ts:          now,
+		Browser:     browser,
+		Os:          osName,
+		Device:      device,
+		Country:     country,
+		Lang:        lang,
+		UtmSource:   utmSource,
+		UtmMedium:   utmMedium,
+		UtmCampaign: utmCampaign,
 	}); err != nil {
 		slog.Error("track: record visit_event", "site_id", siteID, "err", err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// engagementRequest is the body the inline browser beacon sends on
+// visibilitychange/hidden or pagehide. All fields are optional / best-effort:
+// the beacon swallows errors so users with strict browsers (or weird privacy
+// extensions) don't see console noise. Server clamps every numeric field to
+// reasonable bounds before storage.
+type engagementRequest struct {
+	SiteID               string `json:"siteId"`
+	Path                 string `json:"path"`
+	ScreenW              int    `json:"screenW"`
+	ScreenH              int    `json:"screenH"`
+	ViewportW            int    `json:"viewportW"`
+	ViewportH            int    `json:"viewportH"`
+	PrefersDark          bool   `json:"prefersDark"`
+	PrefersReducedMotion bool   `json:"prefersReducedMotion"`
+	TimeOnPageMs         int    `json:"timeOnPageMs"`
+	MaxScrollPct         int    `json:"maxScrollPct"`
+}
+
+// Engagement records a visit_engagement row with the JS-only metrics that
+// server-side log tail can never see (screen / viewport / dark mode pref /
+// time on page / max scroll depth). 204 on completion. Always best-effort:
+// no error is fatal; the beacon doesn't read the response.
+func (h *TrackHandler) Engagement(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
+	defer r.Body.Close()
+
+	var req engagementRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	siteID := strings.TrimSpace(req.SiteID)
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid siteId")
+		return
+	}
+	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+		writeError(w, http.StatusNotFound, "Unknown siteId")
+		return
+	}
+
+	fp := authmw.GetFingerprint(r)
+	if fp == "" {
+		writeError(w, http.StatusInternalServerError, "Missing fingerprint")
+		return
+	}
+
+	path := strings.TrimSpace(req.Path)
+	if path == "" {
+		path = "/"
+	}
+	if len(path) > 1024 {
+		path = path[:1024]
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if err := h.queries.RecordVisitEngagement(r.Context(), store.RecordVisitEngagementParams{
+		ID:                   newID(),
+		SiteID:               siteID,
+		Fingerprint:          fp,
+		Path:                 path,
+		Ts:                   now,
+		ScreenW:              clampInt(req.ScreenW, 0, 32_000),
+		ScreenH:              clampInt(req.ScreenH, 0, 32_000),
+		ViewportW:            clampInt(req.ViewportW, 0, 32_000),
+		ViewportH:            clampInt(req.ViewportH, 0, 32_000),
+		PrefersDark:          boolToInt(req.PrefersDark),
+		PrefersReducedMotion: boolToInt(req.PrefersReducedMotion),
+		TimeOnPageMs:         clampInt(req.TimeOnPageMs, 0, 6*60*60*1000), // cap at 6h to ignore browser-tab-zombies
+		MaxScrollPct:         clampInt(req.MaxScrollPct, 0, 100),
+	}); err != nil {
+		slog.Error("track: record engagement", "site_id", siteID, "err", err)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func clampInt(n, lo, hi int) int64 {
+	if n < lo {
+		return int64(lo)
+	}
+	if n > hi {
+		return int64(hi)
+	}
+	return int64(n)
+}
+
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // encodeCategories serialises consent.categories to a stable JSON string for
