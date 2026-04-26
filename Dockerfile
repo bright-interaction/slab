@@ -18,7 +18,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 
 # Stage 3: Production image
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+# bun is dynamically linked against libstdc++ / libgcc / unwind; without these
+# `bun install` inside the runtime aborts with "_ZNSt... symbol not found".
+RUN apk add --no-cache ca-certificates tzdata libstdc++ libgcc
 COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun
 RUN addgroup -S atomicsite && adduser -S atomicsite -G atomicsite
 RUN mkdir -p /app/data && chown -R atomicsite:atomicsite /app
