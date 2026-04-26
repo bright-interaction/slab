@@ -41,6 +41,9 @@ func parseLocalConfig(cfg map[string]any) localConfig {
 }
 
 // Validate enforces structural rules on a local target before we touch disk.
+// The grandparent of the target path must already exist (so writes stay scoped
+// to a known data dir); the parent itself is created on demand because users
+// pick a leaf slug per site and shouldn't have to ssh in to mkdir it.
 func (d *LocalDeployer) Validate(target Target) error {
 	cfg := parseLocalConfig(target.Config)
 	if cfg.Path == "" {
@@ -54,12 +57,19 @@ func (d *LocalDeployer) Validate(target Target) error {
 		return errors.New("local deploy: path must not be \"/\"")
 	}
 	parent := filepath.Dir(cleaned)
-	info, err := os.Stat(parent)
+	if parent == "/" {
+		return errors.New("local deploy: parent dir must not be \"/\"")
+	}
+	grandparent := filepath.Dir(parent)
+	info, err := os.Stat(grandparent)
 	if err != nil {
-		return fmt.Errorf("local deploy: parent dir %q: %w", parent, err)
+		return fmt.Errorf("local deploy: grandparent dir %q: %w", grandparent, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("local deploy: parent %q is not a directory", parent)
+		return fmt.Errorf("local deploy: grandparent %q is not a directory", grandparent)
+	}
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("local deploy: ensure parent dir %q: %w", parent, err)
 	}
 	return nil
 }
