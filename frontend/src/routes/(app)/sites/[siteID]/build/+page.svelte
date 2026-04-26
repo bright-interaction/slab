@@ -337,7 +337,7 @@
 	});
 </script>
 
-<div class="mx-auto max-w-5xl px-6 py-8">
+<div class="mx-auto max-w-7xl px-6 py-8">
 	<header class="mb-6">
 		<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">Build</h1>
 		<p class="mt-1 text-[13px] text-text-secondary">

@@ -1,20 +1,16 @@
 <script lang="ts">
 	import type { Evaluation } from '$lib/api/types';
+	import { asGrade, gradeTone, pctTone, toneCSSColor } from '$lib/evaluations/grade';
 
 	let {
 		category,
-		evaluation
+		evaluation,
+		size = 'md'
 	}: {
 		category: string;
 		evaluation: Evaluation | null;
+		size?: 'sm' | 'md' | 'lg';
 	} = $props();
-
-	type Grade = 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F';
-	const validGrades: Grade[] = ['A+', 'A', 'B+', 'B', 'C', 'D', 'F'];
-	function asGrade(value: string | undefined): Grade | null {
-		if (!value) return null;
-		return (validGrades as string[]).includes(value) ? (value as Grade) : null;
-	}
 
 	const grade = $derived(asGrade(evaluation?.grade));
 
@@ -25,30 +21,25 @@
 		return Math.max(0, Math.min(100, v));
 	});
 
-	const tone = $derived.by<'success' | 'warning' | 'danger' | 'muted'>(() => {
-		if (!grade) return 'muted';
-		if (grade === 'A+' || grade === 'A' || grade === 'B+' || grade === 'B') return 'success';
-		if (grade === 'C') return 'warning';
-		return 'danger';
-	});
-
-	const ringColor = $derived(
-		tone === 'success'
-			? 'var(--t-success)'
-			: tone === 'warning'
-				? 'var(--t-warning)'
-				: tone === 'danger'
-					? 'var(--t-danger)'
-					: 'var(--t-text-muted)'
-	);
+	// Prefer the grade-derived tone (matches the badge); fall back to the
+	// raw percentage so partially-loaded data still shows a sensible ring.
+	const tone = $derived(grade ? gradeTone(grade) : pctTone(pct));
+	const ringColor = $derived(evaluation ? toneCSSColor(tone) : toneCSSColor('muted'));
 
 	const radius = 42;
 	const circ = 2 * Math.PI * radius;
 	const dashOffset = $derived(circ * (1 - pct / 100));
+
+	const sizeClasses = $derived(
+		size === 'lg' ? 'h-40 w-40' : size === 'sm' ? 'h-24 w-24' : 'h-32 w-32'
+	);
+	const pctTextClasses = $derived(
+		size === 'lg' ? 'text-4xl' : size === 'sm' ? 'text-2xl' : 'text-3xl'
+	);
 </script>
 
 <div class="flex flex-col items-center gap-2">
-	<div class="relative h-32 w-32">
+	<div class="relative {sizeClasses}">
 		<svg viewBox="0 0 100 100" class="h-full w-full -rotate-90" aria-hidden="true">
 			<circle
 				cx="50"
@@ -76,7 +67,7 @@
 		<div class="absolute inset-0 flex flex-col items-center justify-center">
 			{#if evaluation}
 				<span
-					class="font-display text-3xl font-extralight tracking-tight text-text-primary leading-none"
+					class="font-display {pctTextClasses} font-extralight tracking-tight text-text-primary leading-none"
 				>
 					{Math.round(pct)}<span class="text-base text-text-muted">%</span>
 				</span>
