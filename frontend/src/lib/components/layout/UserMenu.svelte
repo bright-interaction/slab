@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { DropdownMenu } from 'bits-ui';
 	import { goto } from '$app/navigation';
-	import { ChevronDown, LogOut, Settings } from 'lucide-svelte';
+	import { ChevronDown, LogOut, Settings, Users } from 'lucide-svelte';
 	import * as authApi from '$lib/api/auth';
 	import { auth, clearUser } from '$lib/stores/auth.svelte';
 
@@ -18,6 +18,7 @@
 
 	const label = $derived(initials(auth.value?.name, auth.value?.email));
 	const displayName = $derived(auth.value?.name || auth.value?.email || 'Account');
+	const isAdmin = $derived(auth.value?.role === 'admin');
 
 	async function handleLogout() {
 		try {
@@ -62,6 +63,15 @@
 				<Settings class="h-3.5 w-3.5" />
 				Account settings
 			</DropdownMenu.Item>
+			{#if isAdmin}
+				<DropdownMenu.Item
+					class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-[13px] text-text-secondary outline-none transition-colors data-[highlighted]:bg-bg-hover data-[highlighted]:text-text-primary"
+					onSelect={() => goto('/members')}
+				>
+					<Users class="h-3.5 w-3.5" />
+					Workspace members
+				</DropdownMenu.Item>
+			{/if}
 			<DropdownMenu.Separator class="my-1 h-px bg-border-light" />
 			<DropdownMenu.Item
 				class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-[13px] text-danger outline-none transition-colors data-[highlighted]:bg-danger/10"

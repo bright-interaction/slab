@@ -148,6 +148,17 @@ type GuardrailRule struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type Invite struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	Token     string `json:"token"`
+	CreatedBy string `json:"created_by"`
+	CreatedAt string `json:"created_at"`
+	ExpiresAt string `json:"expires_at"`
+	UsedAt    string `json:"used_at"`
+}
+
 type KnowledgebaseEntry struct {
 	ID        string `json:"id"`
 	SiteID    string `json:"site_id"`

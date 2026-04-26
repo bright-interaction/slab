@@ -26,6 +26,7 @@ type Querier interface {
 	CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) error
 	CreateGlobalBlock(ctx context.Context, arg CreateGlobalBlockParams) error
 	CreateGuardrail(ctx context.Context, arg CreateGuardrailParams) error
+	CreateInvite(ctx context.Context, arg CreateInviteParams) error
 	CreateKnowledgebaseEntry(ctx context.Context, arg CreateKnowledgebaseEntryParams) error
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
@@ -47,6 +48,7 @@ type Querier interface {
 	DeleteFormSubmission(ctx context.Context, id string) error
 	DeleteGlobalBlock(ctx context.Context, id string) error
 	DeleteGuardrail(ctx context.Context, id string) error
+	DeleteInvite(ctx context.Context, id string) error
 	DeleteKnowledgebaseEntry(ctx context.Context, id string) error
 	DeleteMedia(ctx context.Context, id string) error
 	DeletePage(ctx context.Context, id string) error
@@ -55,6 +57,7 @@ type Querier interface {
 	DeleteSettingsByCategory(ctx context.Context, arg DeleteSettingsByCategoryParams) error
 	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
+	DeleteUser(ctx context.Context, id string) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
 	GetBlockByID(ctx context.Context, id string) (Block, error)
@@ -67,6 +70,7 @@ type Querier interface {
 	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
 	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
+	GetInviteByToken(ctx context.Context, token string) (Invite, error)
 	GetKnowledgebaseByID(ctx context.Context, id string) (KnowledgebaseEntry, error)
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
@@ -112,6 +116,7 @@ type Querier interface {
 	ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error)
 	ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
+	ListPendingInvites(ctx context.Context) ([]Invite, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListRecentDeploymentsBySite(ctx context.Context, arg ListRecentDeploymentsBySiteParams) ([]Deployment, error)
 	ListRedirectsBySite(ctx context.Context, siteID string) ([]Redirect, error)
@@ -122,6 +127,7 @@ type Querier interface {
 	ListSites(ctx context.Context) ([]Site, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
+	MarkInviteUsed(ctx context.Context, id string) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	TopReferers(ctx context.Context, arg TopReferersParams) ([]TopReferersRow, error)
@@ -147,7 +153,9 @@ type Querier interface {
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) error
 	UpdateSiteBuildStatus(ctx context.Context, arg UpdateSiteBuildStatusParams) error
 	UpdateSiteDeployAt(ctx context.Context, arg UpdateSiteDeployAtParams) error
+	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error

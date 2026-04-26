@@ -34,8 +34,8 @@
 
 <div class="rounded-2xl border border-border-light bg-bg-surface p-8">
 	<div class="mb-6 space-y-1">
-		<h1 class="font-display text-2xl font-extralight tracking-tight text-text-primary">Sign in</h1>
-		<p class="text-[13px] text-text-secondary">Continue to your workspace.</p>
+		<h1 class="font-display text-2xl font-extralight tracking-tight text-text-primary">Admin sign in</h1>
+		<p class="text-[13px] text-text-secondary">Atomicsite is invite-only. Ask your workspace admin for an invite link.</p>
 	</div>
 
 	<form class="space-y-4" onsubmit={handleSubmit}>

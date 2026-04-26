@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPatch, apiPost } from './client';
 import type { AuthUser } from './types';
 
 export interface AuthResponse {
@@ -26,4 +26,21 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
 		current_password: currentPassword,
 		new_password: newPassword
 	});
+}
+
+export function updateProfile(name: string): Promise<AuthResponse> {
+	return apiPatch<AuthResponse>('/auth/me', { name });
+}
+
+export interface InviteInfo {
+	email: string;
+	role: string;
+}
+
+export function inviteInfo(token: string): Promise<InviteInfo> {
+	return apiGet<InviteInfo>(`/auth/signup/${token}`);
+}
+
+export function redeemInvite(token: string, name: string, password: string): Promise<AuthResponse> {
+	return apiPost<AuthResponse>(`/auth/signup/${token}`, { name, password });
 }

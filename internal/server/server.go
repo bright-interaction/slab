@@ -85,6 +85,11 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/auth/login", ah.Login)
 	r.Post("/api/auth/logout", ah.Logout)
 
+	// Public invite redemption (no auth - token in path is the credential).
+	invH := handlers.NewInvitesHandler(s.cfg, s.queries)
+	r.Get("/api/auth/signup/{token}", invH.PublicInfo)
+	r.Post("/api/auth/signup/{token}", invH.Redeem)
+
 	// Sites handler (used by both public and authenticated routes).
 	sh := handlers.NewSiteHandler(s.cfg, s.queries, s.db)
 
@@ -99,6 +104,19 @@ func (s *Server) Router() http.Handler {
 		// Auth
 		r.Get("/api/auth/me", ah.Me)
 		r.Post("/api/auth/change-password", ah.ChangePassword)
+
+		// Account profile + workspace member management.
+		memh := handlers.NewMembersHandler(s.cfg, s.queries)
+		r.Patch("/api/auth/me", memh.UpdateProfile)
+		r.Get("/api/admin/members", memh.List)
+		r.Group(func(r chi.Router) {
+			r.Use(authmw.RequireAdmin)
+			r.Patch("/api/admin/members/{userID}/role", memh.UpdateRole)
+			r.Delete("/api/admin/members/{userID}", memh.Delete)
+			r.Get("/api/admin/invites", invH.List)
+			r.Post("/api/admin/invites", invH.Create)
+			r.Delete("/api/admin/invites/{inviteID}", invH.Delete)
+		})
 
 		// Sites
 		r.Get("/api/sites", sh.List)

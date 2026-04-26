@@ -18,3 +18,4 @@ export * as evaluations from './evaluations';
 export * as builds from './builds';
 export * as deploy from './deploy';
 export * as analytics from './analytics';
+export * as members from './members';

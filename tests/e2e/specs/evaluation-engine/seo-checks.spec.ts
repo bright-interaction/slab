@@ -25,7 +25,8 @@ test.describe('evaluation-engine: seo category', () => {
 		expect(VALID_GRADES.has(seo.grade), `grade=${seo.grade}`).toBe(true);
 
 		const names = checkNames(seo);
-		// Names from internal/eval/seo.go.
+		// Names from internal/eval/seo.go and internal/eval/geo.go (GEO/AEO
+		// checks are wired into the seo category).
 		for (const expected of [
 			'Has Title',
 			'Has Meta Description',
@@ -34,7 +35,15 @@ test.describe('evaluation-engine: seo category', () => {
 			'Viewport Meta',
 			'robots.txt',
 			'XML Sitemap',
-			'llms.txt'
+			'llms.txt',
+			// GEO / AEO additions (see internal/eval/geo.go)
+			'Robots max-snippet directive',
+			'Robots max-image-preview directive',
+			'BreadcrumbList Schema',
+			'Organization Schema Completeness',
+			'Content Freshness Signal',
+			'Noindex Pages Excluded From Sitemap',
+			'AI-Friendly Formatting',
 		]) {
 			expect(names, `missing ${expected} in ${names.join(',')}`).toContain(expected);
 		}

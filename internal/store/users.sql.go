@@ -33,6 +33,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, name, role, token_version, created_at, updated_at FROM users WHERE email = ?
 `
@@ -119,6 +128,20 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const updateUserName = `-- name: UpdateUserName :exec
+UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type UpdateUserNameParams struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserName, arg.Name, arg.ID)
+	return err
+}
+
 const updateUserPassword = `-- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = ?, token_version = token_version + 1, updated_at = datetime('now')
 WHERE id = ?
@@ -131,5 +154,20 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :exec
+UPDATE users SET role = ?, token_version = token_version + 1, updated_at = datetime('now')
+WHERE id = ?
+`
+
+type UpdateUserRoleParams struct {
+	Role string `json:"role"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserRole, arg.Role, arg.ID)
 	return err
 }
