@@ -27,7 +27,25 @@
 	};
 </script>
 
-<BitsDialog.Root bind:open {onOpenChange}>
+<!--
+	Controlled mode for bits-ui Dialog.Root.
+
+	Prior version did `bind:open {onOpenChange}` together. bits-ui v1 in
+	Svelte 5 treats that as "fully controlled by parent" and waits for
+	onOpenChange callbacks to drive the open state. When the parent only
+	uses bind:open and never supplies onOpenChange, X / Esc / overlay
+	clicks fired but the resulting close request had nowhere to land,
+	so the dialog stayed open. Now we always supply an onOpenChange handler
+	that writes back to our $bindable open prop and forwards to the
+	parent's optional handler.
+-->
+<BitsDialog.Root
+	{open}
+	onOpenChange={(v) => {
+		open = v;
+		onOpenChange?.(v);
+	}}
+>
 	<BitsDialog.Portal>
 		<BitsDialog.Overlay
 			class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-fadeIn"
