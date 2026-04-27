@@ -95,7 +95,7 @@
 	}
 </script>
 
-<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 	{#each pairs as pair (pair.label)}
 		{@const ratio = contrastRatio(pair.fg, pair.bg)}
 		{@const ok = passesAA(ratio)}
@@ -103,11 +103,11 @@
 			class="flex flex-col gap-2 rounded-lg border border-border-light bg-bg-surface p-3"
 		>
 			<div
-				class="flex h-12 items-center justify-center rounded-md ring-1 ring-border-light"
+				class="flex h-14 items-center justify-center rounded-md ring-1 ring-border-light"
 				style:background-color={pair.bg}
 			>
 				<span
-					class="text-[13px] font-medium"
+					class="text-[14px] font-medium"
 					style:color={pair.fg}
 				>
 					{pair.label}
