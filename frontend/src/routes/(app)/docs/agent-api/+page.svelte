@@ -16,7 +16,12 @@
 				{
 					method: 'GET',
 					path: '/api/agent/context',
-					purpose: 'Full site structure, knowledgebase, components, CSS classes, guardrails.'
+					purpose: 'Full site structure, knowledgebase, components, CSS classes, guardrails, pending_setup.'
+				},
+				{
+					method: 'GET',
+					path: '/api/agent/bootstrap',
+					purpose: 'Re-fetch the personalised CLAUDE.md (text/markdown) for this site.'
 				}
 			]
 		},
