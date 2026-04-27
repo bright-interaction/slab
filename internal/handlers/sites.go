@@ -183,6 +183,11 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Seed defaults for the new site
 	_ = agent.SeedDefaultGuardrailsWith(r.Context(), h.queries, id)
 	_ = agent.SeedDefaultKnowledgebaseWith(r.Context(), h.queries, id)
+	_ = h.queries.EnsureMediaFolder(r.Context(), store.EnsureMediaFolderParams{
+		SiteID:   id,
+		Name:     "brand",
+		IsSystem: 1,
+	})
 
 	// Create default architecture
 	_ = h.queries.UpsertSiteArchitecture(r.Context(), store.UpsertSiteArchitectureParams{
@@ -383,6 +388,18 @@ func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.Error("seed: create site", "error", err, "slug", req.Info.Slug)
 		writeError(w, http.StatusInternalServerError, "Failed to create site")
+		return
+	}
+
+	// 1b. system 'brand' media folder so the Media library has its
+	// always-on Brand Assets section from the very first page load.
+	if err := qtx.EnsureMediaFolder(ctx, store.EnsureMediaFolderParams{
+		SiteID:   siteID,
+		Name:     "brand",
+		IsSystem: 1,
+	}); err != nil {
+		slog.Error("seed: brand folder", "error", err, "site_id", siteID)
+		writeError(w, http.StatusInternalServerError, "Failed to seed brand folder")
 		return
 	}
 

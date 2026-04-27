@@ -182,6 +182,13 @@ type KnowledgebaseEntry struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type MediaFolder struct {
+	SiteID    string `json:"site_id"`
+	Name      string `json:"name"`
+	IsSystem  int64  `json:"is_system"`
+	CreatedAt string `json:"created_at"`
+}
+
 type Medium struct {
 	ID           string `json:"id"`
 	SiteID       string `json:"site_id"`
@@ -194,6 +201,7 @@ type Medium struct {
 	Blurhash     string `json:"blurhash"`
 	VariantsJson string `json:"variants_json"`
 	OriginalPath string `json:"original_path"`
+	Folder       string `json:"folder"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 }

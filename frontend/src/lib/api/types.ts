@@ -236,8 +236,22 @@ export interface Medium {
 	blurhash: string;
 	variants_json: JsonText;
 	original_path: string;
+	folder: string;
 	created_at: Timestamp;
 	updated_at: Timestamp;
+}
+
+export interface MediaFolder {
+	name: string;
+	is_system: boolean;
+	created_at: Timestamp;
+	item_count: number;
+}
+
+export interface MediaFolderListResponse {
+	folders: MediaFolder[];
+	total_count: number;
+	unfiled_count: number;
 }
 
 export interface AgentKey {

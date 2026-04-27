@@ -7,9 +7,11 @@
 
 	let {
 		siteID,
+		folder,
 		onUploaded
 	}: {
 		siteID: string;
+		folder?: string;
 		onUploaded?: (media: Medium) => void;
 	} = $props();
 
@@ -48,7 +50,7 @@
 		let successes = 0;
 		const tasks = accepted.map(async (file) => {
 			try {
-				const result = await mediaApi.upload(siteID, file);
+				const result = await mediaApi.upload(siteID, file, undefined, folder);
 				return { ok: true as const, file, result };
 			} catch (err) {
 				const msg = err instanceof Error ? err.message : 'upload failed';

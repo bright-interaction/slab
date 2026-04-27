@@ -830,6 +830,134 @@ func (h *AgentHandler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, media)
 }
 
+// ListMediaFolders returns folders + counts for the agent's site. Mirrors
+// the admin endpoint so the AI can navigate organisation.
+func (h *AgentHandler) ListMediaFolders(w http.ResponseWriter, r *http.Request) {
+	a := requireAgent(w, r)
+	if a == nil {
+		return
+	}
+	if err := h.queries.EnsureMediaFolder(r.Context(), store.EnsureMediaFolderParams{
+		SiteID:   a.SiteID,
+		Name:     "brand",
+		IsSystem: 1,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to seed system folder")
+		return
+	}
+	folders, err := h.queries.ListMediaFoldersBySite(r.Context(), a.SiteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list folders")
+		return
+	}
+	type folderOut struct {
+		Name      string `json:"name"`
+		IsSystem  bool   `json:"is_system"`
+		CreatedAt string `json:"created_at"`
+		ItemCount int64  `json:"item_count"`
+	}
+	out := make([]folderOut, 0, len(folders))
+	for _, f := range folders {
+		c, _ := h.queries.CountMediaInFolder(r.Context(), store.CountMediaInFolderParams{
+			SiteID: a.SiteID,
+			Folder: f.Name,
+		})
+		out = append(out, folderOut{
+			Name:      f.Name,
+			IsSystem:  f.IsSystem == 1,
+			CreatedAt: f.CreatedAt,
+			ItemCount: c,
+		})
+	}
+	totalCount, _ := h.queries.CountMediaBySite(r.Context(), a.SiteID)
+	unfiledCount, _ := h.queries.CountUnfiledMedia(r.Context(), a.SiteID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"folders":       out,
+		"total_count":   totalCount,
+		"unfiled_count": unfiledCount,
+	})
+}
+
+// CreateMediaFolder pre-creates a user folder for the agent's site.
+func (h *AgentHandler) CreateMediaFolder(w http.ResponseWriter, r *http.Request) {
+	a := requireAgent(w, r)
+	if a == nil {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	name := strings.ToLower(strings.TrimSpace(req.Name))
+	if !validMediaFolderName(name) {
+		writeError(w, http.StatusBadRequest, "Folder name must be 1-32 chars, lowercase letters/digits/hyphens, starting with letter or digit")
+		return
+	}
+	if name == "brand" {
+		writeError(w, http.StatusBadRequest, "'brand' is reserved")
+		return
+	}
+	if err := h.queries.EnsureMediaFolder(r.Context(), store.EnsureMediaFolderParams{
+		SiteID:   a.SiteID,
+		Name:     name,
+		IsSystem: 0,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to create folder")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"name": name, "is_system": false})
+}
+
+// DeleteMediaFolder removes a user folder owned by the agent's site. Items
+// move back to unfiled. System folders are protected.
+func (h *AgentHandler) DeleteMediaFolder(w http.ResponseWriter, r *http.Request) {
+	a := requireAgent(w, r)
+	if a == nil {
+		return
+	}
+	name := urlParam(r, "folderName")
+	if !validMediaFolderName(name) {
+		writeError(w, http.StatusBadRequest, "Invalid folder name")
+		return
+	}
+	folder, err := h.queries.GetMediaFolder(r.Context(), store.GetMediaFolderParams{
+		SiteID: a.SiteID,
+		Name:   name,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Folder not found")
+		return
+	}
+	if folder.IsSystem == 1 {
+		writeError(w, http.StatusBadRequest, "Cannot delete a system folder")
+		return
+	}
+	if err := h.queries.ClearMediaFolder(r.Context(), store.ClearMediaFolderParams{
+		SiteID: a.SiteID,
+		Folder: name,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to clear folder items")
+		return
+	}
+	if err := h.queries.DeleteMediaFolder(r.Context(), store.DeleteMediaFolderParams{
+		SiteID: a.SiteID,
+		Name:   name,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to delete folder")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// validMediaFolderName mirrors the admin handler's regex check. Kept here
+// so agent.go doesn't import handlers/media.go internals.
+func validMediaFolderName(name string) bool {
+	return folderNameRE.MatchString(name)
+}
+
 // --- Admin: Agent Key Management ---
 
 // GenerateAgentKey creates a new API key for a site (admin endpoint).

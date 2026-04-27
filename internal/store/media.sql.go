@@ -10,6 +10,23 @@ import (
 	"strings"
 )
 
+const clearMediaFolder = `-- name: ClearMediaFolder :exec
+UPDATE media SET
+    folder = '',
+    updated_at = datetime('now')
+WHERE site_id = ? AND folder = ?
+`
+
+type ClearMediaFolderParams struct {
+	SiteID string `json:"site_id"`
+	Folder string `json:"folder"`
+}
+
+func (q *Queries) ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error {
+	_, err := q.db.ExecContext(ctx, clearMediaFolder, arg.SiteID, arg.Folder)
+	return err
+}
+
 const countMediaBySite = `-- name: CountMediaBySite :one
 SELECT COUNT(*) FROM media WHERE site_id = ?
 `
@@ -21,9 +38,36 @@ func (q *Queries) CountMediaBySite(ctx context.Context, siteID string) (int64, e
 	return count, err
 }
 
+const countMediaInFolder = `-- name: CountMediaInFolder :one
+SELECT COUNT(*) FROM media WHERE site_id = ? AND folder = ?
+`
+
+type CountMediaInFolderParams struct {
+	SiteID string `json:"site_id"`
+	Folder string `json:"folder"`
+}
+
+func (q *Queries) CountMediaInFolder(ctx context.Context, arg CountMediaInFolderParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMediaInFolder, arg.SiteID, arg.Folder)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUnfiledMedia = `-- name: CountUnfiledMedia :one
+SELECT COUNT(*) FROM media WHERE site_id = ? AND folder = ''
+`
+
+func (q *Queries) CountUnfiledMedia(ctx context.Context, siteID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnfiledMedia, siteID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMedia = `-- name: CreateMedia :exec
-INSERT INTO media (id, site_id, filename, alt_text, mime_type, file_size, width, height, original_path)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO media (id, site_id, filename, alt_text, mime_type, file_size, width, height, original_path, folder)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateMediaParams struct {
@@ -36,6 +80,7 @@ type CreateMediaParams struct {
 	Width        int64  `json:"width"`
 	Height       int64  `json:"height"`
 	OriginalPath string `json:"original_path"`
+	Folder       string `json:"folder"`
 }
 
 func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) error {
@@ -49,6 +94,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) error 
 		arg.Width,
 		arg.Height,
 		arg.OriginalPath,
+		arg.Folder,
 	)
 	return err
 }
@@ -63,7 +109,7 @@ func (q *Queries) DeleteMedia(ctx context.Context, id string) error {
 }
 
 const getMediaByID = `-- name: GetMediaByID :one
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, created_at, updated_at FROM media WHERE id = ?
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE id = ?
 `
 
 func (q *Queries) GetMediaByID(ctx context.Context, id string) (Medium, error) {
@@ -81,6 +127,7 @@ func (q *Queries) GetMediaByID(ctx context.Context, id string) (Medium, error) {
 		&i.Blurhash,
 		&i.VariantsJson,
 		&i.OriginalPath,
+		&i.Folder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -88,7 +135,7 @@ func (q *Queries) GetMediaByID(ctx context.Context, id string) (Medium, error) {
 }
 
 const listMediaByIDs = `-- name: ListMediaByIDs :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, created_at, updated_at FROM media WHERE id IN (/*SLICE:ids*/?)
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE id IN (/*SLICE:ids*/?)
 `
 
 func (q *Queries) ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error) {
@@ -122,6 +169,7 @@ func (q *Queries) ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, e
 			&i.Blurhash,
 			&i.VariantsJson,
 			&i.OriginalPath,
+			&i.Folder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -139,7 +187,7 @@ func (q *Queries) ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, e
 }
 
 const listMediaBySite = `-- name: ListMediaBySite :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error) {
@@ -163,6 +211,7 @@ func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium,
 			&i.Blurhash,
 			&i.VariantsJson,
 			&i.OriginalPath,
+			&i.Folder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -180,7 +229,7 @@ func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium,
 }
 
 const listMediaBySitePaginated = `-- name: ListMediaBySitePaginated :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaBySitePaginatedParams struct {
@@ -210,6 +259,109 @@ func (q *Queries) ListMediaBySitePaginated(ctx context.Context, arg ListMediaByS
 			&i.Blurhash,
 			&i.VariantsJson,
 			&i.OriginalPath,
+			&i.Folder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMediaInFolderPaginated = `-- name: ListMediaInFolderPaginated :many
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? AND folder = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+`
+
+type ListMediaInFolderPaginatedParams struct {
+	SiteID string `json:"site_id"`
+	Folder string `json:"folder"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+func (q *Queries) ListMediaInFolderPaginated(ctx context.Context, arg ListMediaInFolderPaginatedParams) ([]Medium, error) {
+	rows, err := q.db.QueryContext(ctx, listMediaInFolderPaginated,
+		arg.SiteID,
+		arg.Folder,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Medium{}
+	for rows.Next() {
+		var i Medium
+		if err := rows.Scan(
+			&i.ID,
+			&i.SiteID,
+			&i.Filename,
+			&i.AltText,
+			&i.MimeType,
+			&i.FileSize,
+			&i.Width,
+			&i.Height,
+			&i.Blurhash,
+			&i.VariantsJson,
+			&i.OriginalPath,
+			&i.Folder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnfiledMediaPaginated = `-- name: ListUnfiledMediaPaginated :many
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? AND folder = '' ORDER BY created_at DESC LIMIT ? OFFSET ?
+`
+
+type ListUnfiledMediaPaginatedParams struct {
+	SiteID string `json:"site_id"`
+	Limit  int64  `json:"limit"`
+	Offset int64  `json:"offset"`
+}
+
+func (q *Queries) ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error) {
+	rows, err := q.db.QueryContext(ctx, listUnfiledMediaPaginated, arg.SiteID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Medium{}
+	for rows.Next() {
+		var i Medium
+		if err := rows.Scan(
+			&i.ID,
+			&i.SiteID,
+			&i.Filename,
+			&i.AltText,
+			&i.MimeType,
+			&i.FileSize,
+			&i.Width,
+			&i.Height,
+			&i.Blurhash,
+			&i.VariantsJson,
+			&i.OriginalPath,
+			&i.Folder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -240,6 +392,23 @@ type UpdateMediaParams struct {
 
 func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) error {
 	_, err := q.db.ExecContext(ctx, updateMedia, arg.AltText, arg.ID)
+	return err
+}
+
+const updateMediaFolder = `-- name: UpdateMediaFolder :exec
+UPDATE media SET
+    folder = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+`
+
+type UpdateMediaFolderParams struct {
+	Folder string `json:"folder"`
+	ID     string `json:"id"`
+}
+
+func (q *Queries) UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderParams) error {
+	_, err := q.db.ExecContext(ctx, updateMediaFolder, arg.Folder, arg.ID)
 	return err
 }
 

@@ -169,6 +169,8 @@ func applySchema(sqlDB *sql.DB) error {
 		{"sites", "muted_color", "TEXT NOT NULL DEFAULT '#6B7280'"},
 		{"sites", "accent_color", "TEXT NOT NULL DEFAULT ''"},
 		{"sites", "on_primary_color", "TEXT NOT NULL DEFAULT '#FFFFFF'"},
+		// Media folders (Phase 13) added 2026-04-27.
+		{"media", "folder", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {
@@ -181,6 +183,13 @@ func applySchema(sqlDB *sql.DB) error {
 	// existing DBs, or about to be created on fresh DBs).
 	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
 		return err
+	}
+	// Seed system 'brand' folder for every existing site that doesn't have
+	// one. Idempotent thanks to INSERT OR IGNORE on the composite PK. New
+	// sites get the row from their own creation handlers.
+	if _, err := sqlDB.Exec(`INSERT OR IGNORE INTO media_folders (site_id, name, is_system)
+		SELECT id, 'brand', 1 FROM sites`); err != nil {
+		return fmt.Errorf("seed brand folder: %w", err)
 	}
 	return nil
 }

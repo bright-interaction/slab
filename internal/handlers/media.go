@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -43,31 +44,205 @@ var dangerousExts = map[string]bool{
 	".jsp":  true, ".asp": true, ".aspx": true,
 }
 
+// Folder name validator. Lowercase letters, digits, and hyphens. Reserved
+// 'brand' is the only system name today; other reserved-looking names are
+// fine since the lookup is per-site. Empty string means "unfiled".
+var folderNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+
+const (
+	systemFolderBrand = "brand"
+	folderFilterAll   = ""
+	folderFilterUnfiled = "__unfiled"
+)
+
+func validFolderName(name string) bool {
+	return folderNameRE.MatchString(name)
+}
+
 // ---------------- Admin endpoints ----------------
 
-// List returns paginated media for a site.
+// List returns paginated media for a site. Optional ?folder= query param:
+// empty (or absent) = all folders flat; "__unfiled" = items with no folder
+// assigned; any other value = items in that named folder.
 func (h *MediaHandler) List(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 50)
 	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	folder := r.URL.Query().Get("folder")
 
-	rows, err := h.queries.ListMediaBySitePaginated(r.Context(), store.ListMediaBySitePaginatedParams{
-		SiteID: siteID,
-		Limit:  int64(limit),
-		Offset: int64(offset),
-	})
+	var (
+		rows  []store.Medium
+		count int64
+		err   error
+	)
+	switch folder {
+	case folderFilterAll:
+		rows, err = h.queries.ListMediaBySitePaginated(r.Context(), store.ListMediaBySitePaginatedParams{
+			SiteID: siteID,
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
+		if err == nil {
+			count, _ = h.queries.CountMediaBySite(r.Context(), siteID)
+		}
+	case folderFilterUnfiled:
+		rows, err = h.queries.ListUnfiledMediaPaginated(r.Context(), store.ListUnfiledMediaPaginatedParams{
+			SiteID: siteID,
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
+		if err == nil {
+			count, _ = h.queries.CountUnfiledMedia(r.Context(), siteID)
+		}
+	default:
+		if !validFolderName(folder) {
+			writeError(w, http.StatusBadRequest, "Invalid folder name")
+			return
+		}
+		rows, err = h.queries.ListMediaInFolderPaginated(r.Context(), store.ListMediaInFolderPaginatedParams{
+			SiteID: siteID,
+			Folder: folder,
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
+		if err == nil {
+			count, _ = h.queries.CountMediaInFolder(r.Context(), store.CountMediaInFolderParams{
+				SiteID: siteID,
+				Folder: folder,
+			})
+		}
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to list media")
 		return
 	}
-	count, _ := h.queries.CountMediaBySite(r.Context(), siteID)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items":  rows,
 		"total":  count,
 		"limit":  limit,
 		"offset": offset,
+		"folder": folder,
 	})
+}
+
+// ---------------- Folders ----------------
+
+// ListFolders returns all folders for a site with item counts. The system
+// 'brand' folder is auto-seeded and always present in the response.
+func (h *MediaHandler) ListFolders(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if err := h.queries.EnsureMediaFolder(r.Context(), store.EnsureMediaFolderParams{
+		SiteID:   siteID,
+		Name:     systemFolderBrand,
+		IsSystem: 1,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to seed system folder")
+		return
+	}
+	folders, err := h.queries.ListMediaFoldersBySite(r.Context(), siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list folders")
+		return
+	}
+	type folderOut struct {
+		Name      string `json:"name"`
+		IsSystem  bool   `json:"is_system"`
+		CreatedAt string `json:"created_at"`
+		ItemCount int64  `json:"item_count"`
+	}
+	out := make([]folderOut, 0, len(folders))
+	for _, f := range folders {
+		c, _ := h.queries.CountMediaInFolder(r.Context(), store.CountMediaInFolderParams{
+			SiteID: siteID,
+			Folder: f.Name,
+		})
+		out = append(out, folderOut{
+			Name:      f.Name,
+			IsSystem:  f.IsSystem == 1,
+			CreatedAt: f.CreatedAt,
+			ItemCount: c,
+		})
+	}
+	totalCount, _ := h.queries.CountMediaBySite(r.Context(), siteID)
+	unfiledCount, _ := h.queries.CountUnfiledMedia(r.Context(), siteID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"folders":       out,
+		"total_count":   totalCount,
+		"unfiled_count": unfiledCount,
+	})
+}
+
+// CreateFolder pre-creates an empty user folder (so it shows up in the
+// sidebar before any item is moved into it).
+func (h *MediaHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	name := strings.ToLower(strings.TrimSpace(req.Name))
+	if !validFolderName(name) {
+		writeError(w, http.StatusBadRequest, "Folder name must be 1-32 chars, lowercase letters/digits/hyphens, starting with letter or digit")
+		return
+	}
+	if name == systemFolderBrand {
+		writeError(w, http.StatusBadRequest, "'brand' is reserved")
+		return
+	}
+	if err := h.queries.EnsureMediaFolder(r.Context(), store.EnsureMediaFolderParams{
+		SiteID:   siteID,
+		Name:     name,
+		IsSystem: 0,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to create folder")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"name":      name,
+		"is_system": false,
+	})
+}
+
+// DeleteFolder removes a user folder. System folders are protected. Items
+// in the folder are moved back to unfiled (folder = '').
+func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	name := urlParam(r, "folderName")
+	if !validFolderName(name) {
+		writeError(w, http.StatusBadRequest, "Invalid folder name")
+		return
+	}
+	folder, err := h.queries.GetMediaFolder(r.Context(), store.GetMediaFolderParams{
+		SiteID: siteID,
+		Name:   name,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Folder not found")
+		return
+	}
+	if folder.IsSystem == 1 {
+		writeError(w, http.StatusBadRequest, "Cannot delete a system folder")
+		return
+	}
+	if err := h.queries.ClearMediaFolder(r.Context(), store.ClearMediaFolderParams{
+		SiteID: siteID,
+		Folder: name,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to clear folder items")
+		return
+	}
+	if err := h.queries.DeleteMediaFolder(r.Context(), store.DeleteMediaFolderParams{
+		SiteID: siteID,
+		Name:   name,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to delete folder")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // Get returns one media row.
@@ -81,30 +256,67 @@ func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
-// Update edits the alt_text.
+// Update edits alt_text and optionally folder. Both fields are optional in
+// the request body; presence is detected via pointer types so a caller can
+// patch only one without clobbering the other.
 func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id := urlParam(r, "mediaID")
-	_, err := h.queries.GetMediaByID(r.Context(), id)
+	m, err := h.queries.GetMediaByID(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Media not found")
 		return
 	}
 	var req struct {
-		AltText string `json:"alt_text"`
+		AltText *string `json:"alt_text,omitempty"`
+		Folder  *string `json:"folder,omitempty"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	if err := h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
-		AltText: req.AltText,
-		ID:      id,
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update media")
-		return
+	if req.AltText != nil {
+		if err := h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
+			AltText: *req.AltText,
+			ID:      id,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to update media")
+			return
+		}
 	}
-	m, _ := h.queries.GetMediaByID(r.Context(), id)
-	writeJSON(w, http.StatusOK, m)
+	if req.Folder != nil {
+		if status, msg := h.applyFolderChange(r.Context(), m.SiteID, id, *req.Folder); status != http.StatusOK {
+			writeError(w, status, msg)
+			return
+		}
+	}
+	out, _ := h.queries.GetMediaByID(r.Context(), id)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// applyFolderChange validates and applies a folder change on a single media
+// row. Empty string moves the item to unfiled. Otherwise the folder must
+// match the validator and exist (or be auto-created).
+func (h *MediaHandler) applyFolderChange(ctx context.Context, siteID, mediaID, folder string) (int, string) {
+	folder = strings.ToLower(strings.TrimSpace(folder))
+	if folder != "" {
+		if !validFolderName(folder) {
+			return http.StatusBadRequest, "Invalid folder name"
+		}
+		if err := h.queries.EnsureMediaFolder(ctx, store.EnsureMediaFolderParams{
+			SiteID:   siteID,
+			Name:     folder,
+			IsSystem: 0,
+		}); err != nil {
+			return http.StatusInternalServerError, "Failed to ensure folder"
+		}
+	}
+	if err := h.queries.UpdateMediaFolder(ctx, store.UpdateMediaFolderParams{
+		Folder: folder,
+		ID:     mediaID,
+	}); err != nil {
+		return http.StatusInternalServerError, "Failed to update folder"
+	}
+	return http.StatusOK, ""
 }
 
 // Delete removes media from DB and disk.
@@ -133,6 +345,32 @@ func (h *MediaHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	h.uploadMultipart(w, r, siteID)
 }
 
+// resolveUploadFolder takes a raw form value, normalises it, and ensures the
+// folder row exists. Empty string -> unfiled. Returns the canonical folder
+// name to persist on the new media row, or HTTP error info on validation
+// failure.
+func (h *MediaHandler) resolveUploadFolder(ctx context.Context, siteID, raw string) (string, int, string) {
+	folder := strings.ToLower(strings.TrimSpace(raw))
+	if folder == "" {
+		return "", http.StatusOK, ""
+	}
+	if !validFolderName(folder) {
+		return "", http.StatusBadRequest, "Invalid folder name"
+	}
+	isSystem := int64(0)
+	if folder == systemFolderBrand {
+		isSystem = 1
+	}
+	if err := h.queries.EnsureMediaFolder(ctx, store.EnsureMediaFolderParams{
+		SiteID:   siteID,
+		Name:     folder,
+		IsSystem: isSystem,
+	}); err != nil {
+		return "", http.StatusInternalServerError, "Failed to ensure folder"
+	}
+	return folder, http.StatusOK, ""
+}
+
 // ---------------- Agent endpoints ----------------
 
 // AgentUpload: multipart upload via agent API key.
@@ -157,6 +395,7 @@ func (h *MediaHandler) AgentUploadFromBase64(w http.ResponseWriter, r *http.Requ
 		MimeType string `json:"mime_type"`
 		Filename string `json:"filename"`
 		AltText  string `json:"alt_text"`
+		Folder   string `json:"folder"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -180,7 +419,12 @@ func (h *MediaHandler) AgentUploadFromBase64(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusRequestEntityTooLarge, "File too large")
 		return
 	}
-	media, status, msg := h.processAndSave(r.Context(), a.SiteID, req.Filename, req.AltText, raw)
+	folder, status, msg := h.resolveUploadFolder(r.Context(), a.SiteID, req.Folder)
+	if status != http.StatusOK {
+		writeError(w, status, msg)
+		return
+	}
+	media, status, msg := h.processAndSave(r.Context(), a.SiteID, req.Filename, req.AltText, folder, raw)
 	if status != http.StatusCreated {
 		writeError(w, status, msg)
 		return
@@ -199,6 +443,7 @@ func (h *MediaHandler) AgentUploadFromURL(w http.ResponseWriter, r *http.Request
 		URL      string `json:"url"`
 		Filename string `json:"filename"`
 		AltText  string `json:"alt_text"`
+		Folder   string `json:"folder"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -221,7 +466,12 @@ func (h *MediaHandler) AgentUploadFromURL(w http.ResponseWriter, r *http.Request
 	if filename == "" {
 		filename = "image"
 	}
-	media, status, msg := h.processAndSave(r.Context(), a.SiteID, filename, req.AltText, raw)
+	folder, status, msg := h.resolveUploadFolder(r.Context(), a.SiteID, req.Folder)
+	if status != http.StatusOK {
+		writeError(w, status, msg)
+		return
+	}
+	media, status, msg := h.processAndSave(r.Context(), a.SiteID, filename, req.AltText, folder, raw)
 	if status != http.StatusCreated {
 		writeError(w, status, msg)
 		return
@@ -229,7 +479,7 @@ func (h *MediaHandler) AgentUploadFromURL(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, media)
 }
 
-// AgentUpdate: edit alt text.
+// AgentUpdate edits alt_text and/or folder for the agent's site.
 func (h *MediaHandler) AgentUpdate(w http.ResponseWriter, r *http.Request) {
 	a := authmw.GetAgent(r)
 	if a == nil {
@@ -243,21 +493,30 @@ func (h *MediaHandler) AgentUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		AltText string `json:"alt_text"`
+		AltText *string `json:"alt_text,omitempty"`
+		Folder  *string `json:"folder,omitempty"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	if err := h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
-		AltText: req.AltText,
-		ID:      id,
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update media")
-		return
+	if req.AltText != nil {
+		if err := h.queries.UpdateMedia(r.Context(), store.UpdateMediaParams{
+			AltText: *req.AltText,
+			ID:      id,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to update media")
+			return
+		}
 	}
-	m, _ = h.queries.GetMediaByID(r.Context(), id)
-	writeJSON(w, http.StatusOK, m)
+	if req.Folder != nil {
+		if status, msg := h.applyFolderChange(r.Context(), a.SiteID, id, *req.Folder); status != http.StatusOK {
+			writeError(w, status, msg)
+			return
+		}
+	}
+	out, _ := h.queries.GetMediaByID(r.Context(), id)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // AgentDelete: delete media owned by the agent's site.
@@ -352,12 +611,17 @@ func (h *MediaHandler) uploadMultipart(w http.ResponseWriter, r *http.Request, s
 	}
 
 	altText := r.FormValue("alt_text")
+	folder, status, msg := h.resolveUploadFolder(r.Context(), siteID, r.FormValue("folder"))
+	if status != http.StatusOK {
+		writeError(w, status, msg)
+		return
+	}
 	filename := header.Filename
 	if filename == "" {
 		filename = "image"
 	}
 
-	media, status, msg := h.processAndSave(r.Context(), siteID, filename, altText, raw)
+	media, status, msg := h.processAndSave(r.Context(), siteID, filename, altText, folder, raw)
 	if status != http.StatusCreated {
 		writeError(w, status, msg)
 		return
@@ -367,7 +631,9 @@ func (h *MediaHandler) uploadMultipart(w http.ResponseWriter, r *http.Request, s
 
 // processAndSave validates the raw bytes, runs the imaging pipeline, and writes
 // a media row. Returns the created row + HTTP status + error message on failure.
-func (h *MediaHandler) processAndSave(ctx context.Context, siteID, filename, altText string, raw []byte) (*store.Medium, int, string) {
+// folder is the canonical folder name already validated by resolveUploadFolder
+// (empty = unfiled).
+func (h *MediaHandler) processAndSave(ctx context.Context, siteID, filename, altText, folder string, raw []byte) (*store.Medium, int, string) {
 	// 1. Sniff MIME and validate
 	mime := imaging.Sniff(raw)
 	format := imaging.FormatFromMime(mime)
@@ -412,6 +678,7 @@ func (h *MediaHandler) processAndSave(ctx context.Context, siteID, filename, alt
 		Width:        int64(result.OriginalWidth),
 		Height:       int64(result.OriginalHeight),
 		OriginalPath: originalPath,
+		Folder:       folder,
 	}); err != nil {
 		return nil, http.StatusInternalServerError, "Failed to save media record"
 	}
