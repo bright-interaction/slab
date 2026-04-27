@@ -55,7 +55,8 @@
 		Sun,
 		LogOut,
 		KeyRound,
-		ArrowRight
+		ArrowRight,
+		BookOpen
 	} from 'lucide-svelte';
 	import * as sitesApi from '$lib/api/sites';
 	import * as pagesApi from '$lib/api/pages';
@@ -256,6 +257,48 @@
 			secondary: 'Create a new site',
 			run: () => navigate('/sites/new')
 		});
+		out.push({
+			id: 'action:docs',
+			category: 'Actions',
+			label: 'Documentation',
+			secondary: 'System overview, features, and agent API',
+			run: () => navigate('/docs')
+		});
+		out.push({
+			id: 'action:docs-architecture',
+			category: 'Actions',
+			label: 'Architecture',
+			secondary: 'How Atomic Site works',
+			run: () => navigate('/docs/architecture')
+		});
+		out.push({
+			id: 'action:docs-features',
+			category: 'Actions',
+			label: 'Features',
+			secondary: 'Every admin feature',
+			run: () => navigate('/docs/features')
+		});
+		out.push({
+			id: 'action:docs-agent-api',
+			category: 'Actions',
+			label: 'Agent API',
+			secondary: 'Endpoint catalogue for BYOAI',
+			run: () => navigate('/docs/agent-api')
+		});
+		out.push({
+			id: 'action:docs-connect-your-agent',
+			category: 'Actions',
+			label: 'Connect your agent',
+			secondary: 'Wire Claude CLI, Cursor, or any agent',
+			run: () => navigate('/docs/connect-your-agent')
+		});
+		out.push({
+			id: 'action:docs-integrations',
+			category: 'Actions',
+			label: 'Integrations',
+			secondary: 'External systems Atomic Site connects to',
+			run: () => navigate('/docs/integrations')
+		});
 		if (site) {
 			out.push({
 				id: 'action:trigger-build',
@@ -335,6 +378,7 @@
 		if (r.id === 'action:trigger-build') return Hammer;
 		if (r.id === 'action:toggle-theme') return Sun;
 		if (r.id === 'action:sign-out') return LogOut;
+		if (r.id.startsWith('action:docs')) return BookOpen;
 		if (r.category === 'Sections' && r.label === 'Agent keys') return KeyRound;
 		return categoryIcon(r.category);
 	}

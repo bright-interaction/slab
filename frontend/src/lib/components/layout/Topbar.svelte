@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { BookOpen } from 'lucide-svelte';
+	import { goto } from '$app/navigation';
 	import KeyboardHint from '$lib/components/ui/KeyboardHint.svelte';
 	import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
 	import SiteSwitcher from './SiteSwitcher.svelte';
@@ -29,6 +31,15 @@
 			>
 				<span class="hidden sm:inline">Search</span>
 				<KeyboardHint keys={["⌘", 'K']} />
+			</button>
+			<button
+				type="button"
+				onclick={() => goto('/docs')}
+				class="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+				aria-label="Documentation"
+				title="Documentation"
+			>
+				<BookOpen class="h-4 w-4" strokeWidth={1.75} />
 			</button>
 			<ThemeToggle />
 			<UserMenu />
