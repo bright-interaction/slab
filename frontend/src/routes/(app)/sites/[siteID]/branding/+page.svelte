@@ -14,7 +14,8 @@
 	import BrandingPreview from '$lib/components/branding/BrandingPreview.svelte';
 	import { setSite } from '$lib/stores/currentSite.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Trash2, RefreshCw, Github, Upload as UploadIcon } from 'lucide-svelte';
+	import { contrastRatio, passesAA } from '$lib/wcag';
+	import { Trash2, RefreshCw, Github, Upload as UploadIcon, Smartphone, Monitor } from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
 
 	let { data }: { data: { site: Site } } = $props();
@@ -106,8 +107,23 @@
 	});
 
 	let saving = $state(false);
+	let previewViewport = $state<'mobile' | 'desktop'>('mobile');
 
 	const colors = $derived({ primary, secondary, bg, text });
+
+	// Mirror the 7 pairs ContrastMatrix renders so the header status strip
+	// shows live AA pass count without coupling to the component.
+	const aaPairs = $derived([
+		contrastRatio(text, bg),
+		contrastRatio(text, surface),
+		contrastRatio('#ffffff', primary),
+		contrastRatio('#ffffff', secondary),
+		contrastRatio(primary, bg),
+		contrastRatio(secondary, bg),
+		contrastRatio(muted, bg)
+	]);
+	const aaPass = $derived(aaPairs.filter((r) => passesAA(r)).length);
+	const aaTotal = $derived(aaPairs.length);
 
 	// Custom fonts uploaded via /api/sites/{id}/fonts. Listed once on
 	// mount and refreshed after every successful upload / delete.
@@ -396,16 +412,29 @@
 				Set the colors and fonts for this site. Changes apply to the next build.
 			</p>
 		</div>
-		<div class="flex items-center gap-2">
-			<span class="hidden text-[12px] text-text-muted sm:inline">
-				{#if !valid}
-					Some hex values are invalid.
-				{:else if dirty}
-					Unsaved changes.
-				{:else}
-					Up to date.
-				{/if}
-			</span>
+		<div class="flex items-center gap-3">
+			<div class="hidden flex-col items-end gap-0.5 sm:flex">
+				<span
+					class="text-[12px] {!valid
+						? 'text-danger'
+						: dirty
+							? 'text-text-primary'
+							: 'text-text-muted'}"
+				>
+					{#if !valid}
+						Some hex values are invalid
+					{:else if dirty}
+						Unsaved changes
+					{:else}
+						Up to date
+					{/if}
+				</span>
+				<span class="font-mono text-[10.5px] uppercase tracking-[0.12em] text-text-muted">
+					{aaPass}/{aaTotal} AA · {customFonts.length}
+					{customFonts.length === 1 ? 'font' : 'fonts'} · {designRefs.length}
+					{designRefs.length === 1 ? 'ref' : 'refs'}
+				</span>
+			</div>
 			<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>
 				Discard
 			</Button>
@@ -417,67 +446,87 @@
 
 	<div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_28rem]">
 		<div class="flex flex-col gap-8">
-			<section class="flex flex-col gap-5">
-				<div class="flex items-baseline justify-between">
-					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-						Colors
-					</h2>
+			<section class="flex flex-col gap-6">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Colors
+				</h2>
+
+				<div class="flex flex-col gap-3">
+					<h3 class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-secondary">
+						Brand
+					</h3>
+					<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+						<ColorSlot
+							label="Primary"
+							helper="CTAs, focus rings."
+							bind:value={primary}
+							onReset={() => (primary = DEFAULTS.primary_color)}
+						/>
+						<ColorSlot
+							label="Secondary"
+							helper="Eyebrows, captions, footer text."
+							bind:value={secondary}
+							onReset={() => (secondary = DEFAULTS.secondary_color)}
+						/>
+						<ColorSlot
+							label="Accent"
+							helper="Links, focus accents. Empty = use primary."
+							bind:value={accent}
+							onReset={() => (accent = DEFAULTS.accent_color)}
+						/>
+					</div>
 				</div>
-				<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-					<ColorSlot
-						label="Primary"
-						helper="CTAs, focus rings."
-						bind:value={primary}
-						onReset={() => (primary = DEFAULTS.primary_color)}
-					/>
-					<ColorSlot
-						label="Secondary"
-						helper="Eyebrows, captions, footer text."
-						bind:value={secondary}
-						onReset={() => (secondary = DEFAULTS.secondary_color)}
-					/>
-					<ColorSlot
-						label="Accent"
-						helper="Links, focus accents. Empty = use primary."
-						bind:value={accent}
-						onReset={() => (accent = DEFAULTS.accent_color)}
-					/>
-					<ColorSlot
-						label="Background"
-						helper="Page surface behind everything."
-						bind:value={bg}
-						onReset={() => (bg = DEFAULTS.bg_color)}
-					/>
-					<ColorSlot
-						label="Surface"
-						helper="Card panels, elevated sections."
-						bind:value={surface}
-						onReset={() => (surface = DEFAULTS.surface_color)}
-					/>
-					<ColorSlot
-						label="Border"
-						helper="Hairlines, card outlines, dividers."
-						bind:value={border}
-						onReset={() => (border = DEFAULTS.border_color)}
-					/>
-					<ColorSlot
-						label="Text"
-						helper="Body copy, headings, default ink."
-						bind:value={text}
-						onReset={() => (text = DEFAULTS.text_color)}
-					/>
-					<ColorSlot
-						label="Muted text"
-						helper="Captions, hints, de-emphasised copy."
-						bind:value={muted}
-						onReset={() => (muted = DEFAULTS.muted_color)}
-					/>
-					<ColorSlot
-						label="On primary"
-						helper="Text on primary buttons. Use black for light primaries."
-						bind:value={onPrimary}
-						onReset={() => (onPrimary = DEFAULTS.on_primary_color)}
-					/>
+
+				<div class="flex flex-col gap-3">
+					<h3 class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-secondary">
+						Surface
+					</h3>
+					<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+						<ColorSlot
+							label="Background"
+							helper="Page surface behind everything."
+							bind:value={bg}
+							onReset={() => (bg = DEFAULTS.bg_color)}
+						/>
+						<ColorSlot
+							label="Surface"
+							helper="Card panels, elevated sections."
+							bind:value={surface}
+							onReset={() => (surface = DEFAULTS.surface_color)}
+						/>
+						<ColorSlot
+							label="Border"
+							helper="Hairlines, card outlines, dividers."
+							bind:value={border}
+							onReset={() => (border = DEFAULTS.border_color)}
+						/>
+					</div>
+				</div>
+
+				<div class="flex flex-col gap-3">
+					<h3 class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-secondary">
+						Text
+					</h3>
+					<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+						<ColorSlot
+							label="Text"
+							helper="Body copy, headings, default ink."
+							bind:value={text}
+							onReset={() => (text = DEFAULTS.text_color)}
+						/>
+						<ColorSlot
+							label="Muted text"
+							helper="Captions, hints, de-emphasised copy."
+							bind:value={muted}
+							onReset={() => (muted = DEFAULTS.muted_color)}
+						/>
+						<ColorSlot
+							label="On primary"
+							helper="Text on primary buttons. Use black for light primaries."
+							bind:value={onPrimary}
+							onReset={() => (onPrimary = DEFAULTS.on_primary_color)}
+						/>
+					</div>
 				</div>
 			</section>
 
@@ -722,19 +771,64 @@
 		</div>
 
 		<aside class="lg:sticky lg:top-24 lg:self-start">
-			<BrandingPreview
-				{primary}
-				{secondary}
-				{bg}
-				{text}
-				{surface}
-				{border}
-				{muted}
-				{accent}
-				{onPrimary}
-				{fontHeading}
-				{fontBody}
-			/>
+			<div class="flex items-center justify-between">
+				<span class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Live preview
+				</span>
+				<div
+					role="group"
+					aria-label="Preview viewport"
+					class="inline-flex items-center gap-0.5 rounded-md border border-border-light bg-bg-elevated p-0.5"
+				>
+					<button
+						type="button"
+						aria-pressed={previewViewport === 'mobile'}
+						aria-label="Mobile preview"
+						onclick={() => (previewViewport = 'mobile')}
+						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {previewViewport ===
+						'mobile'
+							? 'bg-bg-surface text-text-primary shadow-sm'
+							: 'text-text-muted hover:text-text-primary'}"
+					>
+						<Smartphone size={13} strokeWidth={1.75} />
+						Mobile
+					</button>
+					<button
+						type="button"
+						aria-pressed={previewViewport === 'desktop'}
+						aria-label="Desktop preview"
+						onclick={() => (previewViewport = 'desktop')}
+						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {previewViewport ===
+						'desktop'
+							? 'bg-bg-surface text-text-primary shadow-sm'
+							: 'text-text-muted hover:text-text-primary'}"
+					>
+						<Monitor size={13} strokeWidth={1.75} />
+						Desktop
+					</button>
+				</div>
+			</div>
+			<div class="mt-4">
+				<BrandingPreview
+					{primary}
+					{secondary}
+					{bg}
+					{text}
+					{surface}
+					{border}
+					{muted}
+					{accent}
+					{onPrimary}
+					{fontHeading}
+					{fontBody}
+					viewport={previewViewport}
+				/>
+			</div>
+			<p class="mt-3 text-center text-[10.5px] text-text-muted">
+				{previewViewport === 'mobile'
+					? 'Click Desktop to scale a 1100px canvas into the panel.'
+					: 'Scaled-down view of the desktop layout.'}
+			</p>
 		</aside>
 	</div>
 </div>
