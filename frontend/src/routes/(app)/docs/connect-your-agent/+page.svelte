@@ -8,10 +8,10 @@
 	import { ApiError } from '$lib/api/client';
 
 	const siteID = $derived(currentSite.value?.id ?? null);
-	let copied = $state(false);
 	let copiedKey = $state(false);
 	let copiedSmoke = $state(false);
 	let copiedEnv = $state(false);
+	let copiedFetch = $state(false);
 
 	let bootstrapping = $state(false);
 	let bootstrap = $state<agentKeysApi.BootstrapResponse | null>(null);
@@ -45,7 +45,7 @@
 		URL.revokeObjectURL(url);
 	}
 
-	async function copyText(text: string, marker: 'key' | 'smoke' | 'env') {
+	async function copyText(text: string, marker: 'key' | 'smoke' | 'env' | 'fetch') {
 		try {
 			await navigator.clipboard.writeText(text);
 			if (marker === 'key') {
@@ -54,90 +54,23 @@
 			} else if (marker === 'smoke') {
 				copiedSmoke = true;
 				setTimeout(() => (copiedSmoke = false), 1500);
-			} else {
+			} else if (marker === 'env') {
 				copiedEnv = true;
 				setTimeout(() => (copiedEnv = false), 1500);
+			} else {
+				copiedFetch = true;
+				setTimeout(() => (copiedFetch = false), 1500);
 			}
 		} catch {
 			toast.error('Could not copy. Select the text and copy manually.');
 		}
 	}
 
-	const claudeMd = `# Working on this Atomic Site
+	const fetchClaudeMd = `curl -sH "X-Agent-Key: $ATOMICSITE_KEY" \\
+  "$ATOMICSITE_API/api/agent/bootstrap" -o CLAUDE.md`;
 
-You are an AI agent connected to an Atomic Site instance. Your job is to build
-and edit a website by calling the agent API.
-
-## Setup
-- Base URL: $ATOMICSITE_API
-- Auth: X-Agent-Key: $ATOMICSITE_KEY
-- Site ID: read from /api/agent/context (your key is scoped to one site)
-
-## First-call workflow (do this BEFORE anything else)
-1. Call \`GET /api/agent/context\`.
-2. Inspect the \`pending_setup\` array in the response.
-3. For every item in pending_setup, walk the user through it before
-   touching content:
-   - Read the \`why\` to the user; ask only what you need.
-   - Call the listed \`endpoint\` with their answer.
-   - Re-fetch /api/agent/context and verify the item is gone.
-4. Only after pending_setup is empty (or the user explicitly defers an
-   item) move on to content work.
-
-## Editing workflow
-1. Make edits via the relevant CRUD endpoints. Every write goes through the
-   guardrails engine. Read the validation errors and fix them; do not work
-   around them.
-2. After a meaningful set of edits, trigger a build:
-   \`POST /api/agent/build\`
-3. Poll status: \`GET /api/agent/build/{buildID}/status\` until done.
-4. Fetch the evaluation: \`GET /api/agent/evaluation/{buildID}\`. The evals
-   are the source of truth for quality. Fix every failing check before
-   declaring the task done.
-
-## Endpoints you will use most
-- \`GET /api/agent/context\` -> full site state + pending_setup
-- \`PATCH /api/agent/profile\` -> business name, address, contact emails
-  (drives Organization JSON-LD, security.txt, legal pages)
-- \`PATCH /api/agent/branding\` -> colours, fonts, meta_title,
-  meta_description, og_image_id, favicon_id
-- \`PATCH /api/agent/settings\` -> analytics + seo + general categories
-  (writes to security/allowed-scripts/nginx are admin-only)
-- \`POST /api/agent/pages\` and \`PATCH /api/agent/pages/{slug}\`
-- \`POST /api/agent/pages/{slug}/blocks\`
-- \`POST /api/agent/build\` and \`GET /api/agent/evaluation/{buildID}\`
-
-## Capabilities
-Your key carries: ["read", "write"]
-
-## Guardrails (these will reject your writes if you violate them)
-- Pages: title 30-60 chars, description 120-160 chars
-- Blocks: image blocks need alt + dimensions; CTAs need a label;
-  no generic anchor text ("click here", "read more"); no mixed-content
-  http:// URLs in https sites
-- URL depth: max 3 levels
-- Media: alt text required; SVG rejected for safety; SSRF-guarded
-  from-url ingestion
-
-## Bring-your-own integrations
-- CRM: any HTTPS webhook URL + shared secret. Set via
-  \`PATCH /api/agent/settings\` with category=analytics, keys
-  crm_webhook_url and crm_webhook_secret. Payloads HMAC-signed
-  (X-Atomicsite-Signature, SHA-256 hex).
-- Cookie banner: paste any HTML/JS into analytics.cookie_banner_snippet
-  (Cookiebot, OneTrust, Termly, Iubenda, your own). Or flip
-  analytics.cookieproof_enabled=1 for the bundled CookieProof.
-`;
-
-	async function copyClaudeMd() {
-		try {
-			await navigator.clipboard.writeText(claudeMd);
-			copied = true;
-			setTimeout(() => (copied = false), 1500);
-		} catch {
-			toast.error('Could not copy. Select the text and copy manually.');
-		}
-	}
+	const manualEnv = `export ATOMICSITE_API="https://app.slab.example.com"
+export ATOMICSITE_KEY="ask_<your key>"`;
 </script>
 
 <div class="mx-auto max-w-5xl px-6 py-8">
@@ -153,8 +86,9 @@ Your key carries: ["read", "write"]
 			Connect your agent
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			One-click setup below. The manual steps further down are still here in case you want to
-			wire it by hand.
+			Click the button. We mint a key, render a personalised CLAUDE.md, bundle it with an
+			.env and a smoke-test curl. Drop the files into your project. Your agent takes it from
+			there.
 		</p>
 	</header>
 
@@ -267,96 +201,80 @@ Your key carries: ["read", "write"]
 
 		<Card padding="md">
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-				Step 1: Get an agent key
+				What the bundle contains
 			</h2>
-			<p class="mt-3 text-[13px] text-text-secondary">
-				Open the site you want the agent to work on. Open Agent keys. Generate a key, copy the
-				raw value (you only see it once), give it a recognisable name.
-			</p>
-			<a
-				href={siteID ? `/sites/${siteID}/agent-keys` : '/sites'}
-				class="mt-4 inline-flex items-center gap-1.5 text-[12px] text-text-primary transition-colors hover:text-text-secondary"
-			>
-				Open Agent keys
-			</a>
-		</Card>
-
-		<Card padding="md">
-			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-				Step 2: Export environment variables
-			</h2>
-			<p class="mt-3 text-[13px] text-text-secondary">
-				Drop these into your shell profile (zshrc / bashrc) or your agent's env. The agent reads
-				both.
-			</p>
-			<pre
-				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
-			>{`export ATOMICSITE_API="https://app.slab.example.com"
-export ATOMICSITE_KEY="ask_<the key you just generated>"`}</pre>
-		</Card>
-
-		<Card padding="md">
-			<div class="flex items-start justify-between gap-3">
+			<dl class="mt-4 space-y-4">
 				<div>
-					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-						Step 3: Drop a CLAUDE.md into your project
-					</h2>
-					<p class="mt-3 text-[13px] text-text-secondary">
-						Paste this file at the root of the project the agent will work in. It gives the
-						agent the workflow, the capability list, and the guardrails it must respect.
-					</p>
+					<dt class="text-[13px] font-medium text-text-primary">
+						<code class="font-mono text-[12px]">CLAUDE.md</code>
+					</dt>
+					<dd class="mt-1 text-[12px] text-text-secondary">
+						Personalised for this site: name, domain, base URL, your fresh key, and a
+						snapshot of the current pending_setup array as a starting checklist. Drop it
+						at the root of the project the agent will work in. Cursor users: rename to
+						<code class="font-mono">.cursorrules</code>.
+					</dd>
 				</div>
-				<button
-					type="button"
-					onclick={copyClaudeMd}
-					class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-2.5 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover"
-					aria-label="Copy CLAUDE.md template"
-				>
-					{#if copied}
-						<Check size={12} strokeWidth={2} />
-						Copied
-					{:else}
-						<Copy size={12} strokeWidth={1.75} />
-						Copy
-					{/if}
-				</button>
-			</div>
-			<pre
-				class="mt-4 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[11px] leading-relaxed text-text-primary"
-			>{claudeMd}</pre>
-			<p class="mt-3 text-[12px] text-text-muted">
-				Same file works as <span class="font-mono">.cursorrules</span> for Cursor or as a
-				system-prompt fragment for any agent runtime.
+				<div>
+					<dt class="text-[13px] font-medium text-text-primary">
+						<code class="font-mono text-[12px]">atomicsite.env</code>
+					</dt>
+					<dd class="mt-1 text-[12px] text-text-secondary">
+						Two exports: <code class="font-mono">ATOMICSITE_API</code> and
+						<code class="font-mono">ATOMICSITE_KEY</code>. Source the file (<code
+							class="font-mono">source ./atomicsite.env</code
+						>) before invoking the agent, or feed the values into your runtime's secret
+						store.
+					</dd>
+				</div>
+				<div>
+					<dt class="text-[13px] font-medium text-text-primary">Smoke-test curl</dt>
+					<dd class="mt-1 text-[12px] text-text-secondary">
+						One-liner that hits <code class="font-mono">/api/agent/context</code> and
+						pretty-prints the site object. Run it in your terminal first; if you see your
+						site name back, you are wired up.
+					</dd>
+				</div>
+			</dl>
+			<p class="mt-4 text-[12px] text-text-muted">
+				The raw key only appears once. Stash it in a password manager or commit
+				<code class="font-mono">atomicsite.env</code> to your secret store now. If you lose
+				it, generate another bundle and the previous key still works (use
+				<a href={siteID ? `/sites/${siteID}/agent-keys` : '/sites'} class="text-text-primary hover:underline">Agent keys</a>
+				to revoke any you don't want).
 			</p>
 		</Card>
 
 		<Card padding="md">
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-				Step 4: Smoke test the connection
+				Use it with Claude Code
 			</h2>
-			<p class="mt-3 text-[13px] text-text-secondary">
-				Bootstrap context. If this returns a JSON object with site details, you are wired up.
-			</p>
+			<ol class="mt-4 list-decimal space-y-2 pl-5 text-[13px] text-text-secondary">
+				<li>
+					Save the downloaded files at your project root: <code class="font-mono"
+						>CLAUDE.md</code
+					>
+					and <code class="font-mono">atomicsite.env</code>.
+				</li>
+				<li>
+					In your shell: <code class="font-mono">source ./atomicsite.env</code>.
+				</li>
+				<li>
+					Run <code class="font-mono">claude</code>. Claude Code auto-loads
+					<code class="font-mono">CLAUDE.md</code> and inherits the env vars. The agent now
+					knows your site, its base URL, the key, and the pending_setup checklist.
+				</li>
+				<li>
+					Give it a task. The CLAUDE.md tells the agent to walk pending_setup first, then
+					trigger a build, then read the evaluation, then self-correct.
+				</li>
+			</ol>
 			<pre
-				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
-			>{`curl -sH "X-Agent-Key: $ATOMICSITE_KEY" \\
-  "$ATOMICSITE_API/api/agent/context" | jq .site`}</pre>
-		</Card>
-
-		<Card padding="md">
-			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-				Step 5: Hand it to your agent
-			</h2>
-			<p class="mt-3 text-[13px] text-text-secondary">
-				Give the agent a real task. The CLAUDE.md tells it where to look. It will read context,
-				make edits with curl, trigger a build, read the evaluation, and self-correct.
-			</p>
-			<pre
-				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
-			>{`# Example prompt
-"Read /api/agent/context. Add a 'Pricing' page with three plan blocks
-(Starter, Pro, Enterprise). Trigger a build. Read the evaluation.
-Fix any failing checks. Don't stop until everything is green."`}</pre>
+				class="mt-4 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
+			>{`# Example first prompt
+"Walk me through pending_setup. Then add a Pricing page with three plan
+blocks (Starter, Pro, Enterprise). Build, read the evaluation, and fix
+any failing checks. Don't stop until everything is green."`}</pre>
 		</Card>
 
 		<Card padding="md">
@@ -367,27 +285,71 @@ Fix any failing checks. Don't stop until everything is green."`}</pre>
 				<div>
 					<dt class="text-[13px] font-medium text-text-primary">Cursor / VS Code agents</dt>
 					<dd class="mt-1 text-[12px] text-text-secondary">
-						Same env vars. Save the CLAUDE.md template above as
-						<span class="font-mono">.cursorrules</span> in your project root, or paste it into a
-						workspace-level system prompt. The agent uses curl directly from its bash tool.
+						Same bundle. Rename <code class="font-mono">CLAUDE.md</code> to
+						<code class="font-mono">.cursorrules</code> at the project root, or paste its
+						contents into a workspace-level system prompt. Set the env vars in the agent's
+						runtime config. The agent uses curl directly from its shell tool.
 					</dd>
 				</div>
 				<div>
 					<dt class="text-[13px] font-medium text-text-primary">n8n / generic HTTP</dt>
 					<dd class="mt-1 text-[12px] text-text-secondary">
-						Webhook trigger → HTTP Request node. Set the
-						<span class="font-mono">X-Agent-Key</span> header. Hit any agent endpoint. Right
+						Webhook trigger -> HTTP Request node. Set the
+						<code class="font-mono">X-Agent-Key</code> header. Hit any agent endpoint. Right
 						for scheduled rebuilds, content sync from a CMS, or pre-flight evaluation runs.
 					</dd>
 				</div>
 				<div>
 					<dt class="text-[13px] font-medium text-text-primary">CI / GitHub Actions</dt>
 					<dd class="mt-1 text-[12px] text-text-secondary">
-						Store the key as a repo secret. Run a curl-based job on every push to trigger a
-						build and gate the merge on the evaluation grade.
+						Store the key as a repo secret. Run a curl-based job on every push to trigger
+						a build and gate the merge on the evaluation grade.
 					</dd>
 				</div>
 			</dl>
+		</Card>
+
+		<Card padding="md">
+			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+				Already have a key? Skip the bundle.
+			</h2>
+			<p class="mt-3 text-[13px] text-text-secondary">
+				If you already issued a key from
+				<a
+					href={siteID ? `/sites/${siteID}/agent-keys` : '/sites'}
+					class="text-text-primary hover:underline">Agent keys</a
+				>, set the two env vars manually:
+			</p>
+			<pre
+				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
+			>{manualEnv}</pre>
+			<p class="mt-4 text-[13px] text-text-secondary">
+				Then fetch the personalised CLAUDE.md straight from the agent endpoint:
+			</p>
+			<div class="mt-3 flex items-start gap-2">
+				<pre
+					class="flex-1 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
+				>{fetchClaudeMd}</pre>
+				<button
+					type="button"
+					onclick={() => copyText(fetchClaudeMd, 'fetch')}
+					class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-3 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover"
+					aria-label="Copy fetch command"
+				>
+					{#if copiedFetch}
+						<Check size={12} strokeWidth={2} />
+						Copied
+					{:else}
+						<Copy size={12} strokeWidth={1.75} />
+						Copy
+					{/if}
+				</button>
+			</div>
+			<p class="mt-3 text-[12px] text-text-muted">
+				<code class="font-mono">GET /api/agent/bootstrap</code> regenerates the file every
+				call, so the agent always reads the freshest pending_setup. Right for re-syncing
+				after the human has edited the site in the admin UI.
+			</p>
 		</Card>
 	</div>
 </div>
