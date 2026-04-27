@@ -47,9 +47,7 @@
 			</button>
 		{/if}
 	</div>
-	{#if helper}
-		<p class="text-[11px] text-text-muted">{helper}</p>
-	{/if}
+	<p class="min-h-[2lh] text-[11px] text-text-muted">{helper ?? ''}</p>
 	<div class="flex items-center gap-2">
 		<label
 			class="relative inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md ring-1 ring-border overflow-hidden"
