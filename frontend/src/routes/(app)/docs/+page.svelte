@@ -6,7 +6,8 @@
 		LayoutGrid,
 		Code2,
 		Plug,
-		Workflow
+		Workflow,
+		Boxes
 	} from 'lucide-svelte';
 </script>
 
@@ -77,9 +78,15 @@
 			Plug
 		)}
 		{@render sectionCard(
+			'/docs/apps',
+			'Apps',
+			'Connectors to our stack and to third-party tools.',
+			Boxes
+		)}
+		{@render sectionCard(
 			'/docs/integrations',
 			'Integrations',
-			'External systems Atomic Site connects to.',
+			'Platform-level mechanics: DNS, evals, font hosting.',
 			Workflow
 		)}
 	</section>

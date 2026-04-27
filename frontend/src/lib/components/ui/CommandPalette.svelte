@@ -293,10 +293,17 @@
 			run: () => navigate('/docs/connect-your-agent')
 		});
 		out.push({
+			id: 'action:docs-apps',
+			category: 'Actions',
+			label: 'Apps',
+			secondary: 'Connectors to our stack and to third-party tools',
+			run: () => navigate('/docs/apps')
+		});
+		out.push({
 			id: 'action:docs-integrations',
 			category: 'Actions',
 			label: 'Integrations',
-			secondary: 'External systems Atomic Site connects to',
+			secondary: 'Platform-level mechanics: DNS, evals, font hosting',
 			run: () => navigate('/docs/integrations')
 		});
 		if (site) {
