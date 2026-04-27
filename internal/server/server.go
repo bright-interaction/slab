@@ -247,6 +247,11 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/sites/{siteID}/agent-keys", agh.GenerateAgentKey)
 		r.Delete("/api/sites/{siteID}/agent-keys/{keyID}", agh.RevokeAgentKey)
 
+		// One-click agent bootstrap (Phase 14): generates a key + returns
+		// a download-ready CLAUDE.md / .env / smoke-test bundle. Lets a
+		// user wire an agent in one click instead of four manual steps.
+		r.Post("/api/sites/{siteID}/agent-bootstrap", agh.AgentBootstrap)
+
 		// Figma design-tokens import (admin)
 		fh := handlers.NewFigmaHandler(s.cfg, s.queries)
 		r.Post("/api/sites/{siteID}/figma/import", fh.ImportDesignTokens)
@@ -277,6 +282,10 @@ func (s *Server) Router() http.Handler {
 
 		// Context
 		r.Get("/api/agent/context", agentH.Context)
+
+		// Bootstrap: re-fetch CLAUDE.md (text/markdown) any time. Lets an
+		// agent re-read its own instructions on session start.
+		r.Get("/api/agent/bootstrap", agentH.AgentSelfBootstrap)
 
 		// Pages (slug via path or ?page= query param)
 		r.Post("/api/agent/pages", agentH.CreatePage)

@@ -1,11 +1,67 @@
 <script lang="ts">
 	import Card from '$lib/components/ui/Card.svelte';
-	import { ArrowLeft, Check, Copy } from 'lucide-svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import { ArrowLeft, Check, Copy, Download, Sparkles } from 'lucide-svelte';
 	import { currentSite } from '$lib/stores/currentSite.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import * as agentKeysApi from '$lib/api/agentKeys';
+	import { ApiError } from '$lib/api/client';
 
 	const siteID = $derived(currentSite.value?.id ?? null);
 	let copied = $state(false);
+	let copiedKey = $state(false);
+	let copiedSmoke = $state(false);
+	let copiedEnv = $state(false);
+
+	let bootstrapping = $state(false);
+	let bootstrap = $state<agentKeysApi.BootstrapResponse | null>(null);
+
+	async function runBootstrap() {
+		if (bootstrapping) return;
+		if (!siteID) {
+			toast.error('Open a site first, then come back to this page.');
+			return;
+		}
+		bootstrapping = true;
+		try {
+			bootstrap = await agentKeysApi.bootstrap(siteID, 'Quick start key');
+			toast.success('Key generated. Save it now: it cannot be retrieved later.');
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : 'Failed to generate setup bundle.');
+		} finally {
+			bootstrapping = false;
+		}
+	}
+
+	function downloadFile(name: string, content: string, type = 'text/markdown') {
+		const blob = new Blob([content], { type });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = name;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
+
+	async function copyText(text: string, marker: 'key' | 'smoke' | 'env') {
+		try {
+			await navigator.clipboard.writeText(text);
+			if (marker === 'key') {
+				copiedKey = true;
+				setTimeout(() => (copiedKey = false), 1500);
+			} else if (marker === 'smoke') {
+				copiedSmoke = true;
+				setTimeout(() => (copiedSmoke = false), 1500);
+			} else {
+				copiedEnv = true;
+				setTimeout(() => (copiedEnv = false), 1500);
+			}
+		} catch {
+			toast.error('Could not copy. Select the text and copy manually.');
+		}
+	}
 
 	const claudeMd = `# Working on this Atomic Site
 
@@ -97,11 +153,118 @@ Your key carries: ["read", "write"]
 			Connect your agent
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			Wire Claude CLI, Cursor, or any HTTP-capable agent to a site in five steps.
+			One-click setup below. The manual steps further down are still here in case you want to
+			wire it by hand.
 		</p>
 	</header>
 
 	<div class="mt-8 flex flex-col gap-5">
+		<Card padding="md">
+			<div class="flex items-start gap-3">
+				<div
+					class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"
+				>
+					<Sparkles size={14} strokeWidth={1.75} />
+				</div>
+				<div class="min-w-0 flex-1">
+					<h2 class="text-[14px] font-medium text-text-primary">
+						One-click setup
+					</h2>
+					<p class="mt-1 text-[12px] text-text-muted">
+						Click the button. We mint a fresh agent key, render a personalised CLAUDE.md
+						(with your key, base URL, site name, and current pending_setup snapshot), plus an
+						.env file and a smoke-test command. Drop the files into your project and your
+						agent is wired in 30 seconds.
+					</p>
+					{#if !bootstrap}
+						<div class="mt-4 flex flex-wrap items-center gap-3">
+							<Button
+								variant="primary"
+								onclick={runBootstrap}
+								loading={bootstrapping}
+								disabled={bootstrapping || !siteID}
+							>
+								<Sparkles size={14} strokeWidth={1.75} class="mr-1.5" />
+								{siteID ? 'Generate key & download CLAUDE.md' : 'Open a site first'}
+							</Button>
+							<span class="text-[11px] text-text-muted">
+								{siteID
+									? 'Adds a fresh key with read+write capabilities to this site.'
+									: 'Pick a site from the top-bar site switcher.'}
+							</span>
+						</div>
+					{:else}
+						<div class="mt-4 flex flex-col gap-3">
+							<div class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
+								<strong>{bootstrap.note}</strong> The raw key below is shown once; we store
+								only its SHA-256 hash.
+							</div>
+							<div class="flex items-center gap-2">
+								<code class="flex-1 truncate rounded-lg border border-border-light bg-bg-elevated px-3 py-2 font-mono text-[11px] text-text-primary">
+									{bootstrap.key}
+								</code>
+								<button
+									type="button"
+									onclick={() => copyText(bootstrap!.key, 'key')}
+									class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-3 text-[11px] text-text-secondary transition-colors hover:bg-bg-hover"
+									aria-label="Copy agent key"
+								>
+									{#if copiedKey}
+										<Check size={12} strokeWidth={2} />
+										Copied
+									{:else}
+										<Copy size={12} strokeWidth={1.75} />
+										Copy key
+									{/if}
+								</button>
+							</div>
+							<div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+								<button
+									type="button"
+									onclick={() => downloadFile('CLAUDE.md', bootstrap!.claude_md, 'text/markdown')}
+									class="inline-flex items-center justify-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-3 py-2 text-[12px] text-text-primary transition-colors hover:bg-bg-hover"
+								>
+									<Download size={13} strokeWidth={1.75} />
+									Download CLAUDE.md
+								</button>
+								<button
+									type="button"
+									onclick={() => downloadFile('atomicsite.env', bootstrap!.env_file, 'text/plain')}
+									class="inline-flex items-center justify-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-3 py-2 text-[12px] text-text-primary transition-colors hover:bg-bg-hover"
+								>
+									<Download size={13} strokeWidth={1.75} />
+									Download .env
+								</button>
+								<button
+									type="button"
+									onclick={() => copyText(bootstrap!.smoke_test, 'smoke')}
+									class="inline-flex items-center justify-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-3 py-2 text-[12px] text-text-primary transition-colors hover:bg-bg-hover"
+								>
+									{#if copiedSmoke}
+										<Check size={13} strokeWidth={2} />
+										Smoke test copied
+									{:else}
+										<Copy size={13} strokeWidth={1.75} />
+										Copy smoke-test curl
+									{/if}
+								</button>
+							</div>
+							<details class="rounded-lg border border-border-light bg-bg-elevated px-3 py-2">
+								<summary class="cursor-pointer text-[12px] text-text-secondary">
+									Preview CLAUDE.md
+								</summary>
+								<pre class="mt-3 max-h-[400px] overflow-auto rounded-md bg-bg-surface p-3 font-mono text-[11px] leading-relaxed text-text-primary">{bootstrap.claude_md}</pre>
+							</details>
+							<p class="text-[11px] text-text-muted">
+								Once you've saved the bundle, the agent can re-fetch this file any time by
+								calling <code class="font-mono">GET /api/agent/bootstrap</code>.
+							</p>
+						</div>
+					{/if}
+				</div>
+			</div>
+		</Card>
+
 		<Card padding="md">
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 				Step 1: Get an agent key
