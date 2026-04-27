@@ -16,6 +16,7 @@ type Querier interface {
 	// via COALESCE so an empty window returns zeros instead of NaN.
 	AvgEngagementSince(ctx context.Context, arg AvgEngagementSinceParams) (AvgEngagementSinceRow, error)
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
+	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
 	// For every identified session, return its full path history ordered by ts.
 	// The handler groups by session_id / fingerprint to assemble the journey.
 	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
@@ -23,7 +24,9 @@ type Querier interface {
 	// timestamp). Used for the "live now" widget.
 	CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error)
 	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
+	CountMediaInFolder(ctx context.Context, arg CountMediaInFolderParams) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
+	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
 	CountVisitsByPath(ctx context.Context, arg CountVisitsByPathParams) ([]CountVisitsByPathRow, error)
 	CountVisitsBySite(ctx context.Context, arg CountVisitsBySiteParams) (int64, error)
@@ -43,6 +46,7 @@ type Querier interface {
 	CreateInvite(ctx context.Context, arg CreateInviteParams) error
 	CreateKnowledgebaseEntry(ctx context.Context, arg CreateKnowledgebaseEntryParams) error
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
+	CreateMediaFolder(ctx context.Context, arg CreateMediaFolderParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
 	CreateSilo(ctx context.Context, arg CreateSiloParams) error
@@ -67,6 +71,7 @@ type Querier interface {
 	DeleteInvite(ctx context.Context, id string) error
 	DeleteKnowledgebaseEntry(ctx context.Context, id string) error
 	DeleteMedia(ctx context.Context, id string) error
+	DeleteMediaFolder(ctx context.Context, arg DeleteMediaFolderParams) error
 	DeletePage(ctx context.Context, id string) error
 	DeleteRedirect(ctx context.Context, id string) error
 	DeleteSetting(ctx context.Context, id string) error
@@ -75,6 +80,7 @@ type Querier interface {
 	DeleteSite(ctx context.Context, id string) error
 	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
 	DeleteUser(ctx context.Context, id string) error
+	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
 	GetBlockByID(ctx context.Context, id string) (Block, error)
@@ -91,6 +97,7 @@ type Querier interface {
 	GetInviteByToken(ctx context.Context, token string) (Invite, error)
 	GetKnowledgebaseByID(ctx context.Context, id string) (KnowledgebaseEntry, error)
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
+	GetMediaFolder(ctx context.Context, arg GetMediaFolderParams) (MediaFolder, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
@@ -136,6 +143,8 @@ type Querier interface {
 	ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error)
 	ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error)
 	ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error)
+	ListMediaFoldersBySite(ctx context.Context, siteID string) ([]MediaFolder, error)
+	ListMediaInFolderPaginated(ctx context.Context, arg ListMediaInFolderPaginatedParams) ([]Medium, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
@@ -147,6 +156,7 @@ type Querier interface {
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont, error)
 	ListSites(ctx context.Context) ([]Site, error)
+	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
 	MarkInviteUsed(ctx context.Context, id string) error
@@ -185,6 +195,7 @@ type Querier interface {
 	UpdateGuardrail(ctx context.Context, arg UpdateGuardrailParams) error
 	UpdateKnowledgebaseEntry(ctx context.Context, arg UpdateKnowledgebaseEntryParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) error
+	UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderParams) error
 	UpdateMediaVariants(ctx context.Context, arg UpdateMediaVariantsParams) error
 	UpdatePage(ctx context.Context, arg UpdatePageParams) error
 	UpdatePageOrder(ctx context.Context, arg UpdatePageOrderParams) error

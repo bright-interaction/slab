@@ -138,10 +138,20 @@ CREATE TABLE IF NOT EXISTS media (
     blurhash       TEXT NOT NULL DEFAULT '',
     variants_json  TEXT NOT NULL DEFAULT '[]',
     original_path  TEXT NOT NULL,
+    folder         TEXT NOT NULL DEFAULT '',
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_media_site ON media(site_id);
+CREATE INDEX IF NOT EXISTS idx_media_site_folder ON media(site_id, folder);
+
+CREATE TABLE IF NOT EXISTS media_folders (
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    is_system  INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (site_id, name)
+);
 
 CREATE TABLE IF NOT EXISTS deployments (
     id            TEXT PRIMARY KEY,

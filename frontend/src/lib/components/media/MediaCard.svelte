@@ -5,17 +5,21 @@
 	let {
 		media,
 		siteID,
+		showFolder = false,
 		onOpen,
 		onSelect,
 		onEdit,
+		onMove,
 		onCopyUrl,
 		onDelete
 	}: {
 		media: Medium;
 		siteID: string;
+		showFolder?: boolean;
 		onOpen?: (media: Medium) => void;
 		onSelect?: (media: Medium) => void;
 		onEdit?: (media: Medium) => void;
+		onMove?: (media: Medium) => void;
 		onCopyUrl?: (media: Medium) => void;
 		onDelete?: (media: Medium) => void;
 	} = $props();
@@ -75,10 +79,36 @@
 		/>
 	</button>
 
-	{#if onEdit || onCopyUrl || onDelete}
+	{#if showFolder && media.folder}
+		<span
+			class="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-bg-surface/90 px-1.5 py-0.5 text-[10px] font-medium text-text-secondary backdrop-blur"
+		>
+			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+			</svg>
+			{media.folder}
+		</span>
+	{/if}
+
+	{#if onEdit || onMove || onCopyUrl || onDelete}
 		<div
 			class="row-actions pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-1"
 		>
+			{#if onMove}
+				<button
+					type="button"
+					onclick={(e) => {
+						e.stopPropagation();
+						onMove?.(media);
+					}}
+					class="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-bg-surface/90 text-text-secondary backdrop-blur transition-colors hover:bg-bg-hover hover:text-text-primary"
+					aria-label="Move to folder"
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+					</svg>
+				</button>
+			{/if}
 			{#if onEdit}
 				<button
 					type="button"
