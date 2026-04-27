@@ -17,18 +17,39 @@ and edit a website by calling the agent API.
 - Auth: X-Agent-Key: $ATOMICSITE_KEY
 - Site ID: read from /api/agent/context (your key is scoped to one site)
 
-## Workflow
-1. ALWAYS call \`GET /api/agent/context\` first. It returns the full site
-   structure, knowledgebase, components, CSS classes, and active guardrails.
-2. Make edits via the relevant CRUD endpoints. Every write goes through the
+## First-call workflow (do this BEFORE anything else)
+1. Call \`GET /api/agent/context\`.
+2. Inspect the \`pending_setup\` array in the response.
+3. For every item in pending_setup, walk the user through it before
+   touching content:
+   - Read the \`why\` to the user; ask only what you need.
+   - Call the listed \`endpoint\` with their answer.
+   - Re-fetch /api/agent/context and verify the item is gone.
+4. Only after pending_setup is empty (or the user explicitly defers an
+   item) move on to content work.
+
+## Editing workflow
+1. Make edits via the relevant CRUD endpoints. Every write goes through the
    guardrails engine. Read the validation errors and fix them; do not work
    around them.
-3. After a meaningful set of edits, trigger a build:
+2. After a meaningful set of edits, trigger a build:
    \`POST /api/agent/build\`
-4. Poll status: \`GET /api/agent/build/{buildID}/status\` until done.
-5. Fetch the evaluation: \`GET /api/agent/evaluation/{buildID}\`. The evals
+3. Poll status: \`GET /api/agent/build/{buildID}/status\` until done.
+4. Fetch the evaluation: \`GET /api/agent/evaluation/{buildID}\`. The evals
    are the source of truth for quality. Fix every failing check before
    declaring the task done.
+
+## Endpoints you will use most
+- \`GET /api/agent/context\` -> full site state + pending_setup
+- \`PATCH /api/agent/profile\` -> business name, address, contact emails
+  (drives Organization JSON-LD, security.txt, legal pages)
+- \`PATCH /api/agent/branding\` -> colours, fonts, meta_title,
+  meta_description, og_image_id, favicon_id
+- \`PATCH /api/agent/settings\` -> analytics + seo + general categories
+  (writes to security/allowed-scripts/nginx are admin-only)
+- \`POST /api/agent/pages\` and \`PATCH /api/agent/pages/{slug}\`
+- \`POST /api/agent/pages/{slug}/blocks\`
+- \`POST /api/agent/build\` and \`GET /api/agent/evaluation/{buildID}\`
 
 ## Capabilities
 Your key carries: ["read", "write"]
@@ -41,6 +62,15 @@ Your key carries: ["read", "write"]
 - URL depth: max 3 levels
 - Media: alt text required; SVG rejected for safety; SSRF-guarded
   from-url ingestion
+
+## Bring-your-own integrations
+- CRM: any HTTPS webhook URL + shared secret. Set via
+  \`PATCH /api/agent/settings\` with category=analytics, keys
+  crm_webhook_url and crm_webhook_secret. Payloads HMAC-signed
+  (X-Atomicsite-Signature, SHA-256 hex).
+- Cookie banner: paste any HTML/JS into analytics.cookie_banner_snippet
+  (Cookiebot, OneTrust, Termly, Iubenda, your own). Or flip
+  analytics.cookieproof_enabled=1 for the bundled CookieProof.
 `;
 
 	async function copyClaudeMd() {

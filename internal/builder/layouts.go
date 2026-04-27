@@ -134,6 +134,17 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		}
 	}
 
+	// Bring-your-own consent banner. Whatever HTML/JS the user paste into
+	// analytics.cookie_banner_snippet is emitted verbatim into <head>. We do
+	// not validate or transform it; this is the "I run Cookiebot/OneTrust/
+	// Termly/Iubenda/whatever" escape hatch. Trim whitespace so an empty
+	// textarea doesn't add a blank script tag.
+	if customBanner := strings.TrimSpace(settingsMap["analytics.cookie_banner_snippet"]); customBanner != "" {
+		for _, line := range strings.Split(customBanner, "\n") {
+			b.WriteString("  " + line + "\n")
+		}
+	}
+
 	// @font-face emissions for any site_fonts uploaded via /api/sites/{id}/fonts.
 	// Self-hosted woff2 only; served by /atomicsite-fonts/{site}/{id}.woff2.
 	// font-display:swap so headers don't render invisibly while the file

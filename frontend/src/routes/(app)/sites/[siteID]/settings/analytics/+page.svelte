@@ -6,6 +6,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import Textarea from '$lib/components/ui/Textarea.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { categoryMap } from '$lib/settings/nginxPreview';
 	import type { Site } from '$lib/api/types';
@@ -33,6 +34,7 @@
 	let umamiSiteId = $state('');
 	let crmWebhookUrl = $state('');
 	let crmWebhookSecret = $state('');
+	let cookieBannerSnippet = $state('');
 
 	type State = {
 		cookieproofEnabled: boolean;
@@ -45,6 +47,7 @@
 		umamiSiteId: string;
 		crmWebhookUrl: string;
 		crmWebhookSecret: string;
+		cookieBannerSnippet: string;
 	};
 
 	let initial: State = $state({
@@ -57,7 +60,8 @@
 		umamiUrl: '',
 		umamiSiteId: '',
 		crmWebhookUrl: '',
-		crmWebhookSecret: ''
+		crmWebhookSecret: '',
+		cookieBannerSnippet: ''
 	});
 
 	async function load() {
@@ -79,6 +83,7 @@
 			umamiEnabled = (umamiUrl.length > 0 && umamiSiteId.length > 0) || toBool(m.umami_enabled);
 			crmWebhookUrl = m.crm_webhook_url || '';
 			crmWebhookSecret = m.crm_webhook_secret || '';
+			cookieBannerSnippet = m.cookie_banner_snippet || '';
 
 			initial = {
 				cookieproofEnabled,
@@ -90,7 +95,8 @@
 				umamiUrl,
 				umamiSiteId,
 				crmWebhookUrl,
-				crmWebhookSecret
+				crmWebhookSecret,
+				cookieBannerSnippet
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -113,7 +119,8 @@
 			umamiUrl !== initial.umamiUrl ||
 			umamiSiteId !== initial.umamiSiteId ||
 			crmWebhookUrl !== initial.crmWebhookUrl ||
-			crmWebhookSecret !== initial.crmWebhookSecret
+			crmWebhookSecret !== initial.crmWebhookSecret ||
+			cookieBannerSnippet !== initial.cookieBannerSnippet
 	);
 
 	function discard() {
@@ -127,6 +134,7 @@
 		umamiSiteId = initial.umamiSiteId;
 		crmWebhookUrl = initial.crmWebhookUrl;
 		crmWebhookSecret = initial.crmWebhookSecret;
+		cookieBannerSnippet = initial.cookieBannerSnippet;
 	}
 
 	function b(v: boolean): string {
@@ -159,7 +167,8 @@
 					value: umamiEnabled ? umamiSiteId : ''
 				},
 				{ category: 'analytics', key: 'crm_webhook_url', value: crmWebhookUrl },
-				{ category: 'analytics', key: 'crm_webhook_secret', value: crmWebhookSecret }
+				{ category: 'analytics', key: 'crm_webhook_secret', value: crmWebhookSecret },
+				{ category: 'analytics', key: 'cookie_banner_snippet', value: cookieBannerSnippet }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
@@ -173,7 +182,8 @@
 				umamiUrl,
 				umamiSiteId,
 				crmWebhookUrl,
-				crmWebhookSecret
+				crmWebhookSecret,
+				cookieBannerSnippet
 			};
 			toast.success('Analytics settings saved.');
 		} catch (err) {
@@ -244,6 +254,24 @@
 						</span>
 					</div>
 					<Switch bind:checked={atomicsiteTrackingEnabled} ariaLabel="Enable Atomicsite tracking" />
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Custom cookie banner snippet
+				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Bring your own banner: Cookiebot, OneTrust, Termly, Iubenda, anything. Paste raw HTML
+					or a script tag. We inject it verbatim into &lt;head&gt; on every page. Leave empty if
+					you use CookieProof or no banner.
+				</p>
+				<div class="mt-3">
+					<Textarea
+						rows={6}
+						placeholder={`<script src="https://consent.cookiebot.com/uc.js" data-cbid="..." async></script>`}
+						bind:value={cookieBannerSnippet}
+					/>
 				</div>
 			</Card>
 
