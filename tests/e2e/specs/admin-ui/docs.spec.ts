@@ -6,7 +6,17 @@ const ROUTES: Array<{ path: string; heading: RegExp }> = [
 	{ path: '/docs/features', heading: /^Features$/ },
 	{ path: '/docs/agent-api', heading: /^Agent API$/ },
 	{ path: '/docs/connect-your-agent', heading: /^Connect your agent$/ },
+	{ path: '/docs/apps', heading: /^Apps$/ },
 	{ path: '/docs/integrations', heading: /^Integrations$/ }
+];
+
+const SUB_PAGES = [
+	'architecture',
+	'features',
+	'agent-api',
+	'connect-your-agent',
+	'apps',
+	'integrations'
 ];
 
 test.describe('Documentation pages', () => {
@@ -29,18 +39,18 @@ test.describe('Documentation pages', () => {
 		});
 	}
 
-	test('hub links resolve to all five sub-pages', async ({ loggedInPage }) => {
+	test('hub links resolve to all sub-pages', async ({ loggedInPage }) => {
 		await loggedInPage.goto('/docs');
 		await loggedInPage.waitForLoadState('networkidle');
 
-		for (const sub of ['architecture', 'features', 'agent-api', 'connect-your-agent', 'integrations']) {
+		for (const sub of SUB_PAGES) {
 			const link = loggedInPage.locator(`a[href="/docs/${sub}"]`).first();
 			await expect(link).toBeVisible();
 		}
 	});
 
 	test('sub-pages have a back link to /docs', async ({ loggedInPage }) => {
-		for (const sub of ['architecture', 'features', 'agent-api', 'connect-your-agent', 'integrations']) {
+		for (const sub of SUB_PAGES) {
 			await loggedInPage.goto(`/docs/${sub}`);
 			await loggedInPage.waitForLoadState('networkidle');
 			const back = loggedInPage.getByRole('link', { name: /documentation/i }).first();

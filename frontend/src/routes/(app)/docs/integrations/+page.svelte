@@ -15,86 +15,13 @@
 	};
 
 	const integrations = $derived.by<Integration[]>(() => {
-		const settings = (path: string) => (siteID ? `/sites/${siteID}/settings/${path}` : null);
 		const site = (path: string) => (siteID ? `/sites/${siteID}/${path}` : null);
 		return [
-			{
-				title: 'Bring your own CRM',
-				status: 'shipped',
-				body:
-					'Paste any HTTPS webhook URL plus a shared secret. Form submissions, identification events, and consent updates POST to your endpoint, signed with HMAC-SHA256 in the X-Atomicsite-Signature header. Works with HubSpot, Salesforce, Pipedrive, BrightCRM, n8n, Zapier, your own server, anything that speaks HTTP.',
-				linkLabel: 'Settings → Analytics → CRM webhook',
-				linkHref: settings('analytics')
-			},
-			{
-				title: 'Bring your own consent banner',
-				status: 'shipped',
-				body:
-					'Paste raw HTML or a script tag for any cookie banner: Cookiebot, OneTrust, Termly, Iubenda, your own. We inject it verbatim into <head> on every page. Use this if you already have a consent platform; reach for CookieProof if you want one bundled.',
-				linkLabel: 'Settings → Analytics → Custom cookie banner snippet',
-				linkHref: settings('analytics')
-			},
-			{
-				title: 'CookieProof',
-				status: 'shipped',
-				body:
-					'One-click GDPR consent banner. Snippet auto-injected, /t/consent receives consent:update + consent:gpc events, the engagement beacon waits for consent:init with analytics:true before firing. Right for users who want consent + multi-domain + audit logs without wiring a third party.',
-				linkLabel: 'Settings → Analytics → CookieProof consent',
-				linkHref: settings('analytics')
-			},
-			{
-				title: 'BrightCRM',
-				status: 'shipped',
-				body:
-					'A specific preset on top of the generic CRM webhook. Same HMAC contract, but the receiver maps Atomic Site activity types onto the BrightCRM enum so anonymous and identified journeys stitch together inside the CRM timeline.',
-				linkLabel: 'Settings → Analytics → CRM webhook',
-				linkHref: settings('analytics')
-			},
-			{
-				title: 'Google Analytics 4',
-				status: 'shipped',
-				body:
-					'Drop-in GA4 with a Measurement ID. Loaded only after consent if a banner is in place (CookieProof or your custom snippet that sets the GCM denied/granted state).',
-				linkLabel: 'Settings → Analytics → Google Analytics 4',
-				linkHref: settings('analytics')
-			},
-			{
-				title: 'Umami',
-				status: 'shipped',
-				body:
-					'Cookieless privacy-friendly analytics. Point at any Umami host plus a site ID. Right for users who want a non-Google, GDPR-clean alternative.',
-				linkLabel: 'Settings → Analytics → Umami',
-				linkHref: settings('analytics')
-			},
-			{
-				title: 'Dockyard',
-				status: 'shipped',
-				body:
-					'Deploy target. Requires https:// URL plus a UUID server_id. Posts to /api/servers/{id}/proxy/routes then /proxy/apply. Right for built sites that should land on a custom domain instead of the wildcard.',
-				linkLabel: 'Settings → Deployment',
-				linkHref: settings('deployment')
-			},
-			{
-				title: 'Figma',
-				status: 'shipped',
-				body:
-					'Design tokens import. POST /api/sites/{id}/figma/import pulls published FILL and TEXT styles, slugifies names ("Brand / Primary 600" -> .color-brand-primary-600), seeds CSS classes, and updates site.primary_color + fonts when current values are wizard defaults. Token never persisted.',
-				linkLabel: 'Branding (Design references area)',
-				linkHref: site('branding')
-			},
-			{
-				title: 'GitHub design references',
-				status: 'shipped',
-				body:
-					'Read-only pattern reference. Public repos only. Fetches package.json, README, tailwind config, common globals.css, and 5 representative components. 32 KB per file, 200 KB total cap. Bundle flows into /api/agent/context as design_references[] so the agent reads the design vocabulary.',
-				linkLabel: 'Branding',
-				linkHref: site('branding')
-			},
 			{
 				title: 'Cloudflare DNS',
 				status: 'shipped',
 				body:
-					'Wildcard record *.slab.example.com -> 203.0.113.10 covers any built-site slug. Wildcard TLS cert covers the same. No per-site DNS or cert work needed for slugs on the default domain.',
+					'Wildcard record *.slab.example.com -> 203.0.113.10 covers any built-site slug. Wildcard TLS cert covers the same. No per-site DNS or cert work needed for slugs on the default domain. Custom domains route via Dockyard or your own DNS provider.',
 				linkLabel: 'Architecture page',
 				linkHref: '/docs/architecture'
 			},
@@ -110,9 +37,25 @@
 				title: 'Site Inspector evaluation engine',
 				status: 'shipped',
 				body:
-					'130+ checks ported from the Chrome extension. Run after every build. 13-grade scale, A+ through F. Results expose to the agent through GET /api/agent/evaluation/{buildID} so it can self-correct.',
+					'130+ checks ported from the Chrome extension. Run after every build across Security, SEO, GEO, Performance, Accessibility, Privacy. 13-grade scale, A+ through F. Results expose to the agent through GET /api/agent/evaluation/{buildID} so it can self-correct.',
 				linkLabel: 'Build',
 				linkHref: site('build')
+			},
+			{
+				title: 'Caddy wildcard host',
+				status: 'shipped',
+				body:
+					'Built sites land at /srv/atomicsite/<slug>/dist via a Caddy bind mount. The wildcard route http://*.slab.example.com serves any slug straight from disk; Local-kind deploy targets land here directly.',
+				linkLabel: 'Architecture page',
+				linkHref: '/docs/architecture'
+			},
+			{
+				title: 'Forgejo CI deploy pipeline',
+				status: 'shipped',
+				body:
+					'Push to main triggers .forgejo/workflows/deploy-atomicsite.yml: Bun build, Docker build with frontend embedded via go:embed, container push, container restart. End-to-end ~2-3 minutes from push to live.',
+				linkLabel: null as never,
+				linkHref: null
 			},
 			{
 				title: 'Sentinel',
@@ -147,7 +90,9 @@
 			Integrations
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			External systems Atomic Site connects to, what they do, and where to wire them up.
+			Platform-level mechanics: DNS, font hosting, the eval engine, the deploy pipeline. For
+			user-facing app connectors (CRMs, analytics, banners, automation), see
+			<a href="/docs/apps" class="text-text-primary hover:underline">Apps</a>.
 		</p>
 	</header>
 
