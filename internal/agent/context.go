@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -27,6 +28,35 @@ type SiteContext struct {
 	Constraints      Constraints           `json:"constraints"`
 	Architecture     ArchitectureInfo      `json:"architecture"`
 	DesignReferences []DesignReferenceInfo `json:"design_references"`
+	// PendingSetup lists configuration gaps the agent should resolve before
+	// declaring a site "done". Empty when the site is fully configured.
+	// The CLAUDE.md template tells agents to walk through this list with the
+	// user as the first step of any session.
+	PendingSetup []SetupTask `json:"pending_setup"`
+}
+
+// SetupTask represents one configuration gap the agent should close. The
+// agent reads this list, asks the user when needed, and calls the listed
+// endpoint to apply the fix.
+type SetupTask struct {
+	// ID is a stable string the agent can match on (e.g. across two consecutive
+	// /api/agent/context calls).
+	ID string `json:"id"`
+	// Category groups related tasks: branding, profile, seo, analytics,
+	// content, media.
+	Category string `json:"category"`
+	// Title is a one-line description of what is missing.
+	Title string `json:"title"`
+	// Why explains the consequence of leaving this unfixed (eval impact,
+	// compliance, conversion).
+	Why string `json:"why"`
+	// Action describes what the agent should do.
+	Action string `json:"action"`
+	// Endpoint is the primary API path the agent should call to resolve.
+	Endpoint string `json:"endpoint"`
+	// Severity is "required" (blocks an A+ build) or "recommended"
+	// (improves quality but the build will still pass without it).
+	Severity string `json:"severity"`
 }
 
 // DesignReferenceInfo surfaces a fetched GitHub bundle so the AI agent
@@ -300,6 +330,8 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		archInfo.MaxDepth = int(arch.MaxDepth)
 	}
 
+	pending := b.computePendingSetup(ctx, siteID, site, pageInfos)
+
 	return &SiteContext{
 		Site: SiteInfo{
 			ID:     site.ID,
@@ -338,7 +370,226 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		Constraints:      constraints,
 		Architecture:     archInfo,
 		DesignReferences: refInfos,
+		PendingSetup:     pending,
 	}, nil
+}
+
+// computePendingSetup inspects the site's profile, settings, and content to
+// produce a list of configuration gaps the agent should resolve. Each task
+// names a concrete endpoint so the agent does not have to guess.
+//
+// Failures here are non-fatal; we return whatever we managed to compute and
+// fall back to an empty list if a query errors. Better to ship a partial
+// pending list than to crash the entire context call.
+func (b *ContextBuilder) computePendingSetup(ctx context.Context, siteID string, _ any, pages []PageInfo) []SetupTask {
+	out := []SetupTask{}
+
+	siteRow, err := b.queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return out
+	}
+
+	profile, _ := b.queries.GetSiteProfile(ctx, siteID)
+
+	settings, _ := b.queries.ListSettingsBySite(ctx, siteID)
+	settingMap := map[string]string{}
+	for _, s := range settings {
+		settingMap[s.Category+"."+s.Key] = s.Value
+	}
+
+	push := func(t SetupTask) {
+		out = append(out, t)
+	}
+
+	// --- Profile (drives Organization JSON-LD, security.txt, legal pages) ---
+	if profile.BusinessName == "" {
+		push(SetupTask{
+			ID:       "profile.business_name",
+			Category: "profile",
+			Title:    "Add the business name",
+			Why:      "Drives Organization JSON-LD schema, legal pages, and security.txt. Missing it costs 3 SEO/GEO eval checks.",
+			Action:   "Ask the user for the legal business name, then PATCH it onto the profile.",
+			Endpoint: "PATCH /api/agent/profile",
+			Severity: "required",
+		})
+	}
+	if profile.ContactEmail == "" {
+		push(SetupTask{
+			ID:       "profile.contact_email",
+			Category: "profile",
+			Title:    "Add a public contact email",
+			Why:      "Required for the auto-generated imprint and security.txt. AI search engines look for it as a trust signal.",
+			Action:   "Ask the user for a public-facing contact email and PATCH it onto the profile.",
+			Endpoint: "PATCH /api/agent/profile",
+			Severity: "required",
+		})
+	}
+	if profile.AddressLine1 == "" || profile.City == "" {
+		push(SetupTask{
+			ID:       "profile.address",
+			Category: "profile",
+			Title:    "Add a postal address",
+			Why:      "Drives Organization JSON-LD (address fields) and the auto-generated imprint page. Required for B2B, B2C-local, and ecommerce kits.",
+			Action:   "Ask the user for street + city + postal code, then PATCH the profile.",
+			Endpoint: "PATCH /api/agent/profile",
+			Severity: "recommended",
+		})
+	}
+
+	// --- SEO (drives Organization JSON-LD logo + sameAs) ---
+	if siteRow.MetaTitle == "" {
+		push(SetupTask{
+			ID:       "seo.meta_title",
+			Category: "seo",
+			Title:    "Add a default meta title",
+			Why:      "Falls through to every page that does not override it. Empty title fails the on-page SEO eval check.",
+			Action:   "Compose a 30-60 char title for the site and PATCH it via /api/agent/branding (meta_title field).",
+			Endpoint: "PATCH /api/agent/branding",
+			Severity: "required",
+		})
+	}
+	if siteRow.MetaDescription == "" {
+		push(SetupTask{
+			ID:       "seo.meta_description",
+			Category: "seo",
+			Title:    "Add a default meta description",
+			Why:      "Same fall-through as meta_title. 120-160 chars. Drives SERP and AI-search snippets.",
+			Action:   "Compose a 120-160 char description and PATCH it via /api/agent/branding (meta_description field).",
+			Endpoint: "PATCH /api/agent/branding",
+			Severity: "required",
+		})
+	}
+	if settingMap["seo.logo_url"] == "" {
+		push(SetupTask{
+			ID:       "seo.logo_url",
+			Category: "seo",
+			Title:    "Add a logo URL",
+			Why:      "Required by Organization JSON-LD (logo field) and the GEO 'Organization Schema Completeness' check.",
+			Action:   "Upload or link a logo, then PATCH /api/agent/settings with category=seo, key=logo_url.",
+			Endpoint: "PATCH /api/agent/settings",
+			Severity: "recommended",
+		})
+	}
+	if settingMap["seo.same_as"] == "" {
+		push(SetupTask{
+			ID:       "seo.same_as",
+			Category: "seo",
+			Title:    "Add social profile URLs",
+			Why:      "Drives the Organization JSON-LD sameAs array. Strong AI-search trust signal (LinkedIn, GitHub, etc.).",
+			Action:   "Ask the user for their social URLs (newline-separated) and PATCH /api/agent/settings (seo.same_as).",
+			Endpoint: "PATCH /api/agent/settings",
+			Severity: "recommended",
+		})
+	}
+
+	// --- Branding ---
+	if siteRow.PrimaryColor == "" || siteRow.PrimaryColor == "#D4AF37" {
+		push(SetupTask{
+			ID:       "branding.primary_color",
+			Category: "branding",
+			Title:    "Pick a brand primary colour",
+			Why:      "The wizard default (#D4AF37) is still in place. Real brand colour is the single biggest visual change you can make.",
+			Action:   "Ask the user for their brand primary, then PATCH /api/agent/branding (primary_color field).",
+			Endpoint: "PATCH /api/agent/branding",
+			Severity: "recommended",
+		})
+	}
+	if siteRow.OgImageID == "" {
+		push(SetupTask{
+			ID:       "seo.og_image",
+			Category: "media",
+			Title:    "Set an Open Graph image",
+			Why:      "Drives social previews and is referenced as a Schema.org logo fallback. Failing this loses 1 SEO eval check.",
+			Action:   "Generate or upload a 1200x630 image via /api/agent/media (set folder=brand), then PATCH /api/agent/branding (og_image_id).",
+			Endpoint: "PATCH /api/agent/branding",
+			Severity: "recommended",
+		})
+	}
+	if siteRow.FaviconID == "" {
+		push(SetupTask{
+			ID:       "seo.favicon",
+			Category: "media",
+			Title:    "Set a favicon",
+			Why:      "Browsers default to a placeholder; AI agents and crawlers pick up the favicon as a brand signal.",
+			Action:   "Generate or upload a square favicon via /api/agent/media (folder=brand), then PATCH /api/agent/branding (favicon_id).",
+			Endpoint: "PATCH /api/agent/branding",
+			Severity: "recommended",
+		})
+	}
+
+	// --- Analytics + consent ---
+	atomicsiteTracking := boolFromSetting(settingMap["analytics.atomicsite_tracking_enabled"], true)
+	cookieproofOn := boolFromSetting(settingMap["analytics.cookieproof_enabled"], false)
+	customBanner := strings.TrimSpace(settingMap["analytics.cookie_banner_snippet"]) != ""
+	if atomicsiteTracking && !cookieproofOn && !customBanner {
+		push(SetupTask{
+			ID:       "analytics.consent",
+			Category: "analytics",
+			Title:    "Add a consent banner",
+			Why:      "Tracking is on but no banner is in place. EU GDPR requires consent before non-essential tracking; failing this breaks the privacy eval and risks fines.",
+			Action:   "Either flip on CookieProof (PATCH /api/agent/settings analytics.cookieproof_enabled=1 + cookieproof_org_id) or paste a banner snippet (analytics.cookie_banner_snippet) for Cookiebot, OneTrust, Termly, etc.",
+			Endpoint: "PATCH /api/agent/settings",
+			Severity: "required",
+		})
+	}
+	if settingMap["analytics.crm_webhook_url"] == "" {
+		push(SetupTask{
+			ID:       "analytics.crm_webhook",
+			Category: "analytics",
+			Title:    "Wire a CRM webhook (optional)",
+			Why:      "Without a CRM webhook, identified visitor events (form submits, opt-ins) are recorded but not forwarded anywhere. Plug in any HTTPS endpoint; we sign payloads with HMAC-SHA256.",
+			Action:   "Ask the user for their CRM webhook URL (HubSpot, Salesforce, BrightCRM, n8n) and a shared secret, then PATCH /api/agent/settings (analytics.crm_webhook_url, analytics.crm_webhook_secret).",
+			Endpoint: "PATCH /api/agent/settings",
+			Severity: "recommended",
+		})
+	}
+
+	// --- Content ---
+	publishedPages := 0
+	for _, p := range pages {
+		if p.Status == "published" {
+			publishedPages++
+		}
+	}
+	if publishedPages == 0 {
+		push(SetupTask{
+			ID:       "content.publish_home",
+			Category: "content",
+			Title:    "Publish at least one page",
+			Why:      "Every page is still draft. The site has nothing to deploy.",
+			Action:   "PATCH /api/agent/pages/{slug} with status='published' once the home page is ready.",
+			Endpoint: "PATCH /api/agent/pages/{slug}",
+			Severity: "required",
+		})
+	}
+	if len(pages) <= 1 {
+		push(SetupTask{
+			ID:       "content.add_pages",
+			Category: "content",
+			Title:    "Add more pages",
+			Why:      "A one-page site limits SEO and conversion. Add at least Pricing, About, and Contact unless the user has explicitly chosen a one-pager.",
+			Action:   "Ask the user what additional pages they want, then POST /api/agent/pages.",
+			Endpoint: "POST /api/agent/pages",
+			Severity: "recommended",
+		})
+	}
+
+	return out
+}
+
+// boolFromSetting parses the limited bool encoding the settings table uses
+// ("1" / "true" / "yes" / "on" -> true; everything else -> the default).
+func boolFromSetting(v string, def bool) bool {
+	if v == "" {
+		return def
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	}
+	return def
 }
 
 func (b *ContextBuilder) buildConstraints(ctx context.Context, siteID string) Constraints {

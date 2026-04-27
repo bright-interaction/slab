@@ -129,6 +129,43 @@
 			]
 		},
 		{
+			title: 'Profile',
+			endpoints: [
+				{
+					method: 'GET',
+					path: '/api/agent/profile',
+					purpose: 'Read site profile (business name, address, contact emails).'
+				},
+				{
+					method: 'PATCH',
+					path: '/api/agent/profile',
+					write: true,
+					purpose: 'Patch profile fields (drives Organization JSON-LD, security.txt, legal pages).'
+				}
+			]
+		},
+		{
+			title: 'Settings',
+			endpoints: [
+				{
+					method: 'GET',
+					path: '/api/agent/settings',
+					purpose: 'List all settings rows for the site.'
+				},
+				{
+					method: 'GET',
+					path: '/api/agent/settings/{category}',
+					purpose: 'List settings for one category (seo, analytics, general, etc.).'
+				},
+				{
+					method: 'PATCH',
+					path: '/api/agent/settings',
+					write: true,
+					purpose: 'Bulk upsert. Writes to seo / analytics / general; other categories admin-only.'
+				}
+			]
+		},
+		{
 			title: 'Fonts',
 			endpoints: [
 				{ method: 'GET', path: '/api/agent/fonts', purpose: 'List self-hosted woff2 fonts.' },
@@ -342,6 +379,46 @@ Authorization: Bearer ask_<hex>`}</pre>
 			<p class="mt-3 text-[13px] text-text-secondary">
 				Every agent key is bound to one site. The site ID is read from the agent identity, not
 				the URL. A key for site A cannot manipulate site B even if the path says otherwise.
+			</p>
+		</Card>
+
+		<Card padding="md">
+			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+				Pending setup
+			</h2>
+			<p class="mt-3 text-[13px] text-text-secondary">
+				Every <span class="font-mono text-[12px]">/api/agent/context</span> response carries a
+				<span class="font-mono text-[12px]">pending_setup</span> array. Each entry is a
+				configuration gap the agent should resolve before declaring the site done. Walk through
+				it on the first call.
+			</p>
+			<pre
+				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
+			>{`"pending_setup": [
+  {
+    "id": "profile.business_name",
+    "category": "profile",
+    "title": "Add the business name",
+    "why": "Drives Organization JSON-LD schema, legal pages, and security.txt.",
+    "action": "Ask the user for the legal business name, then PATCH it onto the profile.",
+    "endpoint": "PATCH /api/agent/profile",
+    "severity": "required"
+  },
+  {
+    "id": "analytics.consent",
+    "category": "analytics",
+    "title": "Add a consent banner",
+    "why": "Tracking is on but no banner is in place. EU GDPR requires consent.",
+    "action": "Flip on CookieProof or paste a banner snippet (Cookiebot, OneTrust, Termly, etc.).",
+    "endpoint": "PATCH /api/agent/settings",
+    "severity": "required"
+  }
+]`}</pre>
+			<p class="mt-3 text-[12px] text-text-muted">
+				Severity is <span class="font-mono">required</span> (blocks an A+ build) or
+				<span class="font-mono">recommended</span> (improves quality, build still passes).
+				The list shrinks as the agent applies fixes; an empty array means the site is fully
+				configured.
 			</p>
 		</Card>
 

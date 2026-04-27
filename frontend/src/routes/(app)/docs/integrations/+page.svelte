@@ -19,19 +19,51 @@
 		const site = (path: string) => (siteID ? `/sites/${siteID}/${path}` : null);
 		return [
 			{
+				title: 'Bring your own CRM',
+				status: 'shipped',
+				body:
+					'Paste any HTTPS webhook URL plus a shared secret. Form submissions, identification events, and consent updates POST to your endpoint, signed with HMAC-SHA256 in the X-Atomicsite-Signature header. Works with HubSpot, Salesforce, Pipedrive, BrightCRM, n8n, Zapier, your own server, anything that speaks HTTP.',
+				linkLabel: 'Settings → Analytics → CRM webhook',
+				linkHref: settings('analytics')
+			},
+			{
+				title: 'Bring your own consent banner',
+				status: 'shipped',
+				body:
+					'Paste raw HTML or a script tag for any cookie banner: Cookiebot, OneTrust, Termly, Iubenda, your own. We inject it verbatim into <head> on every page. Use this if you already have a consent platform; reach for CookieProof if you want one bundled.',
+				linkLabel: 'Settings → Analytics → Custom cookie banner snippet',
+				linkHref: settings('analytics')
+			},
+			{
 				title: 'CookieProof',
 				status: 'shipped',
 				body:
-					'GDPR consent banner. Snippet auto-injected into builds when enabled. /t/consent endpoint receives signal events. The engagement beacon waits for consent:init with analytics:true before firing. Replaces hand-rolled cookie banners.',
-				linkLabel: 'Settings → Analytics',
+					'One-click GDPR consent banner. Snippet auto-injected, /t/consent receives consent:update + consent:gpc events, the engagement beacon waits for consent:init with analytics:true before firing. Right for users who want consent + multi-domain + audit logs without wiring a third party.',
+				linkLabel: 'Settings → Analytics → CookieProof consent',
 				linkHref: settings('analytics')
 			},
 			{
 				title: 'BrightCRM',
 				status: 'shipped',
 				body:
-					'Webhook sync of visitor events into the CRM timeline. HMAC-signed (X-Bright-Signature). Activity types map to CRM enum so anonymous and identified journeys stitch together.',
-				linkLabel: 'Settings → Analytics',
+					'A specific preset on top of the generic CRM webhook. Same HMAC contract, but the receiver maps Atomic Site activity types onto the BrightCRM enum so anonymous and identified journeys stitch together inside the CRM timeline.',
+				linkLabel: 'Settings → Analytics → CRM webhook',
+				linkHref: settings('analytics')
+			},
+			{
+				title: 'Google Analytics 4',
+				status: 'shipped',
+				body:
+					'Drop-in GA4 with a Measurement ID. Loaded only after consent if a banner is in place (CookieProof or your custom snippet that sets the GCM denied/granted state).',
+				linkLabel: 'Settings → Analytics → Google Analytics 4',
+				linkHref: settings('analytics')
+			},
+			{
+				title: 'Umami',
+				status: 'shipped',
+				body:
+					'Cookieless privacy-friendly analytics. Point at any Umami host plus a site ID. Right for users who want a non-Google, GDPR-clean alternative.',
+				linkLabel: 'Settings → Analytics → Umami',
 				linkHref: settings('analytics')
 			},
 			{
@@ -46,7 +78,7 @@
 				title: 'Figma',
 				status: 'shipped',
 				body:
-					'Design tokens import. POST /api/sites/{id}/figma/import pulls published FILL and TEXT styles, slugifies names ("Brand / Primary 600" → .color-brand-primary-600), seeds CSS classes, and updates site.primary_color + fonts when current values are wizard defaults. Token never persisted.',
+					'Design tokens import. POST /api/sites/{id}/figma/import pulls published FILL and TEXT styles, slugifies names ("Brand / Primary 600" -> .color-brand-primary-600), seeds CSS classes, and updates site.primary_color + fonts when current values are wizard defaults. Token never persisted.',
 				linkLabel: 'Branding (Design references area)',
 				linkHref: site('branding')
 			},
@@ -62,7 +94,7 @@
 				title: 'Cloudflare DNS',
 				status: 'shipped',
 				body:
-					'Wildcard record *.slab.example.com → 203.0.113.10 covers any built-site slug. Wildcard TLS cert covers the same. No per-site DNS or cert work needed for slugs on the default domain.',
+					'Wildcard record *.slab.example.com -> 203.0.113.10 covers any built-site slug. Wildcard TLS cert covers the same. No per-site DNS or cert work needed for slugs on the default domain.',
 				linkLabel: 'Architecture page',
 				linkHref: '/docs/architecture'
 			},

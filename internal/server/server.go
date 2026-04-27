@@ -313,6 +313,19 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/agent/branding", agentH.GetBranding)
 		r.Patch("/api/agent/branding", agentH.UpdateBranding)
 
+		// Profile (Phase 14): agents can read + patch the site_profiles row
+		// (business name, address, contact emails) so they can fill the
+		// Organization JSON-LD, security.txt, and legal pages on their own.
+		r.Get("/api/agent/profile", agentH.GetProfile)
+		r.Patch("/api/agent/profile", agentH.UpdateProfile)
+
+		// Settings (Phase 14): read any category, write to seo / analytics /
+		// general only. Security, allowed-scripts, nginx, danger stay
+		// admin-only because they affect attack surface.
+		r.Get("/api/agent/settings", agentH.ListSettings)
+		r.Get("/api/agent/settings/{category}", agentH.ListSettingsByCategory)
+		r.Patch("/api/agent/settings", agentH.BulkUpsertSettings)
+
 		// Self-hosted woff2 fonts (Phase 12.9 agent parity).
 		r.Get("/api/agent/fonts", agentH.ListFonts)
 		r.Post("/api/agent/fonts", agentH.UploadFont)
