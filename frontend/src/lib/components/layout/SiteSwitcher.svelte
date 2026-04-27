@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Popover } from 'bits-ui';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { ChevronsUpDown, Check, Plus, Search } from 'lucide-svelte';
 	import * as sitesApi from '$lib/api/sites';
 	import type { Site } from '$lib/api/types';
@@ -49,11 +50,43 @@
 		}
 	}
 
+	// Sections under /sites/{id}/* whose URL is safe to preserve verbatim
+	// when switching sites (no entity-ID tail that'd 404 on the new site).
+	const PRESERVABLE_SITE_SECTIONS = new Set([
+		'pages',
+		'branding',
+		'media',
+		'build',
+		'analytics',
+		'settings',
+		'agent-keys',
+		'components',
+		'css-classes',
+		'knowledgebase',
+		'guardrails'
+	]);
+
 	function selectSite(site: Site) {
 		setSite(site);
 		open = false;
 		query = '';
-		goto(`/sites/${site.id}`);
+
+		// If the user is on a per-site URL, swap the site id in place and
+		// preserve the section so they don't lose context. If they are on a
+		// global route (/docs, /account, /members) just update the store and
+		// stay where they are - those pages re-derive against currentSite.
+		const path = page.url.pathname;
+		const m = path.match(/^\/sites\/[^/]+(?:\/([^/]+))?/);
+		if (m) {
+			const section = m[1];
+			if (section && PRESERVABLE_SITE_SECTIONS.has(section)) {
+				void goto(`/sites/${site.id}/${section}`);
+			} else {
+				void goto(`/sites/${site.id}`);
+			}
+		}
+		// else: stay on the current global route. The page reads currentSite
+		// from the store, so links + bundle-binding pick up the new site.
 	}
 
 	function createNew() {

@@ -111,6 +111,28 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 						agent is wired in 30 seconds.
 					</p>
 					{#if !bootstrap}
+						{#if currentSite.value}
+							<div class="mt-4 rounded-lg border border-border-light bg-bg-elevated px-3 py-2.5">
+								<p class="text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
+									Will bind to
+								</p>
+								<div class="mt-1 flex items-baseline gap-2">
+									<p class="text-[14px] font-medium text-text-primary">
+										{currentSite.value.name}
+									</p>
+									<code class="font-mono text-[11px] text-text-muted">
+										{currentSite.value.slug}
+									</code>
+								</div>
+								<p class="mt-1 font-mono text-[10px] text-text-muted">
+									site_id: {currentSite.value.id}
+								</p>
+								<p class="mt-1 text-[11px] text-text-muted">
+									Switch sites in the top-bar dropdown if this isn't the right one. The bundle
+									keys, CLAUDE.md, and pending_setup snapshot are all tied to this site.
+								</p>
+							</div>
+						{/if}
 						<div class="mt-4 flex flex-wrap items-center gap-3">
 							<Button
 								variant="primary"
@@ -119,16 +141,24 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 								disabled={bootstrapping || !siteID}
 							>
 								<Sparkles size={14} strokeWidth={1.75} class="mr-1.5" />
-								{siteID ? 'Generate key & download CLAUDE.md' : 'Open a site first'}
+								{siteID
+									? `Generate bundle for ${currentSite.value?.name ?? 'this site'}`
+									: 'Open a site first'}
 							</Button>
 							<span class="text-[11px] text-text-muted">
 								{siteID
-									? 'Adds a fresh key with read+write capabilities to this site.'
+									? 'Adds a fresh key with read+write capabilities.'
 									: 'Pick a site from the top-bar site switcher.'}
 							</span>
 						</div>
 					{:else}
 						<div class="mt-4 flex flex-col gap-3">
+							<div class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[12px] text-emerald-700 dark:text-emerald-300">
+								Bundle generated for <strong>{bootstrap.site_name}</strong>
+								<code class="ml-1 font-mono text-[10px] opacity-80">
+									(site_id: {bootstrap.site_id})
+								</code>
+							</div>
 							<div class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
 								<strong>{bootstrap.note}</strong> The raw key below is shown once; we store
 								only its SHA-256 hash.
