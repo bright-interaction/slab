@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bright-interaction/slab/internal/personalization"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -287,6 +288,26 @@ func (g *GuardrailEngine) ShouldNoindex(ctx context.Context, siteID string, page
 // bad input here prevents grades from dropping after build.
 func validateBlockEvalChecks(blockType, dataJSON, unescaped string) []Violation {
 	var out []Violation
+
+	// Personalization condition (Phase 18.4). Any block can carry an
+	// optional `condition` string in data_json that gates its rendering on
+	// per-visitor metadata. Reject anything that isn't a parseable
+	// expression up front so the agent gets a fast feedback loop.
+	{
+		var d struct {
+			Condition string `json:"condition"`
+		}
+		_ = json.Unmarshal([]byte(dataJSON), &d)
+		if cond := strings.TrimSpace(d.Condition); cond != "" {
+			if err := personalization.Validate(cond); err != nil {
+				out = append(out, Violation{
+					Rule:     "personalization_condition",
+					Message:  fmt.Sprintf("condition: invalid expression: %s. Use 'key op value' (==, !=, >, >=, <, <=, in) or 'key present'.", err.Error()),
+					Severity: "error",
+				})
+			}
+		}
+	}
 
 	// Image-type blocks: require alt + dimensions.
 	if blockType == "image" {

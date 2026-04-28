@@ -433,10 +433,21 @@ CREATE TABLE IF NOT EXISTS visit_sessions (
     last_seen_at    TEXT NOT NULL DEFAULT (datetime('now')),
     page_count      INTEGER NOT NULL DEFAULT 0,
     identified_at   TEXT NOT NULL DEFAULT '',
+    -- Bidirectional CRM personalization (Phase 18). The CRM pushes a JSON
+    -- blob of opaque key/value pairs (lifecycle_stage, lead_score,
+    -- last_topic, name, email, ...). identity_confirmed_at is stamped by
+    -- the CRM whenever it has fresh confirmation that the fingerprint is
+    -- the right person; the read endpoint scrubs identified-tier fields
+    -- when this is older than analytics.identity_max_age_days. expires_at
+    -- lets the CRM tell us "this lead_score is good for 24h".
+    metadata_json           TEXT NOT NULL DEFAULT '{}',
+    metadata_expires_at     TEXT NOT NULL DEFAULT '',
+    identity_confirmed_at   TEXT NOT NULL DEFAULT '',
     UNIQUE(site_id, fingerprint)
 );
 CREATE INDEX IF NOT EXISTS idx_visit_sessions_site_seen ON visit_sessions(site_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_visit_sessions_identified ON visit_sessions(site_id, identified_at) WHERE identified_at != '';
+CREATE INDEX IF NOT EXISTS idx_visit_sessions_identity_conf ON visit_sessions(site_id, identity_confirmed_at) WHERE identity_confirmed_at != '';
 
 -- Client-side engagement beacon (Phase 12.6). The public site embeds a tiny
 -- inline JS beacon (see internal/builder/layouts.go). On visibilitychange

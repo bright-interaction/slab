@@ -105,19 +105,37 @@ func renderBlock(bl store.Block, components map[string]bool) string {
 		return fmt.Sprintf("  <!-- block %s: invalid data -->\n", bl.ID)
 	}
 
+	var inner string
 	// Check if this block uses a component
 	compName := extractComponentName(bl)
-	if compName != "" && components[compName] {
-		return renderComponentBlock(compName, data)
+	switch {
+	case compName != "" && components[compName]:
+		inner = renderComponentBlock(compName, data)
+	case dataHasHTML(data):
+		// Check for raw HTML
+		inner = fmt.Sprintf("  %s\n", data["html"])
+	default:
+		// Default: render as a section with data-driven content
+		inner = renderDataBlock(bl.BlockType, data)
 	}
 
-	// Check for raw HTML
-	if html, ok := data["html"].(string); ok {
-		return fmt.Sprintf("  %s\n", html)
+	// Phase 18.3: optional per-visitor condition. The hydration script
+	// loaded by RenderVisitorHydration walks every [data-asp-when] node
+	// and removes `hidden` when the embedded DSL matches. Empty / missing
+	// condition renders verbatim, no wrapper.
+	if cond, ok := data["condition"].(string); ok && strings.TrimSpace(cond) != "" {
+		return fmt.Sprintf("  <div data-asp-when=\"%s\" hidden>\n%s  </div>\n", escapeAttr(cond), inner)
 	}
+	return inner
+}
 
-	// Default: render as a section with data-driven content
-	return renderDataBlock(bl.BlockType, data)
+func dataHasHTML(data map[string]any) bool {
+	if v, ok := data["html"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func renderComponentBlock(name string, data map[string]any) string {

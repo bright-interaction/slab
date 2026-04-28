@@ -32,6 +32,13 @@ type Config struct {
 	BrightCRMWebhookURL    string
 	BrightCRMWebhookSecret string
 	CRMSyncMinInterval     time.Duration
+
+	// Bidirectional CRM personalization (Phase 18). Built sites live on
+	// subdomains of BuiltSiteSuffix (default ".slab.example.com")
+	// and need to reach /t/visitor + /t/inbound on the admin host. The CORS
+	// middleware (server.go isAllowedOrigin) widens to accept any origin
+	// whose hostname ends with this suffix.
+	BuiltSiteSuffix string
 }
 
 func Load() *Config {
@@ -55,6 +62,8 @@ func Load() *Config {
 		BrightCRMWebhookURL:    envOr("BRIGHTCRM_WEBHOOK_URL", ""),
 		BrightCRMWebhookSecret: envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),
 		CRMSyncMinInterval:     time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
+
+		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ".slab.example.com"),
 	}
 }
 

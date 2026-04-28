@@ -99,19 +99,31 @@ func readFingerprintCookie(r *http.Request) string {
 // browser strings collide, which is acceptable: the goal is "stable enough to
 // stitch a session" not "globally unique".
 func deriveFingerprint(r *http.Request, salt string) string {
-	ip := clientIP(r)
-	ua := r.Header.Get("User-Agent")
-	al := r.Header.Get("Accept-Language")
+	return DeriveFingerprint(clientIP(r), r.Header.Get("User-Agent"), r.Header.Get("Accept-Language"), salt)
+}
+
+// DeriveFingerprint exposes the same algorithm as the cookie middleware so
+// non-middleware paths (the bidirectional CRM /t/visitor read endpoint, the
+// /t/inbound CRM-pushed metadata receiver) can re-derive the fingerprint
+// from request headers without depending on FingerprintMiddleware having
+// run. Same inputs produce the same 16-hex value.
+func DeriveFingerprint(ip, ua, acceptLanguage, salt string) string {
 	h := sha256.New()
 	h.Write([]byte(ip))
 	h.Write([]byte{0})
 	h.Write([]byte(ua))
 	h.Write([]byte{0})
-	h.Write([]byte(al))
+	h.Write([]byte(acceptLanguage))
 	h.Write([]byte{0})
 	h.Write([]byte(salt))
 	sum := h.Sum(nil)
 	return hex.EncodeToString(sum[:8])
+}
+
+// ClientIP exposes the same RemoteAddr parsing the middleware uses, so
+// callers outside the middleware can re-derive a matching fingerprint.
+func ClientIP(r *http.Request) string {
+	return clientIP(r)
 }
 
 // clientIP best-effort extracts the client IP. We honour X-Forwarded-For

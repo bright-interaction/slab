@@ -79,6 +79,14 @@ func (s *Server) Router() http.Handler {
 		r.Post("/t/consent", trackH.Consent)
 		r.Post("/t/pageview", trackH.PageView)
 		r.Post("/t/engagement", trackH.Engagement)
+		// Bidirectional CRM personalization (Phase 18.1).
+		// /t/inbound accepts CRM-pushed metadata for a known visitor;
+		// HMAC-SHA256 (same secret as outbound) on X-Atomicsite-Signature.
+		r.Post("/t/inbound", trackH.Inbound)
+		// /t/visitor (Phase 18.2): per-visitor metadata read endpoint for
+		// the built-site hydration script. Re-derives fingerprint from
+		// request headers; cross-origin friendly.
+		r.Get("/t/visitor", trackH.Visitor)
 	})
 
 	// Auth (public)
@@ -287,6 +295,11 @@ func (s *Server) Router() http.Handler {
 		// agent re-read its own instructions on session start.
 		r.Get("/api/agent/bootstrap", agentH.AgentSelfBootstrap)
 
+		// Personalization debug (Phase 18.4): inspect what metadata the
+		// CRM has pushed for a given visitor. Bound to the agent's site
+		// via the agent identity.
+		r.Get("/api/agent/visitor-metadata", agentH.GetVisitorMetadata)
+
 		// Pages (slug via path or ?page= query param)
 		r.Post("/api/agent/pages", agentH.CreatePage)
 		r.Patch("/api/agent/pages/{slug}", agentH.UpdatePage)
@@ -457,6 +470,26 @@ func isAllowedOrigin(cfg *config.Config, origin string) bool {
 	// Allow the configured base URL origin
 	if strings.HasPrefix(origin, cfg.BaseURL) {
 		return true
+	}
+	// Phase 18: built sites live at <slug>.slab.example.com
+	// (or whatever the BUILT_SITE_SUFFIX env points at) and need to reach
+	// the admin host's /t/visitor + /t/inbound + /t/consent endpoints
+	// cross-origin. Match by hostname suffix to cover any slug.
+	if cfg.BuiltSiteSuffix != "" {
+		// Strip protocol and port to compare just the host.
+		host := origin
+		if i := strings.Index(host, "://"); i >= 0 {
+			host = host[i+3:]
+		}
+		if i := strings.IndexByte(host, '/'); i >= 0 {
+			host = host[:i]
+		}
+		if i := strings.IndexByte(host, ':'); i >= 0 {
+			host = host[:i]
+		}
+		if strings.HasSuffix(host, cfg.BuiltSiteSuffix) {
+			return true
+		}
 	}
 	// Agent API requests use API keys, not cookies, so CORS is less critical.
 	// But we still restrict to known origins for cookie-based admin endpoints.
