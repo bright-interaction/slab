@@ -206,6 +206,16 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString(RenderEngagementBeacon(site.ID, trackPath, cookieProofEnabled))
 	}
 
+	// Bidirectional CRM personalization (Phase 18.2). Hydration script
+	// fetches /t/visitor cross-origin, evaluates [data-asp-when] DSL,
+	// reveals matching blocks. Gated on analytics.personalization_enabled
+	// so the cost is opt-in.
+	if boolSetting(settingsMap["analytics.personalization_enabled"], false) {
+		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
+		adminBase := orDefault(settingsMap["analytics.admin_base_url"], DefaultAdminBaseURL)
+		b.WriteString(RenderVisitorHydration(site.ID, adminBase, trackPath))
+	}
+
 	b.WriteString("</body>\n</html>\n")
 
 	return WriteFile(filepath.Join(wsDir, "src", "layouts", "Base.astro"), b.String())

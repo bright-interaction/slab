@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/brightinteraction/atomicsite/internal/analytics"
+	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
 	"github.com/brightinteraction/atomicsite/internal/server"
@@ -42,6 +43,10 @@ func main() {
 	}
 
 	cfg := config.Load()
+	// Default admin base URL for the personalization hydration script
+	// (Phase 18.2). Per-site override via the analytics.admin_base_url
+	// setting; falls back to cfg.BaseURL otherwise.
+	builder.DefaultAdminBaseURL = cfg.BaseURL
 
 	// Ensure data directory exists
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
@@ -171,6 +176,12 @@ func applySchema(sqlDB *sql.DB) error {
 		{"sites", "on_primary_color", "TEXT NOT NULL DEFAULT '#FFFFFF'"},
 		// Media folders (Phase 13) added 2026-04-27.
 		{"media", "folder", "TEXT NOT NULL DEFAULT ''"},
+		// Bidirectional CRM personalization (Phase 18) added 2026-04-28.
+		// Required before applySchema executes the matching CREATE INDEX
+		// on existing prod DBs (mirrors the 2026-04-26 502 fix pattern).
+		{"visit_sessions", "metadata_json", "TEXT NOT NULL DEFAULT '{}'"},
+		{"visit_sessions", "metadata_expires_at", "TEXT NOT NULL DEFAULT ''"},
+		{"visit_sessions", "identity_confirmed_at", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -33,6 +34,20 @@ type SiteContext struct {
 	// The CLAUDE.md template tells agents to walk through this list with the
 	// user as the first step of any session.
 	PendingSetup []SetupTask `json:"pending_setup"`
+	// Personalization tells the agent what visitor metadata the CRM has
+	// pushed to this site, so it can author conditional blocks. Phase 18.4.
+	Personalization PersonalizationInfo `json:"personalization"`
+}
+
+// PersonalizationInfo summarises what the agent needs to author conditional
+// blocks: whether the feature is enabled, the identity-freshness window,
+// the actual metadata keys the CRM has been pushing, and a few example
+// conditions to seed pattern recognition.
+type PersonalizationInfo struct {
+	Enabled             bool     `json:"enabled"`
+	IdentityMaxAgeDays  int      `json:"identity_max_age_days"`
+	KnownKeys           []string `json:"known_keys"`
+	ExampleConditions   []string `json:"example_conditions"`
 }
 
 // SetupTask represents one configuration gap the agent should close. The
@@ -331,6 +346,7 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 	}
 
 	pending := b.computePendingSetup(ctx, siteID, site, pageInfos)
+	personalization := b.computePersonalization(ctx, siteID)
 
 	return &SiteContext{
 		Site: SiteInfo{
@@ -371,7 +387,69 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		Architecture:     archInfo,
 		DesignReferences: refInfos,
 		PendingSetup:     pending,
+		Personalization:  personalization,
 	}, nil
+}
+
+// computePersonalization builds the personalization summary surfaced to
+// the agent. known_keys is the DISTINCT set of metadata keys the CRM has
+// pushed for this site (read via a raw json_each query because sqlc cannot
+// model SQLite's JSON1 virtual columns). Examples are static so the agent
+// has shape recognition even on a fresh site.
+func (b *ContextBuilder) computePersonalization(ctx context.Context, siteID string) PersonalizationInfo {
+	out := PersonalizationInfo{
+		IdentityMaxAgeDays: 30,
+		KnownKeys:          []string{},
+		ExampleConditions: []string{
+			`lead_score >= 60`,
+			`lifecycle == "SQL"`,
+			`last_topic == "compliance"`,
+			`name present`,
+			`returning == "true"`,
+			`last_topic in compliance,gdpr,nis2`,
+		},
+	}
+	settings, _ := b.queries.ListSettingsBySite(ctx, siteID)
+	for _, s := range settings {
+		if s.Category != "analytics" {
+			continue
+		}
+		switch s.Key {
+		case "personalization_enabled":
+			out.Enabled = boolFromSetting(s.Value, false)
+		case "identity_max_age_days":
+			if n, err := strconv.Atoi(strings.TrimSpace(s.Value)); err == nil && n > 0 {
+				out.IdentityMaxAgeDays = n
+			}
+		}
+	}
+	out.KnownKeys = b.listVisitorMetadataKeys(ctx, siteID)
+	return out
+}
+
+// listVisitorMetadataKeys runs a raw query that sqlc cannot model
+// (SQLite's json_each returns key/value as virtual columns, which sqlc's
+// static analyzer rejects). Best-effort: returns an empty list on error
+// rather than aborting the whole context call.
+func (b *ContextBuilder) listVisitorMetadataKeys(ctx context.Context, siteID string) []string {
+	const q = `SELECT DISTINCT je.key
+FROM visit_sessions vs, json_each(vs.metadata_json) je
+WHERE vs.site_id = ? AND vs.metadata_json != '{}'
+ORDER BY je.key`
+	keys := []string{}
+	rows, err := b.queries.Raw().QueryContext(ctx, q, siteID)
+	if err != nil {
+		return keys
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // computePendingSetup inspects the site's profile, settings, and content to

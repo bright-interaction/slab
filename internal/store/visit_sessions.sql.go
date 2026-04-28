@@ -10,7 +10,7 @@ import (
 )
 
 const getSessionByFingerprint = `-- name: GetSessionByFingerprint :one
-SELECT id, site_id, fingerprint, visitor_id, email, consent_method, consent_categories_json, started_at, last_seen_at, page_count, identified_at FROM visit_sessions
+SELECT id, site_id, fingerprint, visitor_id, email, consent_method, consent_categories_json, started_at, last_seen_at, page_count, identified_at, metadata_json, metadata_expires_at, identity_confirmed_at FROM visit_sessions
 WHERE site_id = ? AND fingerprint = ?
 `
 
@@ -34,6 +34,44 @@ func (q *Queries) GetSessionByFingerprint(ctx context.Context, arg GetSessionByF
 		&i.LastSeenAt,
 		&i.PageCount,
 		&i.IdentifiedAt,
+		&i.MetadataJson,
+		&i.MetadataExpiresAt,
+		&i.IdentityConfirmedAt,
+	)
+	return i, err
+}
+
+const getVisitorMetadataByFingerprint = `-- name: GetVisitorMetadataByFingerprint :one
+SELECT id, site_id, fingerprint, visitor_id, email, consent_method,
+       consent_categories_json, started_at, last_seen_at, page_count,
+       identified_at, metadata_json, metadata_expires_at, identity_confirmed_at
+FROM visit_sessions
+WHERE site_id = ? AND fingerprint = ?
+`
+
+type GetVisitorMetadataByFingerprintParams struct {
+	SiteID      string `json:"site_id"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+func (q *Queries) GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error) {
+	row := q.db.QueryRowContext(ctx, getVisitorMetadataByFingerprint, arg.SiteID, arg.Fingerprint)
+	var i VisitSession
+	err := row.Scan(
+		&i.ID,
+		&i.SiteID,
+		&i.Fingerprint,
+		&i.VisitorID,
+		&i.Email,
+		&i.ConsentMethod,
+		&i.ConsentCategoriesJson,
+		&i.StartedAt,
+		&i.LastSeenAt,
+		&i.PageCount,
+		&i.IdentifiedAt,
+		&i.MetadataJson,
+		&i.MetadataExpiresAt,
+		&i.IdentityConfirmedAt,
 	)
 	return i, err
 }
@@ -75,7 +113,7 @@ func (q *Queries) IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSes
 }
 
 const listIdentifiedSessions = `-- name: ListIdentifiedSessions :many
-SELECT id, site_id, fingerprint, visitor_id, email, consent_method, consent_categories_json, started_at, last_seen_at, page_count, identified_at FROM visit_sessions
+SELECT id, site_id, fingerprint, visitor_id, email, consent_method, consent_categories_json, started_at, last_seen_at, page_count, identified_at, metadata_json, metadata_expires_at, identity_confirmed_at FROM visit_sessions
 WHERE site_id = ? AND identified_at != ''
 ORDER BY identified_at DESC
 LIMIT ? OFFSET ?
@@ -108,6 +146,9 @@ func (q *Queries) ListIdentifiedSessions(ctx context.Context, arg ListIdentified
 			&i.LastSeenAt,
 			&i.PageCount,
 			&i.IdentifiedAt,
+			&i.MetadataJson,
+			&i.MetadataExpiresAt,
+			&i.IdentityConfirmedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -147,4 +188,66 @@ func (q *Queries) UpsertVisitSession(ctx context.Context, arg UpsertVisitSession
 		arg.LastSeenAt,
 	)
 	return err
+}
+
+const upsertVisitorMetadataByFingerprint = `-- name: UpsertVisitorMetadataByFingerprint :execrows
+UPDATE visit_sessions
+SET metadata_json = ?,
+    metadata_expires_at = ?,
+    identity_confirmed_at = ?,
+    last_seen_at = datetime('now')
+WHERE site_id = ? AND fingerprint = ?
+`
+
+type UpsertVisitorMetadataByFingerprintParams struct {
+	MetadataJson        string `json:"metadata_json"`
+	MetadataExpiresAt   string `json:"metadata_expires_at"`
+	IdentityConfirmedAt string `json:"identity_confirmed_at"`
+	SiteID              string `json:"site_id"`
+	Fingerprint         string `json:"fingerprint"`
+}
+
+func (q *Queries) UpsertVisitorMetadataByFingerprint(ctx context.Context, arg UpsertVisitorMetadataByFingerprintParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, upsertVisitorMetadataByFingerprint,
+		arg.MetadataJson,
+		arg.MetadataExpiresAt,
+		arg.IdentityConfirmedAt,
+		arg.SiteID,
+		arg.Fingerprint,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const upsertVisitorMetadataByVisitorID = `-- name: UpsertVisitorMetadataByVisitorID :execrows
+UPDATE visit_sessions
+SET metadata_json = ?,
+    metadata_expires_at = ?,
+    identity_confirmed_at = ?,
+    last_seen_at = datetime('now')
+WHERE site_id = ? AND visitor_id = ? AND visitor_id != ''
+`
+
+type UpsertVisitorMetadataByVisitorIDParams struct {
+	MetadataJson        string `json:"metadata_json"`
+	MetadataExpiresAt   string `json:"metadata_expires_at"`
+	IdentityConfirmedAt string `json:"identity_confirmed_at"`
+	SiteID              string `json:"site_id"`
+	VisitorID           string `json:"visitor_id"`
+}
+
+func (q *Queries) UpsertVisitorMetadataByVisitorID(ctx context.Context, arg UpsertVisitorMetadataByVisitorIDParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, upsertVisitorMetadataByVisitorID,
+		arg.MetadataJson,
+		arg.MetadataExpiresAt,
+		arg.IdentityConfirmedAt,
+		arg.SiteID,
+		arg.VisitorID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

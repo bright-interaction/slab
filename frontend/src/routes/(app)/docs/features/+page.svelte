@@ -230,5 +230,22 @@
 			'/account',
 			'Open Account'
 		)}
+
+		{@render feature(
+			'Personalization (CRM round-trip)',
+			'Two-way data flow with your CRM. The CRM sees visitor activity (already shipped), looks the visitor up, and pushes knowledge BACK so the built site can greet them, reference what they last read, or gate a CTA on lead score.',
+			[
+				'POST /t/inbound: HMAC-signed inbound webhook your CRM POSTs to',
+				'GET /t/visitor: hydration script reads metadata; cross-origin friendly (server re-derives fingerprint)',
+				'Conditional blocks: any block can carry data.condition (e.g. lead_score >= 60); the renderer wraps it in [data-asp-when] and the hydration script reveals it on match',
+				'DSL: key op value where op is ==, !=, >, >=, <, <=, in, present',
+				'Anonymous tier: last_topic, last_page, lifecycle, lead_score work without identity confirmation',
+				'Identified tier: name, email, company gated on identity_confirmed_at within analytics.identity_max_age_days (default 30 days)',
+				'Hashed knowledge: keys ending in _hash are matchable but never displayable',
+				'Off by default: flip analytics.personalization_enabled to 1 to wire the hydration script'
+			],
+			siteHref('/settings/analytics'),
+			'Open Analytics settings'
+		)}
 	</div>
 </div>

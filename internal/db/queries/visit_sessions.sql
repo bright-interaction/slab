@@ -24,3 +24,31 @@ SELECT * FROM visit_sessions
 WHERE site_id = ? AND identified_at != ''
 ORDER BY identified_at DESC
 LIMIT ? OFFSET ?;
+
+-- name: UpsertVisitorMetadataByVisitorID :execrows
+UPDATE visit_sessions
+SET metadata_json = ?,
+    metadata_expires_at = ?,
+    identity_confirmed_at = ?,
+    last_seen_at = datetime('now')
+WHERE site_id = ? AND visitor_id = ? AND visitor_id != '';
+
+-- name: UpsertVisitorMetadataByFingerprint :execrows
+UPDATE visit_sessions
+SET metadata_json = ?,
+    metadata_expires_at = ?,
+    identity_confirmed_at = ?,
+    last_seen_at = datetime('now')
+WHERE site_id = ? AND fingerprint = ?;
+
+-- name: GetVisitorMetadataByFingerprint :one
+SELECT id, site_id, fingerprint, visitor_id, email, consent_method,
+       consent_categories_json, started_at, last_seen_at, page_count,
+       identified_at, metadata_json, metadata_expires_at, identity_confirmed_at
+FROM visit_sessions
+WHERE site_id = ? AND fingerprint = ?;
+
+-- ListVisitorMetadataKeys is intentionally implemented as a raw *sql.DB
+-- query in code (see internal/agent/context.go listVisitorMetadataKeys),
+-- not via sqlc, because sqlc's static analyzer can't parse SQLite's
+-- json_each(vs.metadata_json) key/value virtual columns.
