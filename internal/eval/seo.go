@@ -2,11 +2,25 @@ package eval
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/net/html"
 )
+
+// CTA keywords used by Site Inspector's Meta Description Has CTA check.
+// Matches the EN/SV/DE word lists in site-inspector/analyzers/seo.js so the
+// two evaluators agree on whether a description "calls to action".
+var ctaKeywords = regexp.MustCompile(`(?i)\b(learn|get|discover|find|try|start|book|free|download|read|see|check|explore|calculate|compare|shop|buy|order|save|join|sign up|subscribe|request|claim|unlock|läs|hämta|hitta|prova|börja|boka|gratis|ladda|köp|handla|beställ|spara|upptäck|jämför|registrera|testa|få|erfahren|entdecken|testen|starten|buchen|kostenlos|herunterladen|lesen|vergleichen|kaufen|bestellen|sparen|registrieren|anmelden|sehen|bekommen)\b`)
+
+// genericAltRE matches a non-descriptive alt value on its own (case-insensitive).
+var genericAltRE = regexp.MustCompile(`(?i)^\s*(image|photo|picture|img|graphic|icon)\.?\s*$`)
+
+// emailRE finds plaintext email addresses in visible text. Same spirit as
+// site-inspector's checkPlaintextEmails — used at Info severity in the eval
+// because the real enforcement lives in the block-time guardrail.
+var emailRE = regexp.MustCompile(`[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}`)
 
 // RunSEOChecks evaluates on-page + technical SEO across all pages, reporting
 // per-page failures so the agent can see exactly which pages need fixes.
@@ -188,10 +202,306 @@ func RunSEOChecks(site *SiteContext) []CheckResult {
 		return true, ""
 	}, "Add internal links between pages to support crawling and topic clustering."))
 
+	// --- New checks ported from upgraded site-inspector (2026-04-27) ---
+
+	checks = append(checks, perPageCheck("Title Not Truncated", "on-page", 1, site, func(p PageContext) (bool, string) {
+		t := titleOf(p.Doc)
+		n := utf8.RuneCountInString(t)
+		if n > 60 {
+			return false, fmt.Sprintf("title is %d chars and will be truncated in SERPs", n)
+		}
+		return true, ""
+	}, "Shorten title to 60 characters or fewer to prevent SERP truncation."))
+
+	checks = append(checks, perPageCheck("Meta Description Has CTA", "on-page", 1, site, func(p PageContext) (bool, string) {
+		d := findMetaContent(p.Doc, "description")
+		if d == "" {
+			return true, "" // separate check covers missing description
+		}
+		if !ctaKeywords.MatchString(d) {
+			return false, "no call-to-action verbs found in description"
+		}
+		return true, ""
+	}, "Include action verbs (learn, discover, get, try, free, läs, prova, entdecken) in meta descriptions."))
+
+	checks = append(checks, perPageCheck("Content Length 300+", "on-page", 1, site, func(p PageContext) (bool, string) {
+		body := firstElementByTag(p.Doc, "body")
+		if body == nil {
+			return false, "no <body>"
+		}
+		words := len(strings.Fields(textContent(body)))
+		if words < 300 {
+			return false, fmt.Sprintf("%d words (want 300+)", words)
+		}
+		return true, ""
+	}, "Pages under 300 words tend to underperform; expand the content or remove the page."))
+
+	checks = append(checks, perPageCheck("Descriptive Alt Text", "on-page", 2, site, func(p PageContext) (bool, string) {
+		for _, img := range elementsByTag(p.Doc, "img") {
+			alt := strings.TrimSpace(attr(img, "alt"))
+			if alt == "" {
+				continue // covered by Images Have Alt Text
+			}
+			if genericAltRE.MatchString(alt) {
+				return false, fmt.Sprintf("generic alt text %q", alt)
+			}
+		}
+		return true, ""
+	}, "Replace generic alts like \"image\" or \"photo\" with descriptions of what the image shows."))
+
+	checks = append(checks, perPageCheck("No Empty Links", "on-page", 1, site, func(p PageContext) (bool, string) {
+		for _, a := range elementsByTag(p.Doc, "a") {
+			if textContent(a) != "" || attr(a, "aria-label") != "" || attr(a, "title") != "" {
+				continue
+			}
+			imgs := elementsByTag(a, "img")
+			hasAltImg := false
+			for _, im := range imgs {
+				if strings.TrimSpace(attr(im, "alt")) != "" {
+					hasAltImg = true
+					break
+				}
+			}
+			if hasAltImg {
+				continue
+			}
+			return false, "anchor with no text, aria-label, or alt-bearing image"
+		}
+		return true, ""
+	}, "Empty links confuse crawlers. Add visible text, aria-label, or wrap a non-empty alt image."))
+
+	checks = append(checks, perPageCheck("No Broken Anchor Links", "on-page", 1, site, func(p PageContext) (bool, string) {
+		ids := map[string]bool{}
+		for _, n := range findAll(p.Doc, func(n *html.Node) bool {
+			return n.Type == html.ElementNode && hasAttr(n, "id")
+		}) {
+			ids[attr(n, "id")] = true
+		}
+		for _, a := range elementsByTag(p.Doc, "a") {
+			href := attr(a, "href")
+			if !strings.HasPrefix(href, "#") || href == "#" {
+				continue
+			}
+			target := strings.TrimPrefix(href, "#")
+			if !ids[target] {
+				return false, fmt.Sprintf("anchor href=\"#%s\" has no matching id on page", target)
+			}
+		}
+		return true, ""
+	}, "Fix or remove anchors pointing at IDs that don't exist on the page."))
+
+	checks = append(checks, perPageCheck("Canonical Matches URL", "technical", 1, site, func(p PageContext) (bool, string) {
+		canon := findLinkHref(p.Doc, "canonical")
+		if canon == "" {
+			return true, "" // covered by Canonical URL
+		}
+		// Scheme-tolerant compare: normalize the canonical's path tail vs the
+		// page's slug. Site Inspector requires equality of the path; atomicsite
+		// likewise expects the canonical to point at the page's own slug.
+		canonPath := canon
+		if i := strings.Index(canon, "://"); i >= 0 {
+			rest := canon[i+3:]
+			if j := strings.Index(rest, "/"); j >= 0 {
+				canonPath = rest[j:]
+			} else {
+				canonPath = "/"
+			}
+		}
+		canonPath = strings.TrimSuffix(canonPath, "/")
+		want := strings.TrimSuffix(p.Slug, "/")
+		if canonPath != want && canonPath != want+"/" && want != canonPath+"/" {
+			return false, fmt.Sprintf("canonical %q does not match page slug %q", canon, p.Slug)
+		}
+		return true, ""
+	}, "Canonical href must point at this page's own URL, not a parent or unrelated route."))
+
+	checks = append(checks, perPageCheck("Favicon", "technical", 1, site, func(p PageContext) (bool, string) {
+		for _, l := range elementsByTag(p.Doc, "link") {
+			rel := strings.ToLower(attr(l, "rel"))
+			if strings.Contains(rel, "icon") && !strings.Contains(rel, "apple-touch-icon") {
+				return true, ""
+			}
+		}
+		return false, "no <link rel=\"icon\">"
+	}, "Layouts.go should emit <link rel=\"icon\" href=\"/favicon.ico\"> by default."))
+
+	checks = append(checks, perPageCheck("Apple Touch Icon", "technical", 1, site, func(p PageContext) (bool, string) {
+		for _, l := range elementsByTag(p.Doc, "link") {
+			if strings.Contains(strings.ToLower(attr(l, "rel")), "apple-touch-icon") {
+				return true, ""
+			}
+		}
+		return false, "no <link rel=\"apple-touch-icon\">"
+	}, "Layouts.go should emit <link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"> by default."))
+
+	checks = append(checks, perPageCheck("No Duplicate Meta Tags", "technical", 1, site, func(p PageContext) (bool, string) {
+		// Title and canonical must appear at most once. Description, og:image
+		// and twitter:card same rule.
+		if titles := elementsByTag(p.Doc, "title"); len(titles) > 1 {
+			return false, fmt.Sprintf("%d <title> elements", len(titles))
+		}
+		canonCount := 0
+		for _, l := range elementsByTag(p.Doc, "link") {
+			if strings.EqualFold(attr(l, "rel"), "canonical") {
+				canonCount++
+			}
+		}
+		if canonCount > 1 {
+			return false, fmt.Sprintf("%d <link rel=canonical> elements", canonCount)
+		}
+		seen := map[string]int{}
+		for _, m := range elementsByTag(p.Doc, "meta") {
+			for _, key := range []string{"name", "property"} {
+				if v := strings.ToLower(attr(m, key)); v != "" {
+					seen[v]++
+				}
+			}
+		}
+		for _, k := range []string{"description", "og:title", "og:description", "og:image", "og:url", "og:type", "twitter:card", "twitter:image"} {
+			if seen[k] > 1 {
+				return false, fmt.Sprintf("%d <meta %s> elements", seen[k], k)
+			}
+		}
+		return true, ""
+	}, "Emit each meta tag exactly once. Duplicates confuse search engines."))
+
+	checks = append(checks, perPageCheck("OG Completeness", "social", 1, site, func(p PageContext) (bool, string) {
+		var missing []string
+		for _, prop := range []string{"og:title", "og:description", "og:image", "og:type", "og:url", "og:site_name", "og:locale"} {
+			if findMetaContent(p.Doc, prop) == "" {
+				missing = append(missing, prop)
+			}
+		}
+		if len(missing) > 0 {
+			return false, "missing " + strings.Join(missing, ", ")
+		}
+		return true, ""
+	}, "Emit og:site_name and og:locale on every page in addition to title/description/image/type/url."))
+
+	checks = append(checks, perPageCheck("OG Image Size 1200x630", "social", 1, site, func(p PageContext) (bool, string) {
+		w := findMetaContent(p.Doc, "og:image:width")
+		h := findMetaContent(p.Doc, "og:image:height")
+		if w == "" || h == "" {
+			return false, "missing og:image:width / og:image:height"
+		}
+		if w != "1200" || h != "630" {
+			return false, fmt.Sprintf("og:image declares %sx%s (want 1200x630)", w, h)
+		}
+		return true, ""
+	}, "Emit og:image:width=1200 and og:image:height=630 to match the recommended OG aspect ratio."))
+
+	checks = append(checks, perPageCheck("Twitter Card", "social", 1, site, func(p PageContext) (bool, string) {
+		c := findMetaContent(p.Doc, "twitter:card")
+		if c == "" {
+			return false, "no <meta name=twitter:card>"
+		}
+		return true, ""
+	}, "Emit <meta name=twitter:card content=summary_large_image> in the layout."))
+
+	checks = append(checks, perPageCheck("Twitter Image", "social", 1, site, func(p PageContext) (bool, string) {
+		if findMetaContent(p.Doc, "twitter:image") == "" {
+			return false, "no <meta name=twitter:image>"
+		}
+		return true, ""
+	}, "Emit <meta name=twitter:image content=...> referencing the same OG image."))
+
+	// No Plaintext Emails: Info severity only at eval time. Real enforcement
+	// lives in the block-time guardrail (validateBlockEvalChecks).
+	for _, p := range site.Pages {
+		if body := firstElementByTag(p.Doc, "body"); body != nil {
+			text := textContent(body)
+			emails := emailRE.FindAllString(text, -1)
+			// Filter out emails inside mailto: hrefs.
+			var leaks []string
+			for _, e := range emails {
+				if !mailtoCovers(p.Doc, e) {
+					leaks = append(leaks, e)
+				}
+			}
+			if len(leaks) > 0 {
+				r := Info("No Plaintext Emails", "technical",
+					fmt.Sprintf("%d plaintext email(s) on %s: %s", len(leaks), p.Slug, strings.Join(firstN(leaks, 3), ", ")))
+				r.Page = p.Slug
+				r.Recommendation = "Use a contact form or wrap emails in <a href=\"mailto:\">. Block-time guardrail rejects new copy that leaks emails."
+				checks = append(checks, r)
+				break // one info row per build is enough
+			}
+		}
+	}
+
+	checks = append(checks, checkFAQVisibility(site))
+
 	// GEO / AEO checks (AI search readiness), same category, distinct section.
 	checks = append(checks, RunGEOChecks(site)...)
 
 	return checks
+}
+
+// mailtoCovers reports whether an email address appears inside a
+// <a href="mailto:..."> on the page. Used to allow emails the page deliberately
+// surfaces as clickable links.
+func mailtoCovers(doc *html.Node, email string) bool {
+	for _, a := range elementsByTag(doc, "a") {
+		href := strings.ToLower(attr(a, "href"))
+		if strings.HasPrefix(href, "mailto:") && strings.Contains(href, strings.ToLower(email)) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstN(s []string, n int) []string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+// checkFAQVisibility ensures any page emitting FAQPage JSON-LD also renders
+// the questions visibly in the DOM. Mirrors site-inspector's
+// checkFaqSchemaVisibility rule: schema without matching visible Q&A is
+// treated as an SEO trap because Google rejects mismatches.
+func checkFAQVisibility(site *SiteContext) CheckResult {
+	for _, p := range site.Pages {
+		var questions []string
+		walkJSONLD(p.Doc, func(item map[string]any) {
+			if !typeMatches(item["@type"], "FAQPage") {
+				return
+			}
+			list, ok := item["mainEntity"].([]any)
+			if !ok {
+				return
+			}
+			for _, e := range list {
+				m, ok := e.(map[string]any)
+				if !ok {
+					continue
+				}
+				if name, ok := m["name"].(string); ok && strings.TrimSpace(name) != "" {
+					questions = append(questions, name)
+				}
+			}
+		})
+		if len(questions) == 0 {
+			continue
+		}
+		body := firstElementByTag(p.Doc, "body")
+		bodyText := strings.ToLower(textContent(body))
+		for _, q := range questions {
+			needle := strings.ToLower(strings.TrimSpace(q))
+			if needle == "" {
+				continue
+			}
+			if !strings.Contains(bodyText, needle) {
+				r := Fail("FAQ Schema Has Visible Content", "social", 2, SeverityWarning,
+					fmt.Sprintf("FAQPage schema on %s has question %q with no matching visible text", p.Slug, q),
+					"Render every FAQ question in the visible DOM, or remove the FAQPage schema. Google rejects mismatches.")
+				r.Page = p.Slug
+				return r
+			}
+		}
+	}
+	return Pass("FAQ Schema Has Visible Content", "social", 2, "FAQ schemas align with visible content (or no FAQPage schema present)")
 }
 
 // perPageCheck runs predicate on every page, fails on first page that fails.

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/bright-interaction/slab/internal/personalization"
@@ -328,7 +329,7 @@ func validateBlockEvalChecks(blockType, dataJSON, unescaped string) []Violation 
 			out = append(out, Violation{
 				Rule:     "descriptive_alt",
 				Message:  fmt.Sprintf("Alt text %q is generic. Describe what's in the image (subject, action, context), not 'image' / 'photo' / 'picture'.", d.Alt),
-				Severity: "warning",
+				Severity: "error",
 			})
 		}
 		if !hasNonZeroNumber(d.Width) || !hasNonZeroNumber(d.Height) {
@@ -398,6 +399,27 @@ func validateBlockEvalChecks(blockType, dataJSON, unescaped string) []Violation 
 		}
 	}
 
+	// Plaintext-email rejection. Mirrors the eval-engine "No Plaintext Emails"
+	// check at write time: emails that aren't wrapped in mailto: leak to
+	// scrapers + bots. The page handler decides whether agent copy contains
+	// an email and asks the operator to use a mailto: link or a contact form.
+	if leaks := emailLeakRE.FindAllString(unescaped, -1); len(leaks) > 0 {
+		// Filter emails already inside a mailto: href.
+		var bare []string
+		for _, e := range leaks {
+			if !strings.Contains(strings.ToLower(unescaped), "mailto:"+strings.ToLower(e)) {
+				bare = append(bare, e)
+			}
+		}
+		if len(bare) > 0 {
+			out = append(out, Violation{
+				Rule:     "plaintext_email",
+				Message:  fmt.Sprintf("Plaintext email(s) detected: %s. Wrap in <a href=\"mailto:...\"> or use a contact form. Plaintext emails get scraped.", strings.Join(bare, ", ")),
+				Severity: "warning",
+			})
+		}
+	}
+
 	return out
 }
 
@@ -455,10 +477,27 @@ func ValidatePageMeta(in PageMetaInput) []Violation {
 				Severity: "error",
 			})
 		}
+		// Multi-language CTA-keyword check (mirrors the eval-engine "Meta
+		// Description Has CTA" check + Site Inspector's seo.js logic).
+		if !ctaKeywordsRE.MatchString(desc) {
+			out = append(out, Violation{
+				Rule:     "description_cta",
+				Message:  "Meta description has no call-to-action verbs. Add a verb like learn / discover / get / try / free / läs / prova / entdecken so the SERP snippet earns clicks.",
+				Severity: "warning",
+			})
+		}
 	}
 
 	return out
 }
+
+// ctaKeywordsRE mirrors the regex used in internal/eval/seo.go so the agent
+// gets the same answer at write time that the build-time evaluator does.
+var ctaKeywordsRE = regexp.MustCompile(`(?i)\b(learn|get|discover|find|try|start|book|free|download|read|see|check|explore|calculate|compare|shop|buy|order|save|join|sign up|subscribe|request|claim|unlock|läs|hämta|hitta|prova|börja|boka|gratis|ladda|köp|handla|beställ|spara|upptäck|jämför|registrera|testa|få|erfahren|entdecken|testen|starten|buchen|kostenlos|herunterladen|lesen|vergleichen|kaufen|bestellen|sparen|registrieren|anmelden|sehen|bekommen)\b`)
+
+// emailLeakRE matches plaintext email addresses in agent-supplied copy.
+// Block-time enforcement of the eval-engine "No Plaintext Emails" check.
+var emailLeakRE = regexp.MustCompile(`[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}`)
 
 var genericAnchors = []string{
 	"click here",

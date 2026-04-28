@@ -157,6 +157,38 @@ func RunPrivacyChecks(site *SiteContext) []CheckResult {
 			"No terms or cookie policy link", "Add /terms or /cookies link in footer."))
 	}
 
+	// --- New checks ported from upgraded site-inspector (2026-04-27) ---
+
+	// Cookie Count: heuristic on cookie-bearing scripts and document.cookie
+	// writes inside inline <script>. Atomicsite-built sites are static so we
+	// can't read Set-Cookie headers at eval time; what we CAN do is flag
+	// pages that ship inline scripts that write cookies, which is the same
+	// signal Site Inspector surfaces.
+	cookieWriters := 0
+	for _, p := range site.Pages {
+		for _, s := range elementsByTag(p.Doc, "script") {
+			if attr(s, "src") != "" {
+				continue // external scripts go through Tracker Count above
+			}
+			body := textContent(s)
+			if strings.Contains(body, "document.cookie") {
+				cookieWriters++
+			}
+		}
+	}
+	switch {
+	case cookieWriters == 0:
+		checks = append(checks, Pass("Cookie Count", "tracking", 1,
+			"No inline cookie writers detected"))
+	case cookieWriters <= 2:
+		checks = append(checks, Pass("Cookie Count", "tracking", 1,
+			fmt.Sprintf("%d inline cookie writer(s) detected", cookieWriters)))
+	default:
+		checks = append(checks, Fail("Cookie Count", "tracking", 1, SeverityWarning,
+			fmt.Sprintf("%d inline cookie writers across pages", cookieWriters),
+			"Move cookie writes behind consent. Inline document.cookie outside a consent gate fails GDPR."))
+	}
+
 	return checks
 }
 
