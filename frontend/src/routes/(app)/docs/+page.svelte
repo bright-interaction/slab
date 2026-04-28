@@ -6,8 +6,8 @@
 		LayoutGrid,
 		Code2,
 		Plug,
-		Workflow,
-		Boxes
+		Boxes,
+		UserCircle2
 	} from 'lucide-svelte';
 </script>
 
@@ -17,15 +17,15 @@
 	subtitle: string,
 	IconCmp: typeof Layers
 )}
-	<a {href} class="block">
-		<Card padding="md" hoverable>
-			<div class="flex items-start gap-3">
+	<a {href} class="block h-full">
+		<Card padding="md" hoverable class="h-full">
+			<div class="flex h-full items-start gap-3">
 				<span
 					class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-light bg-bg-elevated text-text-secondary"
 				>
 					<IconCmp size={16} strokeWidth={1.5} />
 				</span>
-				<div class="flex flex-col gap-0.5 min-w-0">
+				<div class="flex min-w-0 flex-col gap-0.5">
 					<p class="text-[13px] font-medium text-text-primary">{title}</p>
 					<p class="text-[12px] text-text-muted">{subtitle}</p>
 				</div>
@@ -52,7 +52,9 @@
 		</p>
 	</header>
 
-	<section class="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+	<section
+		class="mt-8 grid auto-rows-fr grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+	>
 		{@render sectionCard(
 			'/docs/architecture',
 			'Architecture',
@@ -78,16 +80,16 @@
 			Plug
 		)}
 		{@render sectionCard(
-			'/docs/apps',
-			'Apps',
-			'Connectors to our stack and to third-party tools.',
-			Boxes
+			'/docs/personalization',
+			'Personalization',
+			'Bidirectional CRM loop, conditional blocks, identity tiers.',
+			UserCircle2
 		)}
 		{@render sectionCard(
-			'/docs/integrations',
-			'Integrations',
-			'Platform-level mechanics: DNS, evals, font hosting.',
-			Workflow
+			'/docs/apps',
+			'Apps & integrations',
+			'External connectors plus platform-level mechanics.',
+			Boxes
 		)}
 	</section>
 </div>

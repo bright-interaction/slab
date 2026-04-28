@@ -6,8 +6,8 @@ const ROUTES: Array<{ path: string; heading: RegExp }> = [
 	{ path: '/docs/features', heading: /^Features$/ },
 	{ path: '/docs/agent-api', heading: /^Agent API$/ },
 	{ path: '/docs/connect-your-agent', heading: /^Connect your agent$/ },
-	{ path: '/docs/apps', heading: /^Apps$/ },
-	{ path: '/docs/integrations', heading: /^Integrations$/ }
+	{ path: '/docs/personalization', heading: /^Personalization$/ },
+	{ path: '/docs/apps', heading: /^Apps & integrations$/ }
 ];
 
 const SUB_PAGES = [
@@ -15,8 +15,8 @@ const SUB_PAGES = [
 	'features',
 	'agent-api',
 	'connect-your-agent',
-	'apps',
-	'integrations'
+	'personalization',
+	'apps'
 ];
 
 test.describe('Documentation pages', () => {
