@@ -2,6 +2,7 @@
 	import * as sitesApi from '$lib/api/sites';
 	import * as fontsApi from '$lib/api/fonts';
 	import * as designRefsApi from '$lib/api/designRefs';
+	import * as cssClassesApi from '$lib/api/cssClasses';
 	import { ApiError } from '$lib/api/client';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -16,7 +17,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { contrastRatio, passesAA } from '$lib/wcag';
 	import { Trash2, RefreshCw, Github, Upload as UploadIcon, Smartphone, Monitor } from 'lucide-svelte';
-	import type { Site } from '$lib/api/types';
+	import type { CssClass, Site } from '$lib/api/types';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -142,9 +143,20 @@
 		}
 	}
 
+	let cssClasses = $state<CssClass[]>([]);
+
+	async function loadCssClasses(): Promise<void> {
+		try {
+			cssClasses = await cssClassesApi.list(data.site.id);
+		} catch {
+			cssClasses = [];
+		}
+	}
+
 	$effect(() => {
 		void loadCustomFonts();
 		void loadDesignRefs();
+		void loadCssClasses();
 	});
 
 	const fontOptions = $derived(() => {
@@ -541,6 +553,7 @@
 					{colors}
 					surfaceHex={surface}
 					mutedHex={muted}
+					{cssClasses}
 					onSuggest={applySuggestion}
 				/>
 			</section>

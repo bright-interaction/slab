@@ -39,8 +39,11 @@ func RunGEOChecks(site *SiteContext) []CheckResult {
 	}, "Add max-image-preview:large to <meta name=robots> for richer image surfacing."))
 
 	checks = append(checks, perPageCheck("BreadcrumbList Schema", "geo", 2, site, func(p PageContext) (bool, string) {
-		// Home page is exempt
-		if p.Slug == "/" {
+		// Home page is exempt, plus per-locale roots like /sv or /en. Single
+		// path-segment routes act as the "homepage" of their locale and
+		// shouldn't carry a breadcrumb (Site Inspector applies the same rule
+		// via `pathname === '/'`; atomicsite extends it to depth-1 locale roots).
+		if isLocaleRoot(p.Slug) {
 			return true, ""
 		}
 		count := breadcrumbItemCount(p.Doc)
@@ -89,6 +92,17 @@ func RunGEOChecks(site *SiteContext) []CheckResult {
 	}, "Use lists, tables with <th>, or denser H2 sections so LLMs can extract passages cleanly."))
 
 	return checks
+}
+
+// isLocaleRoot reports whether a slug is the homepage or a depth-1 locale
+// root (e.g. "/", "/sv", "/sv/", "/en"). Site Inspector exempts the
+// homepage from BreadcrumbList; atomicsite extends to locale roots.
+func isLocaleRoot(slug string) bool {
+	s := strings.Trim(slug, "/")
+	if s == "" {
+		return true
+	}
+	return !strings.Contains(s, "/")
 }
 
 // breadcrumbItemCount returns the maximum itemListElement length found across

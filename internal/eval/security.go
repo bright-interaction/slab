@@ -1,8 +1,13 @@
 package eval
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 )
+
+// hstsMaxAgeRE captures `max-age=N` from a Strict-Transport-Security header.
+var hstsMaxAgeRE = regexp.MustCompile(`(?i)max-age\s*=\s*(\d+)`)
 
 // RunSecurityChecks evaluates HTTP headers + HTML for security best practices.
 // Headers are sourced from BuildSecurityHeaders (what the site WOULD emit when
@@ -120,6 +125,53 @@ func RunSecurityChecks(site *SiteContext) []CheckResult {
 			checks = append(checks, Fail("CSP meta tag", "csp", 1, SeverityInfo,
 				"CSP set in headers but no meta fallback",
 				"Static hosts without header support won't apply CSP. Layouts.go should emit a meta tag."))
+		}
+	}
+
+	// --- New checks ported from upgraded site-inspector (2026-04-27) ---
+
+	hsts := h["Strict-Transport-Security"]
+	if hsts != "" {
+		if m := hstsMaxAgeRE.FindStringSubmatch(hsts); len(m) == 2 {
+			if n, err := strconv.Atoi(m[1]); err == nil && n >= 31536000 {
+				checks = append(checks, Pass("HSTS max-age 1y+", "headers", 2,
+					"max-age covers 1 year or more"))
+			} else {
+				checks = append(checks, Fail("HSTS max-age 1y+", "headers", 2, SeverityWarning,
+					"max-age is below 31536000 (1 year)",
+					"Set Strict-Transport-Security max-age to at least 31536000."))
+			}
+		} else {
+			checks = append(checks, Fail("HSTS max-age 1y+", "headers", 2, SeverityWarning,
+				"HSTS header has no parseable max-age",
+				"Set Strict-Transport-Security max-age=31536000."))
+		}
+		if strings.Contains(strings.ToLower(hsts), "includesubdomains") {
+			checks = append(checks, Pass("HSTS includeSubDomains", "headers", 1,
+				"includeSubDomains directive present"))
+		} else {
+			checks = append(checks, Fail("HSTS includeSubDomains", "headers", 1, SeverityWarning,
+				"includeSubDomains not set",
+				"Add the includeSubDomains directive to Strict-Transport-Security."))
+		}
+		if strings.Contains(strings.ToLower(hsts), "preload") {
+			checks = append(checks, Pass("HSTS preload directive", "headers", 1,
+				"preload directive present"))
+		} else {
+			checks = append(checks, Fail("HSTS preload directive", "headers", 1, SeverityInfo,
+				"preload directive not set",
+				"After confirming max-age >= 1y and includeSubDomains, opt in via Settings -> Security -> HSTS preload to add the preload directive."))
+		}
+	}
+
+	if csp := h["Content-Security-Policy"]; csp != "" {
+		if strings.Contains(strings.ToLower(csp), "upgrade-insecure-requests") {
+			checks = append(checks, Pass("CSP upgrade-insecure-requests", "csp", 1,
+				"upgrade-insecure-requests directive present"))
+		} else {
+			checks = append(checks, Fail("CSP upgrade-insecure-requests", "csp", 1, SeverityWarning,
+				"upgrade-insecure-requests not in CSP",
+				"Add upgrade-insecure-requests to your CSP so legacy http:// embeds are auto-upgraded."))
 		}
 	}
 

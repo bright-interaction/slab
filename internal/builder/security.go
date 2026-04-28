@@ -128,6 +128,7 @@ func buildCSP(allowedDomains []string) string {
 		"base-uri 'self'",
 		"form-action 'self'",
 		"object-src 'none'",
+		"upgrade-insecure-requests",
 	}
 	return strings.Join(directives, "; ")
 }

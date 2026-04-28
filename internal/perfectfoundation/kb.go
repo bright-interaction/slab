@@ -231,6 +231,55 @@ Treat llms.txt like a README for AI crawlers. Update it when:
 
 Brief, honest, fact-dense. No marketing fluff — LLMs prefer specifics.`,
 	},
+	{
+		Category: "seo",
+		Title:    "Anchor links must point to real IDs (kb.go:anchor-links)",
+		Content: `Site Inspector now flags broken anchor links. An <a href="#section-3"> only passes if an element on the same page has id="section-3". When you copy headings between pages, regenerate the slug-id pairs so old anchor hrefs don't drift past their targets.
+
+Atomicsite emits stable id attributes for headings in long-form text blocks. Don't hand-write hrefs that point at IDs you didn't introduce. If a section moves, update every page that linked to it (the eval engine surfaces the broken anchor with the page slug).`,
+	},
+	{
+		Category: "seo",
+		Title:    "FAQ schema must match visible content (kb.go:faq-schema)",
+		Content: `When you emit FAQPage JSON-LD, every Question.name and Answer.acceptedAnswer.text in the schema must appear verbatim in the visible DOM of the same page. Google rejects FAQ schemas that don't align with on-page content; the eval engine treats schema/visible mismatch as an SEO trap.
+
+Pattern: render the FAQ block in <dl><dt><dd> markup AND emit the matching JSON-LD. Atomicsite's faq block does both in lockstep — never emit FAQPage from a custom block without a visible Q&A list to match.`,
+	},
+	{
+		Category: "social",
+		Title:    "Open Graph + Twitter Card completeness",
+		Content: `Site Inspector's "OG Completeness" check requires seven properties: og:title, og:description, og:image, og:type, og:url, og:site_name, og:locale. The "Twitter Card" + "Twitter Image" checks add twitter:card=summary_large_image and twitter:image.
+
+Atomicsite's Layout bakes all of these in. og:locale is derived from the site lang (en → en_US, sv → sv_SE). The OG image must be 1200x630 — uploaded images outside that ratio still pass the OG present check but fail OG Image Size. Use the Branding > Brand assets folder to upload a 1200x630 og-image.png.`,
+	},
+	{
+		Category: "accessibility",
+		Title:    "Skip-to-content link (kb.go:landmarks)",
+		Content: `The first focusable element on every page must be a skip link that jumps to the <main> landmark — keyboard users can't tab past your nav otherwise.
+
+Atomicsite's Layout emits <a href="#main"> as the first child of <body> with sr-only-focusable styling (offscreen until focused). The <main> element carries id="main". Don't remove either; the eval engine fails pages where the first in-page anchor doesn't point to a content landmark.`,
+	},
+	{
+		Category: "accessibility",
+		Title:    "Autocomplete attributes on form inputs (kb.go:autocomplete)",
+		Content: `Form inputs with type="email", "tel", or names like "name", "organization", "country" need an autocomplete attribute. Site Inspector flags missing values; password managers and assistive tech rely on these to autofill correctly.
+
+Common values: email, tel, name, given-name, family-name, organization, organization-title, country-name, postal-code, street-address. Add them on every input atomicsite block — the form_field block already wires this; custom HTML pasted into a text block does not.`,
+	},
+	{
+		Category: "security",
+		Title:    "HSTS preload submission (kb.go:hsts-preload)",
+		Content: `Strict-Transport-Security must declare max-age >= 31536000 (1 year), includeSubDomains, and the preload directive to qualify for the browser preload list at hstspreload.org. Atomicsite ships max-age and includeSubDomains by default; preload is opt-in via Settings > Security > HSTS preload because submission is one-way.
+
+Only enable preload when you're sure every subdomain serves HTTPS — a misconfigured wildcard will lock visitors out of http://intranet.your-domain. The eval engine reports "preload directive" as Info severity until you opt in.`,
+	},
+	{
+		Category: "accessibility",
+		Title:    "aria-hidden must not contain focusable elements (kb.go:aria-hidden)",
+		Content: `Putting aria-hidden="true" on an element that contains a focusable child (link, button, input, tabindex >= 0) is a real bug — keyboard users can tab into content that screen readers can't see. Site Inspector flags this; atomicsite's eval mirrors.
+
+If you need to hide a region from assistive tech, also set tabindex=-1 on every focusable descendant, or skip the aria-hidden and use display:none / inert instead.`,
+	},
 }
 
 // SeedReferenceKnowledgebase seeds the brightinteraction.com-derived

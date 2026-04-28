@@ -74,14 +74,30 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("  <title>{title}</title>\n")
 	b.WriteString("  {description && <meta name=\"description\" content={description} />}\n")
 	b.WriteString("  <meta name=\"robots\" content={robots} />\n")
-	b.WriteString("  <link rel=\"canonical\" href={canonicalURL.href} />\n\n")
+	b.WriteString("  <link rel=\"canonical\" href={canonicalURL.href} />\n")
+	// Favicon + Apple Touch Icon for site-inspector parity. Emitted unconditionally;
+	// browsers degrade silently if /favicon.ico or /apple-touch-icon.png is missing.
+	// The Media library's `folder=brand` is the intended home for these files.
+	b.WriteString("  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\" />\n")
+	b.WriteString("  <link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\" />\n\n")
 
 	// Open Graph
+	b.WriteString(fmt.Sprintf("  <meta property=\"og:site_name\" content=\"%s\" />\n", escapeAttr(site.Name)))
+	b.WriteString(fmt.Sprintf("  <meta property=\"og:locale\" content=\"%s\" />\n", escapeAttr(ogLocaleFromLang(site.Lang))))
 	b.WriteString("  <meta property=\"og:title\" content={title} />\n")
 	b.WriteString("  {description && <meta property=\"og:description\" content={description} />}\n")
 	b.WriteString("  {ogImage && <meta property=\"og:image\" content={ogImage} />}\n")
+	b.WriteString("  {ogImage && <meta property=\"og:image:width\" content=\"1200\" />}\n")
+	b.WriteString("  {ogImage && <meta property=\"og:image:height\" content=\"630\" />}\n")
 	b.WriteString("  <meta property=\"og:type\" content=\"website\" />\n")
-	b.WriteString("  <meta property=\"og:url\" content={canonicalURL.href} />\n\n")
+	b.WriteString("  <meta property=\"og:url\" content={canonicalURL.href} />\n")
+	// Twitter Card. summary_large_image renders the OG image at full bleed in
+	// X / Twitter previews; site-inspector requires twitter:card and
+	// twitter:image. We piggyback on the ogImage prop so they stay in sync.
+	b.WriteString("  <meta name=\"twitter:card\" content=\"summary_large_image\" />\n")
+	b.WriteString("  {ogImage && <meta name=\"twitter:image\" content={ogImage} />}\n")
+	b.WriteString("  <meta name=\"twitter:title\" content={title} />\n")
+	b.WriteString("  {description && <meta name=\"twitter:description\" content={description} />}\n\n")
 
 	// Security headers as meta (belt-and-suspenders: headers also sent via
 	// _headers file and nginx.conf for directives browsers honor only in
@@ -179,6 +195,11 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 
 	b.WriteString("</head>\n<body>\n")
 
+	// Skip-to-content link for keyboard users. Site-inspector's accessibility
+	// pass wants the FIRST focusable anchor on every page to jump to a
+	// landmark. The .sr-only-focusable class hides it offscreen until focus.
+	b.WriteString("  <a href=\"#main\" class=\"sr-only-focusable\" style=\"position:absolute;left:-9999px;top:auto;\" onfocus=\"this.style.left='8px';this.style.top='8px';this.style.background='#000';this.style.color='#fff';this.style.padding='8px 12px';this.style.zIndex='10000';\" onblur=\"this.style.left='-9999px';this.style.top='auto';\">Skip to content</a>\n")
+
 	// Header
 	if headerHTML != "" {
 		b.WriteString("  <header>\n")
@@ -186,7 +207,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString("  </header>\n")
 	}
 
-	b.WriteString("  <main>\n    <slot />\n  </main>\n")
+	b.WriteString("  <main id=\"main\">\n    <slot />\n  </main>\n")
 
 	// Footer
 	if footerHTML != "" {
@@ -450,4 +471,33 @@ func escapeAstroString(s string) string {
 	s = strings.ReplaceAll(s, "'", "\\'")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
+}
+
+// ogLocaleFromLang turns an HTML lang code (en, sv, de) into the underscore-
+// separated form Open Graph wants (en_US, sv_SE, de_DE). Site-inspector's OG
+// Completeness check requires og:locale; this is a best-effort default that
+// can be overridden later via a setting if a user needs a regional variant.
+func ogLocaleFromLang(lang string) string {
+	switch strings.ToLower(strings.TrimSpace(lang)) {
+	case "en":
+		return "en_US"
+	case "sv":
+		return "sv_SE"
+	case "de":
+		return "de_DE"
+	case "no", "nb":
+		return "nb_NO"
+	case "da":
+		return "da_DK"
+	case "fi":
+		return "fi_FI"
+	case "fr":
+		return "fr_FR"
+	case "es":
+		return "es_ES"
+	case "":
+		return "en_US"
+	default:
+		return strings.ToLower(strings.TrimSpace(lang)) + "_" + strings.ToUpper(strings.TrimSpace(lang))
+	}
 }

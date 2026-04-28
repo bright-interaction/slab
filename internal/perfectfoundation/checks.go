@@ -45,7 +45,7 @@ type CheckOwner struct {
 // RunGEOChecks / RunPerformanceChecks / RunAccessibilityChecks /
 // RunPrivacyChecks. Keep this list alphabetical within category.
 var CheckOwnership = []CheckOwner{
-	// --- security (14) ---
+	// --- security (18) ---
 	{"security", "Strict-Transport-Security", StrategyBake, "builder/security.go:BuildSecurityHeaders"},
 	{"security", "Content-Security-Policy", StrategyBake, "builder/security.go:buildCSP"},
 	{"security", "X-Content-Type-Options", StrategyBake, "builder/security.go:BuildSecurityHeaders"},
@@ -61,8 +61,12 @@ var CheckOwnership = []CheckOwner{
 	{"security", "CSP meta tag", StrategyBake, "builder/layouts.go:RenderLayouts"},
 	{"security", "Compression", StrategyBake, "builder/nginx.go:RenderNginxConfig"},
 	{"security", "Cache Headers", StrategyBake, "builder/nginx.go:RenderNginxConfig"},
+	{"security", "HSTS max-age 1y+", StrategyBake, "builder/security.go:BuildSecurityHeaders"},
+	{"security", "HSTS includeSubDomains", StrategyBake, "builder/security.go:BuildSecurityHeaders"},
+	{"security", "HSTS preload directive", StrategyTeach, "kb.go:hsts-preload"},
+	{"security", "CSP upgrade-insecure-requests", StrategyBake, "builder/security.go:buildCSP"},
 
-	// --- seo (23) ---
+	// --- seo (37) ---
 	{"seo", "Has Title", StrategyBlock, "agent/guardrails.go:ValidatePageMeta"},
 	{"seo", "Title Length (30-60 chars)", StrategyBlock, "agent/guardrails.go:ValidatePageMeta"},
 	{"seo", "Has Meta Description", StrategyBlock, "agent/guardrails.go:ValidatePageMeta"},
@@ -86,6 +90,22 @@ var CheckOwnership = []CheckOwner{
 	{"seo", "XML Sitemap", StrategyBake, "builder/security.go:RenderSitemap"},
 	{"seo", "llms.txt (AI Search)", StrategyBake, "builder/security.go:RenderLLMsTxt"},
 	{"seo", "Hreflang Tags", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "Title Not Truncated", StrategyBlock, "agent/guardrails.go:ValidatePageMeta"},
+	{"seo", "Meta Description Has CTA", StrategyBlock, "agent/guardrails.go:ValidatePageMeta"},
+	{"seo", "Content Length 300+", StrategyBlock, "agent/guardrails.go:validateBlockEvalChecks"},
+	{"seo", "Descriptive Alt Text", StrategyBlock, "agent/guardrails.go:validateBlockEvalChecks"},
+	{"seo", "No Empty Links", StrategyBlock, "agent/guardrails.go:validateBlockEvalChecks"},
+	{"seo", "No Broken Anchor Links", StrategyTeach, "kb.go:anchor-links"},
+	{"seo", "Canonical Matches URL", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "Favicon", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "Apple Touch Icon", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "No Duplicate Meta Tags", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "OG Completeness", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "OG Image Size 1200x630", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "Twitter Card", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "Twitter Image", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"seo", "No Plaintext Emails", StrategyBlock, "agent/guardrails.go:validateBlockEvalChecks"},
+	{"seo", "FAQ Schema Has Visible Content", StrategyTeach, "kb.go:faq-schema"},
 
 	// --- geo (7) ---
 	{"geo", "Robots max-snippet directive", StrategyBake, "builder/layouts.go:RenderLayouts"},
@@ -106,7 +126,7 @@ var CheckOwnership = []CheckOwner{
 	{"performance", "Resource Hints", StrategyBake, "builder/layouts.go:RenderLayouts"},
 	{"performance", "Total HTML Size", StrategyTeach, "kb.go:html-size"},
 
-	// --- accessibility (14) ---
+	// --- accessibility (18) ---
 	{"accessibility", "Main Landmark", StrategyTeach, "kb.go:landmarks"},
 	{"accessibility", "Navigation Landmark", StrategyTeach, "kb.go:landmarks"},
 	{"accessibility", "Banner Landmark", StrategyTeach, "kb.go:landmarks"},
@@ -121,14 +141,19 @@ var CheckOwnership = []CheckOwner{
 	{"accessibility", "Links Have Labels", StrategyBlock, "agent/guardrails.go:ValidateBlock"},
 	{"accessibility", "No Positive Tabindex", StrategyTeach, "kb.go:tabindex"},
 	{"accessibility", "Tables Have Headers", StrategyTeach, "kb.go:table-headers"},
+	{"accessibility", "Skip Navigation Link", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"accessibility", "Autocomplete Attributes", StrategyTeach, "kb.go:autocomplete"},
+	{"accessibility", "Focus Indicators", StrategyBake, "builder/layouts.go:RenderLayouts"},
+	{"accessibility", "No Focusable in aria-hidden", StrategyTeach, "kb.go:aria-hidden"},
 
-	// --- privacy (6) ---
+	// --- privacy (7) ---
 	{"privacy", "Consent Banner", StrategyBake, "builder/cookieproof.go:RenderCookieProofSnippet"},
 	{"privacy", "Tracker Count", StrategyTeach, "kb.go:tracker-count"},
 	{"privacy", "Pre-Consent Tracking", StrategyBake, "builder/layouts.go:RenderLayouts"},
 	{"privacy", "AI Training Bots Blocked", StrategyBake, "builder/security.go:RenderRobotsTxt"},
 	{"privacy", "Privacy Policy Link", StrategyBake, "agent/guardrails.go:SeedEssentialPagesWith"},
 	{"privacy", "Terms / Cookie Policy Link", StrategyBake, "agent/guardrails.go:SeedEssentialPagesWith"},
+	{"privacy", "Cookie Count", StrategyBake, "builder/layouts.go:RenderLayouts"},
 }
 
 // CountByStrategy returns the number of checks owned by each strategy.
