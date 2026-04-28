@@ -35,6 +35,8 @@
 	let crmWebhookUrl = $state('');
 	let crmWebhookSecret = $state('');
 	let cookieBannerSnippet = $state('');
+	let personalizationEnabled = $state(false);
+	let identityMaxAgeDays = $state('30');
 
 	type State = {
 		cookieproofEnabled: boolean;
@@ -48,6 +50,8 @@
 		crmWebhookUrl: string;
 		crmWebhookSecret: string;
 		cookieBannerSnippet: string;
+		personalizationEnabled: boolean;
+		identityMaxAgeDays: string;
 	};
 
 	let initial: State = $state({
@@ -61,7 +65,9 @@
 		umamiSiteId: '',
 		crmWebhookUrl: '',
 		crmWebhookSecret: '',
-		cookieBannerSnippet: ''
+		cookieBannerSnippet: '',
+		personalizationEnabled: false,
+		identityMaxAgeDays: '30'
 	});
 
 	async function load() {
@@ -84,6 +90,8 @@
 			crmWebhookUrl = m.crm_webhook_url || '';
 			crmWebhookSecret = m.crm_webhook_secret || '';
 			cookieBannerSnippet = m.cookie_banner_snippet || '';
+			personalizationEnabled = toBool(m.personalization_enabled);
+			identityMaxAgeDays = m.identity_max_age_days || '30';
 
 			initial = {
 				cookieproofEnabled,
@@ -96,7 +104,9 @@
 				umamiSiteId,
 				crmWebhookUrl,
 				crmWebhookSecret,
-				cookieBannerSnippet
+				cookieBannerSnippet,
+				personalizationEnabled,
+				identityMaxAgeDays
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -120,7 +130,9 @@
 			umamiSiteId !== initial.umamiSiteId ||
 			crmWebhookUrl !== initial.crmWebhookUrl ||
 			crmWebhookSecret !== initial.crmWebhookSecret ||
-			cookieBannerSnippet !== initial.cookieBannerSnippet
+			cookieBannerSnippet !== initial.cookieBannerSnippet ||
+			personalizationEnabled !== initial.personalizationEnabled ||
+			identityMaxAgeDays !== initial.identityMaxAgeDays
 	);
 
 	function discard() {
@@ -135,6 +147,8 @@
 		crmWebhookUrl = initial.crmWebhookUrl;
 		crmWebhookSecret = initial.crmWebhookSecret;
 		cookieBannerSnippet = initial.cookieBannerSnippet;
+		personalizationEnabled = initial.personalizationEnabled;
+		identityMaxAgeDays = initial.identityMaxAgeDays;
 	}
 
 	function b(v: boolean): string {
@@ -168,7 +182,17 @@
 				},
 				{ category: 'analytics', key: 'crm_webhook_url', value: crmWebhookUrl },
 				{ category: 'analytics', key: 'crm_webhook_secret', value: crmWebhookSecret },
-				{ category: 'analytics', key: 'cookie_banner_snippet', value: cookieBannerSnippet }
+				{ category: 'analytics', key: 'cookie_banner_snippet', value: cookieBannerSnippet },
+				{
+					category: 'analytics',
+					key: 'personalization_enabled',
+					value: b(personalizationEnabled)
+				},
+				{
+					category: 'analytics',
+					key: 'identity_max_age_days',
+					value: identityMaxAgeDays
+				}
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
@@ -183,7 +207,9 @@
 				umamiSiteId,
 				crmWebhookUrl,
 				crmWebhookSecret,
-				cookieBannerSnippet
+				cookieBannerSnippet,
+				personalizationEnabled,
+				identityMaxAgeDays
 			};
 			toast.success('Analytics settings saved.');
 		} catch (err) {
@@ -370,6 +396,70 @@
 						hint="Sent as X-Atomicsite-Signature for HMAC verification."
 						bind:value={crmWebhookSecret}
 					/>
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Personalization (CRM round-trip)
+				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Bidirectional loop: built sites read per-visitor metadata your CRM pushes back, and
+					blocks gated on a tiny DSL ("lead_score &gt;= 60", "name present") reveal on match.
+					See
+					<a href="/docs/personalization" class="text-text-primary hover:underline">
+						Documentation -&gt; Personalization
+					</a>
+					for the full model.
+				</p>
+				<div class="mt-4 flex flex-col gap-4">
+					<div class="flex items-center justify-between gap-4">
+						<div class="flex flex-col">
+							<span class="text-[13px] text-text-primary">
+								Enable visitor hydration script
+							</span>
+							<span class="text-[12px] text-text-muted">
+								Inject a small &lt;script&gt; into every built page that fetches /t/visitor
+								and reveals matching conditional blocks. Off by default.
+							</span>
+						</div>
+						<Switch
+							bind:checked={personalizationEnabled}
+							ariaLabel="Enable visitor personalization hydration"
+						/>
+					</div>
+					{#if personalizationEnabled}
+						<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+							<Input
+								label="Identity max age (days)"
+								type="number"
+								placeholder="30"
+								hint="Identified-tier fields (name, email) are scrubbed if the CRM's identity_confirmed_at is older than this. Default 30 days."
+								bind:value={identityMaxAgeDays}
+							/>
+							<div class="flex flex-col gap-1.5">
+								<span class="text-[12px] font-medium text-text-secondary">Status</span>
+								<div
+									class="rounded-lg border border-border-light bg-bg-elevated px-3 py-2 text-[12px] text-text-secondary"
+								>
+									{#if !crmWebhookUrl}
+										<span class="text-amber-600 dark:text-amber-400">
+											Wire a CRM webhook above to receive metadata pushes back.
+										</span>
+									{:else}
+										<span class="text-emerald-700 dark:text-emerald-400">
+											CRM webhook configured. Metadata pushes will land at /t/inbound on
+											the next event.
+										</span>
+									{/if}
+								</div>
+							</div>
+						</div>
+						<div class="rounded-lg border border-border-light bg-bg-elevated px-3 py-2 text-[11px] text-text-muted">
+							The hydration script ships on the next build. Trigger one from the Build page
+							after saving.
+						</div>
+					{/if}
 				</div>
 			</Card>
 

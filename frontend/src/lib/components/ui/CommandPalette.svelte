@@ -293,18 +293,18 @@
 			run: () => navigate('/docs/connect-your-agent')
 		});
 		out.push({
-			id: 'action:docs-apps',
+			id: 'action:docs-personalization',
 			category: 'Actions',
-			label: 'Apps',
-			secondary: 'Connectors to our stack and to third-party tools',
-			run: () => navigate('/docs/apps')
+			label: 'Personalization',
+			secondary: 'Bidirectional CRM loop, conditional blocks, identity tiers',
+			run: () => navigate('/docs/personalization')
 		});
 		out.push({
-			id: 'action:docs-integrations',
+			id: 'action:docs-apps',
 			category: 'Actions',
-			label: 'Integrations',
-			secondary: 'Platform-level mechanics: DNS, evals, font hosting',
-			run: () => navigate('/docs/integrations')
+			label: 'Apps & integrations',
+			secondary: 'External connectors plus platform-level mechanics',
+			run: () => navigate('/docs/apps')
 		});
 		if (site) {
 			out.push({

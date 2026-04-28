@@ -349,6 +349,76 @@
 						linkHref: site('build')
 					}
 				]
+			},
+			{
+				title: 'Platform',
+				intro:
+					'Platform-level mechanics that run under the hood. Not user-toggleable; documented so the agent and the human admin know what is in play.',
+				apps: [
+					{
+						name: 'Cloudflare DNS',
+						status: 'shipped',
+						body:
+							'Wildcard record *.slab.example.com -> 203.0.113.10 covers any built-site slug. Wildcard TLS cert covers the same. No per-site DNS or cert work needed for slugs on the default domain. Custom domains route via Dockyard or your own DNS provider.',
+						setup: 'Automatic. Inspect at /docs/architecture for the topology.',
+						linkLabel: 'Architecture',
+						linkHref: '/docs/architecture'
+					},
+					{
+						name: 'Self-hosted woff2 fonts',
+						status: 'shipped',
+						body:
+							'POST /api/sites/{id}/fonts. Magic header (wOF2 at offset 0) validated; woff/ttf/otf rejected. 2 MB cap per file. Served at /atomicsite-fonts/{site_id}/{font_id}.woff2 with Cache-Control: immutable + crossorigin. Builder emits @font-face + rel="preload" hints.',
+						setup: 'Branding -> Custom fonts.',
+						linkLabel: 'Branding',
+						linkHref: site('branding')
+					},
+					{
+						name: 'Site Inspector evaluation engine',
+						status: 'shipped',
+						body:
+							'130+ checks ported from the Chrome extension. Run after every build across Security, SEO, GEO, Performance, Accessibility, Privacy. 13-grade scale, A+ through F. Results expose to the agent through GET /api/agent/evaluation/{buildID} so it can self-correct.',
+						setup: 'Automatic. Inspect at Build -> latest evaluation.',
+						linkLabel: 'Build',
+						linkHref: site('build')
+					},
+					{
+						name: 'Caddy wildcard host',
+						status: 'shipped',
+						body:
+							'Built sites land at /srv/atomicsite/<slug>/dist via a Caddy bind mount. The wildcard route http://*.slab.example.com serves any slug straight from disk. Local-kind deploy targets land here directly.',
+						setup: 'Automatic. Operated by the Dockyard control plane.',
+						linkLabel: null,
+						linkHref: null
+					},
+					{
+						name: 'Forgejo CI deploy pipeline',
+						status: 'shipped',
+						body:
+							'Push to main triggers .forgejo/workflows/deploy-atomicsite.yml: Bun build, Docker build with frontend embedded via go:embed, container push, container restart. End-to-end ~2-3 minutes from push to live.',
+						setup: 'Automatic. CI status visible at code.example.com.',
+						linkLabel: null,
+						linkHref: null
+					},
+					{
+						name: 'Sentinel',
+						status: 'planned',
+						body:
+							'Uptime + GRC monitoring for built sites. Will hook into the deploy pipeline so a site goes into a watchlist as soon as it ships.',
+						setup: 'Coming soon.',
+						linkLabel: null,
+						linkHref: null
+					},
+					{
+						name: 'SVAR',
+						status: 'planned',
+						body:
+							'Security scan integration. Will run a full SVAR scan on each build and surface findings in the evaluation panel alongside the in-house security checks.',
+						setup: 'Coming soon.',
+						linkLabel: null,
+						linkHref: null
+					}
+				]
 			}
 		];
 	});
@@ -377,11 +447,13 @@
 	</a>
 	<header class="mt-3 flex flex-col gap-1.5">
 		<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
-			Apps
+			Apps & integrations
 		</h1>
 		<p class="text-[13px] text-text-secondary">
 			Easy connectors to our own apps and to third parties. Most are wired with a single API
-			key or webhook URL on Settings -> Analytics.
+			key or webhook URL on Settings -> Analytics. The
+			<a href="#platform" class="text-text-primary hover:underline">Platform</a> section at the bottom
+			documents platform-level mechanics that run under the hood.
 		</p>
 	</header>
 
@@ -402,7 +474,7 @@
 
 	<div class="mt-6 flex flex-col gap-6">
 		{#each sections as section (section.title)}
-			<div>
+			<div id={section.title === 'Platform' ? 'platform' : undefined}>
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 					{section.title}
 				</h2>
