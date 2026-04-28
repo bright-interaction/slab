@@ -181,9 +181,20 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 // crmEmitIdentified fires an identified event toward BrightCRM. It bypasses
 // the throttler so a fresh identification always lands in the activity log.
 // All failures are logged; nothing is surfaced to the visitor.
+//
+// Consent state is included in metadata so the CRM can promote it onto the
+// contact record (Phase 18). The full categories map is forwarded verbatim
+// so the CRM can split marketing vs analytics consent independently and
+// audit the source.
 func (h *TrackHandler) crmEmitIdentified(siteID, visitorID, method string, req consentRequest) {
 	if h.crmClient == nil || !h.crmClient.Enabled() {
 		return
+	}
+	categories := map[string]bool{}
+	if req.Consent != nil {
+		for k, v := range req.Consent.Categories {
+			categories[k] = v
+		}
 	}
 	event := crmsync.Event{
 		Event:      crmsync.EventIdentified,
@@ -195,7 +206,8 @@ func (h *TrackHandler) crmEmitIdentified(siteID, visitorID, method string, req c
 			Referrer: req.Referrer,
 		},
 		Metadata: map[string]any{
-			"consent_method": method,
+			"consent_method":     method,
+			"consent_categories": categories,
 		},
 	}
 	// Identified events bypass throttling per design.

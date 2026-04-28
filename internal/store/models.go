@@ -392,4 +392,7 @@ type VisitSession struct {
 	LastSeenAt            string `json:"last_seen_at"`
 	PageCount             int64  `json:"page_count"`
 	IdentifiedAt          string `json:"identified_at"`
+	MetadataJson          string `json:"metadata_json"`
+	MetadataExpiresAt     string `json:"metadata_expires_at"`
+	IdentityConfirmedAt   string `json:"identity_confirmed_at"`
 }
