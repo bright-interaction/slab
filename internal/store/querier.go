@@ -113,6 +113,7 @@ type Querier interface {
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
+	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
@@ -211,6 +212,8 @@ type Querier interface {
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error
 	UpsertVisitSession(ctx context.Context, arg UpsertVisitSessionParams) error
+	UpsertVisitorMetadataByFingerprint(ctx context.Context, arg UpsertVisitorMetadataByFingerprintParams) (int64, error)
+	UpsertVisitorMetadataByVisitorID(ctx context.Context, arg UpsertVisitorMetadataByVisitorIDParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)
