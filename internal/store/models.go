@@ -207,22 +207,23 @@ type Medium struct {
 }
 
 type Page struct {
-	ID              string `json:"id"`
-	SiteID          string `json:"site_id"`
-	Title           string `json:"title"`
-	Slug            string `json:"slug"`
-	Status          string `json:"status"`
-	MetaTitle       string `json:"meta_title"`
-	MetaDescription string `json:"meta_description"`
-	OgImageID       string `json:"og_image_id"`
-	Layout          string `json:"layout"`
-	SortOrder       int64  `json:"sort_order"`
-	ShowInNav       int64  `json:"show_in_nav"`
-	NavLabel        string `json:"nav_label"`
-	NoIndex         int64  `json:"no_index"`
-	CanonicalUrl    string `json:"canonical_url"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
+	ID               string `json:"id"`
+	SiteID           string `json:"site_id"`
+	Title            string `json:"title"`
+	Slug             string `json:"slug"`
+	Status           string `json:"status"`
+	MetaTitle        string `json:"meta_title"`
+	MetaDescription  string `json:"meta_description"`
+	OgImageID        string `json:"og_image_id"`
+	Layout           string `json:"layout"`
+	SortOrder        int64  `json:"sort_order"`
+	ShowInNav        int64  `json:"show_in_nav"`
+	NavLabel         string `json:"nav_label"`
+	NoIndex          int64  `json:"no_index"`
+	CanonicalUrl     string `json:"canonical_url"`
+	HideGlobalBlocks int64  `json:"hide_global_blocks"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 type Redirect struct {

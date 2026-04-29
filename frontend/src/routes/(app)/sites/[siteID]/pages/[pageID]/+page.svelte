@@ -40,6 +40,7 @@
 	let seoCanonical = $state('');
 	let seoNoIndex = $state(false);
 	let seoLayout = $state('default');
+	let seoHideGlobalBlocks = $state(false);
 	let seoSaving = $state(false);
 	let seoDirty = $state(false);
 	let seoBaseline = $state({
@@ -48,7 +49,8 @@
 		og_image_id: '',
 		canonical_url: '',
 		no_index: false,
-		layout: 'default'
+		layout: 'default',
+		hide_global_blocks: false
 	});
 
 	let saving = $state(false);
@@ -99,13 +101,15 @@
 		seoCanonical = p.canonical_url || '';
 		seoNoIndex = p.no_index === 1;
 		seoLayout = p.layout || 'default';
+		seoHideGlobalBlocks = p.hide_global_blocks === 1;
 		seoBaseline = {
 			meta_title: seoMetaTitle,
 			meta_description: seoMetaDescription,
 			og_image_id: seoOgImage,
 			canonical_url: seoCanonical,
 			no_index: seoNoIndex,
-			layout: seoLayout
+			layout: seoLayout,
+			hide_global_blocks: seoHideGlobalBlocks
 		};
 		seoDirty = false;
 	}
@@ -121,7 +125,8 @@
 			seoOgImage !== seoBaseline.og_image_id ||
 			seoCanonical !== seoBaseline.canonical_url ||
 			seoNoIndex !== seoBaseline.no_index ||
-			seoLayout !== seoBaseline.layout;
+			seoLayout !== seoBaseline.layout ||
+			seoHideGlobalBlocks !== seoBaseline.hide_global_blocks;
 	});
 
 	function startTitleEdit() {
@@ -172,7 +177,8 @@
 				og_image_id: seoOgImage,
 				canonical_url: seoCanonical,
 				no_index: seoNoIndex,
-				layout: seoLayout
+				layout: seoLayout,
+				hide_global_blocks: seoHideGlobalBlocks
 			});
 			pageData = updated;
 			hydrateSeo(updated);
@@ -445,6 +451,17 @@
 							</div>
 							<Switch bind:checked={seoNoIndex} />
 						</div>
+						<div class="flex items-center justify-between md:col-span-2">
+							<div>
+								<p class="text-[13px] font-medium text-text-primary">Hide global blocks</p>
+								<p class="text-[11px] text-text-muted">
+									Suppress the site's header and footer on this page. Use for
+									landing pages that need full attention on a single CTA without
+									the main nav competing for clicks.
+								</p>
+							</div>
+							<Switch bind:checked={seoHideGlobalBlocks} />
+						</div>
 					</div>
 					<div class="mt-4 flex justify-end gap-2 border-t border-border-light pt-4">
 						<Button
@@ -497,7 +514,7 @@
 							: 'text-text-muted hover:text-text-primary'}"
 					>
 						<Type class="h-3.5 w-3.5" />
-						Text
+						Text mode
 					</button>
 				</div>
 				<span class="text-[11px] text-text-muted">

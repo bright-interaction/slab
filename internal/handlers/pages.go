@@ -113,18 +113,19 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title           *string `json:"title"`
-		Slug            *string `json:"slug"`
-		Status          *string `json:"status"`
-		MetaTitle       *string `json:"meta_title"`
-		MetaDescription *string `json:"meta_description"`
-		OgImageID       *string `json:"og_image_id"`
-		Layout          *string `json:"layout"`
-		SortOrder       *int64  `json:"sort_order"`
-		ShowInNav       *bool   `json:"show_in_nav"`
-		NavLabel        *string `json:"nav_label"`
-		NoIndex         *bool   `json:"no_index"`
-		CanonicalURL    *string `json:"canonical_url"`
+		Title            *string `json:"title"`
+		Slug             *string `json:"slug"`
+		Status           *string `json:"status"`
+		MetaTitle        *string `json:"meta_title"`
+		MetaDescription  *string `json:"meta_description"`
+		OgImageID        *string `json:"og_image_id"`
+		Layout           *string `json:"layout"`
+		SortOrder        *int64  `json:"sort_order"`
+		ShowInNav        *bool   `json:"show_in_nav"`
+		NavLabel         *string `json:"nav_label"`
+		NoIndex          *bool   `json:"no_index"`
+		CanonicalURL     *string `json:"canonical_url"`
+		HideGlobalBlocks *bool   `json:"hide_global_blocks"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -132,19 +133,20 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := store.UpdatePageParams{
-		Title:           existing.Title,
-		Slug:            existing.Slug,
-		Status:          existing.Status,
-		MetaTitle:       existing.MetaTitle,
-		MetaDescription: existing.MetaDescription,
-		OgImageID:       existing.OgImageID,
-		Layout:          existing.Layout,
-		SortOrder:       existing.SortOrder,
-		ShowInNav:       existing.ShowInNav,
-		NavLabel:        existing.NavLabel,
-		NoIndex:         existing.NoIndex,
-		CanonicalUrl:    existing.CanonicalUrl,
-		ID:              pageID,
+		Title:            existing.Title,
+		Slug:             existing.Slug,
+		Status:           existing.Status,
+		MetaTitle:        existing.MetaTitle,
+		MetaDescription:  existing.MetaDescription,
+		OgImageID:        existing.OgImageID,
+		Layout:           existing.Layout,
+		SortOrder:        existing.SortOrder,
+		ShowInNav:        existing.ShowInNav,
+		NavLabel:         existing.NavLabel,
+		NoIndex:          existing.NoIndex,
+		CanonicalUrl:     existing.CanonicalUrl,
+		HideGlobalBlocks: existing.HideGlobalBlocks,
+		ID:               pageID,
 	}
 
 	if req.Title != nil {
@@ -190,6 +192,13 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.CanonicalURL != nil {
 		params.CanonicalUrl = *req.CanonicalURL
+	}
+	if req.HideGlobalBlocks != nil {
+		if *req.HideGlobalBlocks {
+			params.HideGlobalBlocks = 1
+		} else {
+			params.HideGlobalBlocks = 0
+		}
 	}
 
 	// Input-time SEO guardrails (mirrors Site Inspector eval engine).

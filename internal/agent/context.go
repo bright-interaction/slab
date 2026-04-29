@@ -37,6 +37,72 @@ type SiteContext struct {
 	// Personalization tells the agent what visitor metadata the CRM has
 	// pushed to this site, so it can author conditional blocks. Phase 18.4.
 	Personalization PersonalizationInfo `json:"personalization"`
+	// Endpoints surfaces the admin and agent API paths the agent uses
+	// most often, so it doesn't need to look them up in docs. Each entry
+	// names the use case alongside the HTTP method + URL template. Added
+	// 2026-04-29 alongside the per-block code-view + page View Source
+	// dialogs so the agent can fetch the same source the human admin
+	// sees.
+	Endpoints EndpointsInfo `json:"endpoints"`
+	// BlockSchemas tells the agent which JSON keys each block_type
+	// expects under data_json. The keys come from atomicsite's renderer
+	// (internal/builder/pages.go) and the Text Mode UI's canonical text
+	// field set. Use this to put copy in the right field instead of
+	// inventing new keys that the renderer ignores.
+	BlockSchemas []BlockSchemaInfo `json:"block_schemas"`
+	// EditingModes documents the two human surfaces an authoring agent
+	// shares the canvas with. The agent uses this to phrase its outputs
+	// (e.g. "your headline is now editable in Text mode at /sites/{id}/
+	// pages/{id}").
+	EditingModes []EditingModeInfo `json:"editing_modes"`
+}
+
+// EndpointInfo names one URL template the agent calls. Method is the HTTP
+// verb; Path uses {var} placeholders matching chi route params. Use lists
+// the persona-level intent (humans + agent share these endpoints).
+type EndpointInfo struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Use    string `json:"use"`
+}
+
+// EndpointsInfo groups EndpointInfo entries by area so the agent can
+// scan the relevant set quickly.
+type EndpointsInfo struct {
+	Pages         []EndpointInfo `json:"pages"`
+	Blocks        []EndpointInfo `json:"blocks"`
+	GlobalBlocks  []EndpointInfo `json:"global_blocks"`
+	Media         []EndpointInfo `json:"media"`
+	Build         []EndpointInfo `json:"build"`
+	Preview       []EndpointInfo `json:"preview"`
+}
+
+// BlockSchemaInfo describes the keys data_json should carry for one
+// block_type. Use this as the source of truth for "where does the
+// headline go" when authoring a block.
+type BlockSchemaInfo struct {
+	BlockType string             `json:"block_type"`
+	Use       string             `json:"use"`
+	TextKeys  []BlockSchemaField `json:"text_keys"`
+	OtherKeys []BlockSchemaField `json:"other_keys"`
+}
+
+// BlockSchemaField is one key inside a block's data_json: its name, a
+// short label for human display, and whether multiline copy is expected
+// (multiline keys belong in textareas; single-line keys are short copy
+// like CTAs and titles).
+type BlockSchemaField struct {
+	Key       string `json:"key"`
+	Label     string `json:"label"`
+	Multiline bool   `json:"multiline"`
+}
+
+// EditingModeInfo documents one of the two authoring surfaces the agent
+// shares with humans on the page editor.
+type EditingModeInfo struct {
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Description string `json:"description"`
 }
 
 // PersonalizationInfo summarises what the agent needs to author conditional
@@ -125,15 +191,16 @@ type Structure struct {
 }
 
 type PageInfo struct {
-	ID        string      `json:"id"`
-	Title     string      `json:"title"`
-	Slug      string      `json:"slug"`
-	Status    string      `json:"status"`
-	Layout    string      `json:"layout"`
-	SortOrder int64       `json:"sort_order"`
-	ShowInNav bool        `json:"show_in_nav"`
-	NavLabel  string      `json:"nav_label"`
-	Blocks    []BlockInfo `json:"blocks"`
+	ID               string      `json:"id"`
+	Title            string      `json:"title"`
+	Slug             string      `json:"slug"`
+	Status           string      `json:"status"`
+	Layout           string      `json:"layout"`
+	SortOrder        int64       `json:"sort_order"`
+	ShowInNav        bool        `json:"show_in_nav"`
+	NavLabel         string      `json:"nav_label"`
+	HideGlobalBlocks bool        `json:"hide_global_blocks"`
+	Blocks           []BlockInfo `json:"blocks"`
 }
 
 type BlockInfo struct {
@@ -227,15 +294,16 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 			})
 		}
 		pageInfos = append(pageInfos, PageInfo{
-			ID:        p.ID,
-			Title:     p.Title,
-			Slug:      p.Slug,
-			Status:    p.Status,
-			Layout:    p.Layout,
-			SortOrder: p.SortOrder,
-			ShowInNav: p.ShowInNav == 1,
-			NavLabel:  p.NavLabel,
-			Blocks:    blockInfos,
+			ID:               p.ID,
+			Title:            p.Title,
+			Slug:             p.Slug,
+			Status:           p.Status,
+			Layout:           p.Layout,
+			SortOrder:        p.SortOrder,
+			ShowInNav:        p.ShowInNav == 1,
+			NavLabel:         p.NavLabel,
+			HideGlobalBlocks: p.HideGlobalBlocks == 1,
+			Blocks:           blockInfos,
 		})
 	}
 
@@ -388,7 +456,170 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		DesignReferences: refInfos,
 		PendingSetup:     pending,
 		Personalization:  personalization,
+		Endpoints:        defaultEndpoints(),
+		BlockSchemas:     defaultBlockSchemas(),
+		EditingModes:     defaultEditingModes(),
 	}, nil
+}
+
+// defaultEndpoints returns the endpoint catalogue surfaced to AI agents.
+// Static for now; if a future endpoint becomes site-conditional it can
+// move into the Build closure.
+func defaultEndpoints() EndpointsInfo {
+	return EndpointsInfo{
+		Pages: []EndpointInfo{
+			{Method: "GET", Path: "/api/agent/pages", Use: "List published + draft pages."},
+			{Method: "POST", Path: "/api/agent/pages", Use: "Create a page. Title + slug required; layout defaults to 'default'."},
+			{Method: "PATCH", Path: "/api/agent/pages/{slug}", Use: "Update title, slug, status, meta_title, meta_description, og_image_id, layout, hide_global_blocks, no_index, canonical_url. Slug-addressed."},
+		},
+		Blocks: []EndpointInfo{
+			{Method: "GET", Path: "/api/agent/pages/{slug}/blocks", Use: "List blocks on a page, ordered by sort_order."},
+			{Method: "POST", Path: "/api/agent/pages/{slug}/blocks", Use: "Append a block. block_type + data are required; data should match the block_schemas catalogue below."},
+			{Method: "PATCH", Path: "/api/agent/blocks/{blockID}", Use: "Patch a block's data, style, sort_order, or is_visible without re-creating it."},
+			{Method: "DELETE", Path: "/api/agent/blocks/{blockID}", Use: "Remove a block from a page."},
+		},
+		GlobalBlocks: []EndpointInfo{
+			{Method: "PUT", Path: "/api/agent/global/{slot}", Use: "Upsert the header or footer global block. Slot must be 'header' or 'footer'. Body: name, block_type, data."},
+		},
+		Media: []EndpointInfo{
+			{Method: "GET", Path: "/api/agent/media", Use: "List uploaded media."},
+			{Method: "POST", Path: "/api/agent/media", Use: "Multipart upload. Optional folder field puts files under a folder; 'brand' is the system folder for favicon, OG image, logos."},
+			{Method: "POST", Path: "/api/agent/media/from-url", Use: "Server-side fetch with SSRF guard. Same folder field as multipart."},
+			{Method: "POST", Path: "/api/agent/media/from-base64", Use: "For agents that emit base64 but not multipart. Same folder field."},
+		},
+		Build: []EndpointInfo{
+			{Method: "POST", Path: "/api/agent/build", Use: "Trigger a full build. Returns a build_id for status polling."},
+			{Method: "GET", Path: "/api/agent/evaluation/{buildID}", Use: "Read the post-build evaluation results so the agent can self-correct against the 96 Site Inspector parity checks."},
+		},
+		Preview: []EndpointInfo{
+			{Method: "GET", Path: "/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}/preview", Use: "Returns the rendered Astro source for one block. Use this when the user asks 'show me the code' for a specific section. Same source the build pipeline writes to disk."},
+			{Method: "GET", Path: "/api/sites/{siteID}/pages/{pageID}/preview", Use: "Returns the assembled .astro source for the whole page. Use to inspect what bun build will see without triggering a build."},
+		},
+	}
+}
+
+// defaultBlockSchemas tells the agent which JSON keys each block type
+// recognises. Aligns with internal/builder/pages.go renderDataBlock plus
+// the canonical text key set that the Text Mode editor surfaces inline.
+func defaultBlockSchemas() []BlockSchemaInfo {
+	headingTextKeys := []BlockSchemaField{
+		{Key: "eyebrow", Label: "Eyebrow", Multiline: false},
+		{Key: "heading", Label: "Heading", Multiline: false},
+		{Key: "subheading", Label: "Subheading", Multiline: true},
+		{Key: "text", Label: "Text", Multiline: true},
+		{Key: "cta_text", Label: "CTA label", Multiline: false},
+	}
+	heroTextKeys := []BlockSchemaField{
+		{Key: "eyebrow", Label: "Eyebrow", Multiline: false},
+		{Key: "headline", Label: "Headline", Multiline: false},
+		{Key: "subheading", Label: "Subheading", Multiline: true},
+		{Key: "cta_text", Label: "Primary CTA label", Multiline: false},
+		{Key: "secondary_label", Label: "Secondary CTA label", Multiline: false},
+	}
+	imageTextKeys := []BlockSchemaField{
+		{Key: "alt", Label: "Image alt", Multiline: false},
+		{Key: "caption", Label: "Caption", Multiline: false},
+	}
+	quoteTextKeys := []BlockSchemaField{
+		{Key: "quote", Label: "Quote", Multiline: true},
+		{Key: "attribution", Label: "Attribution", Multiline: false},
+	}
+	return []BlockSchemaInfo{
+		{
+			BlockType: "hero",
+			Use:       "Above-the-fold attention-grab. One per page. Drives a primary CTA.",
+			TextKeys:  heroTextKeys,
+			OtherKeys: []BlockSchemaField{
+				{Key: "cta_url", Label: "Primary CTA URL"},
+				{Key: "secondary_url", Label: "Secondary CTA URL"},
+				{Key: "image_id", Label: "Background image media ID"},
+			},
+		},
+		{
+			BlockType: "text",
+			Use:       "Rich body copy block. Renders heading + text + optional CTA.",
+			TextKeys:  headingTextKeys,
+			OtherKeys: []BlockSchemaField{
+				{Key: "cta_url", Label: "CTA URL"},
+				{Key: "alignment", Label: "Alignment ('left' | 'center')"},
+			},
+		},
+		{
+			BlockType: "feature_grid",
+			Use:       "3-to-4-up grid of feature cards.",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {title, body, icon}"}},
+		},
+		{
+			BlockType: "cta",
+			Use:       "Standalone CTA section. Use heading + text to set up the action.",
+			TextKeys: []BlockSchemaField{
+				{Key: "heading", Label: "Heading"},
+				{Key: "text", Label: "Lead-in text", Multiline: true},
+				{Key: "cta_text", Label: "CTA label"},
+			},
+			OtherKeys: []BlockSchemaField{
+				{Key: "cta_url", Label: "CTA URL"},
+				{Key: "variant", Label: "Variant ('primary' | 'secondary')"},
+			},
+		},
+		{
+			BlockType: "image",
+			Use:       "Single image. Always include a descriptive alt; never 'image' or 'photo'.",
+			TextKeys:  imageTextKeys,
+			OtherKeys: []BlockSchemaField{
+				{Key: "image_id", Label: "Media ID"},
+				{Key: "width", Label: "Pixel width (required, prevents CLS)"},
+				{Key: "height", Label: "Pixel height (required, prevents CLS)"},
+			},
+		},
+		{
+			BlockType: "quote",
+			Use:       "Testimonial / pull quote.",
+			TextKeys:  quoteTextKeys,
+		},
+		{
+			BlockType: "raw",
+			Use:       "Escape hatch for custom HTML. Pass `html` directly. Last resort, every other block type is preferred.",
+			OtherKeys: []BlockSchemaField{{Key: "html", Label: "Raw HTML, no scripts."}},
+		},
+		{
+			BlockType: "component",
+			Use:       "Render a custom Astro component declared in the site's components catalogue.",
+			OtherKeys: []BlockSchemaField{
+				{Key: "component", Label: "Component name (kebab-case)"},
+				{Key: "props", Label: "Object of props the component accepts"},
+			},
+		},
+	}
+}
+
+// defaultEditingModes documents the two authoring surfaces on the page
+// editor. The agent uses these to phrase its responses ("toggle to Text
+// mode" / "open the </> code view" / "click View source").
+func defaultEditingModes() []EditingModeInfo {
+	return []EditingModeInfo{
+		{
+			Name:        "Blocks",
+			URL:         "/sites/{site_id}/pages/{page_id}",
+			Description: "Canonical full editor. Drag, add, delete, expand each block to edit every field. Per-block </> toggle reveals the rendered Astro source for that block.",
+		},
+		{
+			Name:        "Text mode",
+			URL:         "/sites/{site_id}/pages/{page_id}",
+			Description: "Tight inline-editable view of every text field across every visible block. Click any field, edit, blur to autosave. Use this surface when the user asks for copy or SEO edits.",
+		},
+		{
+			Name:        "View source",
+			URL:         "/sites/{site_id}/pages/{page_id}",
+			Description: "Dialog showing the assembled .astro source for the whole page. Mirrors GET /api/sites/{id}/pages/{id}/preview.",
+		},
+		{
+			Name:        "Global blocks",
+			URL:         "/sites/{site_id}/global-blocks",
+			Description: "Site-wide header and footer slots. Edit once, applies to every page (unless the page sets hide_global_blocks=true for landing-page suppression).",
+		},
+	}
 }
 
 // computePersonalization builds the personalization summary surfaced to

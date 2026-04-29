@@ -14,6 +14,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 -- name: UpdateGlobalBlock :exec
 UPDATE global_blocks SET
     name = ?,
+    slot = ?,
     block_type = ?,
     data_json = ?,
     style_json = ?,

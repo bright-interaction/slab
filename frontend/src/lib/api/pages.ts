@@ -25,6 +25,7 @@ export interface UpdatePagePatch {
 	nav_label?: string;
 	no_index?: boolean;
 	canonical_url?: string;
+	hide_global_blocks?: boolean;
 }
 
 export function list(siteID: string): Promise<PagesListResponse> {

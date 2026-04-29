@@ -157,6 +157,14 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/sites/{siteID}/pages/{pageID}/blocks/reorder", bh.Reorder)
 		r.Put("/api/sites/{siteID}/pages/{pageID}/blocks/bulk", bh.BulkSave)
 
+		// Global blocks (header / footer slots)
+		gbh := handlers.NewGlobalBlockHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/global-blocks", gbh.List)
+		r.Post("/api/sites/{siteID}/global-blocks", gbh.Create)
+		r.Get("/api/sites/{siteID}/global-blocks/{blockID}", gbh.Get)
+		r.Patch("/api/sites/{siteID}/global-blocks/{blockID}", gbh.Update)
+		r.Delete("/api/sites/{siteID}/global-blocks/{blockID}", gbh.Delete)
+
 		// Knowledgebase
 		kbh := handlers.NewKnowledgebaseHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/knowledgebase", kbh.List)
