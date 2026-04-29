@@ -29,9 +29,20 @@ type Config struct {
 	// BrightCRM analytics sync (Phase 10 C2). When either the URL or secret
 	// is empty, crmsync becomes a no-op so dev environments don't crash.
 	// CRMSyncMinInterval throttles non-identified events per (site, visitor).
-	BrightCRMWebhookURL    string
-	BrightCRMWebhookSecret string
-	CRMSyncMinInterval     time.Duration
+	BrightCRMWebhookURL string
+	// BrightCRMWebhookSecret is the current shared HMAC value, used both to
+	// sign outbound /webhooks/atomicsite calls and to verify inbound /t/inbound
+	// pings from BrightCRM. BrightCRMWebhookSecretPrevious is the previous
+	// value, accepted by the inbound verifier during a rotation grace window
+	// so requests in flight signed with the old key still verify. Outbound
+	// signing always uses the current value. See internal/sharedsecret.
+	BrightCRMWebhookSecret         string
+	BrightCRMWebhookSecretPrevious string
+	CRMSyncMinInterval             time.Duration
+
+	// AdminReloadToken gates POST /admin/reload-secrets so Dockyard's rotation
+	// engine can push a new pair without a container restart.
+	AdminReloadToken string
 
 	// Bidirectional CRM personalization (Phase 18). Built sites live on
 	// subdomains of BuiltSiteSuffix (default ".slab.example.com")
@@ -59,8 +70,10 @@ func Load() *Config {
 		CookieProofAPIBase:    envOr("COOKIEPROOF_API_BASE", "https://consent.example.com"),
 		CookieProofAdminToken: os.Getenv("COOKIEPROOF_ADMIN_TOKEN"),
 
-		BrightCRMWebhookURL:    envOr("BRIGHTCRM_WEBHOOK_URL", ""),
-		BrightCRMWebhookSecret: envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),
+		BrightCRMWebhookURL:            envOr("BRIGHTCRM_WEBHOOK_URL", ""),
+		BrightCRMWebhookSecret:         envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),
+		BrightCRMWebhookSecretPrevious: envOr("BRIGHTCRM_WEBHOOK_SECRET_PREVIOUS", ""),
+		AdminReloadToken:               envOr("ADMIN_RELOAD_TOKEN", ""),
 		CRMSyncMinInterval:     time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
 
 		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ".slab.example.com"),

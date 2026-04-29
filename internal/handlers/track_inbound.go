@@ -1,9 +1,6 @@
 package handlers
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -44,8 +41,12 @@ type inboundRequest struct {
 //   503 - secret not configured (server admin must set BRIGHTCRM_WEBHOOK_SECRET)
 //   204 - success
 func (h *TrackHandler) Inbound(w http.ResponseWriter, r *http.Request) {
-	secret := h.cfg.BrightCRMWebhookSecret
-	if secret == "" {
+	// Dual-secret verifier (long-lived on TrackHandler so /admin/reload-secrets
+	// can hot-swap its values during a Dockyard rotation): accepts the current
+	// value plus an optional "previous" value during a rotation grace window
+	// so requests in flight signed with the old key still verify.
+	verifier := h.inboundVerifier
+	if !verifier.Configured() {
 		slog.Warn("track: inbound rejected, BRIGHTCRM_WEBHOOK_SECRET not configured")
 		writeError(w, http.StatusServiceUnavailable, "inbound webhook not configured")
 		return
@@ -65,10 +66,7 @@ func (h *TrackHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	expected := hex.EncodeToString(mac.Sum(nil))
-	if !hmac.Equal([]byte(sig), []byte(expected)) {
+	if !verifier.Verify(body, sig) {
 		writeError(w, http.StatusUnauthorized, "invalid signature")
 		return
 	}
