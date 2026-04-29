@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -179,6 +180,40 @@ func (h *BlockHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Preview returns the rendered Astro source for a single block. Used by
+// the per-block "</>" code toggle in the admin so developers can see
+// exactly what each block produces without triggering a full build.
+// Defends against cross-site fetches by checking the block's page belongs
+// to the requested site.
+func (h *BlockHandler) Preview(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	blockID := urlParam(r, "blockID")
+
+	block, err := h.queries.GetBlockByID(r.Context(), blockID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return
+	}
+	page, err := h.queries.GetPageByID(r.Context(), block.PageID)
+	if err != nil || page.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return
+	}
+
+	src, err := builder.RenderSingleBlock(r.Context(), h.queries, siteID, blockID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to render block")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"block_id":   blockID,
+		"block_type": block.BlockType,
+		"page_id":    block.PageID,
+		"astro":      src,
+	})
 }
 
 // BulkSave atomically replaces all blocks on a page.

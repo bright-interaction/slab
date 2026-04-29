@@ -68,3 +68,18 @@ export function bulkSave(
 ): Promise<BlocksListResponse> {
 	return apiPut<BlocksListResponse>(`/sites/${siteID}/pages/${pageID}/blocks/bulk`, { blocks });
 }
+
+export interface BlockPreview {
+	block_id: string;
+	block_type: string;
+	page_id: string;
+	astro: string;
+}
+
+export function preview(
+	siteID: string,
+	pageID: string,
+	blockID: string
+): Promise<BlockPreview> {
+	return apiGet<BlockPreview>(`/sites/${siteID}/pages/${pageID}/blocks/${blockID}/preview`);
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -229,6 +230,34 @@ func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// PreviewSource returns the assembled .astro source for a single page so the
+// admin can show "View source" without triggering a full build. Uses the
+// same renderPage routine the build pipeline writes to disk; output is the
+// canonical source-of-truth for what bun build will see.
+func (h *PageHandler) PreviewSource(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	pageID := urlParam(r, "pageID")
+
+	page, err := h.queries.GetPageByID(r.Context(), pageID)
+	if err != nil || page.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Page not found")
+		return
+	}
+
+	src, err := builder.RenderPagePreview(r.Context(), h.queries, siteID, pageID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to render page")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"page_id": pageID,
+		"slug":    page.Slug,
+		"title":   page.Title,
+		"astro":   src,
+	})
 }
 
 func (h *PageHandler) Reorder(w http.ResponseWriter, r *http.Request) {

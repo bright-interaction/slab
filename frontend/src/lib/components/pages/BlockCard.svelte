@@ -1,11 +1,15 @@
 <script lang="ts">
-	import { GripVertical, ChevronDown, Trash2 } from 'lucide-svelte';
+	import { GripVertical, ChevronDown, Trash2, Code, Copy, Check } from 'lucide-svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import BlockTypeForm from './BlockTypeForm.svelte';
+	import * as blocksApi from '$lib/api/blocks';
+	import { toast } from '$lib/stores/toast.svelte';
 	import type { Block } from '$lib/api/types';
 
 	let {
 		block,
+		siteID,
+		pageID,
 		expanded = false,
 		dragging = false,
 		onToggleExpanded,
@@ -18,6 +22,8 @@
 		ondrop
 	}: {
 		block: Block;
+		siteID: string;
+		pageID: string;
 		expanded?: boolean;
 		dragging?: boolean;
 		onToggleExpanded: () => void;
@@ -29,6 +35,66 @@
 		ondragend?: (e: DragEvent) => void;
 		ondrop?: (e: DragEvent) => void;
 	} = $props();
+
+	// Code preview state. Lazy: only fetched the first time the </> toggle
+	// opens or after a save (which dirties the cached source).
+	let codeOpen = $state(false);
+	let codeLoading = $state(false);
+	let codeError = $state<string | null>(null);
+	let codeAstro = $state<string | null>(null);
+	let codeBlockType = $state<string>('');
+	let copied = $state(false);
+
+	async function loadCode(): Promise<void> {
+		if (!block.id) {
+			codeError = 'Save the page once before viewing source. New blocks need an ID.';
+			return;
+		}
+		codeLoading = true;
+		codeError = null;
+		try {
+			const res = await blocksApi.preview(siteID, pageID, block.id);
+			codeAstro = res.astro;
+			codeBlockType = res.block_type;
+		} catch (err) {
+			codeError = err instanceof Error ? err.message : 'Failed to render block';
+		} finally {
+			codeLoading = false;
+		}
+	}
+
+	function toggleCode(): void {
+		codeOpen = !codeOpen;
+		if (codeOpen && codeAstro === null) {
+			void loadCode();
+		}
+	}
+
+	async function refreshCode(): Promise<void> {
+		codeAstro = null;
+		await loadCode();
+	}
+
+	async function copyCode(): Promise<void> {
+		if (!codeAstro) return;
+		try {
+			await navigator.clipboard.writeText(codeAstro);
+			copied = true;
+			toast.success('Source copied');
+			setTimeout(() => (copied = false), 1500);
+		} catch {
+			toast.error('Could not copy');
+		}
+	}
+
+	// Re-fetch when the underlying data changes after the panel was opened
+	// at least once. Otherwise the code would lag behind a fresh edit.
+	$effect(() => {
+		void block.data_json;
+		if (codeOpen && codeAstro !== null && !codeLoading) {
+			void refreshCode();
+		}
+	});
 
 	let visibleBound = $state(false);
 	let visibleInit = $state(false);
@@ -107,6 +173,18 @@
 			<Switch bind:checked={visibleBound} />
 			<button
 				type="button"
+				aria-pressed={codeOpen}
+				aria-label={codeOpen ? 'Hide source' : 'Show source'}
+				title={codeOpen ? 'Hide source' : 'Show source'}
+				class="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors {codeOpen
+					? 'bg-bg-elevated text-text-primary'
+					: 'text-text-muted hover:bg-bg-hover hover:text-text-primary'}"
+				onclick={toggleCode}
+			>
+				<Code class="h-3.5 w-3.5" />
+			</button>
+			<button
+				type="button"
 				class="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] text-text-muted transition-colors hover:bg-bg-hover hover:text-danger"
 				onclick={onDelete}
 			>
@@ -132,6 +210,43 @@
 				dataJson={block.data_json || '{}'}
 				onChange={onDataChange}
 			/>
+		</div>
+	{/if}
+	{#if codeOpen}
+		<div class="border-t border-border-light bg-bg-elevated/40">
+			<div class="flex items-center justify-between gap-2 px-4 py-2">
+				<div class="flex items-center gap-2">
+					<span class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-muted">
+						Source
+					</span>
+					{#if codeBlockType}
+						<span class="font-mono text-[10.5px] text-text-secondary">{codeBlockType}.astro</span>
+					{/if}
+				</div>
+				<button
+					type="button"
+					aria-label="Copy source"
+					title="Copy"
+					class="inline-flex h-6 w-6 items-center justify-center rounded text-text-muted hover:bg-bg-hover hover:text-text-primary disabled:opacity-50"
+					disabled={!codeAstro}
+					onclick={copyCode}
+				>
+					{#if copied}
+						<Check class="h-3 w-3 text-accent" />
+					{:else}
+						<Copy class="h-3 w-3" />
+					{/if}
+				</button>
+			</div>
+			{#if codeLoading}
+				<p class="px-4 pb-3 text-[12px] text-text-muted">Loading…</p>
+			{:else if codeError}
+				<p class="px-4 pb-3 text-[12px] text-danger">{codeError}</p>
+			{:else if codeAstro !== null}
+				<pre
+					class="overflow-x-auto px-4 pb-3 font-mono text-[11.5px] leading-relaxed text-text-primary"
+				>{codeAstro}</pre>
+			{/if}
 		</div>
 	{/if}
 </div>

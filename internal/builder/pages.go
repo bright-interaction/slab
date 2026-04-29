@@ -11,6 +11,47 @@ import (
 	"github.com/bright-interaction/slab/internal/store"
 )
 
+// RenderSingleBlock returns the rendered Astro source for a single block.
+// Used by the admin "View source" feature so developers can see the exact
+// code each block produces without triggering a full build. The output is
+// the same string the build pipeline writes to disk for this block.
+func RenderSingleBlock(ctx context.Context, queries *store.Queries, siteID, blockID string) (string, error) {
+	block, err := queries.GetBlockByID(ctx, blockID)
+	if err != nil {
+		return "", fmt.Errorf("get block: %w", err)
+	}
+	components, _ := queries.ListComponentsBySite(ctx, siteID)
+	componentNames := make(map[string]bool, len(components))
+	for _, c := range components {
+		componentNames[c.Name] = true
+	}
+	return renderBlock(block, componentNames), nil
+}
+
+// RenderPagePreview returns the rendered Astro source for a single page.
+// Same output renderPage produces during a build, but materialised in-memory
+// so the admin "View source" dialog can show the assembled page without
+// triggering bun build. Bypasses status filters so drafts also render.
+func RenderPagePreview(ctx context.Context, queries *store.Queries, siteID, pageID string) (string, error) {
+	page, err := queries.GetPageByID(ctx, pageID)
+	if err != nil {
+		return "", fmt.Errorf("get page: %w", err)
+	}
+	if page.SiteID != siteID {
+		return "", fmt.Errorf("page does not belong to site")
+	}
+	blocks, err := queries.ListBlocksByPage(ctx, pageID)
+	if err != nil {
+		return "", fmt.Errorf("list blocks: %w", err)
+	}
+	components, _ := queries.ListComponentsBySite(ctx, siteID)
+	componentNames := make(map[string]bool, len(components))
+	for _, c := range components {
+		componentNames[c.Name] = true
+	}
+	return renderPage(page, blocks, componentNames), nil
+}
+
 // RenderPages generates .astro page files from published pages and their blocks.
 func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsDir string) (int, error) {
 	pages, err := queries.ListPublishedPagesBySite(ctx, siteID)
