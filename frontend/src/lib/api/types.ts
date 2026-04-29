@@ -266,11 +266,14 @@ export interface AgentKey {
 	created_at: Timestamp;
 }
 
+export type AllowedScriptKind = 'script' | 'frame' | 'image' | 'media' | 'connect' | 'all';
+
 export interface AllowedScript {
 	id: string;
 	site_id: string;
 	domain: string;
 	purpose: string;
+	kind: AllowedScriptKind;
 	is_active: BoolInt;
 	created_at: Timestamp;
 }

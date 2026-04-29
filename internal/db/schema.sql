@@ -322,15 +322,27 @@ CREATE TABLE IF NOT EXISTS site_settings (
 );
 CREATE INDEX IF NOT EXISTS idx_site_settings_site ON site_settings(site_id);
 
--- Allowlisted external scripts (feeds CSP generation + guardrails)
+-- Allowlisted external domains (feeds CSP generation + guardrails). The kind
+-- column routes the domain to the right CSP directive, so a single table
+-- covers scripts (Stripe.js), iframes (cal.com), images (Cloudinary CDN),
+-- media (Vimeo), and connect-only API hosts.
+--
+-- kind values:
+--   script  -> script-src + connect-src (default; backwards-compatible)
+--   frame   -> frame-src (iframe embeds like cal.com / YouTube / Stripe Checkout)
+--   image   -> img-src
+--   media   -> media-src
+--   connect -> connect-src
+--   all     -> every directive above
 CREATE TABLE IF NOT EXISTS allowed_scripts (
     id         TEXT PRIMARY KEY,
     site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
     domain     TEXT NOT NULL,
     purpose    TEXT NOT NULL DEFAULT '',
+    kind       TEXT NOT NULL DEFAULT 'script',
     is_active  INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(site_id, domain)
+    UNIQUE(site_id, domain, kind)
 );
 CREATE INDEX IF NOT EXISTS idx_allowed_scripts_site ON allowed_scripts(site_id);
 

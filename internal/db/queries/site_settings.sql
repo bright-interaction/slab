@@ -73,11 +73,11 @@ DELETE FROM site_silos WHERE id = ?;
 SELECT * FROM allowed_scripts WHERE site_id = ? ORDER BY domain;
 
 -- name: CreateAllowedScript :exec
-INSERT INTO allowed_scripts (id, site_id, domain, purpose, is_active, created_at)
-VALUES (?, ?, ?, ?, 1, datetime('now'));
+INSERT INTO allowed_scripts (id, site_id, domain, purpose, kind, is_active, created_at)
+VALUES (?, ?, ?, ?, ?, 1, datetime('now'));
 
 -- name: UpdateAllowedScript :exec
-UPDATE allowed_scripts SET domain = ?, purpose = ?, is_active = ? WHERE id = ?;
+UPDATE allowed_scripts SET domain = ?, purpose = ?, kind = ?, is_active = ? WHERE id = ?;
 
 -- name: DeleteAllowedScript :exec
 DELETE FROM allowed_scripts WHERE id = ?;

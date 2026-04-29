@@ -195,6 +195,7 @@ func (s *Server) Router() http.Handler {
 			seth.OnAnalyticsChange(s.OnAnalyticsSettingsChange)
 		}
 		r.Get("/api/sites/{siteID}/settings", seth.List)
+		r.Get("/api/sites/{siteID}/settings/security/preview", seth.SecurityPreview)
 		r.Get("/api/sites/{siteID}/settings/{category}", seth.ListByCategory)
 		r.Put("/api/sites/{siteID}/settings", seth.Upsert)
 		r.Put("/api/sites/{siteID}/settings/bulk", seth.BulkUpsert)
