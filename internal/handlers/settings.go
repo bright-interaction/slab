@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -136,4 +137,29 @@ func (h *SettingsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// SecurityPreview returns the resolved security headers the next build would
+// emit for this site. Used by the admin Security page to show "this is what
+// CSP will look like" before triggering a build, and by the kind-routing
+// e2e test to verify a frame-only domain lands in frame-src and not
+// script-src.
+func (h *SettingsHandler) SecurityPreview(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	hdrs, err := builder.BuildSecurityHeaders(r.Context(), h.queries, siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to compute headers")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"csp":                          hdrs.CSP,
+		"hsts":                         hdrs.HSTS,
+		"x_frame_options":              hdrs.XFrameOptions,
+		"x_content_type_options":       hdrs.XContentTypeOptions,
+		"referrer_policy":              hdrs.ReferrerPolicy,
+		"permissions_policy":           hdrs.PermissionsPolicy,
+		"cross_origin_opener_policy":   hdrs.COOP,
+		"cross_origin_resource_policy": hdrs.CORP,
+		"cross_origin_embedder_policy": hdrs.COEP,
+	})
 }

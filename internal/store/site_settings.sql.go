@@ -10,8 +10,8 @@ import (
 )
 
 const createAllowedScript = `-- name: CreateAllowedScript :exec
-INSERT INTO allowed_scripts (id, site_id, domain, purpose, is_active, created_at)
-VALUES (?, ?, ?, ?, 1, datetime('now'))
+INSERT INTO allowed_scripts (id, site_id, domain, purpose, kind, is_active, created_at)
+VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
 `
 
 type CreateAllowedScriptParams struct {
@@ -19,6 +19,7 @@ type CreateAllowedScriptParams struct {
 	SiteID  string `json:"site_id"`
 	Domain  string `json:"domain"`
 	Purpose string `json:"purpose"`
+	Kind    string `json:"kind"`
 }
 
 func (q *Queries) CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error {
@@ -27,6 +28,7 @@ func (q *Queries) CreateAllowedScript(ctx context.Context, arg CreateAllowedScri
 		arg.SiteID,
 		arg.Domain,
 		arg.Purpose,
+		arg.Kind,
 	)
 	return err
 }
@@ -189,7 +191,7 @@ func (q *Queries) GetSiteProfile(ctx context.Context, siteID string) (SiteProfil
 }
 
 const listAllowedScriptsBySite = `-- name: ListAllowedScriptsBySite :many
-SELECT id, site_id, domain, purpose, is_active, created_at FROM allowed_scripts WHERE site_id = ? ORDER BY domain
+SELECT id, site_id, domain, purpose, kind, is_active, created_at FROM allowed_scripts WHERE site_id = ? ORDER BY domain
 `
 
 // Allowed scripts
@@ -207,6 +209,7 @@ func (q *Queries) ListAllowedScriptsBySite(ctx context.Context, siteID string) (
 			&i.SiteID,
 			&i.Domain,
 			&i.Purpose,
+			&i.Kind,
 			&i.IsActive,
 			&i.CreatedAt,
 		); err != nil {
@@ -333,12 +336,13 @@ func (q *Queries) ListSilosBySite(ctx context.Context, siteID string) ([]SiteSil
 }
 
 const updateAllowedScript = `-- name: UpdateAllowedScript :exec
-UPDATE allowed_scripts SET domain = ?, purpose = ?, is_active = ? WHERE id = ?
+UPDATE allowed_scripts SET domain = ?, purpose = ?, kind = ?, is_active = ? WHERE id = ?
 `
 
 type UpdateAllowedScriptParams struct {
 	Domain   string `json:"domain"`
 	Purpose  string `json:"purpose"`
+	Kind     string `json:"kind"`
 	IsActive int64  `json:"is_active"`
 	ID       string `json:"id"`
 }
@@ -347,6 +351,7 @@ func (q *Queries) UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScri
 	_, err := q.db.ExecContext(ctx, updateAllowedScript,
 		arg.Domain,
 		arg.Purpose,
+		arg.Kind,
 		arg.IsActive,
 		arg.ID,
 	)

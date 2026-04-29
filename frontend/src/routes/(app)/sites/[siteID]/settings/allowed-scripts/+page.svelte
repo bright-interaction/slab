@@ -2,6 +2,7 @@
 	import * as allowedScriptsApi from '$lib/api/allowedScripts';
 	import { ApiError } from '$lib/api/client';
 	import Input from '$lib/components/ui/Input.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Dialog from '$lib/components/ui/Dialog.svelte';
@@ -9,8 +10,21 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { confirm } from '$lib/components/ui/ConfirmDialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import type { Site, AllowedScript } from '$lib/api/types';
+	import type { Site, AllowedScript, AllowedScriptKind } from '$lib/api/types';
 	import { Plus, Trash2, Pencil } from 'lucide-svelte';
+
+	const KIND_OPTIONS: { value: AllowedScriptKind; label: string; hint: string }[] = [
+		{ value: 'script', label: 'Script', hint: 'Third-party JS (Stripe.js, GA, custom snippets). Routes to script-src + connect-src.' },
+		{ value: 'frame', label: 'Iframe / embed', hint: 'cal.com, YouTube, Stripe Checkout, Tally, anything that renders inside an <iframe>. Routes to frame-src.' },
+		{ value: 'image', label: 'Image host', hint: 'External CDN for images (Cloudinary, Imgix). Routes to img-src.' },
+		{ value: 'media', label: 'Audio / video host', hint: 'Vimeo, SoundCloud, audio CDN. Routes to media-src.' },
+		{ value: 'connect', label: 'API / fetch host', hint: 'Backend an inline script needs to fetch from. Routes to connect-src only.' },
+		{ value: 'all', label: 'Everything', hint: 'Trust this domain across every directive. Use sparingly.' }
+	];
+
+	function kindLabel(k: string): string {
+		return KIND_OPTIONS.find((o) => o.value === k)?.label ?? k;
+	}
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -24,6 +38,7 @@
 	let editingId = $state<string | null>(null);
 	let formDomain = $state('');
 	let formPurpose = $state('');
+	let formKind = $state<AllowedScriptKind>('script');
 	let formError = $state<string | null>(null);
 	let submitting = $state(false);
 
@@ -49,6 +64,7 @@
 		editingId = null;
 		formDomain = '';
 		formPurpose = '';
+		formKind = 'script';
 		formError = null;
 		dialogOpen = true;
 	}
@@ -57,6 +73,7 @@
 		editingId = s.id;
 		formDomain = s.domain;
 		formPurpose = s.purpose;
+		formKind = (s.kind ?? 'script') as AllowedScriptKind;
 		formError = null;
 		dialogOpen = true;
 	}
@@ -82,15 +99,17 @@
 			if (editingId) {
 				await allowedScriptsApi.update(siteID, editingId, {
 					domain: formDomain.trim(),
-					purpose: formPurpose.trim()
+					purpose: formPurpose.trim(),
+					kind: formKind
 				});
-				toast.success('Allowed script updated.');
+				toast.success('Trusted domain updated.');
 			} else {
 				await allowedScriptsApi.create(siteID, {
 					domain: formDomain.trim(),
-					purpose: formPurpose.trim()
+					purpose: formPurpose.trim(),
+					kind: formKind
 				});
-				toast.success('Allowed script added.');
+				toast.success('Trusted domain added.');
 			}
 			dialogOpen = false;
 			await load();
@@ -134,10 +153,13 @@
 	<header class="flex items-start justify-between gap-4">
 		<div class="flex flex-col gap-1.5">
 			<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
-				Allowed Scripts
+				Trusted external domains
 			</h1>
 			<p class="text-[13px] text-text-secondary">
-				Third-party domains permitted by Content-Security-Policy.
+				Whitelist third-party domains in this site's Content-Security-Policy.
+				Pick a kind so each domain lands in the right CSP directive: scripts
+				to script-src, iframes (cal.com, YouTube, Stripe Checkout) to frame-src,
+				CDN images to img-src, audio/video hosts to media-src.
 			</p>
 		</div>
 		<Button variant="primary" onclick={openAdd}>
@@ -174,11 +196,18 @@
 					<Card padding="sm">
 						<div class="flex items-center gap-4">
 							<div class="flex-1 min-w-0">
-								<p class="font-mono text-[13px] text-text-primary truncate">{s.domain}</p>
+								<div class="flex items-center gap-2">
+									<p class="truncate font-mono text-[13px] text-text-primary">{s.domain}</p>
+									<span
+										class="inline-flex h-5 shrink-0 items-center rounded-md bg-bg-elevated px-1.5 font-mono text-[10px] uppercase tracking-wider text-text-secondary"
+									>
+										{kindLabel(s.kind ?? 'script')}
+									</span>
+								</div>
 								{#if s.purpose}
-									<p class="text-[12px] text-text-muted truncate">{s.purpose}</p>
+									<p class="truncate text-[12px] text-text-muted">{s.purpose}</p>
 								{:else}
-									<p class="text-[12px] text-text-muted italic">No purpose noted.</p>
+									<p class="text-[12px] italic text-text-muted">No purpose noted.</p>
 								{/if}
 							</div>
 							<button
@@ -225,20 +254,31 @@
 
 <Dialog
 	bind:open={dialogOpen}
-	title={editingId ? 'Edit allowed script' : 'Add allowed script'}
+	title={editingId ? 'Edit trusted domain' : 'Add trusted domain'}
 	description="Hostname only. No protocol, no path."
 	size="md"
 >
 	<div class="flex flex-col gap-4">
 		<Input
 			label="Domain"
-			placeholder="cdn.example.com"
+			placeholder="cal.com"
 			bind:value={formDomain}
 			error={formError ?? undefined}
 		/>
+		<div class="flex flex-col gap-1.5">
+			<span class="text-[12px] font-medium text-text-secondary">Kind</span>
+			<Select
+				options={KIND_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+				value={formKind}
+				onchange={(v) => (formKind = v as AllowedScriptKind)}
+			/>
+			<p class="text-[11px] text-text-muted">
+				{KIND_OPTIONS.find((o) => o.value === formKind)?.hint ?? ''}
+			</p>
+		</div>
 		<Input
 			label="Purpose"
-			placeholder="Analytics, payment, fonts..."
+			placeholder="Booking widget, payments, video..."
 			hint="Why this domain is needed. Audit-friendly note."
 			bind:value={formPurpose}
 		/>

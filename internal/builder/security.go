@@ -33,21 +33,48 @@ func BuildSecurityHeaders(ctx context.Context, queries *store.Queries, siteID st
 		sm[s.Category+"."+s.Key] = s.Value
 	}
 
-	scripts, _ := queries.ListAllowedScriptsBySite(ctx, siteID)
-	var allowedDomains []string
-	for _, s := range scripts {
-		if s.IsActive == 1 {
-			allowedDomains = append(allowedDomains, s.Domain)
+	// Group active trusted domains by kind so each kind feeds the right CSP
+	// directive. 'all' is fanned out into every list.
+	rows, _ := queries.ListAllowedScriptsBySite(ctx, siteID)
+	allow := AllowedDomains{}
+	for _, s := range rows {
+		if s.IsActive != 1 {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(s.Kind)) {
+		case "frame":
+			allow.Frame = append(allow.Frame, s.Domain)
+		case "image":
+			allow.Image = append(allow.Image, s.Domain)
+		case "media":
+			allow.Media = append(allow.Media, s.Domain)
+		case "connect":
+			allow.Connect = append(allow.Connect, s.Domain)
+		case "all":
+			allow.Script = append(allow.Script, s.Domain)
+			allow.Connect = append(allow.Connect, s.Domain)
+			allow.Frame = append(allow.Frame, s.Domain)
+			allow.Image = append(allow.Image, s.Domain)
+			allow.Media = append(allow.Media, s.Domain)
+		default: // "" or "script"
+			allow.Script = append(allow.Script, s.Domain)
+			allow.Connect = append(allow.Connect, s.Domain)
 		}
 	}
 
 	h := SecurityHeaders{}
 
 	// CSP: if fully overridden in settings, use that; otherwise auto-build
+	// from the structured allowlist + per-site CSP settings.
 	if override := sm["security.csp_policy"]; override != "" && override != "auto" {
 		h.CSP = override
 	} else if boolSetting(sm["security.csp_enabled"], true) {
-		h.CSP = buildCSP(allowedDomains)
+		opts := CSPOptions{
+			Allow:           allow,
+			FrameAncestors:  orDefault(sm["security.frame_ancestors"], "'none'"),
+			ExtraDirectives: sm["security.csp_extra_directives"],
+		}
+		h.CSP = buildCSP(opts)
 	}
 
 	if boolSetting(sm["security.hsts_enabled"], true) {
@@ -103,34 +130,85 @@ func CSPForMeta(full string) string {
 	return strings.Join(out, "; ")
 }
 
-// buildCSP constructs a Content-Security-Policy from allowed script domains.
-// Default policy: self-only, allow https img/font, explicit allowlist for scripts.
-func buildCSP(allowedDomains []string) string {
-	scriptSrc := "'self'"
-	styleSrc := "'self' 'unsafe-inline'" // inline styles common in generated HTML
-	connectSrc := "'self'"
-	fontSrc := "'self' https: data:"
+// AllowedDomains groups trusted external domains by which CSP directive
+// they should land in. Built by BuildSecurityHeaders from
+// allowed_scripts rows partitioned by their kind column.
+type AllowedDomains struct {
+	Script  []string // -> script-src
+	Connect []string // -> connect-src
+	Frame   []string // -> frame-src (iframes: cal.com / YouTube / Stripe Checkout)
+	Image   []string // -> img-src (extra hosts beyond the default https: wildcard)
+	Media   []string // -> media-src (audio/video sources)
+}
 
-	if len(allowedDomains) > 0 {
-		hosts := strings.Join(allowedDomains, " ")
-		scriptSrc += " " + hosts
-		connectSrc += " " + hosts
+// CSPOptions is the input to buildCSP. Allow contributes directive-specific
+// hostnames; FrameAncestors controls who can embed THIS site in an iframe
+// (default 'none' is anti-clickjacking; operators can set 'self' or a host
+// list when they need to allow embedding); ExtraDirectives is an opaque
+// suffix the operator can paste in to escape any limitation here, joined
+// with semicolons.
+type CSPOptions struct {
+	Allow           AllowedDomains
+	FrameAncestors  string
+	ExtraDirectives string
+}
+
+// buildCSP constructs a Content-Security-Policy from the structured
+// allowlist + per-site CSP settings. Each domain lands in exactly the
+// directive it was registered for so an iframe domain doesn't accidentally
+// gain script-execution privileges.
+func buildCSP(opts CSPOptions) string {
+	join := func(base string, extra []string) string {
+		if len(extra) == 0 {
+			return base
+		}
+		return base + " " + strings.Join(extra, " ")
+	}
+
+	scriptSrc := join("'self'", opts.Allow.Script)
+	connectSrc := join("'self'", opts.Allow.Connect)
+	imgSrc := join("'self' data: https:", opts.Allow.Image)
+	fontSrc := "'self' https: data:"
+	styleSrc := "'self' 'unsafe-inline'"
+
+	frameAncestors := strings.TrimSpace(opts.FrameAncestors)
+	if frameAncestors == "" {
+		frameAncestors = "'none'"
 	}
 
 	directives := []string{
 		"default-src 'self'",
 		"script-src " + scriptSrc,
 		"style-src " + styleSrc,
-		"img-src 'self' data: https:",
+		"img-src " + imgSrc,
 		"connect-src " + connectSrc,
 		"font-src " + fontSrc,
-		"frame-ancestors 'none'",
+		"frame-ancestors " + frameAncestors,
 		"base-uri 'self'",
 		"form-action 'self'",
 		"object-src 'none'",
 		"upgrade-insecure-requests",
 	}
-	return strings.Join(directives, "; ")
+
+	// frame-src and media-src are opt-in. Without explicit hosts the
+	// browser falls back to default-src ('self'), which blocks every
+	// third-party iframe. Adding these only when there's a host list keeps
+	// the directive count tight on simple sites.
+	if len(opts.Allow.Frame) > 0 {
+		directives = append(directives, "frame-src 'self' "+strings.Join(opts.Allow.Frame, " "))
+	}
+	if len(opts.Allow.Media) > 0 {
+		directives = append(directives, "media-src 'self' "+strings.Join(opts.Allow.Media, " "))
+	}
+
+	out := strings.Join(directives, "; ")
+	if extra := strings.TrimSpace(opts.ExtraDirectives); extra != "" {
+		// Strip a trailing semicolon from the operator paste so we don't
+		// emit "...; ; " and confuse browsers.
+		extra = strings.TrimRight(extra, "; ")
+		out += "; " + extra
+	}
+	return out
 }
 
 // RenderSecurityHeaders writes the _headers file (Netlify/Cloudflare Pages/Caddy)

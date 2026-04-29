@@ -42,6 +42,29 @@ func validateDomain(d string) error {
 	return nil
 }
 
+// AllowedKinds is the closed set of values for allowed_scripts.kind. Keep in
+// sync with the schema comment in internal/db/schema.sql and with the CSP
+// directive routing in builder/security.go:buildCSP.
+var AllowedKinds = map[string]bool{
+	"script":  true,
+	"frame":   true,
+	"image":   true,
+	"media":   true,
+	"connect": true,
+	"all":     true,
+}
+
+func validateKind(k string) (string, error) {
+	k = strings.TrimSpace(strings.ToLower(k))
+	if k == "" {
+		return "script", nil
+	}
+	if !AllowedKinds[k] {
+		return "", fmt.Errorf("kind must be one of: script, frame, image, media, connect, all")
+	}
+	return k, nil
+}
+
 // AllowedScriptHandler handles the CSP allowlist for external script domains.
 type AllowedScriptHandler struct {
 	cfg     *config.Config
@@ -67,12 +90,18 @@ func (h *AllowedScriptHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Domain  string `json:"domain"`
 		Purpose string `json:"purpose"`
+		Kind    string `json:"kind"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 	if err := validateDomain(req.Domain); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	kind, err := validateKind(req.Kind)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -83,11 +112,12 @@ func (h *AllowedScriptHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SiteID:  siteID,
 		Domain:  req.Domain,
 		Purpose: req.Purpose,
+		Kind:    kind,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create allowed script")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "domain": req.Domain})
+	writeJSON(w, http.StatusCreated, map[string]string{"id": id, "domain": req.Domain, "kind": kind})
 }
 
 func (h *AllowedScriptHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +125,7 @@ func (h *AllowedScriptHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Domain   *string `json:"domain"`
 		Purpose  *string `json:"purpose"`
+		Kind     *string `json:"kind"`
 		IsActive *int64  `json:"is_active"`
 	}
 	if err := parseJSON(r, &req); err != nil {
@@ -128,6 +159,15 @@ func (h *AllowedScriptHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Purpose != nil {
 		purpose = *req.Purpose
 	}
+	kind := existing.Kind
+	if req.Kind != nil {
+		k, err := validateKind(*req.Kind)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		kind = k
+	}
 	active := existing.IsActive
 	if req.IsActive != nil {
 		active = *req.IsActive
@@ -137,6 +177,7 @@ func (h *AllowedScriptHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ID:       id,
 		Domain:   domain,
 		Purpose:  purpose,
+		Kind:     kind,
 		IsActive: active,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update allowed script")

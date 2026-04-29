@@ -20,6 +20,7 @@ type AllowedScript struct {
 	SiteID    string `json:"site_id"`
 	Domain    string `json:"domain"`
 	Purpose   string `json:"purpose"`
+	Kind      string `json:"kind"`
 	IsActive  int64  `json:"is_active"`
 	CreatedAt string `json:"created_at"`
 }

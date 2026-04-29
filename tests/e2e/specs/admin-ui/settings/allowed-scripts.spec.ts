@@ -11,7 +11,9 @@ test.describe('Settings: Allowed scripts', () => {
 	test('add domain, toggle active, delete', async ({ loggedInPage, adminApi }) => {
 		site = await createSite(adminApi);
 		await loggedInPage.goto(`/sites/${site.id}/settings/allowed-scripts`);
-		await expect(loggedInPage.getByRole('heading', { name: 'Allowed Scripts', exact: true })).toBeVisible();
+		await expect(
+			loggedInPage.getByRole('heading', { name: 'Trusted external domains', exact: true })
+		).toBeVisible();
 
 		const domain = `e2e-${rand()}.example.com`;
 		await loggedInPage.getByRole('button', { name: /add (first )?domain/i }).first().click();

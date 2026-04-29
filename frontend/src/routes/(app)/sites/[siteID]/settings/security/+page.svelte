@@ -46,10 +46,14 @@
 	let hstsPreload = $state(false);
 	let cspEnabled = $state(false);
 	let cspExtra = $state('');
+	let frameAncestors = $state("'none'");
 	let xFrameOptions = $state('SAMEORIGIN');
 	let xContentTypeOptions = $state(true);
 	let referrerPolicy = $state('strict-origin-when-cross-origin');
 	let permissionsPolicy = $state('camera=(), microphone=(), geolocation=()');
+	let coop = $state('same-origin');
+	let corp = $state('same-origin');
+	let coep = $state('');
 	let httpsRedirect = $state(true);
 
 	type State = {
@@ -58,10 +62,14 @@
 		hstsPreload: boolean;
 		cspEnabled: boolean;
 		cspExtra: string;
+		frameAncestors: string;
 		xFrameOptions: string;
 		xContentTypeOptions: boolean;
 		referrerPolicy: string;
 		permissionsPolicy: string;
+		coop: string;
+		corp: string;
+		coep: string;
 		httpsRedirect: boolean;
 	};
 
@@ -71,10 +79,14 @@
 		hstsPreload: false,
 		cspEnabled: false,
 		cspExtra: '',
+		frameAncestors: "'none'",
 		xFrameOptions: 'SAMEORIGIN',
 		xContentTypeOptions: true,
 		referrerPolicy: 'strict-origin-when-cross-origin',
 		permissionsPolicy: 'camera=(), microphone=(), geolocation=()',
+		coop: 'same-origin',
+		corp: 'same-origin',
+		coep: '',
 		httpsRedirect: true
 	});
 
@@ -89,10 +101,14 @@
 			hstsPreload = toBool(m.hsts_preload);
 			cspEnabled = toBool(m.csp_enabled);
 			cspExtra = m.csp_extra_directives || '';
+			frameAncestors = m.frame_ancestors || "'none'";
 			xFrameOptions = m.x_frame_options || 'SAMEORIGIN';
 			xContentTypeOptions = m.x_content_type_options ? toBool(m.x_content_type_options) : true;
 			referrerPolicy = m.referrer_policy || 'strict-origin-when-cross-origin';
 			permissionsPolicy = m.permissions_policy || 'camera=(), microphone=(), geolocation=()';
+			coop = m.coop || 'same-origin';
+			corp = m.corp || 'same-origin';
+			coep = m.coep || '';
 			httpsRedirect = m.https_redirect ? toBool(m.https_redirect) : true;
 
 			initial = {
@@ -101,10 +117,14 @@
 				hstsPreload,
 				cspEnabled,
 				cspExtra,
+				frameAncestors,
 				xFrameOptions,
 				xContentTypeOptions,
 				referrerPolicy,
 				permissionsPolicy,
+				coop,
+				corp,
+				coep,
 				httpsRedirect
 			};
 		} catch (err) {
@@ -124,10 +144,14 @@
 			hstsPreload !== initial.hstsPreload ||
 			cspEnabled !== initial.cspEnabled ||
 			cspExtra !== initial.cspExtra ||
+			frameAncestors !== initial.frameAncestors ||
 			xFrameOptions !== initial.xFrameOptions ||
 			xContentTypeOptions !== initial.xContentTypeOptions ||
 			referrerPolicy !== initial.referrerPolicy ||
 			permissionsPolicy !== initial.permissionsPolicy ||
+			coop !== initial.coop ||
+			corp !== initial.corp ||
+			coep !== initial.coep ||
 			httpsRedirect !== initial.httpsRedirect
 	);
 
@@ -137,10 +161,14 @@
 		hstsPreload = initial.hstsPreload;
 		cspEnabled = initial.cspEnabled;
 		cspExtra = initial.cspExtra;
+		frameAncestors = initial.frameAncestors;
 		xFrameOptions = initial.xFrameOptions;
 		xContentTypeOptions = initial.xContentTypeOptions;
 		referrerPolicy = initial.referrerPolicy;
 		permissionsPolicy = initial.permissionsPolicy;
+		coop = initial.coop;
+		corp = initial.corp;
+		coep = initial.coep;
 		httpsRedirect = initial.httpsRedirect;
 	}
 
@@ -158,6 +186,7 @@
 				{ category: 'security', key: 'hsts_preload', value: b(hstsPreload) },
 				{ category: 'security', key: 'csp_enabled', value: b(cspEnabled) },
 				{ category: 'security', key: 'csp_extra_directives', value: cspExtra },
+				{ category: 'security', key: 'frame_ancestors', value: frameAncestors },
 				{ category: 'security', key: 'x_frame_options', value: xFrameOptions },
 				{
 					category: 'security',
@@ -166,6 +195,9 @@
 				},
 				{ category: 'security', key: 'referrer_policy', value: referrerPolicy },
 				{ category: 'security', key: 'permissions_policy', value: permissionsPolicy },
+				{ category: 'security', key: 'coop', value: coop },
+				{ category: 'security', key: 'corp', value: corp },
+				{ category: 'security', key: 'coep', value: coep },
 				{ category: 'security', key: 'https_redirect', value: b(httpsRedirect) }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
@@ -176,10 +208,14 @@
 				hstsPreload,
 				cspEnabled,
 				cspExtra,
+				frameAncestors,
 				xFrameOptions,
 				xContentTypeOptions,
 				referrerPolicy,
 				permissionsPolicy,
+				coop,
+				corp,
+				coep,
 				httpsRedirect
 			};
 			toast.success('Security settings saved.');
@@ -262,13 +298,29 @@
 						<Switch bind:checked={cspEnabled} ariaLabel="Enable CSP" />
 					</div>
 					{#if cspEnabled}
+						<Input
+							label="frame-ancestors"
+							hint="Who can embed THIS site in an iframe. 'none' (default) is anti-clickjacking. Use 'self' or a host list to allow embedding (e.g. for a customer portal)."
+							placeholder="'none' or 'self' or https://app.example.com"
+							bind:value={frameAncestors}
+						/>
 						<Textarea
 							label="Extra directives"
 							rows={3}
-							placeholder="connect-src 'self' https://api.example.com;"
-							hint="Appended to base CSP. Keep semicolon-separated."
+							placeholder="report-uri /csp-report"
+							hint="Appended to the auto-built CSP. Use this for report-uri, sandbox, or anything atomicsite doesn't expose as its own field. Trailing semicolons are stripped."
 							bind:value={cspExtra}
 						/>
+						<p class="rounded-lg border border-border-light bg-bg-elevated/50 px-3 py-2 text-[12px] text-text-muted">
+							Need to whitelist an iframe (cal.com, YouTube), an image CDN, or
+							a payment script? Use the
+							<a href="./allowed-scripts" class="text-accent underline-offset-2 hover:underline">
+								Trusted external domains
+							</a>
+							page. Each entry there picks the kind (script / iframe / image /
+							media / connect / all), and the builder routes it into the right
+							CSP directive automatically.
+						</p>
 					{/if}
 				</div>
 			</Card>
@@ -302,6 +354,62 @@
 						hint="Comma-separated feature directives. Empty parens = block."
 						bind:value={permissionsPolicy}
 					/>
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Cross-Origin Isolation
+				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Controls how this page shares a browsing context with documents on
+					other origins. Same-origin defaults are safe; loosen only if a
+					third-party iframe or popup needs to interact with the site.
+				</p>
+				<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<div class="flex flex-col gap-1.5">
+						<span class="text-[12px] font-medium text-text-secondary">
+							Cross-Origin-Opener-Policy (COOP)
+						</span>
+						<Select
+							options={[
+								{ value: 'same-origin', label: 'same-origin (default)' },
+								{ value: 'same-origin-allow-popups', label: 'same-origin-allow-popups' },
+								{ value: 'unsafe-none', label: 'unsafe-none' }
+							]}
+							bind:value={coop}
+						/>
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<span class="text-[12px] font-medium text-text-secondary">
+							Cross-Origin-Resource-Policy (CORP)
+						</span>
+						<Select
+							options={[
+								{ value: 'same-origin', label: 'same-origin (default)' },
+								{ value: 'same-site', label: 'same-site' },
+								{ value: 'cross-origin', label: 'cross-origin' }
+							]}
+							bind:value={corp}
+						/>
+					</div>
+					<div class="flex flex-col gap-1.5 sm:col-span-2">
+						<span class="text-[12px] font-medium text-text-secondary">
+							Cross-Origin-Embedder-Policy (COEP)
+						</span>
+						<Select
+							options={[
+								{ value: '', label: 'Off (default; preserves third-party embeds)' },
+								{ value: 'require-corp', label: 'require-corp (enables SharedArrayBuffer)' },
+								{ value: 'credentialless', label: 'credentialless' }
+							]}
+							bind:value={coep}
+						/>
+						<p class="text-[11px] text-text-muted">
+							require-corp blocks iframes without Cross-Origin-Resource-Policy.
+							Use only if you need SharedArrayBuffer / cross-origin isolation.
+						</p>
+					</div>
 				</div>
 			</Card>
 

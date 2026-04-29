@@ -1,20 +1,23 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
-import type { AllowedScript, BoolInt } from './types';
+import type { AllowedScript, AllowedScriptKind, BoolInt } from './types';
 
 export interface CreateAllowedScriptInput {
 	domain: string;
 	purpose?: string;
+	kind?: AllowedScriptKind;
 }
 
 export interface UpdateAllowedScriptPatch {
 	domain?: string;
 	purpose?: string;
+	kind?: AllowedScriptKind;
 	is_active?: BoolInt;
 }
 
 export interface CreateAllowedScriptResponse {
 	id: string;
 	domain: string;
+	kind: AllowedScriptKind;
 }
 
 export function list(siteID: string): Promise<AllowedScript[]> {

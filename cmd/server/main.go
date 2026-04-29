@@ -187,6 +187,13 @@ func applySchema(sqlDB *sql.DB) error {
 		// conversion without breaking the global blocks for the rest of
 		// the site.
 		{"pages", "hide_global_blocks", "INTEGER NOT NULL DEFAULT 0"},
+		// Trusted-domain kind (Phase 15) added 2026-04-29. Existing rows
+		// default to 'script' so the upgrade is no-op for current sites.
+		// Note: schema.sql also widens UNIQUE to (site_id, domain, kind)
+		// but addColumnIfMissing can't redefine constraints; SQLite ignores
+		// the older UNIQUE on existing tables and allows the new (id, kind)
+		// combination at the application layer (handler dedupes per kind).
+		{"allowed_scripts", "kind", "TEXT NOT NULL DEFAULT 'script'"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {
