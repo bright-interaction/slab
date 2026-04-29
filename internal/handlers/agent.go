@@ -161,16 +161,18 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title           *string `json:"title"`
-		Slug            *string `json:"slug"`
-		Status          *string `json:"status"`
-		MetaTitle       *string `json:"meta_title"`
-		MetaDescription *string `json:"meta_description"`
-		Layout          *string `json:"layout"`
-		ShowInNav       *int64  `json:"show_in_nav"`
-		NavLabel        *string `json:"nav_label"`
-		NoIndex         *int64  `json:"no_index"`
-		CanonicalURL    *string `json:"canonical_url"`
+		Title            *string `json:"title"`
+		Slug             *string `json:"slug"`
+		Status           *string `json:"status"`
+		MetaTitle        *string `json:"meta_title"`
+		MetaDescription  *string `json:"meta_description"`
+		OgImageID        *string `json:"og_image_id"`
+		Layout           *string `json:"layout"`
+		ShowInNav        *int64  `json:"show_in_nav"`
+		NavLabel         *string `json:"nav_label"`
+		NoIndex          *int64  `json:"no_index"`
+		CanonicalURL     *string `json:"canonical_url"`
+		HideGlobalBlocks *int64  `json:"hide_global_blocks"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -178,19 +180,20 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := store.UpdatePageParams{
-		ID:              page.ID,
-		Title:           page.Title,
-		Slug:            page.Slug,
-		Status:          page.Status,
-		MetaTitle:       page.MetaTitle,
-		MetaDescription: page.MetaDescription,
-		OgImageID:       page.OgImageID,
-		Layout:          page.Layout,
-		SortOrder:       page.SortOrder,
-		ShowInNav:       page.ShowInNav,
-		NavLabel:        page.NavLabel,
-		NoIndex:         page.NoIndex,
-		CanonicalUrl:    page.CanonicalUrl,
+		ID:               page.ID,
+		Title:            page.Title,
+		Slug:             page.Slug,
+		Status:           page.Status,
+		MetaTitle:        page.MetaTitle,
+		MetaDescription:  page.MetaDescription,
+		OgImageID:        page.OgImageID,
+		Layout:           page.Layout,
+		SortOrder:        page.SortOrder,
+		ShowInNav:        page.ShowInNav,
+		NavLabel:         page.NavLabel,
+		NoIndex:          page.NoIndex,
+		CanonicalUrl:     page.CanonicalUrl,
+		HideGlobalBlocks: page.HideGlobalBlocks,
 	}
 
 	if req.Title != nil {
@@ -225,6 +228,9 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	if req.MetaDescription != nil {
 		params.MetaDescription = *req.MetaDescription
 	}
+	if req.OgImageID != nil {
+		params.OgImageID = *req.OgImageID
+	}
 	if req.Layout != nil {
 		params.Layout = *req.Layout
 	}
@@ -239,6 +245,9 @@ func (h *AgentHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.CanonicalURL != nil {
 		params.CanonicalUrl = *req.CanonicalURL
+	}
+	if req.HideGlobalBlocks != nil {
+		params.HideGlobalBlocks = *req.HideGlobalBlocks
 	}
 
 	if err := h.queries.UpdatePage(r.Context(), params); err != nil {
@@ -365,6 +374,7 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		Data      any     `json:"data"`
 		Style     any     `json:"style"`
 		IsVisible *int64  `json:"is_visible"`
+		SortOrder *int64  `json:"sort_order"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -387,6 +397,10 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	if req.IsVisible != nil {
 		isVisible = *req.IsVisible
 	}
+	sortOrder := existing.SortOrder
+	if req.SortOrder != nil {
+		sortOrder = *req.SortOrder
+	}
 
 	violations := h.guardrails.ValidateBlock(r.Context(), a.SiteID, blockType, dataStr)
 	if agent.HasErrors(violations) {
@@ -400,6 +414,7 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	err = h.queries.UpdateBlock(r.Context(), store.UpdateBlockParams{
 		ID:        blockID,
 		BlockType: blockType,
+		SortOrder: sortOrder,
 		DataJson:  dataStr,
 		StyleJson: styleStr,
 		IsVisible: isVisible,

@@ -114,7 +114,7 @@ func (s *Server) registerTools() {
 
 	register(Tool{
 		Name:        "update_page",
-		Description: "Updates a page identified by slug. Pass slug + any of: title, new_slug, status (draft|published), meta_title, meta_description, layout, show_in_nav (0|1), nav_label, no_index (0|1), canonical_url, hide_global_blocks (0|1).",
+		Description: "Updates a page identified by slug. Pass slug + any of: title, new_slug, status (draft|published), meta_title, meta_description, og_image_id, layout, show_in_nav (0|1), nav_label, no_index (0|1), canonical_url, hide_global_blocks (0|1).",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
@@ -124,28 +124,32 @@ func (s *Server) registerTools() {
 				"status":{"type":"string","enum":["draft","published"]},
 				"meta_title":{"type":"string"},
 				"meta_description":{"type":"string"},
+				"og_image_id":{"type":"string"},
 				"layout":{"type":"string"},
 				"show_in_nav":{"type":"integer","enum":[0,1]},
 				"nav_label":{"type":"string"},
 				"no_index":{"type":"integer","enum":[0,1]},
-				"canonical_url":{"type":"string"}
+				"canonical_url":{"type":"string"},
+				"hide_global_blocks":{"type":"integer","enum":[0,1]}
 			},
 			"required":["slug"]
 		}`),
 		RequiresWrite: true,
 		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
 			var args struct {
-				Slug            string  `json:"slug"`
-				Title           *string `json:"title"`
-				NewSlug         *string `json:"new_slug"`
-				Status          *string `json:"status"`
-				MetaTitle       *string `json:"meta_title"`
-				MetaDescription *string `json:"meta_description"`
-				Layout          *string `json:"layout"`
-				ShowInNav       *int64  `json:"show_in_nav"`
-				NavLabel        *string `json:"nav_label"`
-				NoIndex         *int64  `json:"no_index"`
-				CanonicalURL    *string `json:"canonical_url"`
+				Slug             string  `json:"slug"`
+				Title            *string `json:"title"`
+				NewSlug          *string `json:"new_slug"`
+				Status           *string `json:"status"`
+				MetaTitle        *string `json:"meta_title"`
+				MetaDescription  *string `json:"meta_description"`
+				OgImageID        *string `json:"og_image_id"`
+				Layout           *string `json:"layout"`
+				ShowInNav        *int64  `json:"show_in_nav"`
+				NavLabel         *string `json:"nav_label"`
+				NoIndex          *int64  `json:"no_index"`
+				CanonicalURL     *string `json:"canonical_url"`
+				HideGlobalBlocks *int64  `json:"hide_global_blocks"`
 			}
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", err
@@ -158,19 +162,20 @@ func (s *Server) registerTools() {
 				return "", fmt.Errorf("page not found: %s", args.Slug)
 			}
 			params := store.UpdatePageParams{
-				ID:              page.ID,
-				Title:           page.Title,
-				Slug:            page.Slug,
-				Status:          page.Status,
-				MetaTitle:       page.MetaTitle,
-				MetaDescription: page.MetaDescription,
-				OgImageID:       page.OgImageID,
-				Layout:          page.Layout,
-				SortOrder:       page.SortOrder,
-				ShowInNav:       page.ShowInNav,
-				NavLabel:        page.NavLabel,
-				NoIndex:         page.NoIndex,
-				CanonicalUrl:    page.CanonicalUrl,
+				ID:               page.ID,
+				Title:            page.Title,
+				Slug:             page.Slug,
+				Status:           page.Status,
+				MetaTitle:        page.MetaTitle,
+				MetaDescription:  page.MetaDescription,
+				OgImageID:        page.OgImageID,
+				Layout:           page.Layout,
+				SortOrder:        page.SortOrder,
+				ShowInNav:        page.ShowInNav,
+				NavLabel:         page.NavLabel,
+				NoIndex:          page.NoIndex,
+				CanonicalUrl:     page.CanonicalUrl,
+				HideGlobalBlocks: page.HideGlobalBlocks,
 			}
 			if args.Title != nil {
 				params.Title = *args.Title
@@ -187,6 +192,9 @@ func (s *Server) registerTools() {
 			if args.MetaDescription != nil {
 				params.MetaDescription = *args.MetaDescription
 			}
+			if args.OgImageID != nil {
+				params.OgImageID = *args.OgImageID
+			}
 			if args.Layout != nil {
 				params.Layout = *args.Layout
 			}
@@ -201,6 +209,9 @@ func (s *Server) registerTools() {
 			}
 			if args.CanonicalURL != nil {
 				params.CanonicalUrl = *args.CanonicalURL
+			}
+			if args.HideGlobalBlocks != nil {
+				params.HideGlobalBlocks = *args.HideGlobalBlocks
 			}
 			if err := s.queries.UpdatePage(ctx, params); err != nil {
 				return "", err
@@ -319,7 +330,7 @@ func (s *Server) registerTools() {
 
 	register(Tool{
 		Name:        "update_block",
-		Description: "Updates a block by id. Pass block_id + any of: block_type, data, style, is_visible (0|1). Use list_blocks to find the block_id.",
+		Description: "Updates a block by id. Pass block_id + any of: block_type, data, style, is_visible (0|1), sort_order. Use list_blocks to find the block_id.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
@@ -327,7 +338,8 @@ func (s *Server) registerTools() {
 				"block_type":{"type":"string"},
 				"data":{"type":"object"},
 				"style":{"type":"object"},
-				"is_visible":{"type":"integer","enum":[0,1]}
+				"is_visible":{"type":"integer","enum":[0,1]},
+				"sort_order":{"type":"integer"}
 			},
 			"required":["block_id"]
 		}`),
@@ -339,6 +351,7 @@ func (s *Server) registerTools() {
 				Data      any     `json:"data"`
 				Style     any     `json:"style"`
 				IsVisible *int64  `json:"is_visible"`
+				SortOrder *int64  `json:"sort_order"`
 			}
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", err
@@ -367,8 +380,12 @@ func (s *Server) registerTools() {
 			if args.IsVisible != nil {
 				vis = *args.IsVisible
 			}
+			so := existing.SortOrder
+			if args.SortOrder != nil {
+				so = *args.SortOrder
+			}
 			if err := s.queries.UpdateBlock(ctx, store.UpdateBlockParams{
-				ID: args.BlockID, BlockType: bt, DataJson: data, StyleJson: style, IsVisible: vis,
+				ID: args.BlockID, BlockType: bt, SortOrder: so, DataJson: data, StyleJson: style, IsVisible: vis,
 			}); err != nil {
 				return "", err
 			}

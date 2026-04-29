@@ -27,17 +27,22 @@ import (
 // --- Branding read / write ---
 
 type agentBrandingPayload struct {
-	PrimaryColor   *string `json:"primary_color,omitempty"`
-	SecondaryColor *string `json:"secondary_color,omitempty"`
-	BgColor        *string `json:"bg_color,omitempty"`
-	TextColor      *string `json:"text_color,omitempty"`
-	SurfaceColor   *string `json:"surface_color,omitempty"`
-	BorderColor    *string `json:"border_color,omitempty"`
-	MutedColor     *string `json:"muted_color,omitempty"`
-	AccentColor    *string `json:"accent_color,omitempty"`
-	OnPrimaryColor *string `json:"on_primary_color,omitempty"`
-	FontHeading    *string `json:"font_heading,omitempty"`
-	FontBody       *string `json:"font_body,omitempty"`
+	PrimaryColor    *string `json:"primary_color,omitempty"`
+	SecondaryColor  *string `json:"secondary_color,omitempty"`
+	BgColor         *string `json:"bg_color,omitempty"`
+	TextColor       *string `json:"text_color,omitempty"`
+	SurfaceColor    *string `json:"surface_color,omitempty"`
+	BorderColor     *string `json:"border_color,omitempty"`
+	MutedColor      *string `json:"muted_color,omitempty"`
+	AccentColor     *string `json:"accent_color,omitempty"`
+	OnPrimaryColor  *string `json:"on_primary_color,omitempty"`
+	FontHeading     *string `json:"font_heading,omitempty"`
+	FontBody        *string `json:"font_body,omitempty"`
+	MetaTitle       *string `json:"meta_title,omitempty"`
+	MetaDescription *string `json:"meta_description,omitempty"`
+	OgImageID       *string `json:"og_image_id,omitempty"`
+	FaviconID       *string `json:"favicon_id,omitempty"`
+	Lang            *string `json:"lang,omitempty"`
 }
 
 // GET /api/agent/branding -> current branding fields for the agent's site.
@@ -132,6 +137,11 @@ func (h *AgentHandler) UpdateBranding(w http.ResponseWriter, r *http.Request) {
 	apply(req.OnPrimaryColor, &params.OnPrimaryColor)
 	apply(req.FontHeading, &params.FontHeading)
 	apply(req.FontBody, &params.FontBody)
+	apply(req.MetaTitle, &params.MetaTitle)
+	apply(req.MetaDescription, &params.MetaDescription)
+	apply(req.OgImageID, &params.OgImageID)
+	apply(req.FaviconID, &params.FaviconID)
+	apply(req.Lang, &params.Lang)
 
 	if err := h.queries.UpdateSite(r.Context(), params); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update branding")
