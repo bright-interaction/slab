@@ -43,6 +43,11 @@ type Server struct {
 
 // New creates a Server.
 func New(cfg *config.Config, db *sql.DB, queries *store.Queries, st storage.Store) *Server {
+	if cfg.BrightCRMWebhookURL != "" && cfg.BrightCRMWebhookSecret != "" {
+		slog.Info("brightcrm integration enabled (outbound + /t/inbound verify)", "url", cfg.BrightCRMWebhookURL)
+	} else {
+		slog.Warn("brightcrm integration DISABLED (BRIGHTCRM_WEBHOOK_URL or BRIGHTCRM_WEBHOOK_SECRET unset)")
+	}
 	return &Server{
 		cfg:     cfg,
 		db:      db,

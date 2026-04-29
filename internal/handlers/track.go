@@ -409,12 +409,15 @@ func boolToInt(b bool) int64 {
 
 // encodeCategories serialises consent.categories to a stable JSON string for
 // storage in visit_sessions.consent_categories_json. nil/empty -> "{}".
+// Marshal errors are unexpected for map[string]bool but get logged so the
+// silent "{}" fallback is observable.
 func encodeCategories(c map[string]bool) string {
 	if len(c) == 0 {
 		return "{}"
 	}
 	b, err := json.Marshal(c)
 	if err != nil {
+		slog.Warn("track: encodeCategories marshal failed, falling back to empty", "err", err)
 		return "{}"
 	}
 	return string(b)
