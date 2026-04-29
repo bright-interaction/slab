@@ -135,8 +135,12 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 	// hand-editing the JSON because it picks the right scope file + handles
 	// quoting. --scope project tracks .mcp.json in git so the whole team
 	// gets the connection without each person setting it up.
+	// Positional args (name + url) come BEFORE the flags. Putting flags
+	// first and positional args last fails with "missing required
+	// argument 'name'" because the parser consumes the next token after
+	// --header as the header value, not as the name.
 	const mcpCli = $derived(
-		`claude mcp add --transport http --scope project --header "X-Agent-Key: ${mcpKey}" atomicsite ${mcpURL}`
+		`claude mcp add atomicsite ${mcpURL} --transport http --scope project --header "X-Agent-Key: ${mcpKey}"`
 	);
 	async function copyMcp() {
 		try {
