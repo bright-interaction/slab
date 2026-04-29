@@ -24,6 +24,29 @@
 	let copiedFetch = $state(false);
 	let copiedMcp = $state(false);
 	let copiedMcpCli = $state(false);
+	let copiedMkdir = $state(false);
+	let copiedClaudeRun = $state(false);
+
+	const mkdirCmd = `mkdir ~/Desktop/my-atomicsite-project
+cd ~/Desktop/my-atomicsite-project`;
+	async function copyMkdir() {
+		try {
+			await navigator.clipboard.writeText(mkdirCmd);
+			copiedMkdir = true;
+			setTimeout(() => (copiedMkdir = false), 1500);
+		} catch {
+			toast.error('Could not copy. Select the text and copy manually.');
+		}
+	}
+	async function copyClaudeRun() {
+		try {
+			await navigator.clipboard.writeText('claude');
+			copiedClaudeRun = true;
+			setTimeout(() => (copiedClaudeRun = false), 1500);
+		} catch {
+			toast.error('Could not copy. Select the text and copy manually.');
+		}
+	}
 
 	let mcpClient =
 		$state<'claude-desktop' | 'claude-code' | 'cursor' | 'cline'>('claude-desktop');
@@ -472,11 +495,13 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 
 						<!-- First-time walkthrough. Plain step-by-step for a user who has
 							never run claude / mcp / a terminal command for an agent. -->
-						<details class="mt-3 rounded-lg border border-border-light bg-bg-elevated/50">
-							<summary class="cursor-pointer px-3 py-2 text-[12px] text-text-secondary">
+						<details class="mt-3 overflow-hidden rounded-lg border border-text-primary">
+							<summary
+								class="cursor-pointer bg-text-primary px-3 py-2 text-[12px] font-medium text-bg-surface transition-opacity hover:opacity-90"
+							>
 								First time? Full walkthrough
 							</summary>
-							<ol class="space-y-3 px-3 pb-3 pt-2 text-[12px] text-text-secondary">
+							<ol class="space-y-3 bg-bg-elevated/50 px-3 pb-3 pt-2 text-[12px] text-text-secondary">
 								<li>
 									<p class="font-medium text-text-primary">1. Open Terminal.</p>
 									<p class="mt-0.5 text-text-muted">
@@ -488,8 +513,23 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 									<p class="font-medium text-text-primary">
 										2. Make a project folder and go into it.
 									</p>
-									<pre class="mt-1 overflow-x-auto rounded-md bg-bg-surface px-2 py-1.5 font-mono text-[11px] text-text-primary"><code>mkdir ~/Desktop/my-atomicsite-project
-cd ~/Desktop/my-atomicsite-project</code></pre>
+									<div class="relative mt-1">
+										<pre class="overflow-x-auto rounded-md bg-bg-surface px-2 py-1.5 pr-16 font-mono text-[11px] text-text-primary"><code>{mkdirCmd}</code></pre>
+										<button
+											type="button"
+											onclick={copyMkdir}
+											class="absolute right-1.5 top-1.5 inline-flex h-6 items-center gap-1 rounded-md border border-border-light bg-bg-surface px-1.5 text-[10.5px] text-text-secondary hover:text-text-primary"
+											aria-label="Copy mkdir + cd command"
+										>
+											{#if copiedMkdir}
+												<Check size={11} strokeWidth={2} />
+												Copied
+											{:else}
+												<Copy size={11} strokeWidth={1.75} />
+												Copy
+											{/if}
+										</button>
+									</div>
 								</li>
 								<li>
 									<p class="font-medium text-text-primary">
@@ -504,7 +544,23 @@ cd ~/Desktop/my-atomicsite-project</code></pre>
 								</li>
 								<li>
 									<p class="font-medium text-text-primary">4. Start Claude Code.</p>
-									<pre class="mt-1 overflow-x-auto rounded-md bg-bg-surface px-2 py-1.5 font-mono text-[11px] text-text-primary"><code>claude</code></pre>
+									<div class="relative mt-1">
+										<pre class="overflow-x-auto rounded-md bg-bg-surface px-2 py-1.5 pr-16 font-mono text-[11px] text-text-primary"><code>claude</code></pre>
+										<button
+											type="button"
+											onclick={copyClaudeRun}
+											class="absolute right-1.5 top-1.5 inline-flex h-6 items-center gap-1 rounded-md border border-border-light bg-bg-surface px-1.5 text-[10.5px] text-text-secondary hover:text-text-primary"
+											aria-label="Copy claude command"
+										>
+											{#if copiedClaudeRun}
+												<Check size={11} strokeWidth={2} />
+												Copied
+											{:else}
+												<Copy size={11} strokeWidth={1.75} />
+												Copy
+											{/if}
+										</button>
+									</div>
 									<p class="mt-0.5 text-text-muted">
 										Don't have it? Install with
 										<code class="font-mono">npm install -g @anthropic-ai/claude-code</code>.
