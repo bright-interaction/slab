@@ -533,13 +533,30 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 								</li>
 								<li>
 									<p class="font-medium text-text-primary">
-										3. Paste the command above and hit enter.
+										3. Add the atomicsite MCP server.
 									</p>
-									<p class="mt-0.5 text-text-muted">
-										It writes a small <code class="font-mono">.mcp.json</code> file
-										inside the folder. If you see "missing required argument",
-										make sure the URL comes right after "atomicsite" and before
-										the flags.
+									<p class="mt-0.5 text-text-muted">Paste this command and hit enter.</p>
+									<div class="relative mt-1.5">
+										<pre class="overflow-x-auto rounded-md bg-bg-surface px-2 py-1.5 pr-16 font-mono text-[11px] text-text-primary"><code>{mcpCli}</code></pre>
+										<button
+											type="button"
+											onclick={copyMcpCli}
+											class="absolute right-1.5 top-1.5 inline-flex h-6 items-center gap-1 rounded-md border border-border-light bg-bg-surface px-1.5 text-[10.5px] text-text-secondary hover:text-text-primary"
+											aria-label="Copy claude mcp add command"
+										>
+											{#if copiedMcpCli}
+												<Check size={11} strokeWidth={2} />
+												Copied
+											{:else}
+												<Copy size={11} strokeWidth={1.75} />
+												Copy
+											{/if}
+										</button>
+									</div>
+									<p class="mt-1 text-text-muted">
+										Writes a small <code class="font-mono">.mcp.json</code> in
+										the folder. Skip this step and Claude Code starts with no
+										atomicsite tools (the most common mistake).
 									</p>
 								</li>
 								<li>
