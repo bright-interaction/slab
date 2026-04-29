@@ -16,22 +16,26 @@ func TestRenderBlock_DataBlock(t *testing.T) {
 		ID:        "blk-1",
 		BlockType: "hero",
 		DataJson: `{
-			"heading": "A calm site",
+			"eyebrow": "Calm",
+			"headline": "A calm site",
 			"subheading": "that earns the click",
-			"text": "Restrained type, accessible color, real content.",
 			"cta_text": "Book a discovery call",
-			"cta_url": "/book"
+			"cta_url": "/book",
+			"secondary_label": "Read more",
+			"secondary_url": "/about"
 		}`,
 	}
 	out := renderBlock(bl, map[string]bool{})
 
 	wantSubstrings := []string{
 		`<section class="block block--hero">`,
-		`<h2>A calm site</h2>`,
-		`<p>that earns the click</p>`,
-		`<div>Restrained type, accessible color, real content.</div>`,
+		`<p class="eyebrow">Calm</p>`,
+		`<h1>A calm site</h1>`,
+		`<p class="subheading">that earns the click</p>`,
 		`href="/book"`,
 		`>Book a discovery call</a>`,
+		`href="/about"`,
+		`>Read more</a>`,
 	}
 	for _, s := range wantSubstrings {
 		if !strings.Contains(out, s) {
@@ -162,7 +166,7 @@ func TestRenderPage_Wrapping(t *testing.T) {
 	blocks := []store.Block{
 		{
 			ID:        "b1",
-			BlockType: "hero",
+			BlockType: "text",
 			SortOrder: 0,
 			IsVisible: 1,
 			DataJson:  `{"heading": "First"}`,
