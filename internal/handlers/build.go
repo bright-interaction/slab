@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -177,6 +178,103 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 		"status":   "building",
 		"message":  "Build started. Poll GET /api/agent/build/" + deployID + "/status for progress.",
 	})
+}
+
+// StartBuild creates a deployment record + kicks off an async build for
+// the given site. Returns the build_id (= deployment id). Non-handler
+// entry point used by the MCP server's trigger_build tool so it doesn't
+// have to duplicate the deployment + goroutine + cookieproof provisioning
+// logic. Mirrors TriggerBuild's body without the http.ResponseWriter.
+func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, error) {
+	deployID := newID()
+	if err := h.queries.CreateDeployment(ctx, store.CreateDeploymentParams{
+		ID:           deployID,
+		SiteID:       siteID,
+		DeployTarget: "local",
+		DeployConfig: "{}",
+	}); err != nil {
+		return "", err
+	}
+
+	h.mu.Lock()
+	h.builds[deployID] = &buildState{Status: "building"}
+	h.mu.Unlock()
+
+	go func() {
+		bgCtx := context.Background()
+		h.provisionCookieProof(bgCtx, siteID)
+		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
+		if result.Success && result.DistDir != "" {
+			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
+				result.BuildLog += "\n=== eval ===\nfailed: " + err.Error() + "\n"
+			}
+		}
+		h.mu.Lock()
+		st := h.builds[deployID]
+		st.BuildLog = result.BuildLog
+		st.PagesBuilt = result.PagesBuilt
+		st.DurationMs = result.DurationMs
+		st.DistDir = result.DistDir
+		if result.Success {
+			st.Status = "success"
+		} else {
+			st.Status = "failed"
+			st.Error = result.Error
+		}
+		h.mu.Unlock()
+
+		status := "success"
+		if !result.Success {
+			status = "failed"
+		}
+		_ = h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
+			ID: deployID, Status: status, BuildLog: result.BuildLog,
+			PagesBuilt: int64(result.PagesBuilt), DurationMs: result.DurationMs, Error: result.Error,
+		})
+		_ = h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
+			ID: siteID, LastBuildStatus: status, LastBuildError: result.Error,
+		})
+	}()
+
+	return deployID, nil
+}
+
+// GetBuildState returns the cross-source build state (in-memory if active,
+// DB row if persisted). siteID is checked so MCP can't read across sites.
+// Used by the MCP get_build_status + get_evaluation tools to reuse the
+// same logic the BuildStatus admin endpoint exercises.
+func (h *BuildHandler) GetBuildState(ctx context.Context, buildID, siteID string) (any, error) {
+	deploy, err := h.queries.GetDeploymentByID(ctx, buildID)
+	if err != nil {
+		return nil, fmt.Errorf("build not found: %s", buildID)
+	}
+	if deploy.SiteID != siteID {
+		return nil, fmt.Errorf("build does not belong to this site")
+	}
+	h.mu.Lock()
+	st, ok := h.builds[buildID]
+	h.mu.Unlock()
+	if ok {
+		return map[string]any{
+			"build_id":    buildID,
+			"status":      st.Status,
+			"build_log":   st.BuildLog,
+			"pages_built": st.PagesBuilt,
+			"duration_ms": st.DurationMs,
+			"error":       st.Error,
+			"dist_dir":    st.DistDir,
+			"created_at":  deploy.CreatedAt,
+		}, nil
+	}
+	return map[string]any{
+		"build_id":    buildID,
+		"status":      deploy.Status,
+		"build_log":   deploy.BuildLog,
+		"pages_built": deploy.PagesBuilt,
+		"duration_ms": deploy.DurationMs,
+		"error":       deploy.Error,
+		"created_at":  deploy.CreatedAt,
+	}, nil
 }
 
 // BuildStatus returns the current status of a build.
