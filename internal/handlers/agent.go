@@ -986,7 +986,7 @@ func (h *AgentHandler) GenerateAgentKey(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
-	rawKey := "ask_" + hex.EncodeToString(rawBytes)
+	rawKey := "atomic_" + hex.EncodeToString(rawBytes)
 	keyHash := authmw.HashAgentKey(rawKey)
 
 	id := newID()
