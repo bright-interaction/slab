@@ -13,8 +13,10 @@
 	let copiedEnv = $state(false);
 	let copiedFetch = $state(false);
 	let copiedMcp = $state(false);
+	let copiedMcpCli = $state(false);
 
-	let mcpClient = $state<'claude-desktop' | 'cursor' | 'cline'>('claude-desktop');
+	let mcpClient =
+		$state<'claude-desktop' | 'claude-code' | 'cursor' | 'cline'>('claude-desktop');
 
 	let bootstrapping = $state(false);
 	let bootstrap = $state<agentKeysApi.BootstrapResponse | null>(null);
@@ -87,7 +89,11 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 	const mcpURL = $derived(`${baseURL}/mcp`);
 	const mcpKey = $derived(bootstrap?.key ?? 'ask_<your key>');
 	const mcpSnippet = $derived.by(() => {
-		const claudeAndCursor = {
+		// Same JSON shape works for Claude Desktop, Cursor, and Claude Code:
+		// HTTP transport is inferred from the url scheme (no "transport"
+		// field needed). Cline / Continue / Windsurf still want the
+		// explicit transport key per their own MCP docs.
+		const httpInferred = {
 			mcpServers: {
 				atomicsite: {
 					url: mcpURL,
@@ -106,8 +112,9 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 		};
 		switch (mcpClient) {
 			case 'claude-desktop':
+			case 'claude-code':
 			case 'cursor':
-				return JSON.stringify(claudeAndCursor, null, 2);
+				return JSON.stringify(httpInferred, null, 2);
 			case 'cline':
 				return JSON.stringify(cline, null, 2);
 		}
@@ -116,17 +123,35 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 		switch (mcpClient) {
 			case 'claude-desktop':
 				return '~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows)';
+			case 'claude-code':
+				return 'Run the CLI command below (recommended) OR edit .mcp.json (project, git-tracked) or ~/.claude.json (user-global)';
 			case 'cursor':
 				return '.cursor/mcp.json (in your project) or ~/.cursor/mcp.json (global)';
 			case 'cline':
 				return 'Cline -> MCP Servers panel -> Edit JSON';
 		}
 	});
+	// Claude Code can be wired via a single CLI command. Recommended over
+	// hand-editing the JSON because it picks the right scope file + handles
+	// quoting. --scope project tracks .mcp.json in git so the whole team
+	// gets the connection without each person setting it up.
+	const mcpCli = $derived(
+		`claude mcp add --transport http --scope project --header "X-Agent-Key: ${mcpKey}" atomicsite ${mcpURL}`
+	);
 	async function copyMcp() {
 		try {
 			await navigator.clipboard.writeText(mcpSnippet);
 			copiedMcp = true;
 			setTimeout(() => (copiedMcp = false), 1500);
+		} catch {
+			toast.error('Could not copy. Select the text and copy manually.');
+		}
+	}
+	async function copyMcpCli() {
+		try {
+			await navigator.clipboard.writeText(mcpCli);
+			copiedMcpCli = true;
+			setTimeout(() => (copiedMcpCli = false), 1500);
 		} catch {
 			toast.error('Could not copy. Select the text and copy manually.');
 		}
@@ -177,8 +202,8 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 					</p>
 
 					<!-- Client tabs -->
-					<div class="mt-4 inline-flex rounded-lg border border-border-light bg-bg-elevated p-0.5">
-						{#each [{ id: 'claude-desktop' as const, label: 'Claude Desktop' }, { id: 'cursor' as const, label: 'Cursor' }, { id: 'cline' as const, label: 'Cline / Continue / Windsurf' }] as tab (tab.id)}
+					<div class="mt-4 flex flex-wrap gap-1 rounded-lg border border-border-light bg-bg-elevated p-0.5">
+						{#each [{ id: 'claude-desktop' as const, label: 'Claude Desktop' }, { id: 'claude-code' as const, label: 'Claude Code' }, { id: 'cursor' as const, label: 'Cursor' }, { id: 'cline' as const, label: 'Cline / Continue / Windsurf' }] as tab (tab.id)}
 							<button
 								type="button"
 								onclick={() => (mcpClient = tab.id)}
@@ -197,6 +222,34 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 						Paste into:
 						<code class="font-mono text-[11px] text-text-secondary">{mcpConfigPath}</code>
 					</p>
+
+					{#if mcpClient === 'claude-code'}
+						<!-- Claude Code: CLI command is the recommended path. The
+							resulting config lands in .mcp.json (project scope) so
+							everyone on the team gets the connection on git pull. -->
+						<div class="mt-2 relative">
+							<pre
+								class="overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-3 font-mono text-[11.5px] text-text-secondary"><code>{mcpCli}</code></pre>
+							<button
+								type="button"
+								onclick={copyMcpCli}
+								class="absolute right-2 top-2 inline-flex h-7 items-center gap-1 rounded-md border border-border-light bg-bg-surface px-2 text-[11px] text-text-secondary hover:text-text-primary"
+								aria-label="Copy claude mcp add command"
+							>
+								{#if copiedMcpCli}
+									<Check size={12} strokeWidth={2} />
+									Copied
+								{:else}
+									<Copy size={12} strokeWidth={1.75} />
+									Copy
+								{/if}
+							</button>
+						</div>
+						<p class="mt-2 text-[11px] text-text-muted">
+							Or paste this JSON into <code class="font-mono">.mcp.json</code>
+							/ <code class="font-mono">~/.claude.json</code> manually:
+						</p>
+					{/if}
 
 					<!-- JSON snippet -->
 					<div class="mt-2 relative">
