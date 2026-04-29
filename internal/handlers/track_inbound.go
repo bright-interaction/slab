@@ -139,13 +139,16 @@ func (h *TrackHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 
 // encodeMetadata serialises the inbound metadata blob to JSON for storage.
 // nil/empty -> "{}". Map values can be string/number/bool; the DSL evaluator
-// coerces at read time.
+// coerces at read time. Marshal errors are rare (typically a non-encodable
+// chan or func value the CRM somehow sent) but get logged so the silent
+// "{}" fallback is at least observable.
 func encodeMetadata(m map[string]any) string {
 	if len(m) == 0 {
 		return "{}"
 	}
 	b, err := json.Marshal(m)
 	if err != nil {
+		slog.Warn("track: encodeMetadata marshal failed, falling back to empty", "err", err)
 		return "{}"
 	}
 	return string(b)
