@@ -67,6 +67,10 @@ func (h *SettingsHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "category and key are required")
 		return
 	}
+	if err := validateSetting(req.Category, req.Key, req.Value); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 
 	id := newID()
 	err := h.queries.UpsertSetting(r.Context(), store.UpsertSettingParams{
@@ -103,6 +107,18 @@ func (h *SettingsHandler) BulkUpsert(w http.ResponseWriter, r *http.Request) {
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
+	}
+
+	// Validate every entry up front; reject the whole batch on first
+	// failure so the admin doesn't end up with half-applied state.
+	for _, s := range req {
+		if s.Category == "" || s.Key == "" {
+			continue
+		}
+		if err := validateSetting(s.Category, s.Key, s.Value); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
 	}
 
 	touchedAnalytics := false

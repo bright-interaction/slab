@@ -1,0 +1,488 @@
+package agent
+
+import (
+	"strings"
+)
+
+// SettingDescriptor describes one setting key the agent can reason about.
+// The catalog covers every key that has a real backend consumer. Settings
+// that exist only on the human admin UI (no backend wiring) are deliberately
+// excluded so the agent doesn't waste tokens writing values that go nowhere.
+//
+// Reading: every entry's CurrentValue reflects the row currently in the
+// database (or the documented default when the row is absent). The agent
+// uses this to answer "what is this site set to?" without making a separate
+// query per key.
+//
+// Writing: AgentWritable=true means the agent can flip this via PATCH
+// /api/agent/settings (the request body is {category, key, value}). Anything
+// admin-only (security headers, allowed_scripts, deploy targets) carries
+// AgentWritable=false so the agent knows to ask the human to flip it via
+// the link in HumanAdminURL.
+type SettingDescriptor struct {
+	// Category is the bucket the setting lives under (general / seo /
+	// analytics / security / profile). Maps to the row's category column.
+	Category string `json:"category"`
+	// Key is the unique row key under that category. The fully-qualified
+	// name is "{category}.{key}" (e.g. "seo.meta_title_template").
+	Key string `json:"key"`
+	// Label is the human-readable name the admin UI uses for this setting.
+	Label string `json:"label"`
+	// Description is one or two sentences explaining what the builder /
+	// renderer / nginx does with this value. Read this before writing.
+	Description string `json:"description"`
+	// ValueType is the shape the value column holds. Valid values:
+	//   "bool"  → "0" or "1" (use 0/1 strings, not "true"/"false")
+	//   "int"   → integer rendered as a decimal string
+	//   "string"→ free-form
+	//   "enum"  → one of EnumValues
+	//   "url"   → absolute URL with scheme
+	//   "email" → RFC 5322 email
+	//   "css"   → CSS source (selectors + properties)
+	//   "html"  → HTML/JS snippet (inserted verbatim into <head>)
+	//   "csv"   → comma-separated string (each entry trimmed)
+	//   "media_id" → references a media row id; resolved to a URL by the builder
+	//   "template" → meta-template string with {token} substitutions
+	ValueType string `json:"value_type"`
+	// EnumValues lists the allowed values when ValueType is "enum". Empty
+	// for other types. Validators in BulkUpsertSettings reject unknown
+	// values when this list is non-empty.
+	EnumValues []string `json:"enum_values,omitempty"`
+	// MinInt / MaxInt bound int values (inclusive). Both zero means no bound.
+	MinInt int64 `json:"min_int,omitempty"`
+	MaxInt int64 `json:"max_int,omitempty"`
+	// CurrentValue is what the row currently holds, or the documented
+	// default when the row is absent. Always a string (matches column type).
+	CurrentValue string `json:"current_value"`
+	// IsDefault is true when CurrentValue came from the documented default
+	// rather than an explicit row. Use this to spot un-configured settings.
+	IsDefault bool `json:"is_default"`
+	// AgentWritable mirrors agentWritableSettingsCategories on the
+	// handler side. When false, the agent must ask the human admin to
+	// flip the setting (point them at HumanAdminURL).
+	AgentWritable bool `json:"agent_writable"`
+	// HumanAdminURL is the per-site URL for the admin UI page that owns
+	// this setting (e.g. /sites/{id}/settings/security). Filled in at
+	// build time so the agent can paste a clickable link to the human.
+	HumanAdminURL string `json:"human_admin_url"`
+	// Tokens lists the {tokens} valid for ValueType="template" entries.
+	// Empty for other types.
+	Tokens []string `json:"tokens,omitempty"`
+}
+
+// SettingsCatalogInfo wraps the catalog with category-level summaries so
+// the agent can quickly count writable surfaces.
+type SettingsCatalogInfo struct {
+	// WritableCategories enumerates the categories the agent can write to.
+	// Mirrors agentWritableSettingsCategories on the handler side.
+	WritableCategories []string `json:"writable_categories"`
+	// AdminOnlyCategories enumerates the categories the agent can read but
+	// not write. Surfaces as a hint to ask the human.
+	AdminOnlyCategories []string `json:"admin_only_categories"`
+	// Items is the per-key descriptor list.
+	Items []SettingDescriptor `json:"items"`
+}
+
+// buildSettingsCatalog assembles the catalog with current values resolved
+// from settingsMap. siteID is used to materialize HumanAdminURL paths.
+func buildSettingsCatalog(siteID string, settingsMap map[string]string) SettingsCatalogInfo {
+	descriptors := []SettingDescriptor{
+		// --- general -------------------------------------------------------
+		{
+			Category: "general", Key: "additional_langs",
+			Label:       "Additional languages",
+			Description: "Comma-separated list of locale codes the site publishes besides the default lang (e.g. \"sv,de,fr\"). Pages whose slug starts with /<lang>/ are treated as that locale's counterparts and feed hreflang emission.",
+			ValueType:   "csv",
+			AgentWritable: true,
+		},
+		{
+			Category: "general", Key: "default_lang",
+			Label:       "Default language (mirror)",
+			Description: "Mirror of sites.lang. Patching this via /api/agent/settings does not move the column; use PATCH /api/sites/{id} for that. Surfaced here so the agent can read the lang without a separate fetch.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "general", Key: "domain_aliases",
+			Label:       "Domain aliases",
+			Description: "Comma-separated host list. Each alias gets a 301 redirect to the primary domain via the public/_redirects file (Caddy / Netlify / Cloudflare Pages). Strip protocol; \"www.example.com,example.org\" is the right shape.",
+			ValueType:   "csv",
+			AgentWritable: true,
+		},
+
+		// --- seo -----------------------------------------------------------
+		{
+			Category: "seo", Key: "meta_title_template",
+			Label:       "Meta title template",
+			Description: "Applied to every page that doesn't override its own meta_title. Empty string means \"use the page title verbatim\". Token expansion happens at build time; missing tokens collapse along with their adjacent separators.",
+			ValueType:   "template",
+			Tokens:      []string{"{page_title}", "{page_description}", "{site_name}", "{lang}", "{separator}"},
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "meta_description_template",
+			Label:       "Meta description template",
+			Description: "Applied to every page that doesn't override its own meta_description. Empty string means \"use the page description verbatim\". Same token grammar as meta_title_template.",
+			ValueType:   "template",
+			Tokens:      []string{"{page_title}", "{page_description}", "{site_name}", "{lang}", "{separator}"},
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "canonical_base",
+			Label:       "Canonical base URL",
+			Description: "Override for the prefix used when emitting <link rel=\"canonical\">. Defaults to https://<primary domain>. Set this when public URLs differ from the build's domain (CDN, sub-path proxy, staging vs. prod).",
+			ValueType:   "url",
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "hreflang_strategy",
+			Label:       "Hreflang strategy",
+			Description: "How the builder maps locales to URLs. \"path\" (default) uses /<lang>/<slug>; \"subdomain\" uses <lang>.<host>; \"off\" disables hreflang emission entirely. Counterparts are gathered from actually-published pages so monolingual sites stay clean.",
+			ValueType:   "enum",
+			EnumValues:  []string{"path", "subdomain", "off"},
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "og_default_image_id",
+			Label:       "Default Open Graph image",
+			Description: "media row id used as the fallback og:image / twitter:image when a page has no own image. The builder resolves to the absolute /media/<id>/original.<ext> URL. Upload via /api/sites/{id}/media first, then PATCH this with the returned id.",
+			ValueType:   "media_id",
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "robots_txt",
+			Label:       "robots.txt full override",
+			Description: "Replaces the auto-generated robots.txt body wholesale. Empty (default) keeps the AI-bot-blocking baseline. Use only if you want to rewrite the entire file by hand; otherwise set robots_txt_extra to append.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "robots_txt_extra",
+			Label:       "robots.txt extras",
+			Description: "Appended to the auto-generated robots.txt under a labeled section. Use this for site-specific Disallow rules without losing the AI-bot-blocking baseline.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "llms_txt",
+			Label:       "llms.txt content",
+			Description: "Full body of the public /llms.txt file consumed by AI crawlers (Perplexity, ChatGPT search, Claude, Gemini). Empty falls back to a builder-generated summary derived from published pages.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "seo", Key: "sitemap_enabled",
+			Label:       "Generate sitemap.xml",
+			Description: "When 1 (default), the @astrojs/sitemap integration runs at build and emits /sitemap-index.xml. Set 0 to drop the integration entirely.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+
+		// --- analytics -----------------------------------------------------
+		{
+			Category: "analytics", Key: "cookieproof_enabled",
+			Label:       "Enable CookieProof",
+			Description: "Flips the bundled CookieProof banner + consent relay. When 1, the layout emits the cookieproof script + the /t/consent forwarder; when 0, no consent UI is injected. Pair with cookieproof_org_id.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "cookieproof_org_id",
+			Label:       "CookieProof Org ID",
+			Description: "The Org ID from the CookieProof admin. Required when cookieproof_enabled=1. Falls back to the site's domain when empty.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "atomicsite_tracking_enabled",
+			Label:       "Atomicsite server-side tracking",
+			Description: "When 1 (default), the nginx access log tail emits visit_events to the admin DB. Pure server-side, no client JS, GDPR-aligned legitimate-interest posture.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "ga4_enabled",
+			Label:       "Enable Google Analytics 4",
+			Description: "When 1, the layout injects gtag.js + the GA4 config snippet with anonymize_ip=true. Pair with ga4_id (G-XXXXXXX). When CookieProof is also on, the relay gates gtag config until the visitor consents to analytics.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "ga4_id",
+			Label:       "GA4 Measurement ID",
+			Description: "Google Analytics 4 measurement id, format G-XXXXXXX. When non-empty and ga4_enabled is unset, the builder treats GA4 as enabled (sane default for an agent that just wrote the id).",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "umami_enabled",
+			Label:       "Enable Umami",
+			Description: "When 1, the layout injects the Umami script tag pointing at umami_url with data-website-id=umami_site_id. Privacy-aligned analytics, no cookies.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "umami_url",
+			Label:       "Umami host URL",
+			Description: "Base URL for the Umami instance, e.g. https://analytics.example.com. The script tag becomes <umami_url>/script.js.",
+			ValueType:   "url",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "umami_site_id",
+			Label:       "Umami Site ID",
+			Description: "data-website-id attribute on the Umami script tag. Get it from your Umami dashboard.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "crm_webhook_url",
+			Label:       "CRM webhook URL",
+			Description: "Where outbound visitor + consent events get POSTed (HMAC-SHA256 signed via X-Atomicsite-Signature). The companion CRM endpoint receives identified-visitor pushes and replies on /t/inbound to drive personalization.",
+			ValueType:   "url",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "crm_webhook_secret",
+			Label:       "CRM webhook secret",
+			Description: "Shared HMAC secret for outbound webhook signing AND inbound /t/inbound verification. Treat as sensitive; never echo into rendered content.",
+			ValueType:   "string",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "cookie_banner_snippet",
+			Label:       "Custom cookie banner snippet",
+			Description: "Verbatim HTML/JS injected into <head>. Bring-your-own escape hatch for Cookiebot, OneTrust, Termly, Iubenda. No validation; treat as trusted operator input.",
+			ValueType:   "html",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "personalization_enabled",
+			Label:       "Enable bidirectional CRM personalization",
+			Description: "When 1, the layout emits the visitor-hydration script that fetches /t/visitor and reveals [data-asp-when] blocks. Pair with identity_max_age_days. Required for conditional blocks to actually render.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+		{
+			Category: "analytics", Key: "identity_max_age_days",
+			Label:       "Identity max age (days)",
+			Description: "Visitors whose identity_confirmed_at is older than this window are downgraded to anonymous-tier metadata only. Default 30. Lower for stricter privacy posture.",
+			ValueType:   "int",
+			MinInt:      1,
+			MaxInt:      3650,
+			AgentWritable: true,
+		},
+
+		// --- security (admin-only) ----------------------------------------
+		{
+			Category: "security", Key: "hsts_enabled",
+			Label:       "Enable HSTS",
+			Description: "When 1, the response carries Strict-Transport-Security with max-age=hsts_max_age + includeSubDomains. Off by default to avoid bricking dev domains.",
+			ValueType:   "bool",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "hsts_max_age",
+			Label:       "HSTS max-age",
+			Description: "Seconds. 31536000 (one year) is the recommended baseline; site-inspector requires >= 1y for the HSTS check to pass.",
+			ValueType:   "int",
+			MinInt:      0,
+			MaxInt:      63072000,
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "hsts_preload",
+			Label:       "HSTS preload",
+			Description: "When 1, appends the preload directive. Implies a public commitment; only enable after submitting to hstspreload.org.",
+			ValueType:   "bool",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "csp_enabled",
+			Label:       "Enable CSP",
+			Description: "When 1, the response carries Content-Security-Policy built from the trusted-domains table + frame_ancestors + csp_extra_directives. Off keeps the pre-CSP behaviour.",
+			ValueType:   "bool",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "csp_extra_directives",
+			Label:       "CSP extra directives",
+			Description: "Appended to the auto-built CSP. Use for report-uri, sandbox, anything atomicsite doesn't expose as its own field. Trailing semicolons trimmed.",
+			ValueType:   "string",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "frame_ancestors",
+			Label:       "frame-ancestors",
+			Description: "Who can embed THIS site in an iframe. 'none' (default) is anti-clickjacking; use 'self' or a host list to allow embedding (e.g. for a customer portal).",
+			ValueType:   "string",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "x_frame_options",
+			Label:       "X-Frame-Options",
+			Description: "Legacy clickjacking protection. DENY refuses all framing; SAMEORIGIN allows same-origin only. Modern browsers honour CSP frame-ancestors instead, but X-Frame-Options remains a useful belt-and-suspenders.",
+			ValueType:   "enum",
+			EnumValues:  []string{"DENY", "SAMEORIGIN"},
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "x_content_type_options",
+			Label:       "Send X-Content-Type-Options nosniff",
+			Description: "When 1 (default), emits X-Content-Type-Options: nosniff. Recommended on for every public site.",
+			ValueType:   "bool",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "referrer_policy",
+			Label:       "Referrer-Policy",
+			Description: "Controls how much of the URL sites can read in the Referer header. strict-origin-when-cross-origin is the recommended baseline.",
+			ValueType:   "enum",
+			EnumValues:  []string{"no-referrer", "no-referrer-when-downgrade", "origin", "origin-when-cross-origin", "same-origin", "strict-origin", "strict-origin-when-cross-origin", "unsafe-url"},
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "permissions_policy",
+			Label:       "Permissions-Policy",
+			Description: "Comma-separated feature directives (camera=(), microphone=(), geolocation=()). Empty parens block; (self) allows the page itself.",
+			ValueType:   "string",
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "coop",
+			Label:       "Cross-Origin-Opener-Policy",
+			Description: "Default same-origin isolates the browsing context; same-origin-allow-popups loosens for OAuth popups; unsafe-none disables.",
+			ValueType:   "enum",
+			EnumValues:  []string{"same-origin", "same-origin-allow-popups", "unsafe-none"},
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "corp",
+			Label:       "Cross-Origin-Resource-Policy",
+			Description: "Who may load THIS site's resources cross-origin. same-origin (default) blocks all cross-origin loads; same-site allows sibling subdomains; cross-origin allows everyone.",
+			ValueType:   "enum",
+			EnumValues:  []string{"same-origin", "same-site", "cross-origin"},
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "coep",
+			Label:       "Cross-Origin-Embedder-Policy",
+			Description: "Empty (default) preserves third-party embeds. require-corp blocks iframes without CORP and unlocks SharedArrayBuffer; credentialless drops cookies on cross-origin loads.",
+			ValueType:   "enum",
+			EnumValues:  []string{"", "require-corp", "credentialless"},
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "https_redirect",
+			Label:       "HTTPS redirect",
+			Description: "When 1 (default), the deploy target's reverse proxy enforces HTTPS via 301. Atomicsite Deploys terminate TLS at Caddy / Dockyard so this is implicit; the row is kept so self-hosters can read the intent.",
+			ValueType:   "bool",
+			AgentWritable: false,
+		},
+	}
+
+	defaultsByKey := map[string]string{
+		"general.additional_langs":          "",
+		"general.default_lang":              "",
+		"general.domain_aliases":            "",
+		"seo.meta_title_template":           "",
+		"seo.meta_description_template":     "",
+		"seo.canonical_base":                "",
+		"seo.hreflang_strategy":             "path",
+		"seo.og_default_image_id":           "",
+		"seo.robots_txt":                    "",
+		"seo.robots_txt_extra":              "",
+		"seo.llms_txt":                      "",
+		"seo.sitemap_enabled":               "1",
+		"analytics.cookieproof_enabled":     "0",
+		"analytics.cookieproof_org_id":      "",
+		"analytics.atomicsite_tracking_enabled": "1",
+		"analytics.ga4_enabled":             "0",
+		"analytics.ga4_id":                  "",
+		"analytics.umami_enabled":           "0",
+		"analytics.umami_url":               "",
+		"analytics.umami_site_id":           "",
+		"analytics.crm_webhook_url":         "",
+		"analytics.crm_webhook_secret":      "",
+		"analytics.cookie_banner_snippet":   "",
+		"analytics.personalization_enabled": "0",
+		"analytics.identity_max_age_days":   "30",
+		"security.hsts_enabled":             "0",
+		"security.hsts_max_age":             "31536000",
+		"security.hsts_preload":             "0",
+		"security.csp_enabled":              "0",
+		"security.csp_extra_directives":     "",
+		"security.frame_ancestors":          "'none'",
+		"security.x_frame_options":          "SAMEORIGIN",
+		"security.x_content_type_options":   "1",
+		"security.referrer_policy":          "strict-origin-when-cross-origin",
+		"security.permissions_policy":       "camera=(), microphone=(), geolocation=()",
+		"security.coop":                     "same-origin",
+		"security.corp":                     "same-origin",
+		"security.coep":                     "",
+		"security.https_redirect":           "1",
+	}
+
+	humanAdminURL := func(category string) string {
+		base := "/sites/" + siteID + "/settings/"
+		switch category {
+		case "general":
+			return base + "general"
+		case "seo":
+			return base + "seo"
+		case "analytics":
+			return base + "analytics"
+		case "security":
+			return base + "security"
+		default:
+			return base
+		}
+	}
+
+	for i := range descriptors {
+		d := &descriptors[i]
+		fqn := d.Category + "." + d.Key
+		current, present := settingsMap[fqn]
+		if !present || current == "" {
+			d.CurrentValue = defaultsByKey[fqn]
+			d.IsDefault = true
+		} else {
+			d.CurrentValue = current
+			d.IsDefault = false
+		}
+		d.HumanAdminURL = humanAdminURL(d.Category)
+	}
+
+	// Sort writable / admin-only category lists deterministically.
+	writableSet := map[string]bool{"seo": true, "analytics": true, "general": true}
+	allCats := map[string]bool{}
+	for _, d := range descriptors {
+		allCats[d.Category] = true
+	}
+	var writable, adminOnly []string
+	for cat := range allCats {
+		if writableSet[cat] {
+			writable = append(writable, cat)
+		} else {
+			adminOnly = append(adminOnly, cat)
+		}
+	}
+	sortStrings(writable)
+	sortStrings(adminOnly)
+
+	return SettingsCatalogInfo{
+		WritableCategories:  writable,
+		AdminOnlyCategories: adminOnly,
+		Items:               descriptors,
+	}
+}
+
+// sortStrings is a tiny inline sort.Strings wrapper; lets this file avoid
+// importing sort directly when context.go already pulls it in.
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && strings.Compare(s[j-1], s[j]) > 0; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
+}
