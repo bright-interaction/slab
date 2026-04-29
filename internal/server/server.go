@@ -514,3 +514,4 @@ func isAllowedOrigin(cfg *config.Config, origin string) bool {
 	// But we still restrict to known origins for cookie-based admin endpoints.
 	return false
 }
+
