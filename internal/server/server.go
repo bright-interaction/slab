@@ -19,6 +19,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/handlers"
+	"github.com/brightinteraction/atomicsite/internal/mcp"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/storage"
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -337,6 +338,14 @@ func (s *Server) Router() http.Handler {
 		agentBuildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		r.Post("/api/agent/build", agentBuildH.TriggerBuild)
 		r.Get("/api/agent/build/{buildID}/status", agentBuildH.BuildStatus)
+
+		// MCP server (Model Context Protocol). One JSON-RPC endpoint
+		// translating tools/call + resources/read into the same store
+		// + builder logic the REST handlers use. Allow-list driven so
+		// future REST endpoints can't accidentally leak PII through MCP.
+		// Auth: same X-Agent-Key as the rest of /api/agent/*.
+		mcpServer := mcp.NewServer(s.queries, agentBuildH)
+		r.Mount("/mcp", mcpServer.Handler())
 
 		// Evaluation
 		r.Get("/api/agent/evaluation/{buildID}", agentH.GetEvaluation)

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import { ArrowLeft, Check, Copy, Download, Sparkles } from 'lucide-svelte';
+	import { ArrowLeft, Check, Copy, Download, Plug, Sparkles } from 'lucide-svelte';
 	import { currentSite } from '$lib/stores/currentSite.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import * as agentKeysApi from '$lib/api/agentKeys';
@@ -12,6 +12,9 @@
 	let copiedSmoke = $state(false);
 	let copiedEnv = $state(false);
 	let copiedFetch = $state(false);
+	let copiedMcp = $state(false);
+
+	let mcpClient = $state<'claude-desktop' | 'cursor' | 'cline'>('claude-desktop');
 
 	let bootstrapping = $state(false);
 	let bootstrap = $state<agentKeysApi.BootstrapResponse | null>(null);
@@ -71,6 +74,63 @@
 
 	const manualEnv = `export ATOMICSITE_API="https://app.atomicsite.example.com"
 export ATOMICSITE_KEY="ask_<your key>"`;
+
+	// MCP card. Default tab is Claude Desktop because that is the most
+	// common host today; Cursor and Cline cover the rest. The snippet
+	// fills in the bootstrap key automatically once the user clicks
+	// Generate further down the page; until then it shows a placeholder.
+	const baseURL = $derived(
+		typeof window !== 'undefined'
+			? window.location.origin
+			: 'https://app.atomicsite.example.com'
+	);
+	const mcpURL = $derived(`${baseURL}/mcp`);
+	const mcpKey = $derived(bootstrap?.key ?? 'ask_<your key>');
+	const mcpSnippet = $derived.by(() => {
+		const claudeAndCursor = {
+			mcpServers: {
+				atomicsite: {
+					url: mcpURL,
+					headers: { 'X-Agent-Key': mcpKey }
+				}
+			}
+		};
+		const cline = {
+			mcpServers: {
+				atomicsite: {
+					transport: 'http',
+					url: mcpURL,
+					headers: { 'X-Agent-Key': mcpKey }
+				}
+			}
+		};
+		switch (mcpClient) {
+			case 'claude-desktop':
+			case 'cursor':
+				return JSON.stringify(claudeAndCursor, null, 2);
+			case 'cline':
+				return JSON.stringify(cline, null, 2);
+		}
+	});
+	const mcpConfigPath = $derived.by(() => {
+		switch (mcpClient) {
+			case 'claude-desktop':
+				return '~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows)';
+			case 'cursor':
+				return '.cursor/mcp.json (in your project) or ~/.cursor/mcp.json (global)';
+			case 'cline':
+				return 'Cline -> MCP Servers panel -> Edit JSON';
+		}
+	});
+	async function copyMcp() {
+		try {
+			await navigator.clipboard.writeText(mcpSnippet);
+			copiedMcp = true;
+			setTimeout(() => (copiedMcp = false), 1500);
+		} catch {
+			toast.error('Could not copy. Select the text and copy manually.');
+		}
+	}
 </script>
 
 <div class="mx-auto max-w-5xl px-6 py-8">
@@ -86,11 +146,109 @@ export ATOMICSITE_KEY="ask_<your key>"`;
 			Connect your agent
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			Click the button. We mint a key, render a personalised CLAUDE.md, bundle it with an
-			.env and a smoke-test curl. Drop the files into your project. Your agent takes it from
-			there.
+			MCP is the recommended path: one config entry once per machine and your agent has
+			the full atomicsite surface. The CLAUDE.md bundle below is the fallback for clients
+			that don't speak remote MCP yet.
 		</p>
 	</header>
+
+	<!-- MCP-first connection card. Three tabs covering the most common
+		MCP-aware hosts. Snippet auto-fills the agent key once the user
+		generates a bundle further down the page; until then it carries
+		"ask_<your key>" as a placeholder. -->
+	<div class="mt-8">
+		<Card padding="md">
+			<div class="flex items-start gap-3">
+				<div
+					class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"
+				>
+					<Plug size={14} strokeWidth={1.75} />
+				</div>
+				<div class="min-w-0 flex-1">
+					<h2 class="text-[14px] font-medium text-text-primary">
+						Connect via MCP (recommended)
+					</h2>
+					<p class="mt-1 text-[12px] text-text-muted">
+						The Model Context Protocol lets your AI host (Claude Desktop, Cursor, Cline,
+						Windsurf, n8n's MCP node) discover atomicsite's tools and resources directly,
+						no per-project files or env vars. Same auth as the rest of /api/agent/*: an
+						X-Agent-Key header. Visitor-tier PII is intentionally blocked; the agent can
+						set up analytics but never touch the data they collect.
+					</p>
+
+					<!-- Client tabs -->
+					<div class="mt-4 inline-flex rounded-lg border border-border-light bg-bg-elevated p-0.5">
+						{#each [{ id: 'claude-desktop' as const, label: 'Claude Desktop' }, { id: 'cursor' as const, label: 'Cursor' }, { id: 'cline' as const, label: 'Cline / Continue / Windsurf' }] as tab (tab.id)}
+							<button
+								type="button"
+								onclick={() => (mcpClient = tab.id)}
+								class="rounded-md px-3 py-1.5 text-[12px] transition-colors {mcpClient ===
+								tab.id
+									? 'bg-bg-surface text-text-primary shadow-sm'
+									: 'text-text-muted hover:text-text-primary'}"
+							>
+								{tab.label}
+							</button>
+						{/each}
+					</div>
+
+					<!-- Config-file path hint -->
+					<p class="mt-3 text-[11px] text-text-muted">
+						Paste into:
+						<code class="font-mono text-[11px] text-text-secondary">{mcpConfigPath}</code>
+					</p>
+
+					<!-- JSON snippet -->
+					<div class="mt-2 relative">
+						<pre
+							class="overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-3 font-mono text-[11.5px] text-text-secondary"><code>{mcpSnippet}</code></pre>
+						<button
+							type="button"
+							onclick={copyMcp}
+							class="absolute right-2 top-2 inline-flex h-7 items-center gap-1 rounded-md border border-border-light bg-bg-surface px-2 text-[11px] text-text-secondary hover:text-text-primary"
+							aria-label="Copy MCP snippet"
+						>
+							{#if copiedMcp}
+								<Check size={12} strokeWidth={2} />
+								Copied
+							{:else}
+								<Copy size={12} strokeWidth={1.75} />
+								Copy
+							{/if}
+						</button>
+					</div>
+
+					{#if !bootstrap}
+						<p class="mt-3 text-[11px] text-text-muted">
+							The snippet shows <code class="font-mono">ask_&lt;your key&gt;</code>
+							as a placeholder. Generate one in the next card and the snippet auto-fills
+							with the real key.
+						</p>
+					{:else}
+						<p class="mt-3 text-[11px] text-text-muted">
+							Snippet pre-filled with the key generated below. Restart your MCP host
+							after pasting; atomicsite tools should appear in its tool picker.
+						</p>
+					{/if}
+
+					<!-- What you get -->
+					<div class="mt-4 rounded-lg border border-border-light bg-bg-elevated/40 p-3 text-[12px] text-text-secondary">
+						<p class="font-medium text-text-primary">What MCP exposes</p>
+						<ul class="mt-1.5 list-disc space-y-0.5 pl-4 text-text-muted">
+							<li>~22 tools for content + config (pages, blocks, branding, profile, settings, media, build, evaluation)</li>
+							<li>6 resources for live site context (settings_catalog, security_posture, i18n, pending_setup, structure)</li>
+							<li>5 prompts (walk_through_pending_setup, audit_seo, connect_analytics, add_iframe_integration, create_landing_page)</li>
+						</ul>
+						<p class="mt-2 font-medium text-text-primary">What MCP does NOT expose</p>
+						<ul class="mt-1.5 list-disc space-y-0.5 pl-4 text-text-muted">
+							<li>Visitor metadata (name, email, lifecycle, last_topic): identified-tier PII stays out of the AI host</li>
+							<li>Security-header writes, allowed-scripts writes: admin-only because they widen attack surface</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+		</Card>
+	</div>
 
 	<div class="mt-8 flex flex-col gap-5">
 		<Card padding="md">
