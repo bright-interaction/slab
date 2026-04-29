@@ -280,6 +280,42 @@ Only enable preload when you're sure every subdomain serves HTTPS — a misconfi
 
 If you need to hide a region from assistive tech, also set tabindex=-1 on every focusable descendant, or skip the aria-hidden and use display:none / inert instead.`,
 	},
+	{
+		Category: "security",
+		Title:    "Whitelisting iframes (cal.com, YouTube, Stripe Checkout) and other embeds",
+		Content: `Atomicsite ships a strict Content-Security-Policy by default: third-party iframes and external scripts are blocked unless their domain is registered as a Trusted external domain. The kind column on each row routes the domain into the right CSP directive:
+
+- kind=script: Stripe.js, GA snippets, custom JS. Routes to script-src + connect-src.
+- kind=frame: cal.com booking, YouTube embeds, Stripe Checkout iframe, Tally forms. Routes to frame-src.
+- kind=image: external image CDNs (Cloudinary, Imgix). Routes to img-src.
+- kind=media: audio/video hosts (Vimeo, SoundCloud). Routes to media-src.
+- kind=connect: backend an inline script needs to fetch from. Routes to connect-src only.
+- kind=all: trust this domain across every directive (use sparingly).
+
+Adding a domain widens the attack surface, so writes are admin-only at /sites/{id}/settings/allowed-scripts. The agent reads the current list at GET /api/agent/allowed-scripts and the resolved CSP at GET /api/agent/security/preview. When a user asks for an embed (e.g. "add my cal.com booking page"), the agent should:
+1. Check security_posture.trusted_domains.frame for cal.com.
+2. If absent, tell the user to add cal.com with kind=frame in Settings -> Trusted external domains BEFORE inserting the iframe block. Reciting the path saves the user a search.
+3. Once added, insert the block; the next build's CSP will allow the iframe to render.`,
+	},
+	{
+		Category: "security",
+		Title:    "Files atomicsite ships automatically",
+		Content: `Every site auto-generates these on every build:
+
+- /sitemap-index.xml (via @astrojs/sitemap, walks every published page)
+- /robots.txt (AI training bots blocked by default; override via seo.robots_txt)
+- /.well-known/security.txt (when Profile.security_email is set)
+- /llms.txt (built from published pages; override via seo.llms_txt)
+- /humans.txt
+- /favicon.ico + /apple-touch-icon.png (linked in every page; brand folder in Media is the upload home)
+- JSON-LD Organization in <head> (from Profile + seo.same_as URLs)
+- JSON-LD BreadcrumbList per page (depth >= 2)
+- JSON-LD Article on article-type pages (datePublished + dateModified + author)
+- OG meta + Twitter Card meta (og:title/description/image/site_name/locale, twitter:card=summary_large_image, og:image:width/height = 1200x630)
+- Full security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, COEP) emitted via _headers AND nginx.conf
+
+Don't try to manually re-author these as page blocks. The agent should point the user at Settings -> Profile / SEO / Security to influence what gets emitted instead of writing the files directly.`,
+	},
 }
 
 // SeedReferenceKnowledgebase seeds the brightinteraction.com-derived

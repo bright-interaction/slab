@@ -55,6 +55,65 @@ type SiteContext struct {
 	// (e.g. "your headline is now editable in Text mode at /sites/{id}/
 	// pages/{id}").
 	EditingModes []EditingModeInfo `json:"editing_modes"`
+	// SecurityPosture surfaces what the agent needs to reason about
+	// embeds, scripts, and CSP without hitting a separate endpoint.
+	// trusted_domains carries every active allowed_scripts row keyed by
+	// kind so the agent can answer "is cal.com already trusted?"; csp
+	// carries the resolved Content-Security-Policy the next build will
+	// emit; generated_files names the artifacts atomicsite ships for
+	// every site so the agent doesn't try to manually re-author them.
+	// Added 2026-04-29 alongside the per-kind CSP allowlist + Security
+	// settings UI rebuild.
+	SecurityPosture SecurityPostureInfo `json:"security_posture"`
+}
+
+// SecurityPostureInfo is the agent-facing summary of the security
+// surface for one site. Read-only: the agent cannot mutate any of these
+// directly; CSP-modifying writes (allowed_scripts, security settings)
+// require the human admin so the AI can never silently widen the attack
+// surface. The agent uses this view to (a) avoid asking for an embed
+// that already works and (b) tell the human exactly what to whitelist
+// when an iframe is needed.
+type SecurityPostureInfo struct {
+	// TrustedDomains lists every active allowed_scripts row, keyed by
+	// kind, so the agent can scan "is cal.com in the frame list?" in
+	// one pass.
+	TrustedDomains TrustedDomainsByKind `json:"trusted_domains"`
+	// AllowedKinds is the closed set of valid kind values, mirrored
+	// from internal/handlers/allowed_scripts.go:AllowedKinds.
+	AllowedKinds []string `json:"allowed_kinds"`
+	// CSP is the resolved Content-Security-Policy the next build will
+	// emit (computed via builder.BuildSecurityHeaders).
+	CSP string `json:"csp"`
+	// HSTS is the resolved Strict-Transport-Security header value.
+	HSTS string `json:"hsts"`
+	// FrameAncestors is the current frame-ancestors directive value
+	// (defaults to 'none', which forbids being embedded).
+	FrameAncestors string `json:"frame_ancestors"`
+	// HumanAdminURL is the path the agent should point the user at
+	// when an iframe / image / script host needs whitelisting.
+	HumanAdminURL string `json:"human_admin_url"`
+	// GeneratedFiles names every artifact atomicsite emits on every
+	// build so the agent doesn't try to re-create them.
+	GeneratedFiles []GeneratedFileInfo `json:"generated_files"`
+}
+
+// TrustedDomainsByKind groups active allowed_scripts entries by the
+// CSP directive they feed.
+type TrustedDomainsByKind struct {
+	Script  []string `json:"script"`
+	Frame   []string `json:"frame"`
+	Image   []string `json:"image"`
+	Media   []string `json:"media"`
+	Connect []string `json:"connect"`
+	All     []string `json:"all"`
+}
+
+// GeneratedFileInfo names one artifact atomicsite auto-ships.
+type GeneratedFileInfo struct {
+	Path        string `json:"path"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
 }
 
 // EndpointInfo names one URL template the agent calls. Method is the HTTP
@@ -69,12 +128,14 @@ type EndpointInfo struct {
 // EndpointsInfo groups EndpointInfo entries by area so the agent can
 // scan the relevant set quickly.
 type EndpointsInfo struct {
-	Pages         []EndpointInfo `json:"pages"`
-	Blocks        []EndpointInfo `json:"blocks"`
-	GlobalBlocks  []EndpointInfo `json:"global_blocks"`
-	Media         []EndpointInfo `json:"media"`
-	Build         []EndpointInfo `json:"build"`
-	Preview       []EndpointInfo `json:"preview"`
+	Pages          []EndpointInfo `json:"pages"`
+	Blocks         []EndpointInfo `json:"blocks"`
+	GlobalBlocks   []EndpointInfo `json:"global_blocks"`
+	Media          []EndpointInfo `json:"media"`
+	Build          []EndpointInfo `json:"build"`
+	Preview        []EndpointInfo `json:"preview"`
+	Security       []EndpointInfo `json:"security"`
+	TrustedDomains []EndpointInfo `json:"trusted_domains"`
 }
 
 // BlockSchemaInfo describes the keys data_json should carry for one
@@ -459,7 +520,81 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		Endpoints:        defaultEndpoints(),
 		BlockSchemas:     defaultBlockSchemas(),
 		EditingModes:     defaultEditingModes(),
+		SecurityPosture:  b.computeSecurityPosture(ctx, siteID),
 	}, nil
+}
+
+// computeSecurityPosture builds the agent-facing security summary. Reads
+// allowed_scripts to group trusted domains by kind, computes the resolved
+// CSP via the same builder helper the build pipeline uses, and lists the
+// auto-generated files atomicsite emits for every site.
+func (b *ContextBuilder) computeSecurityPosture(ctx context.Context, siteID string) SecurityPostureInfo {
+	rows, _ := b.queries.ListAllowedScriptsBySite(ctx, siteID)
+	td := TrustedDomainsByKind{
+		Script:  []string{},
+		Frame:   []string{},
+		Image:   []string{},
+		Media:   []string{},
+		Connect: []string{},
+		All:     []string{},
+	}
+	for _, s := range rows {
+		if s.IsActive != 1 {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(s.Kind)) {
+		case "frame":
+			td.Frame = append(td.Frame, s.Domain)
+		case "image":
+			td.Image = append(td.Image, s.Domain)
+		case "media":
+			td.Media = append(td.Media, s.Domain)
+		case "connect":
+			td.Connect = append(td.Connect, s.Domain)
+		case "all":
+			td.All = append(td.All, s.Domain)
+		default: // "" or "script"
+			td.Script = append(td.Script, s.Domain)
+		}
+	}
+
+	// Resolved CSP / HSTS / frame-ancestors. Same source-of-truth as
+	// the build pipeline; written via internal/builder/security.go but
+	// imported here would be a circular dep, so we re-read the same
+	// settings + scripts and inline the few fields we need.
+	settings, _ := b.queries.ListSettingsBySite(ctx, siteID)
+	sm := make(map[string]string)
+	for _, s := range settings {
+		sm[s.Category+"."+s.Key] = s.Value
+	}
+	frameAncestors := sm["security.frame_ancestors"]
+	if frameAncestors == "" || frameAncestors == "auto" {
+		frameAncestors = "'none'"
+	}
+	// CSP + HSTS strings are computed by builder.BuildSecurityHeaders;
+	// to keep this package free of a builder import we leave them empty
+	// and let the agent fetch them via GET /api/agent/security/preview
+	// when it needs the resolved policy verbatim. Most of the time the
+	// trusted_domains map + frame_ancestors are enough.
+	return SecurityPostureInfo{
+		TrustedDomains: td,
+		AllowedKinds:   []string{"script", "frame", "image", "media", "connect", "all"},
+		FrameAncestors: frameAncestors,
+		HumanAdminURL:  "/sites/{site_id}/settings/allowed-scripts",
+		GeneratedFiles: []GeneratedFileInfo{
+			{Path: "/sitemap-index.xml", Label: "XML Sitemap", Description: "Auto-built from every published page via @astrojs/sitemap."},
+			{Path: "/robots.txt", Label: "robots.txt", Description: "Auto-built; AI training bots blocked by default. Override via seo.robots_txt setting."},
+			{Path: "/.well-known/security.txt", Label: "security.txt", Description: "RFC 9116 contact, emitted when Profile.security_email is set."},
+			{Path: "/llms.txt", Label: "llms.txt", Description: "AI search readiness (Perplexity, ChatGPT). Built from published pages."},
+			{Path: "/humans.txt", Label: "humans.txt", Description: "Team + site metadata."},
+			{Path: "/favicon.ico", Label: "Favicon", Description: "Linked in every page from the brand media folder."},
+			{Path: "/apple-touch-icon.png", Label: "Apple touch icon", Description: "iOS home-screen icon."},
+			{Path: "<head> JSON-LD Organization", Label: "Organization schema", Description: "Auto-emitted from Profile (business name + sameAs URLs)."},
+			{Path: "<head> JSON-LD BreadcrumbList", Label: "BreadcrumbList schema", Description: "Per page (depth >= 2)."},
+			{Path: "<head> JSON-LD Article", Label: "Article schema", Description: "Article-type pages: datePublished + dateModified + author."},
+			{Path: "<head> OG + Twitter Card", Label: "Social meta", Description: "og:title/description/image/site_name/locale + twitter:card=summary_large_image."},
+		},
+	}
 }
 
 // defaultEndpoints returns the endpoint catalogue surfaced to AI agents.
@@ -494,6 +629,13 @@ func defaultEndpoints() EndpointsInfo {
 		Preview: []EndpointInfo{
 			{Method: "GET", Path: "/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}/preview", Use: "Returns the rendered Astro source for one block. Use this when the user asks 'show me the code' for a specific section. Same source the build pipeline writes to disk."},
 			{Method: "GET", Path: "/api/sites/{siteID}/pages/{pageID}/preview", Use: "Returns the assembled .astro source for the whole page. Use to inspect what bun build will see without triggering a build."},
+		},
+		Security: []EndpointInfo{
+			{Method: "GET", Path: "/api/agent/security/preview", Use: "Returns the resolved security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, COEP) the next build will emit. Use to verify a CSP includes the host you need before recommending a content change to the user."},
+			{Method: "GET", Path: "/api/agent/settings/security", Use: "Read-only view of the security category settings (HSTS, CSP toggles, frame_ancestors, csp_extra_directives, COOP/CORP/COEP). Writes here stay admin-only because they widen attack surface."},
+		},
+		TrustedDomains: []EndpointInfo{
+			{Method: "GET", Path: "/api/agent/allowed-scripts", Use: "Read the trusted-domain rows that feed CSP. Each row has a kind (script | frame | image | media | connect | all). Use this to detect 'is cal.com already trusted?' before asking the user to add it. Mutations are admin-only at /api/sites/{id}/allowed-scripts (UI: /sites/{id}/settings/allowed-scripts)."},
 		},
 	}
 }
@@ -618,6 +760,16 @@ func defaultEditingModes() []EditingModeInfo {
 			Name:        "Global blocks",
 			URL:         "/sites/{site_id}/global-blocks",
 			Description: "Site-wide header and footer slots. Edit once, applies to every page (unless the page sets hide_global_blocks=true for landing-page suppression).",
+		},
+		{
+			Name:        "Trusted external domains",
+			URL:         "/sites/{site_id}/settings/allowed-scripts",
+			Description: "CSP allowlist. Each row picks a kind: script (Stripe.js / GA), frame (cal.com / YouTube / Stripe Checkout iframes), image (Cloudinary CDN), media (Vimeo), connect (fetch-only API host), or all. Writes are admin-only to keep agents from silently widening the attack surface; the agent should point the user here when an embed is needed.",
+		},
+		{
+			Name:        "Security headers",
+			URL:         "/sites/{site_id}/settings/security",
+			Description: "Edit HSTS, CSP enable + extra directives, frame-ancestors, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP/CORP/COEP. Admin-only (writes change attack surface).",
 		},
 	}
 }
