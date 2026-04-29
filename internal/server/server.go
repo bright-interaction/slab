@@ -359,6 +359,14 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/agent/settings/{category}", agentH.ListSettingsByCategory)
 		r.Patch("/api/agent/settings", agentH.BulkUpsertSettings)
 
+		// Trusted external domains (CSP allowlist) + resolved security
+		// headers preview. Read-only for the agent: writes here widen
+		// the site's attack surface so they stay admin-only via the
+		// /api/sites/{id}/allowed-scripts endpoint and the
+		// /api/sites/{id}/settings/security UI.
+		r.Get("/api/agent/allowed-scripts", agentH.ListAllowedScripts)
+		r.Get("/api/agent/security/preview", agentH.SecurityPreview)
+
 		// Self-hosted woff2 fonts (Phase 12.9 agent parity).
 		r.Get("/api/agent/fonts", agentH.ListFonts)
 		r.Post("/api/agent/fonts", agentH.UploadFont)

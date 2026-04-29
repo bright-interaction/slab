@@ -10,6 +10,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -125,4 +126,56 @@ func keysOfStringBoolMap(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// ListAllowedScripts returns the trusted-domain rows for the agent's site.
+// Read-only: writes stay admin-only because adding a CSP host widens the
+// attack surface. The agent uses this to detect "is cal.com already
+// trusted?" before asking the human to add it.
+//
+// GET /api/agent/allowed-scripts
+func (h *AgentHandler) ListAllowedScripts(w http.ResponseWriter, r *http.Request) {
+	a := requireAgent(w, r)
+	if a == nil {
+		return
+	}
+	rows, err := h.queries.ListAllowedScriptsBySite(r.Context(), a.SiteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list allowed scripts")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"trusted_domains":   rows,
+		"allowed_kinds":     []string{"script", "frame", "image", "media", "connect", "all"},
+		"writable_by_agent": false,
+		"hint":              "Domains are added by the human admin in Settings -> Trusted external domains. Pick the right kind so the domain lands in the right CSP directive: script-src for JS, frame-src for iframes (cal.com / YouTube / Stripe Checkout), img-src for image CDNs, media-src for audio/video hosts, connect-src for fetch-only API hosts.",
+	})
+}
+
+// SecurityPreview returns the resolved security headers the next build
+// would emit for the agent's site. Read-only mirror of the admin
+// /api/sites/{id}/settings/security/preview endpoint.
+//
+// GET /api/agent/security/preview
+func (h *AgentHandler) SecurityPreview(w http.ResponseWriter, r *http.Request) {
+	a := requireAgent(w, r)
+	if a == nil {
+		return
+	}
+	hdrs, err := builder.BuildSecurityHeaders(r.Context(), h.queries, a.SiteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to compute headers")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"csp":                          hdrs.CSP,
+		"hsts":                         hdrs.HSTS,
+		"x_frame_options":              hdrs.XFrameOptions,
+		"x_content_type_options":       hdrs.XContentTypeOptions,
+		"referrer_policy":              hdrs.ReferrerPolicy,
+		"permissions_policy":           hdrs.PermissionsPolicy,
+		"cross_origin_opener_policy":   hdrs.COOP,
+		"cross_origin_resource_policy": hdrs.CORP,
+		"cross_origin_embedder_policy": hdrs.COEP,
+	})
 }
