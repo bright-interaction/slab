@@ -208,6 +208,16 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
 				result.BuildLog += "\n=== eval ===\nfailed: " + err.Error() + "\n"
 			}
+			// Auto-deploy to the site's default deploy target so trigger_build
+			// is a true publish verb, not just "build to workspace + eval".
+			if targetID, deployURL, deployErr := h.autoDeployDefault(bgCtx, siteID, result.DistDir); deployErr != nil {
+				result.BuildLog += "\n=== deploy ===\nfailed: " + deployErr.Error() + "\n"
+			} else if targetID != "" {
+				result.BuildLog += "\n=== deploy ===\npublished to " + deployURL + "\n"
+				_ = h.queries.UpdateDeploymentDeployed(bgCtx, store.UpdateDeploymentDeployedParams{
+					TargetID: targetID, DeployUrl: deployURL, ID: deployID,
+				})
+			}
 		}
 		h.mu.Lock()
 		st := h.builds[deployID]
@@ -237,6 +247,41 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 	}()
 
 	return deployID, nil
+}
+
+// autoDeployDefault publishes distDir to the site's default deploy target.
+// Returns ("", "", nil) when no targets are configured (silent no-op so
+// brand-new sites that haven't picked a target yet still get a clean
+// build response). Returns (targetID, deployURL, nil) on success.
+func (h *BuildHandler) autoDeployDefault(ctx context.Context, siteID, distDir string) (string, string, error) {
+	targets, err := h.queries.ListDeployTargetsBySite(ctx, siteID)
+	if err != nil {
+		return "", "", fmt.Errorf("list deploy targets: %w", err)
+	}
+	if len(targets) == 0 {
+		return "", "", nil
+	}
+	t := targets[0] // ordered by is_default DESC, name ASC
+	cfg := map[string]any{}
+	if strings.TrimSpace(t.ConfigJson) != "" {
+		_ = json.Unmarshal([]byte(t.ConfigJson), &cfg)
+	}
+	target := deploy.Target{
+		ID:     t.ID,
+		SiteID: t.SiteID,
+		Name:   t.Name,
+		Kind:   t.Kind,
+		Config: cfg,
+	}
+	deployer, err := deploy.New(target.Kind)
+	if err != nil {
+		return "", "", fmt.Errorf("deployer: %w", err)
+	}
+	res, err := deployer.Deploy(ctx, distDir, target)
+	if err != nil {
+		return "", "", fmt.Errorf("deploy: %w", err)
+	}
+	return t.ID, res.URL, nil
 }
 
 // GetBuildState returns the cross-source build state (in-memory if active,
