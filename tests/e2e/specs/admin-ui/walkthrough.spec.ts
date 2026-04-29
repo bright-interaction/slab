@@ -26,6 +26,8 @@ const SECTION_TABS = [
 ] as const;
 
 // Settings tree sub-routes (one per directory under sites/[siteID]/settings/).
+// Danger zone moved to /account in Phase 14 so destructive cross-site
+// actions live in one place; the per-site /settings/danger route is gone.
 const SETTINGS_SUBPAGES = [
 	'/settings/general',
 	'/settings/security',
@@ -34,8 +36,7 @@ const SETTINGS_SUBPAGES = [
 	'/settings/profile',
 	'/settings/allowed-scripts',
 	'/settings/deployment',
-	'/settings/nginx',
-	'/settings/danger'
+	'/settings/nginx'
 ] as const;
 
 // Captures console errors with the URL where they fired. SvelteKit can emit

@@ -8,8 +8,7 @@
 		Code2,
 		Building2,
 		Server,
-		Cloud,
-		AlertTriangle
+		Cloud
 	} from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
 
@@ -105,12 +104,11 @@
 			'Targets for publishing built sites.',
 			Cloud
 		)}
-		{@render sectionCard(
-			`/sites/${siteID}/settings/danger`,
-			'Danger Zone',
-			'Delete this site permanently.',
-			AlertTriangle,
-			true
-		)}
 	</section>
+
+	<p class="mt-6 text-[12px] text-text-muted">
+		Looking for "Delete this site"? It's now in
+		<a href="/account" class="text-accent underline-offset-2 hover:underline">Account settings</a>
+		so destructive cross-site actions live in one place.
+	</p>
 </div>

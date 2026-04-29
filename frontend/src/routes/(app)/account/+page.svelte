@@ -1,14 +1,17 @@
 <script lang="ts">
-	import { ArrowLeft, Check, Copy, Sun, Moon } from 'lucide-svelte';
+	import { ArrowLeft, Check, Copy, Sun, Moon, AlertTriangle } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
 	import { ApiError } from '$lib/api/client';
 	import * as authApi from '$lib/api/auth';
+	import * as sitesApi from '$lib/api/sites';
 	import { auth, setUser } from '$lib/stores/auth.svelte';
 	import { confirm } from '$lib/stores/confirm.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { theme, toggleTheme } from '$lib/stores/theme.svelte';
+	import type { Site } from '$lib/api/types';
 
 	const user = $derived(auth.value);
 	const isAdmin = $derived(user?.role === 'admin');
@@ -23,6 +26,62 @@
 
 	let signingOutAll = $state(false);
 	let copiedId = $state(false);
+
+	// Danger zone (moved here from per-site Settings tree). Lists every site
+	// the account has access to and gates each delete behind a slug-typing
+	// confirmation. Deleting a site from inside that site's own Settings
+	// page used to leave the user staring at the now-404 route; the account
+	// surface is the right home for cross-site destructive actions.
+	let sites = $state<Site[]>([]);
+	let sitesLoading = $state(true);
+	let sitesLoadError = $state<string | null>(null);
+
+	let deleteDialogOpen = $state(false);
+	let deleteTarget = $state<Site | null>(null);
+	let deleteConfirmText = $state('');
+	let deleting = $state(false);
+	const deleteMatches = $derived(
+		deleteTarget !== null && deleteConfirmText.trim() === deleteTarget.slug
+	);
+
+	async function loadSites(): Promise<void> {
+		sitesLoading = true;
+		sitesLoadError = null;
+		try {
+			const res = await sitesApi.list();
+			sites = res.sites ?? [];
+		} catch (err) {
+			sitesLoadError = err instanceof ApiError ? err.message : 'Failed to load sites.';
+		} finally {
+			sitesLoading = false;
+		}
+	}
+
+	$effect(() => {
+		void loadSites();
+	});
+
+	function openDeleteDialog(site: Site) {
+		deleteTarget = site;
+		deleteConfirmText = '';
+		deleteDialogOpen = true;
+	}
+
+	async function deleteSite() {
+		if (!deleteTarget || !deleteMatches || deleting) return;
+		deleting = true;
+		try {
+			await sitesApi.remove(deleteTarget.id);
+			toast.success(`Site "${deleteTarget.name}" deleted.`);
+			sites = sites.filter((s) => s.id !== deleteTarget!.id);
+			deleteDialogOpen = false;
+			deleteTarget = null;
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : 'Failed to delete site.');
+		} finally {
+			deleting = false;
+		}
+	}
 
 	function formatDate(ts: string | undefined): string {
 		if (!ts) return '-';
@@ -283,5 +342,86 @@
 				</div>
 			</Card>
 		{/if}
+
+		<Card padding="md" class="border-danger/30">
+			<div class="flex items-start gap-3">
+				<span
+					class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger"
+				>
+					<AlertTriangle size={16} strokeWidth={1.5} />
+				</span>
+				<div class="flex-1">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-danger">
+						Danger zone
+					</h2>
+					<p class="mt-1 text-[13px] text-text-secondary">
+						Permanently delete a site. Removes every page, block, media file,
+						setting, evaluation, and build for that site. Cannot be undone.
+					</p>
+				</div>
+			</div>
+
+			<div class="mt-5 border-t border-border-light pt-4">
+				{#if sitesLoading}
+					<p class="text-[12px] text-text-muted">Loading sites…</p>
+				{:else if sitesLoadError}
+					<p class="text-[12px] text-danger">{sitesLoadError}</p>
+				{:else if sites.length === 0}
+					<p class="text-[12px] text-text-muted">No sites to delete.</p>
+				{:else}
+					<ul class="divide-y divide-border-light">
+						{#each sites as site (site.id)}
+							<li class="flex items-center justify-between gap-3 py-3">
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-[13px] font-medium text-text-primary">{site.name}</p>
+									<p class="truncate font-mono text-[11px] text-text-muted">/{site.slug}</p>
+								</div>
+								<Button variant="danger" size="sm" onclick={() => openDeleteDialog(site)}>
+									Delete site
+								</Button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</Card>
 	</div>
 </div>
+
+<Dialog
+	bind:open={deleteDialogOpen}
+	title="Delete this site?"
+	description="Type the site slug to confirm. This action cannot be reversed."
+	size="md"
+>
+	{#if deleteTarget}
+		<div class="flex flex-col gap-4">
+			<div class="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5">
+				<p class="text-[12px] text-text-secondary">
+					You are about to delete
+					<span class="font-medium text-text-primary">{deleteTarget.name}</span>. Slug:
+					<code class="font-mono text-[12px] text-text-primary">{deleteTarget.slug}</code>
+				</p>
+			</div>
+			<Input
+				label={`Type "${deleteTarget.slug}" to confirm`}
+				placeholder={deleteTarget.slug}
+				bind:value={deleteConfirmText}
+				autocomplete="off"
+			/>
+		</div>
+	{/if}
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (deleteDialogOpen = false)} disabled={deleting}>
+			Cancel
+		</Button>
+		<Button
+			variant="danger"
+			onclick={deleteSite}
+			disabled={!deleteMatches}
+			loading={deleting}
+		>
+			Delete forever
+		</Button>
+	{/snippet}
+</Dialog>
