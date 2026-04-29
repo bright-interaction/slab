@@ -29,9 +29,11 @@ func RenderSingleBlock(ctx context.Context, queries *store.Queries, siteID, bloc
 }
 
 // RenderPagePreview returns the rendered Astro source for a single page.
-// Same output renderPage produces during a build, but materialised in-memory
-// so the admin "View source" dialog can show the assembled page without
-// triggering bun build. Bypasses status filters so drafts also render.
+// Same output renderPageWithContext produces during a build, but
+// materialised in-memory so the admin "View source" dialog can show the
+// assembled page without triggering bun build. Bypasses status filters
+// so drafts also render. Loads the full pageRenderContext so the preview
+// reflects current meta-template + hreflang settings.
 func RenderPagePreview(ctx context.Context, queries *store.Queries, siteID, pageID string) (string, error) {
 	page, err := queries.GetPageByID(ctx, pageID)
 	if err != nil {
@@ -49,7 +51,23 @@ func RenderPagePreview(ctx context.Context, queries *store.Queries, siteID, page
 	for _, c := range components {
 		componentNames[c.Name] = true
 	}
-	return renderPage(page, blocks, componentNames), nil
+	site, err := queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return "", fmt.Errorf("get site: %w", err)
+	}
+	settings, _ := queries.ListSettingsBySite(ctx, siteID)
+	sm := make(map[string]string, len(settings))
+	for _, s := range settings {
+		sm[s.Category+"."+s.Key] = s.Value
+	}
+	i18n, _ := LoadI18nConfig(ctx, queries, siteID)
+	pageCtx := pageRenderContext{
+		site:     site,
+		i18n:     i18n,
+		titleTpl: sm["seo.meta_title_template"],
+		descTpl:  sm["seo.meta_description_template"],
+	}
+	return renderPageWithContext(page, blocks, componentNames, pageCtx), nil
 }
 
 // RenderPages generates .astro page files from published pages and their blocks.
@@ -65,6 +83,29 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		componentNames[c.Name] = true
 	}
 
+	site, err := queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return 0, fmt.Errorf("get site: %w", err)
+	}
+
+	settings, _ := queries.ListSettingsBySite(ctx, siteID)
+	sm := make(map[string]string, len(settings))
+	for _, s := range settings {
+		sm[s.Category+"."+s.Key] = s.Value
+	}
+
+	i18n, err := LoadI18nConfig(ctx, queries, siteID)
+	if err != nil {
+		return 0, fmt.Errorf("load i18n config: %w", err)
+	}
+
+	pageCtx := pageRenderContext{
+		site:      site,
+		i18n:      i18n,
+		titleTpl:  sm["seo.meta_title_template"],
+		descTpl:   sm["seo.meta_description_template"],
+	}
+
 	for _, page := range pages {
 		blocks, err := queries.ListBlocksByPage(ctx, page.ID)
 		if err != nil {
@@ -72,7 +113,7 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		}
 		slog.Info("build: rendering page", "slug", page.Slug, "blocks", len(blocks))
 
-		content := renderPage(page, blocks, componentNames)
+		content := renderPageWithContext(page, blocks, componentNames, pageCtx)
 		pagePath := slugToFilePath(page.Slug, wsDir)
 
 		if err := WriteFile(pagePath, content); err != nil {
@@ -83,7 +124,31 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 	return len(pages), nil
 }
 
+// pageRenderContext bundles everything needed to render one page that
+// isn't on the page row itself: the parent site, the i18n config, and
+// the seo template strings. RenderPages computes this once per build
+// and passes a copy to every renderPageWithContext call so renderPage
+// stays cheap and free of context.Context plumbing.
+type pageRenderContext struct {
+	site     store.Site
+	i18n     I18nConfig
+	titleTpl string
+	descTpl  string
+}
+
+// renderPage is the legacy entry point used by the standalone preview
+// helpers (RenderSingleBlock / RenderPagePreview). It renders a page
+// without site-level context (no meta-template expansion, no hreflang).
+// The build pipeline calls renderPageWithContext for the full output.
 func renderPage(page store.Page, blocks []store.Block, components map[string]bool) string {
+	return renderPageWithContext(page, blocks, components, pageRenderContext{})
+}
+
+// renderPageWithContext builds the page Astro source with the full
+// site-level rendering context: meta-title/description templates,
+// hreflang alternates, canonical override. Empty pageRenderContext
+// degrades to the legacy behaviour for the preview helpers.
+func renderPageWithContext(page store.Page, blocks []store.Block, components map[string]bool, ctx pageRenderContext) string {
 	var b strings.Builder
 
 	// Depth-aware import prefix. Pages live under src/pages/{slug}.astro;
@@ -114,14 +179,28 @@ func renderPage(page store.Page, blocks []store.Block, components map[string]boo
 
 	b.WriteString("---\n\n")
 
-	// Page wrapper
-	title := page.MetaTitle
-	if title == "" {
-		title = page.Title
+	// Page wrapper. Title + description run through the operator-set
+	// templates from seo.meta_title_template / seo.meta_description_template
+	// when those settings are non-empty. Tokens supported:
+	// {page_title}, {page_description}, {site_name}, {lang}, {separator}.
+	pageTitle := page.MetaTitle
+	if pageTitle == "" {
+		pageTitle = page.Title
 	}
+	pageDesc := page.MetaDescription
+
+	vars := MetaTemplateVars{
+		PageTitle:       pageTitle,
+		PageDescription: pageDesc,
+		SiteName:        ctx.site.Name,
+		Lang:            ctx.site.Lang,
+	}
+	title := ExpandMetaTemplate(ctx.titleTpl, pageTitle, vars)
+	description := ExpandMetaTemplate(ctx.descTpl, pageDesc, vars)
+
 	b.WriteString(fmt.Sprintf("<Base title=\"%s\"", escapeAttr(title)))
-	if page.MetaDescription != "" {
-		b.WriteString(fmt.Sprintf(" description=\"%s\"", escapeAttr(page.MetaDescription)))
+	if description != "" {
+		b.WriteString(fmt.Sprintf(" description=\"%s\"", escapeAttr(description)))
 	}
 	if page.NoIndex == 1 {
 		b.WriteString(` robots="noindex, nofollow"`)
@@ -131,6 +210,14 @@ func renderPage(page store.Page, blocks []store.Block, components map[string]boo
 	// Layout reads {hideGlobalBlocks} and skips header + footer when true.
 	if page.HideGlobalBlocks == 1 {
 		b.WriteString(` hideGlobalBlocks={true}`)
+	}
+	// Hreflang alternates. Multi-language sites get one <link rel="alternate">
+	// per locale that has a counterpart page, plus an x-default. Mono-language
+	// sites and hreflang_strategy=off drop the prop entirely.
+	if alts := ctx.i18n.ComputeAlternates(ctx.site.Domain, page.Slug); len(alts) > 0 {
+		b.WriteString(" alternates={")
+		b.WriteString(hreflangPropExpression(alts))
+		b.WriteString("}")
 	}
 	b.WriteString(">\n")
 
