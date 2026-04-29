@@ -781,6 +781,7 @@ func (h *AgentHandler) UpdateGlobalBlock(w http.ResponseWriter, r *http.Request)
 	err := h.queries.UpdateGlobalBlock(r.Context(), store.UpdateGlobalBlockParams{
 		ID:        existing.ID,
 		Name:      name,
+		Slot:      existing.Slot,
 		BlockType: blockType,
 		DataJson:  dataStr,
 		StyleJson: styleStr,

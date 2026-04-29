@@ -182,6 +182,11 @@ func applySchema(sqlDB *sql.DB) error {
 		{"visit_sessions", "metadata_json", "TEXT NOT NULL DEFAULT '{}'"},
 		{"visit_sessions", "metadata_expires_at", "TEXT NOT NULL DEFAULT ''"},
 		{"visit_sessions", "identity_confirmed_at", "TEXT NOT NULL DEFAULT ''"},
+		// Per-page suppression of global blocks (Phase 14) added 2026-04-29.
+		// Lets a landing page hide site-wide nav and footer for higher
+		// conversion without breaking the global blocks for the rest of
+		// the site.
+		{"pages", "hide_global_blocks", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

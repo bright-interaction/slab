@@ -70,6 +70,7 @@ export interface Page {
 	nav_label: string;
 	no_index: BoolInt;
 	canonical_url: string;
+	hide_global_blocks: BoolInt;
 	created_at: Timestamp;
 	updated_at: Timestamp;
 }

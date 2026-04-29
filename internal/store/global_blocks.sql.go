@@ -155,6 +155,7 @@ func (q *Queries) ListGlobalBlocksBySite(ctx context.Context, siteID string) ([]
 const updateGlobalBlock = `-- name: UpdateGlobalBlock :exec
 UPDATE global_blocks SET
     name = ?,
+    slot = ?,
     block_type = ?,
     data_json = ?,
     style_json = ?,
@@ -166,6 +167,7 @@ WHERE id = ?
 
 type UpdateGlobalBlockParams struct {
 	Name      string `json:"name"`
+	Slot      string `json:"slot"`
 	BlockType string `json:"block_type"`
 	DataJson  string `json:"data_json"`
 	StyleJson string `json:"style_json"`
@@ -177,6 +179,7 @@ type UpdateGlobalBlockParams struct {
 func (q *Queries) UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error {
 	_, err := q.db.ExecContext(ctx, updateGlobalBlock,
 		arg.Name,
+		arg.Slot,
 		arg.BlockType,
 		arg.DataJson,
 		arg.StyleJson,

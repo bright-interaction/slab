@@ -28,6 +28,7 @@ UPDATE pages SET
     nav_label = ?,
     no_index = ?,
     canonical_url = ?,
+    hide_global_blocks = ?,
     updated_at = datetime('now')
 WHERE id = ?;
 

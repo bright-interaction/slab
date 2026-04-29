@@ -48,12 +48,14 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("  description?: string;\n")
 	b.WriteString("  ogImage?: string;\n")
 	b.WriteString("  robots?: string;\n")
+	b.WriteString("  hideGlobalBlocks?: boolean;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("const {\n")
 	b.WriteString(fmt.Sprintf("  title = '%s',\n", escapeAstroString(site.MetaTitle)))
 	b.WriteString(fmt.Sprintf("  description = '%s',\n", escapeAstroString(site.MetaDescription)))
 	b.WriteString(fmt.Sprintf("  ogImage = '%s',\n", site.OgImageID))
 	b.WriteString("  robots = 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',\n")
+	b.WriteString("  hideGlobalBlocks = false,\n")
 	b.WriteString("} = Astro.props;\n")
 
 	// Compute canonical
@@ -200,20 +202,26 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	// landmark. The .sr-only-focusable class hides it offscreen until focus.
 	b.WriteString("  <a href=\"#main\" class=\"sr-only-focusable\" style=\"position:absolute;left:-9999px;top:auto;\" onfocus=\"this.style.left='8px';this.style.top='8px';this.style.background='#000';this.style.color='#fff';this.style.padding='8px 12px';this.style.zIndex='10000';\" onblur=\"this.style.left='-9999px';this.style.top='auto';\">Skip to content</a>\n")
 
-	// Header
+	// Header. Gated on `hideGlobalBlocks` so per-page landing routes can
+	// drop the site-wide nav for higher conversion. Astro reads
+	// `hideGlobalBlocks` as a boolean prop, defaults false.
 	if headerHTML != "" {
-		b.WriteString("  <header>\n")
-		b.WriteString("    " + headerHTML + "\n")
-		b.WriteString("  </header>\n")
+		b.WriteString("  {!hideGlobalBlocks && (\n")
+		b.WriteString("    <header>\n")
+		b.WriteString("      " + headerHTML + "\n")
+		b.WriteString("    </header>\n")
+		b.WriteString("  )}\n")
 	}
 
 	b.WriteString("  <main id=\"main\">\n    <slot />\n  </main>\n")
 
-	// Footer
+	// Footer. Same per-page suppression as the header.
 	if footerHTML != "" {
-		b.WriteString("  <footer>\n")
-		b.WriteString("    " + footerHTML + "\n")
-		b.WriteString("  </footer>\n")
+		b.WriteString("  {!hideGlobalBlocks && (\n")
+		b.WriteString("    <footer>\n")
+		b.WriteString("      " + footerHTML + "\n")
+		b.WriteString("    </footer>\n")
+		b.WriteString("  )}\n")
 	}
 
 	// Engagement beacon (Phase 12.6). Captures the JS-only metrics server

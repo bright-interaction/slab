@@ -126,6 +126,12 @@ func renderPage(page store.Page, blocks []store.Block, components map[string]boo
 	if page.NoIndex == 1 {
 		b.WriteString(` robots="noindex, nofollow"`)
 	}
+	// Per-page suppression of global blocks. Used by landing pages that
+	// want to drop the site-wide nav and footer for higher conversion.
+	// Layout reads {hideGlobalBlocks} and skips header + footer when true.
+	if page.HideGlobalBlocks == 1 {
+		b.WriteString(` hideGlobalBlocks={true}`)
+	}
 	b.WriteString(">\n")
 
 	// Render blocks
