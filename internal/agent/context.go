@@ -74,6 +74,16 @@ type SiteContext struct {
 	// page (you don't, atomicsite does it for you), and to pick the
 	// right slug prefix when creating a page in a non-default locale.
 	I18n I18nInfo `json:"i18n"`
+	// SettingsCatalog is the per-key dictionary of every setting the
+	// builder, renderer, or nginx config consumes, with current value +
+	// type + valid range + writable flag + a link to the human admin
+	// page that owns it. Read this BEFORE writing PATCH /api/agent/settings
+	// so you know what each key does, what shape its value should be, and
+	// whether the agent (you) is permitted to write it. Settings that exist
+	// only on the human admin UI (no backend wiring) are deliberately
+	// excluded from the catalog so an agent doesn't spend tokens setting
+	// values that go nowhere.
+	SettingsCatalog SettingsCatalogInfo `json:"settings_catalog"`
 }
 
 // I18nInfo is the agent-facing summary of the site's multi-language
@@ -518,6 +528,15 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 	}
 
 	pending := b.computePendingSetup(ctx, siteID, site, pageInfos)
+
+	// One settings load shared by SettingsCatalog (and any future
+	// context-level consumers). The per-feature compute* functions still
+	// load their own slice for now; not worth refactoring those today.
+	settingsRows, _ := b.queries.ListSettingsBySite(ctx, siteID)
+	settingMap := make(map[string]string, len(settingsRows))
+	for _, s := range settingsRows {
+		settingMap[s.Category+"."+s.Key] = s.Value
+	}
 	personalization := b.computePersonalization(ctx, siteID)
 
 	return &SiteContext{
@@ -565,6 +584,7 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		EditingModes:     defaultEditingModes(),
 		SecurityPosture:  b.computeSecurityPosture(ctx, siteID),
 		I18n:             b.computeI18n(ctx, siteID, site, pageInfos),
+		SettingsCatalog:  buildSettingsCatalog(siteID, settingMap),
 	}, nil
 }
 

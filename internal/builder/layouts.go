@@ -54,7 +54,13 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("const {\n")
 	b.WriteString(fmt.Sprintf("  title = '%s',\n", escapeAstroString(site.MetaTitle)))
 	b.WriteString(fmt.Sprintf("  description = '%s',\n", escapeAstroString(site.MetaDescription)))
-	b.WriteString(fmt.Sprintf("  ogImage = '%s',\n", site.OgImageID))
+	// Default OG image. Resolution order:
+	//   1. seo.og_default_image_id (Settings -> SEO -> Default Open Graph image)
+	//   2. sites.og_image_id (legacy column written by the wizard)
+	// Either way, we resolve to a full URL like https://example.com/media/<id>/original.jpg
+	// so external scrapers (Open Graph + Twitter Card) get a usable absolute href.
+	// Per-page <Base ogImage="..."> overrides are passed at render time by pages.go.
+	b.WriteString(fmt.Sprintf("  ogImage = '%s',\n", resolveDefaultOgImageURL(ctx, queries, site, settingsMap, domainForOgImage(site))))
 	b.WriteString("  robots = 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',\n")
 	b.WriteString("  hideGlobalBlocks = false,\n")
 	b.WriteString("  alternates = [],\n")
@@ -135,9 +141,30 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString("</script>\n")
 	}
 
-	// Analytics
-	if site.UmamiID != "" && site.UmamiUrl != "" {
-		b.WriteString(fmt.Sprintf("  <script defer src=\"%s/script.js\" data-website-id=\"%s\"></script>\n", site.UmamiUrl, site.UmamiID))
+	// Analytics. Resolution lives in resolveAnalyticsConfig: the
+	// analytics-category settings rows take precedence over the legacy
+	// sites-table columns, falling back to those columns when the row is
+	// empty (so existing wizard-seeded sites keep working). Both Umami and
+	// GA4 emit only when the operator explicitly opts in.
+	analytics := resolveAnalyticsConfig(site, settingsMap)
+	if analytics.UmamiEnabled && analytics.UmamiURL != "" && analytics.UmamiSiteID != "" {
+		b.WriteString(fmt.Sprintf("  <script defer src=\"%s/script.js\" data-website-id=\"%s\"></script>\n", analytics.UmamiURL, analytics.UmamiSiteID))
+	}
+	if analytics.GA4Enabled && analytics.GA4ID != "" {
+		// gtag.js + GA4 config. Emitted as an honest static snippet (no consent
+		// gate built in here): when analytics.cookieproof_enabled=1 the
+		// CookieProof relay below this block delays gtag config until the
+		// visitor consents to analytics. When CookieProof is off, this fires
+		// on every visit (legitimate-interest aligned with the always-on log
+		// tail). Operators who want hard consent gating should keep
+		// CookieProof on; that is the documented setup.
+		b.WriteString(fmt.Sprintf("  <script async src=\"https://www.googletagmanager.com/gtag/js?id=%s\"></script>\n", escapeAttr(analytics.GA4ID)))
+		b.WriteString("  <script>\n")
+		b.WriteString("    window.dataLayer = window.dataLayer || [];\n")
+		b.WriteString("    function gtag(){dataLayer.push(arguments);}\n")
+		b.WriteString("    gtag('js', new Date());\n")
+		b.WriteString(fmt.Sprintf("    gtag('config', '%s', { anonymize_ip: true });\n", escapeAttr(analytics.GA4ID)))
+		b.WriteString("  </script>\n")
 	}
 
 	// CookieProof + Atomicsite consent relay. Gated on

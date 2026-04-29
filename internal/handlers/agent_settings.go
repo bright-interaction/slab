@@ -94,6 +94,23 @@ func (h *AgentHandler) BulkUpsertSettings(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Pre-validate every writable entry so a typo in one key doesn't half-
+	// apply the batch. Admin-only categories are quietly bucketed into
+	// rejected_admin_only (the agent should ask the human via the per-key
+	// settings_catalog.human_admin_url link).
+	for _, s := range req {
+		if s.Category == "" || s.Key == "" {
+			continue
+		}
+		if !agentWritableSettingsCategories[s.Category] {
+			continue
+		}
+		if err := validateSetting(s.Category, s.Key, s.Value); err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+	}
+
 	rejected := []string{}
 	for _, s := range req {
 		if s.Category == "" || s.Key == "" {

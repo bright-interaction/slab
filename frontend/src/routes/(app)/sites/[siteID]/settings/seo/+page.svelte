@@ -12,7 +12,6 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { categoryMap } from '$lib/settings/nginxPreview';
 	import type { Site, Medium } from '$lib/api/types';
-	import { Trash2, Plus } from 'lucide-svelte';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -23,8 +22,6 @@
 		const s = v.toLowerCase();
 		return s === '1' || s === 'true' || s === 'yes' || s === 'on';
 	}
-
-	type HreflangRow = { lang: string; hreflang_code: string };
 
 	let loading = $state(true);
 	let saving = $state(false);
@@ -37,7 +34,6 @@
 	let robotsExtra = $state('');
 	let llmsTxt = $state('');
 	let sitemapEnabled = $state(true);
-	let hreflangRows = $state<HreflangRow[]>([]);
 
 	let pickerOpen = $state(false);
 
@@ -49,7 +45,6 @@
 		robotsExtra: string;
 		llmsTxt: string;
 		sitemapEnabled: boolean;
-		hreflangJson: string;
 	};
 
 	let initial: State = $state({
@@ -59,28 +54,8 @@
 		ogDefaultImageId: '',
 		robotsExtra: '',
 		llmsTxt: '',
-		sitemapEnabled: true,
-		hreflangJson: '[]'
+		sitemapEnabled: true
 	});
-
-	function parseHreflang(raw: string): HreflangRow[] {
-		if (!raw.trim()) return [];
-		try {
-			const parsed = JSON.parse(raw);
-			if (!Array.isArray(parsed)) return [];
-			return parsed
-				.filter(
-					(r): r is HreflangRow =>
-						r &&
-						typeof r === 'object' &&
-						typeof r.lang === 'string' &&
-						typeof r.hreflang_code === 'string'
-				)
-				.map((r) => ({ lang: r.lang, hreflang_code: r.hreflang_code }));
-		} catch {
-			return [];
-		}
-	}
 
 	async function load() {
 		loading = true;
@@ -95,9 +70,6 @@
 			robotsExtra = m.robots_txt_extra || '';
 			llmsTxt = m.llms_txt || '';
 			sitemapEnabled = m.sitemap_enabled ? toBool(m.sitemap_enabled) : true;
-
-			const hreflangJson = m.hreflang_map || '[]';
-			hreflangRows = parseHreflang(hreflangJson);
 
 			if (ogDefaultImageId) {
 				try {
@@ -114,8 +86,7 @@
 				ogDefaultImageId,
 				robotsExtra,
 				llmsTxt,
-				sitemapEnabled,
-				hreflangJson: JSON.stringify(hreflangRows)
+				sitemapEnabled
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -128,8 +99,6 @@
 		void load();
 	});
 
-	const hreflangJsonNow = $derived(JSON.stringify(hreflangRows));
-
 	const dirty = $derived(
 		metaTitleTemplate !== initial.metaTitleTemplate ||
 			metaDescriptionTemplate !== initial.metaDescriptionTemplate ||
@@ -137,8 +106,7 @@
 			ogDefaultImageId !== initial.ogDefaultImageId ||
 			robotsExtra !== initial.robotsExtra ||
 			llmsTxt !== initial.llmsTxt ||
-			sitemapEnabled !== initial.sitemapEnabled ||
-			hreflangJsonNow !== initial.hreflangJson
+			sitemapEnabled !== initial.sitemapEnabled
 	);
 
 	function discard() {
@@ -149,15 +117,6 @@
 		robotsExtra = initial.robotsExtra;
 		llmsTxt = initial.llmsTxt;
 		sitemapEnabled = initial.sitemapEnabled;
-		hreflangRows = parseHreflang(initial.hreflangJson);
-	}
-
-	function addHreflang() {
-		hreflangRows = [...hreflangRows, { lang: '', hreflang_code: '' }];
-	}
-
-	function removeHreflang(i: number) {
-		hreflangRows = hreflangRows.filter((_, idx) => idx !== i);
 	}
 
 	function pickImage(m: Medium) {
@@ -181,8 +140,7 @@
 				{ category: 'seo', key: 'og_default_image_id', value: ogDefaultImageId },
 				{ category: 'seo', key: 'robots_txt_extra', value: robotsExtra },
 				{ category: 'seo', key: 'llms_txt', value: llmsTxt },
-				{ category: 'seo', key: 'sitemap_enabled', value: sitemapEnabled ? '1' : '0' },
-				{ category: 'seo', key: 'hreflang_map', value: hreflangJsonNow }
+				{ category: 'seo', key: 'sitemap_enabled', value: sitemapEnabled ? '1' : '0' }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
@@ -193,8 +151,7 @@
 				ogDefaultImageId,
 				robotsExtra,
 				llmsTxt,
-				sitemapEnabled,
-				hreflangJson: hreflangJsonNow
+				sitemapEnabled
 			};
 			toast.success('SEO settings saved.');
 		} catch (err) {
@@ -277,39 +234,17 @@
 			</Card>
 
 			<Card padding="md">
-				<div class="flex items-center justify-between">
-					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-						Hreflang
-					</h2>
-					<Button variant="ghost" size="sm" onclick={addHreflang}>
-						{#snippet icon()}
-							<Plus size={14} strokeWidth={1.75} />
-						{/snippet}
-						Add row
-					</Button>
-				</div>
-				<div class="mt-4 flex flex-col gap-2">
-					{#if hreflangRows.length === 0}
-						<p class="text-[12px] text-text-muted">
-							No hreflang entries. Add one per supported language or region.
-						</p>
-					{:else}
-						{#each hreflangRows as row, i (i)}
-							<div class="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-								<Input placeholder="en" bind:value={row.lang} />
-								<Input placeholder="en-US" bind:value={row.hreflang_code} />
-								<button
-									type="button"
-									class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-muted hover:bg-bg-hover hover:text-danger transition-colors"
-									aria-label="Remove row"
-									onclick={() => removeHreflang(i)}
-								>
-									<Trash2 size={14} strokeWidth={1.75} />
-								</button>
-							</div>
-						{/each}
-					{/if}
-				</div>
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Hreflang
+				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Hreflang strategy + per-locale alternates are configured under
+					<a href="./general" class="text-accent underline-offset-2 hover:underline">
+						General -> Languages and hreflang
+					</a>
+					. The builder emits self-ref + counterpart links automatically when
+					sister pages exist (e.g. /about and /sv/about both published).
+				</p>
 			</Card>
 
 			<Card padding="md">
