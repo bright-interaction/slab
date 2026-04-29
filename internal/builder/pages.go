@@ -304,6 +304,223 @@ func renderComponentBlock(name string, data map[string]any) string {
 }
 
 func renderDataBlock(blockType string, data map[string]any) string {
+	switch blockType {
+	case "hero":
+		return renderHeroBlock(data)
+	case "feature_grid":
+		return renderFeatureGridBlock(data)
+	case "text":
+		return renderTextBlock(data)
+	case "cta":
+		return renderCTABlock(data)
+	case "image":
+		return renderImageBlock(data)
+	case "quote":
+		return renderQuoteBlock(data)
+	default:
+		return renderGenericBlock(blockType, data)
+	}
+}
+
+func dataString(data map[string]any, key string) string {
+	if v, ok := data[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// renderTextParagraphs splits a multi-line text body on blank lines and emits
+// one <p> per paragraph. Single-line breaks within a paragraph become <br>
+// so authored line wraps survive without inflating paragraph count.
+func renderTextParagraphs(b *strings.Builder, text string) {
+	for _, para := range strings.Split(strings.TrimSpace(text), "\n\n") {
+		para = strings.TrimSpace(para)
+		if para == "" {
+			continue
+		}
+		lines := strings.Split(para, "\n")
+		var inner strings.Builder
+		for i, ln := range lines {
+			if i > 0 {
+				inner.WriteString("<br>")
+			}
+			inner.WriteString(escapeHTML(strings.TrimSpace(ln)))
+		}
+		b.WriteString(fmt.Sprintf("    <p>%s</p>\n", inner.String()))
+	}
+}
+
+func renderHeroBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--hero\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if headline := dataString(data, "headline"); headline != "" {
+		b.WriteString(fmt.Sprintf("    <h1>%s</h1>\n", escapeHTML(headline)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	if imageID := dataString(data, "image_id"); imageID != "" {
+		alt := dataString(data, "image_alt")
+		if alt == "" {
+			alt = dataString(data, "headline")
+		}
+		b.WriteString(fmt.Sprintf("    <img src=\"/media/%s\" alt=\"%s\" />\n",
+			escapeAttr(imageID), escapeAttr(alt)))
+	}
+	ctaText := dataString(data, "cta_text")
+	if ctaText != "" {
+		ctaURL := dataString(data, "cta_url")
+		if ctaURL == "" {
+			ctaURL = "#"
+		}
+		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
+			escapeURL(ctaURL), escapeHTML(ctaText)))
+	}
+	if secLabel := dataString(data, "secondary_label"); secLabel != "" {
+		secURL := dataString(data, "secondary_url")
+		if secURL == "" {
+			secURL = "#"
+		}
+		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-secondary\">%s</a>\n",
+			escapeURL(secURL), escapeHTML(secLabel)))
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+func renderFeatureGridBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--feature_grid\">\n")
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	if itemsRaw, ok := data["items"].([]any); ok && len(itemsRaw) > 0 {
+		b.WriteString("    <ul class=\"feature-grid\">\n")
+		for _, it := range itemsRaw {
+			item, ok := it.(map[string]any)
+			if !ok {
+				continue
+			}
+			b.WriteString("      <li class=\"feature-grid-item\">\n")
+			if title := dataString(item, "title"); title != "" {
+				b.WriteString(fmt.Sprintf("        <h3>%s</h3>\n", escapeHTML(title)))
+			}
+			if body := dataString(item, "body"); body != "" {
+				b.WriteString(fmt.Sprintf("        <p>%s</p>\n", escapeHTML(body)))
+			}
+			b.WriteString("      </li>\n")
+		}
+		b.WriteString("    </ul>\n")
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+func renderTextBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--text\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	if text := dataString(data, "text"); text != "" {
+		renderTextParagraphs(&b, text)
+	}
+	if ctaText := dataString(data, "cta_text"); ctaText != "" {
+		ctaURL := dataString(data, "cta_url")
+		if ctaURL == "" {
+			ctaURL = "#"
+		}
+		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
+			escapeURL(ctaURL), escapeHTML(ctaText)))
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+func renderCTABlock(data map[string]any) string {
+	var b strings.Builder
+	variant := dataString(data, "variant")
+	if variant == "" {
+		variant = "primary"
+	}
+	b.WriteString(fmt.Sprintf("  <section class=\"block block--cta block--cta-%s\">\n", escapeAttr(variant)))
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if text := dataString(data, "text"); text != "" {
+		b.WriteString(fmt.Sprintf("    <p>%s</p>\n", escapeHTML(text)))
+	}
+	if ctaText := dataString(data, "cta_text"); ctaText != "" {
+		ctaURL := dataString(data, "cta_url")
+		if ctaURL == "" {
+			ctaURL = "#"
+		}
+		btnClass := "btn-primary"
+		if variant == "secondary" {
+			btnClass = "btn-secondary"
+		}
+		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"%s\">%s</a>\n",
+			escapeURL(ctaURL), btnClass, escapeHTML(ctaText)))
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+func renderImageBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--image\">\n")
+	imageID := dataString(data, "image_id")
+	alt := dataString(data, "alt")
+	if imageID != "" {
+		// Width/height attributes prevent CLS when the surrounding layout
+		// reserves the box. Optional in the schema; emit only when set.
+		widthAttr := ""
+		heightAttr := ""
+		if w, ok := data["width"].(string); ok && w != "" {
+			widthAttr = fmt.Sprintf(" width=\"%s\"", escapeAttr(w))
+		}
+		if h, ok := data["height"].(string); ok && h != "" {
+			heightAttr = fmt.Sprintf(" height=\"%s\"", escapeAttr(h))
+		}
+		b.WriteString(fmt.Sprintf("    <img src=\"/media/%s\" alt=\"%s\"%s%s loading=\"lazy\" />\n",
+			escapeAttr(imageID), escapeAttr(alt), widthAttr, heightAttr))
+	}
+	if caption := dataString(data, "caption"); caption != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"caption\">%s</p>\n", escapeHTML(caption)))
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+func renderQuoteBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--quote\">\n")
+	if quote := dataString(data, "quote"); quote != "" {
+		b.WriteString(fmt.Sprintf("    <blockquote><p>%s</p></blockquote>\n", escapeHTML(quote)))
+	}
+	if attribution := dataString(data, "attribution"); attribution != "" {
+		b.WriteString(fmt.Sprintf("    <cite>%s</cite>\n", escapeHTML(attribution)))
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// renderGenericBlock is the fallback for unknown block types and the legacy
+// shape used by tests that pass arbitrary data shapes through. Renders the
+// lowest-common-denominator fields (heading / subheading / text / cta).
+func renderGenericBlock(blockType string, data map[string]any) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("  <section class=\"block block--%s\">\n", escapeAttr(blockType)))
 
