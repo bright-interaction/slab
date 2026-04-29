@@ -157,7 +157,7 @@
 	}
 </script>
 
-<div class="mx-auto max-w-3xl px-6 py-8">
+<div class="mx-auto max-w-7xl px-6 py-8">
 	<header class="flex items-start justify-between gap-4">
 		<div class="flex flex-col gap-1.5">
 			<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
