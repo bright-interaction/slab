@@ -7,9 +7,13 @@
 	type EditableBlock = Block & { _localId: string };
 
 	let {
+		siteID,
+		pageID,
 		initialBlocks,
 		onChange
 	}: {
+		siteID: string;
+		pageID: string;
 		initialBlocks: Block[];
 		onChange?: (state: { blocks: Block[]; dirty: boolean }) => void;
 	} = $props();
@@ -196,6 +200,8 @@
 		{#each blocks as block (block._localId)}
 			<BlockCard
 				{block}
+				{siteID}
+				{pageID}
 				expanded={expandedId === block._localId}
 				dragging={draggingId === block._localId}
 				onToggleExpanded={() => toggleExpanded(block._localId)}

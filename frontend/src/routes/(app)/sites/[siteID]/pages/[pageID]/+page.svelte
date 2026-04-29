@@ -12,7 +12,9 @@
 	import { confirm } from '$lib/components/ui/ConfirmDialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import BlockEditor from '$lib/components/pages/BlockEditor.svelte';
-	import { ChevronDown, ArrowLeft } from 'lucide-svelte';
+	import PageSourceDialog from '$lib/components/pages/PageSourceDialog.svelte';
+	import TextMode from '$lib/components/pages/TextMode.svelte';
+	import { ChevronDown, ArrowLeft, Code, Type, LayoutPanelTop } from 'lucide-svelte';
 	import type { Block, Page } from '$lib/api/types';
 
 	const siteID = $derived(pageState.params.siteID as string);
@@ -55,6 +57,14 @@
 		getBlocks: () => Block[];
 		syncFrom: (next: Block[]) => void;
 	} | null>(null);
+
+	// Editing surface. "Blocks" is the canonical full editor, "Text" is the
+	// content-writer view (inline-editable text fields per block, autosave on
+	// blur). The </> source dialog is opened on demand and works in both.
+	let editorMode = $state<'blocks' | 'text'>('blocks');
+	let sourceOpen = $state(false);
+	// Per-block inline-text save state for the Text Mode UI. Keyed by block id.
+	let textSaving = $state<Record<string, boolean>>({});
 
 	const layoutOptions = [
 		{ value: 'default', label: 'Default' },
@@ -209,6 +219,40 @@
 		}
 	}
 
+	// Inline-text save from the Text Mode surface. PATCHes a single field on
+	// a block's data_json and reflects the result back into local state so
+	// the BlockEditor sees the same value if the user toggles back. Targets
+	// the existing PATCH /api/sites/{id}/pages/{id}/blocks/{id} endpoint,
+	// no new mutation API is needed.
+	async function handleTextField(blockID: string, fieldKey: string, nextValue: string) {
+		const current = blocks.find((b) => b.id === blockID);
+		if (!current) return;
+		const data = (() => {
+			try {
+				const v = JSON.parse(current.data_json || '{}');
+				return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+			} catch {
+				return {} as Record<string, unknown>;
+			}
+		})();
+		const previous = typeof data[fieldKey] === 'string' ? (data[fieldKey] as string) : '';
+		if (nextValue === previous) return;
+		const nextData = { ...data, [fieldKey]: nextValue };
+		textSaving = { ...textSaving, [blockID]: true };
+		try {
+			const updated = await blocksApi.update(siteID, pageID, blockID, { data: nextData });
+			blocks = blocks.map((b) => (b.id === blockID ? updated : b));
+			editorRef?.syncFrom(blocks);
+			toast.success(`Saved ${fieldKey}`);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to save text');
+		} finally {
+			const next = { ...textSaving };
+			delete next[blockID];
+			textSaving = next;
+		}
+	}
+
 	async function discardBlocks() {
 		if (!editorState.dirty) return;
 		const ok = await confirm({
@@ -307,6 +351,14 @@
 				</div>
 			</div>
 			<div class="flex shrink-0 items-center gap-2">
+				<Button
+					variant="ghost"
+					onclick={() => (sourceOpen = true)}
+					title="View the rendered .astro source for this page"
+				>
+					<Code class="mr-1 h-3.5 w-3.5" />
+					View source
+				</Button>
 				<Button
 					variant="ghost"
 					disabled={!editorState.dirty || saving}
@@ -416,20 +468,61 @@
 		</section>
 
 		<section class="mt-8">
-			<div class="mb-3 flex items-baseline justify-between">
-				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Blocks</h2>
+			<div class="mb-3 flex items-baseline justify-between gap-3">
+				<div
+					role="group"
+					aria-label="Editor mode"
+					class="inline-flex items-center gap-0.5 rounded-md border border-border-light bg-bg-elevated p-0.5"
+				>
+					<button
+						type="button"
+						aria-pressed={editorMode === 'blocks'}
+						onclick={() => (editorMode = 'blocks')}
+						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {editorMode ===
+						'blocks'
+							? 'bg-bg-surface text-text-primary shadow-sm'
+							: 'text-text-muted hover:text-text-primary'}"
+					>
+						<LayoutPanelTop class="h-3.5 w-3.5" />
+						Blocks
+					</button>
+					<button
+						type="button"
+						aria-pressed={editorMode === 'text'}
+						onclick={() => (editorMode = 'text')}
+						title="Edit text fields inline. Saves on blur."
+						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {editorMode ===
+						'text'
+							? 'bg-bg-surface text-text-primary shadow-sm'
+							: 'text-text-muted hover:text-text-primary'}"
+					>
+						<Type class="h-3.5 w-3.5" />
+						Text
+					</button>
+				</div>
 				<span class="text-[11px] text-text-muted">
-					{blocks.length} block(s){editorState.dirty ? ' · unsaved' : ''}
+					{blocks.length} block(s){editorMode === 'blocks' && editorState.dirty ? ' · unsaved' : ''}
+					{#if editorMode === 'text' && Object.keys(textSaving).length > 0}
+						· saving…
+					{/if}
 				</span>
 			</div>
-			<BlockEditor
-				bind:this={editorRef}
-				initialBlocks={blocks}
-				onChange={(state) => {
-					editorState = state;
-				}}
-			/>
+			{#if editorMode === 'blocks'}
+				<BlockEditor
+					bind:this={editorRef}
+					{siteID}
+					{pageID}
+					initialBlocks={blocks}
+					onChange={(state) => {
+						editorState = state;
+					}}
+				/>
+			{:else}
+				<TextMode {blocks} onFieldChange={handleTextField} />
+			{/if}
 		</section>
 	{/if}
 </div>
+
+<PageSourceDialog bind:open={sourceOpen} {siteID} {pageID} />
 

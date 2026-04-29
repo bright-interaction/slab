@@ -51,3 +51,14 @@ export function reorder(siteID: string, sortedPageIDs: string[]): Promise<{ stat
 	const order = sortedPageIDs.map((id, idx) => ({ id, sort_order: idx }));
 	return apiPost<{ status: string }>(`/sites/${siteID}/pages/reorder`, { order });
 }
+
+export interface PagePreview {
+	page_id: string;
+	slug: string;
+	title: string;
+	astro: string;
+}
+
+export function previewSource(siteID: string, pageID: string): Promise<PagePreview> {
+	return apiGet<PagePreview>(`/sites/${siteID}/pages/${pageID}/preview`);
+}
