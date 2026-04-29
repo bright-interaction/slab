@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -65,6 +66,48 @@ type SiteContext struct {
 	// Added 2026-04-29 alongside the per-kind CSP allowlist + Security
 	// settings UI rebuild.
 	SecurityPosture SecurityPostureInfo `json:"security_posture"`
+	// I18n surfaces the multi-language story for one site: default lang,
+	// declared additional langs, the hreflang strategy, the meta-title
+	// and -description templates, and the locale prefixes that have
+	// actual published pages. Use this to author copy in the right
+	// locale, to know whether you should emit hreflang as part of a
+	// page (you don't, atomicsite does it for you), and to pick the
+	// right slug prefix when creating a page in a non-default locale.
+	I18n I18nInfo `json:"i18n"`
+}
+
+// I18nInfo is the agent-facing summary of the site's multi-language
+// configuration. Read-only context; the agent writes general /
+// additional_langs / seo.hreflang_strategy via PATCH /api/agent/settings
+// (general + seo categories are agent-writable).
+type I18nInfo struct {
+	// DefaultLang is the site's primary language (sites.lang). Pages
+	// without a /<lang>/ prefix in their slug belong to this locale.
+	DefaultLang string `json:"default_lang"`
+	// AdditionalLangs is the operator-declared CSV expanded into the
+	// list of other languages the site publishes (general.additional_langs).
+	AdditionalLangs []string `json:"additional_langs"`
+	// Strategy is "path" (default), "subdomain", or "off". Atomicsite
+	// optimizes for path-based; subdomain is opt-in for sites already
+	// running sv.example.com etc; off disables hreflang emission.
+	Strategy string `json:"hreflang_strategy"`
+	// LocaleRoots are the actual locale prefixes that have published
+	// pages right now (e.g. ["", "/sv"] when /about + /sv/about exist).
+	// Use this to pick the right slug prefix when creating a page in a
+	// new locale: append the lang code to the prefix list with a slash.
+	LocaleRoots []string `json:"locale_roots"`
+	// MetaTitleTemplate is seo.meta_title_template applied to every
+	// page that doesn't override its own meta_title. Tokens:
+	// {page_title}, {site_name}, {lang}, {page_description},
+	// {separator}.
+	MetaTitleTemplate string `json:"meta_title_template"`
+	// MetaDescriptionTemplate is seo.meta_description_template; same
+	// tokens as MetaTitleTemplate.
+	MetaDescriptionTemplate string `json:"meta_description_template"`
+	// CanonicalBase overrides the default https://{domain}. Useful when
+	// the public URL differs from the build's domain (CDN, sub-path
+	// proxy).
+	CanonicalBase string `json:"canonical_base"`
 }
 
 // SecurityPostureInfo is the agent-facing summary of the security
@@ -521,7 +564,78 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		BlockSchemas:     defaultBlockSchemas(),
 		EditingModes:     defaultEditingModes(),
 		SecurityPosture:  b.computeSecurityPosture(ctx, siteID),
+		I18n:             b.computeI18n(ctx, siteID, site, pageInfos),
 	}, nil
+}
+
+// computeI18n surfaces the multi-language config for one site. Reads
+// sites.lang, settings (general.additional_langs, seo.hreflang_strategy,
+// seo.meta_title_template, seo.meta_description_template,
+// seo.canonical_base), then derives the actual published locale roots
+// from the page list so the agent knows which language paths are live.
+func (b *ContextBuilder) computeI18n(ctx context.Context, siteID string, site store.Site, pages []PageInfo) I18nInfo {
+	settings, _ := b.queries.ListSettingsBySite(ctx, siteID)
+	sm := make(map[string]string, len(settings))
+	for _, s := range settings {
+		sm[s.Category+"."+s.Key] = s.Value
+	}
+
+	defaultLang := strings.ToLower(strings.TrimSpace(site.Lang))
+	if defaultLang == "" {
+		defaultLang = "en"
+	}
+
+	addl := []string{}
+	seen := map[string]bool{defaultLang: true}
+	for _, raw := range strings.Split(sm["general.additional_langs"], ",") {
+		l := strings.ToLower(strings.TrimSpace(raw))
+		if l == "" || seen[l] {
+			continue
+		}
+		seen[l] = true
+		addl = append(addl, l)
+	}
+
+	strategy := strings.ToLower(strings.TrimSpace(sm["seo.hreflang_strategy"]))
+	switch strategy {
+	case "path", "subdomain", "off":
+	default:
+		strategy = "path"
+	}
+
+	// Derive actual locale roots from the published-page slugs. Default
+	// locale root is "" (root). Each /<lang>/ prefix that has at least
+	// one published page becomes a root.
+	rootSet := map[string]bool{"": true}
+	knownLangs := map[string]bool{defaultLang: true}
+	for _, l := range addl {
+		knownLangs[l] = true
+	}
+	for _, p := range pages {
+		s := strings.TrimPrefix(p.Slug, "/")
+		if s == "" {
+			continue
+		}
+		first := strings.ToLower(strings.SplitN(s, "/", 2)[0])
+		if knownLangs[first] {
+			rootSet["/"+first] = true
+		}
+	}
+	roots := make([]string, 0, len(rootSet))
+	for r := range rootSet {
+		roots = append(roots, r)
+	}
+	sort.Strings(roots)
+
+	return I18nInfo{
+		DefaultLang:             defaultLang,
+		AdditionalLangs:         addl,
+		Strategy:                strategy,
+		LocaleRoots:             roots,
+		MetaTitleTemplate:       sm["seo.meta_title_template"],
+		MetaDescriptionTemplate: sm["seo.meta_description_template"],
+		CanonicalBase:           sm["seo.canonical_base"],
+	}
 }
 
 // computeSecurityPosture builds the agent-facing security summary. Reads
@@ -633,6 +747,9 @@ func defaultEndpoints() EndpointsInfo {
 		Security: []EndpointInfo{
 			{Method: "GET", Path: "/api/agent/security/preview", Use: "Returns the resolved security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, COEP) the next build will emit. Use to verify a CSP includes the host you need before recommending a content change to the user."},
 			{Method: "GET", Path: "/api/agent/settings/security", Use: "Read-only view of the security category settings (HSTS, CSP toggles, frame_ancestors, csp_extra_directives, COOP/CORP/COEP). Writes here stay admin-only because they widen attack surface."},
+			{Method: "GET", Path: "/api/agent/settings/general", Use: "Read general-category settings (default_lang, additional_langs, domain_aliases). Writes via PATCH /api/agent/settings."},
+			{Method: "GET", Path: "/api/agent/settings/seo", Use: "Read seo-category settings (meta_title_template, meta_description_template, canonical_base, hreflang_strategy, robots_txt override, llms_txt override, same_as, logo_url). Writes via PATCH /api/agent/settings."},
+			{Method: "PATCH", Path: "/api/agent/settings", Use: "Bulk upsert. seo + general + analytics are agent-writable; security + allowed-scripts + nginx + danger reject silently and the response carries rejected_admin_only."},
 		},
 		TrustedDomains: []EndpointInfo{
 			{Method: "GET", Path: "/api/agent/allowed-scripts", Use: "Read the trusted-domain rows that feed CSP. Each row has a kind (script | frame | image | media | connect | all). Use this to detect 'is cal.com already trusted?' before asking the user to add it. Mutations are admin-only at /api/sites/{id}/allowed-scripts (UI: /sites/{id}/settings/allowed-scripts)."},

@@ -316,6 +316,43 @@ Adding a domain widens the attack surface, so writes are admin-only at /sites/{i
 
 Don't try to manually re-author these as page blocks. The agent should point the user at Settings -> Profile / SEO / Security to influence what gets emitted instead of writing the files directly.`,
 	},
+	{
+		Category: "seo",
+		Title:    "Multi-language sites: hreflang strategy + locale path conventions",
+		Content: `Atomicsite supports three multi-language strategies, picked via the seo.hreflang_strategy setting in Settings -> General:
+
+- "path" (default, recommended): every locale lives at /<lang>/<slug>; default language sits at root. Atomicsite emits <link rel="alternate" hreflang="X" href="..."> automatically when a page has counterparts in other locales (e.g. /about + /sv/about). One domain, one cert.
+- "subdomain": for sites already running sv.example.com / de.example.com separately. Atomicsite trusts the operator's general.additional_langs CSV; you handle the per-subdomain DNS + TLS. Hreflang URLs use the <lang>.<host> pattern.
+- "off": disables hreflang emission entirely. Use only when you're managing hreflang from a custom layout.
+
+Authoring convention for path mode (the common case): a page in Swedish lives at slug "/sv/about". The shared identity is "/about"; atomicsite strips the locale prefix, looks for "/about" (English / default) and "/de/about" etc, then emits hreflang to whatever counterparts actually exist. Counterparts that aren't published get no link — never link to a 404.
+
+When the user asks for a translated page:
+1. Read i18n.default_lang + i18n.additional_langs to see which locales are declared.
+2. If the target lang isn't in additional_langs, ask the user to add it via PATCH /api/agent/settings (general.additional_langs is agent-writable).
+3. Create the page at slug "/<lang>/<shared>" matching the existing default-lang page's slug.
+4. The next build automatically wires hreflang on both pages. You don't author <link rel="alternate"> in page blocks; atomicsite does it for you.
+
+x-default points at the default-lang version automatically when one exists.`,
+	},
+	{
+		Category: "seo",
+		Title:    "Meta title and description templates",
+		Content: `seo.meta_title_template + seo.meta_description_template (both in Settings -> General -> Meta defaults) apply to every page that doesn't override its own meta_title / meta_description. Templates support these tokens:
+
+- {page_title}: the page's title (or meta_title if set)
+- {page_description}: the page's meta_description
+- {site_name}: from sites.name
+- {lang}: the page's language code
+- {separator}: defaults to "|"
+
+Common patterns:
+- "{page_title} | {site_name}"  →  "About us | Acme"
+- "{site_name}: {page_title}"   →  "Acme: About us"
+- "{page_title} ({lang})"       →  "About us (en)"
+
+Empty tokens collapse with adjacent " | " runs so a missing site_name doesn't leave a trailing pipe. The agent should patch seo.meta_title_template at /api/agent/settings (seo is agent-writable) when the user asks for a site-wide title pattern; per-page overrides go on the page row's meta_title field via PATCH /api/agent/pages/{slug}.`,
+	},
 }
 
 // SeedReferenceKnowledgebase seeds the brightinteraction.com-derived

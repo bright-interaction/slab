@@ -41,6 +41,24 @@
 	let canonicalBase = $state('');
 	let domainAliases = $state('');
 	let additionalLangs = $state('');
+	let hreflangStrategy = $state<'path' | 'subdomain' | 'off'>('path');
+
+	const hreflangOptions = [
+		{ value: 'path', label: 'Path-based (/sv/about, /de/about)' },
+		{ value: 'subdomain', label: 'Subdomain (sv.example.com/about)' },
+		{ value: 'off', label: 'Off (no hreflang emission)' }
+	];
+
+	const strategyHint = $derived.by(() => {
+		switch (hreflangStrategy) {
+			case 'path':
+				return 'Recommended. Each language sits at /<lang>/<slug>; default language at root. Atomicsite emits hreflang automatically when a page has counterparts in other locales (e.g. /about + /sv/about both published). One domain, one cert, no DNS work.';
+			case 'subdomain':
+				return 'For sites already running sv.example.com / de.example.com separately. Atomicsite trusts your additional_langs list; you handle the DNS + TLS per subdomain. Hreflang URLs use the <lang>.<host> pattern.';
+			case 'off':
+				return 'Disable hreflang emission entirely. Use only if you manage hreflang from a custom layout or your site is single-language and you want to be explicit.';
+		}
+	});
 
 	let initial = $state({
 		name: '',
@@ -50,7 +68,8 @@
 		metaDescriptionTemplate: '',
 		canonicalBase: '',
 		domainAliases: '',
-		additionalLangs: ''
+		additionalLangs: '',
+		hreflangStrategy: 'path' as 'path' | 'subdomain' | 'off'
 	});
 
 	async function load() {
@@ -72,6 +91,11 @@
 			canonicalBase = seoMap.canonical_base || '';
 			domainAliases = genMap.domain_aliases || '';
 			additionalLangs = genMap.additional_langs || '';
+			const strat = (seoMap.hreflang_strategy || 'path') as
+				| 'path'
+				| 'subdomain'
+				| 'off';
+			hreflangStrategy = ['path', 'subdomain', 'off'].includes(strat) ? strat : 'path';
 
 			initial = {
 				name,
@@ -81,7 +105,8 @@
 				metaDescriptionTemplate,
 				canonicalBase,
 				domainAliases,
-				additionalLangs
+				additionalLangs,
+				hreflangStrategy
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -102,7 +127,8 @@
 			metaDescriptionTemplate !== initial.metaDescriptionTemplate ||
 			canonicalBase !== initial.canonicalBase ||
 			domainAliases !== initial.domainAliases ||
-			additionalLangs !== initial.additionalLangs
+			additionalLangs !== initial.additionalLangs ||
+			hreflangStrategy !== initial.hreflangStrategy
 	);
 
 	function discard() {
@@ -114,7 +140,36 @@
 		canonicalBase = initial.canonicalBase;
 		domainAliases = initial.domainAliases;
 		additionalLangs = initial.additionalLangs;
+		hreflangStrategy = initial.hreflangStrategy;
 	}
+
+	// Live preview of how the meta-title template renders with a sample
+	// page. Uses the same {token} substitution the builder applies; empty
+	// tokens collapse along with adjacent separators.
+	function expandPreview(tpl: string, fallback: string): string {
+		if (!tpl.trim()) return fallback;
+		const vars: Record<string, string> = {
+			'{page_title}': 'About us',
+			'{page_description}': 'Who we are and what we do',
+			'{site_name}': name || 'Site name',
+			'{lang}': lang || 'en',
+			'{separator}': '|'
+		};
+		let out = tpl;
+		for (const [k, v] of Object.entries(vars)) {
+			out = out.split(k).join(v);
+		}
+		// Collapse empty separator runs left over by missing tokens.
+		out = out.replace(/\s*\|\s*\|\s*/g, ' | ');
+		out = out.replace(/^\s*\|\s*|\s*\|\s*$/g, '');
+		out = out.replace(/\s+/g, ' ').trim();
+		return out || fallback;
+	}
+
+	const titlePreview = $derived(expandPreview(metaTitleTemplate, 'About us'));
+	const descPreview = $derived(
+		expandPreview(metaDescriptionTemplate, 'Who we are and what we do')
+	);
 
 	async function save() {
 		if (saving || !dirty) return;
@@ -135,6 +190,7 @@
 				{ category: 'seo', key: 'meta_title_template', value: metaTitleTemplate },
 				{ category: 'seo', key: 'meta_description_template', value: metaDescriptionTemplate },
 				{ category: 'seo', key: 'canonical_base', value: canonicalBase },
+				{ category: 'seo', key: 'hreflang_strategy', value: hreflangStrategy },
 				{ category: 'general', key: 'domain_aliases', value: domainAliases },
 				{ category: 'general', key: 'additional_langs', value: additionalLangs },
 				{ category: 'general', key: 'default_lang', value: lang }
@@ -149,7 +205,8 @@
 				metaDescriptionTemplate,
 				canonicalBase,
 				domainAliases,
-				additionalLangs
+				additionalLangs,
+				hreflangStrategy
 			};
 			toast.success('General settings saved.');
 		} catch (err) {
@@ -187,8 +244,15 @@
 
 			<Card padding="md">
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-					Languages
+					Languages and hreflang
 				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Atomicsite optimizes for path-based multi-language by default
+					(/sv/about, /de/about). Subdomain mode is opt-in for sites that
+					already run sv.example.com. TLD-per-locale (example.se,
+					example.de) is handled as separate sites linked together; that
+					setup lives outside this page.
+				</p>
 				<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
 					<div class="flex flex-col gap-1.5">
 						<label for="lang" class="text-[12px] font-medium text-text-secondary">
@@ -199,9 +263,20 @@
 					<Input
 						label="Additional languages"
 						placeholder="sv,de,fr"
-						hint="Comma-separated list of language codes."
+						hint="Comma-separated language codes (sv, de, fr). Pages whose slug starts with /<lang>/ are treated as that language's locale."
 						bind:value={additionalLangs}
 					/>
+					<div class="flex flex-col gap-1.5 sm:col-span-2">
+						<span class="text-[12px] font-medium text-text-secondary">
+							Hreflang strategy
+						</span>
+						<Select
+							options={hreflangOptions}
+							value={hreflangStrategy}
+							onchange={(v) => (hreflangStrategy = v as 'path' | 'subdomain' | 'off')}
+						/>
+						<p class="text-[11px] text-text-muted">{strategyHint}</p>
+					</div>
 				</div>
 			</Card>
 
@@ -209,23 +284,43 @@
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 					Meta defaults
 				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Templates apply to every page that doesn't override its own meta.
+					Leave empty to use the page-level value verbatim. Tokens:
+					<code class="font-mono text-[11px]">{'{page_title}'}</code>,
+					<code class="font-mono text-[11px]">{'{site_name}'}</code>,
+					<code class="font-mono text-[11px]">{'{lang}'}</code>,
+					<code class="font-mono text-[11px]">{'{page_description}'}</code>,
+					<code class="font-mono text-[11px]">{'{separator}'}</code>. Empty
+					tokens drop with adjacent
+					<code class="font-mono text-[11px]">|</code>
+					so a missing site_name doesn't leave a trailing pipe.
+				</p>
 				<div class="mt-4 flex flex-col gap-4">
-					<Input
-						label="Meta title template"
-						placeholder={'{page_title} | {site_name}'}
-						hint={'Tokens. {page_title}, {site_name}, {lang}.'}
-						bind:value={metaTitleTemplate}
-					/>
-					<Input
-						label="Meta description template"
-						placeholder={'{page_description}'}
-						hint="Falls back to page-level description if empty."
-						bind:value={metaDescriptionTemplate}
-					/>
+					<div class="flex flex-col gap-1.5">
+						<Input
+							label="Meta title template"
+							placeholder={'{page_title} | {site_name}'}
+							bind:value={metaTitleTemplate}
+						/>
+						<p class="rounded-md border border-border-light bg-bg-elevated/50 px-3 py-2 font-mono text-[11.5px] text-text-secondary">
+							Preview: <span class="text-text-primary">{titlePreview}</span>
+						</p>
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<Input
+							label="Meta description template"
+							placeholder={'{page_description}'}
+							bind:value={metaDescriptionTemplate}
+						/>
+						<p class="rounded-md border border-border-light bg-bg-elevated/50 px-3 py-2 font-mono text-[11.5px] text-text-secondary">
+							Preview: <span class="text-text-primary">{descPreview}</span>
+						</p>
+					</div>
 					<Input
 						label="Canonical base"
 						placeholder="https://example.com"
-						hint="Used to build canonical URLs at build time."
+						hint="Override the default URL prefix (https://your primary domain). Useful when the public URL differs from the build's domain (CDN, sub-path proxy, staging vs prod)."
 						bind:value={canonicalBase}
 					/>
 				</div>

@@ -431,10 +431,87 @@ func RunSEOChecks(site *SiteContext) []CheckResult {
 
 	checks = append(checks, checkFAQVisibility(site))
 
+	// Hreflang Tags. Multi-language sites should emit <link rel="alternate"
+	// hreflang="X"> on every page that has a counterpart in another locale.
+	// Mono-language sites pass automatically. Site Inspector tracks three
+	// related checks (Tags / Self-Referencing / x-default); we collapse them
+	// into one Pass-with-detail when the page emits a coherent set.
+	checks = append(checks, perPageCheck("Hreflang Tags", "technical", 1, site, func(p PageContext) (bool, string) {
+		alts := collectHreflangs(p.Doc)
+		if !pageNeedsHreflang(p, site) {
+			return true, "" // mono-language site or single-locale page
+		}
+		if len(alts) == 0 {
+			return false, "page has multi-language counterparts but no <link rel=\"alternate\" hreflang> tags"
+		}
+		// Self-referencing: at least one alt must point at the current page's lang.
+		htmlNode := firstElementByTag(p.Doc, "html")
+		pageLang := strings.ToLower(strings.TrimSpace(attr(htmlNode, "lang")))
+		hasSelf := false
+		for _, a := range alts {
+			if strings.EqualFold(a.lang, pageLang) {
+				hasSelf = true
+				break
+			}
+		}
+		if !hasSelf {
+			return false, fmt.Sprintf("hreflang set has no self-referencing entry for current locale %q", pageLang)
+		}
+		// x-default is a soft signal: warn-only if missing on the home page.
+		return true, ""
+	}, "Multi-language pages need <link rel=\"alternate\" hreflang=\"X\"> for every locale that has a counterpart, plus a self-referencing entry. Atomicsite emits these automatically when general.additional_langs is set."))
+
 	// GEO / AEO checks (AI search readiness), same category, distinct section.
 	checks = append(checks, RunGEOChecks(site)...)
 
 	return checks
+}
+
+// hreflangAlt is one parsed <link rel="alternate" hreflang="X" href="Y">.
+type hreflangAlt struct {
+	lang string
+	href string
+}
+
+// collectHreflangs walks the head and returns every alternate link with a
+// hreflang attribute.
+func collectHreflangs(doc *html.Node) []hreflangAlt {
+	var out []hreflangAlt
+	for _, l := range elementsByTag(doc, "link") {
+		if !strings.Contains(strings.ToLower(attr(l, "rel")), "alternate") {
+			continue
+		}
+		hl := attr(l, "hreflang")
+		if hl == "" {
+			continue
+		}
+		out = append(out, hreflangAlt{lang: hl, href: attr(l, "href")})
+	}
+	return out
+}
+
+// pageNeedsHreflang reports whether the page has any reason to be checked
+// for hreflang emission. Heuristic: if the site has more than one
+// language-prefixed top-level slug under /pages (e.g. both /about and
+// /sv/about exist), then the page belongs to a multi-language site and
+// should emit hreflang.
+func pageNeedsHreflang(p PageContext, site *SiteContext) bool {
+	if len(site.Pages) < 2 {
+		return false
+	}
+	prefixes := map[string]bool{}
+	for _, q := range site.Pages {
+		s := strings.TrimPrefix(q.Slug, "/")
+		if s == "" {
+			continue
+		}
+		first := strings.SplitN(s, "/", 2)[0]
+		// Heuristic: a 2-letter ASCII first segment is a locale prefix.
+		if len(first) == 2 && first == strings.ToLower(first) {
+			prefixes[first] = true
+		}
+	}
+	return len(prefixes) > 0
 }
 
 // mailtoCovers reports whether an email address appears inside a

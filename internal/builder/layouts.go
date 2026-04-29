@@ -49,6 +49,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("  ogImage?: string;\n")
 	b.WriteString("  robots?: string;\n")
 	b.WriteString("  hideGlobalBlocks?: boolean;\n")
+	b.WriteString("  alternates?: Array<{ lang: string; url: string }>;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("const {\n")
 	b.WriteString(fmt.Sprintf("  title = '%s',\n", escapeAstroString(site.MetaTitle)))
@@ -56,6 +57,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString(fmt.Sprintf("  ogImage = '%s',\n", site.OgImageID))
 	b.WriteString("  robots = 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',\n")
 	b.WriteString("  hideGlobalBlocks = false,\n")
+	b.WriteString("  alternates = [],\n")
 	b.WriteString("} = Astro.props;\n")
 
 	// Compute canonical
@@ -77,6 +79,14 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("  {description && <meta name=\"description\" content={description} />}\n")
 	b.WriteString("  <meta name=\"robots\" content={robots} />\n")
 	b.WriteString("  <link rel=\"canonical\" href={canonicalURL.href} />\n")
+	// Hreflang alternates. Per-page array passed in by renderPage; mono-
+	// language sites receive [] and the JSX expression renders nothing.
+	// Each entry maps to a <link rel="alternate" hreflang="X" href="Y" />.
+	// Site Inspector's seo checks (Hreflang Tags + Self-Referencing +
+	// x-default) cover this output.
+	b.WriteString("  {alternates && alternates.map((a) => (\n")
+	b.WriteString("    <link rel=\"alternate\" hreflang={a.lang} href={a.url} />\n")
+	b.WriteString("  ))}\n")
 	// Favicon + Apple Touch Icon for site-inspector parity. Emitted unconditionally;
 	// browsers degrade silently if /favicon.ico or /apple-touch-icon.png is missing.
 	// The Media library's `folder=brand` is the intended home for these files.
