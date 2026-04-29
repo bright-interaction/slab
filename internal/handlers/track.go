@@ -13,6 +13,7 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/crmsync"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	"github.com/brightinteraction/atomicsite/internal/sharedsecret"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -61,6 +62,11 @@ type TrackHandler struct {
 	db        *sql.DB
 	crmClient *crmsync.Client
 	crmThrot  *crmsync.Throttler
+	// inboundVerifier is shared across every /t/inbound request and held as
+	// a long-lived pointer so the /admin/reload-secrets handler can hot-swap
+	// the primary + secondary HMAC values when Dockyard rotates the shared
+	// secret. Callers obtain it via InboundVerifier().
+	inboundVerifier *sharedsecret.Verifier
 }
 
 // NewTrackHandler builds a TrackHandler. The CRM sync client and throttler
@@ -68,13 +74,22 @@ type TrackHandler struct {
 // BRIGHTCRM_WEBHOOK_SECRET are unset.
 func NewTrackHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *TrackHandler {
 	return &TrackHandler{
-		cfg:       cfg,
-		queries:   queries,
-		db:        db,
-		crmClient: crmsync.NewClient(cfg.BrightCRMWebhookURL, cfg.BrightCRMWebhookSecret),
-		crmThrot:  crmsync.NewThrottler(cfg.CRMSyncMinInterval),
+		cfg:             cfg,
+		queries:         queries,
+		db:              db,
+		crmClient:       crmsync.NewClient(cfg.BrightCRMWebhookURL, cfg.BrightCRMWebhookSecret),
+		crmThrot:        crmsync.NewThrottler(cfg.CRMSyncMinInterval),
+		inboundVerifier: sharedsecret.NewVerifier(cfg.BrightCRMWebhookSecret, cfg.BrightCRMWebhookSecretPrevious),
 	}
 }
+
+// InboundVerifier exposes the verifier so the /admin/reload-secrets handler
+// can call its Update method during a Dockyard-driven rotation.
+func (h *TrackHandler) InboundVerifier() *sharedsecret.Verifier { return h.inboundVerifier }
+
+// CRMClient exposes the outbound HMAC client so /admin/reload-secrets can
+// swap its signing secret in place.
+func (h *TrackHandler) CRMClient() *crmsync.Client { return h.crmClient }
 
 // consentRequest is the body the in-page relay POSTs to /t/consent.
 type consentRequest struct {

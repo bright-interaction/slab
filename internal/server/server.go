@@ -95,6 +95,13 @@ func (s *Server) Router() http.Handler {
 		r.Get("/t/visitor", trackH.Visitor)
 	})
 
+	// Admin reload endpoint. Dockyard's rotation engine POSTs new shared
+	// secrets here with Authorization: Bearer <ADMIN_RELOAD_TOKEN>. The
+	// handler does its own bearer check and hot-swaps the in-memory
+	// HMAC verifier + signer without restarting the container.
+	adminReloadH := handlers.NewAdminReloadHandler(s.cfg, trackH)
+	r.Post("/admin/reload-secrets", adminReloadH.ReloadSecrets)
+
 	// Auth (public)
 	ah := handlers.NewAuthHandler(s.cfg, s.queries)
 	r.Post("/api/auth/login", ah.Login)

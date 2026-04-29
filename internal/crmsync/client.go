@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ const defaultTimeout = 5 * time.Second
 // a CRM endpoint.
 type Client struct {
 	webhookURL string
+	mu         sync.RWMutex // guards secret so /admin/reload-secrets can swap
 	secret     string
 	httpClient *http.Client
 }
@@ -45,10 +47,23 @@ func NewClient(webhookURL, secret string) *Client {
 	}
 }
 
+// UpdateSecret hot-swaps the signing secret. Called by /admin/reload-secrets
+// when Dockyard rotates the shared HMAC value.
+func (c *Client) UpdateSecret(s string) {
+	c.mu.Lock()
+	c.secret = s
+	c.mu.Unlock()
+}
+
 // Enabled reports whether this Client will actually deliver events. Useful
 // for tests and for short-circuiting upstream throttling logic.
 func (c *Client) Enabled() bool {
-	return c != nil && c.webhookURL != "" && c.secret != ""
+	if c == nil || c.webhookURL == "" {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.secret != ""
 }
 
 // Send marshals event, signs it with HMAC-SHA256 (hex), and POSTs to the
@@ -64,7 +79,16 @@ func (c *Client) Send(ctx context.Context, event Event) error {
 		return fmt.Errorf("crmsync: marshal event: %w", err)
 	}
 
-	mac := hmac.New(sha256.New, []byte(c.secret))
+	// Sign with the current secret only. Rotation is coordinated by Dockyard:
+	// it pushes a new value into c.secret (via /admin/reload-secrets), the
+	// receiving end keeps the old value in its PREVIOUS slot for the grace
+	// window, in-flight requests still verify there. We never sign with the
+	// previous value once rotated. RWMutex copy snapshots the value so a
+	// concurrent UpdateSecret swap never tears.
+	c.mu.RLock()
+	currentSecret := c.secret
+	c.mu.RUnlock()
+	mac := hmac.New(sha256.New, []byte(currentSecret))
 	mac.Write(body)
 	sig := hex.EncodeToString(mac.Sum(nil))
 
