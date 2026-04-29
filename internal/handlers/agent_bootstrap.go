@@ -70,14 +70,16 @@ func (h *AgentHandler) AgentBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mint a fresh ask_<hex> key. Identical to GenerateAgentKey but we want
-	// the raw value in scope so we can embed it in the bundle.
+	// Mint a fresh atomic_<hex> key. Identical to GenerateAgentKey but we
+	// want the raw value in scope so we can embed it in the bundle.
+	// (Older keys carry the legacy ask_ prefix and still authenticate;
+	// the auth middleware hashes the raw string regardless of prefix.)
 	rawBytes := make([]byte, 32)
 	if _, err := rand.Read(rawBytes); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate key")
 		return
 	}
-	rawKey := "ask_" + hex.EncodeToString(rawBytes)
+	rawKey := "atomic_" + hex.EncodeToString(rawBytes)
 	keyHash := authmw.HashAgentKey(rawKey)
 
 	keyID := newID()

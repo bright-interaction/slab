@@ -327,8 +327,8 @@
 			</p>
 			<pre
 				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
-			>{`X-Agent-Key: ask_<hex>
-Authorization: Bearer ask_<hex>`}</pre>
+			>{`X-Agent-Key: atomic_<hex>
+Authorization: Bearer atomic_<hex>`}</pre>
 			<p class="mt-3 text-[13px] text-text-secondary">
 				Smoke test:
 			</p>
