@@ -75,7 +75,7 @@ Then converge on the perfect-score checklist below. Treat each item as a hard re
    - general.hreflang_strategy = "path" (default)
    - general.additional_langs = "en,sv,..." for every locale you'll publish
    - analytics.atomicsite_tracking_enabled = "1"
-   - analytics.cookieproof_enabled = "1" if you're using CookieProof; the cookieproof_org_id can stay empty (falls back to site domain)
+   - analytics.cookieproof_enabled = "1" to ship the bundled, same-origin cookie banner; branding colors flow in automatically, banner copy and categories live in cookie_banner_title/_description/_position and cookie_cat_analytics/_marketing/_preferences
 
 == Structure ==
 4. URL convention: pick one. Either root = default lang (e.g. / + /sv/ matching brightinteraction.com) OR symmetric (/en/ + /sv/ + a noindex splash at /). Don't mix. Hreflang emission is path-based on actually-published page slugs.

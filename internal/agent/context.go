@@ -1232,7 +1232,7 @@ func (b *ContextBuilder) computePendingSetup(ctx context.Context, siteID string,
 			Category: "analytics",
 			Title:    "Add a consent banner",
 			Why:      "Tracking is on but no banner is in place. EU GDPR requires consent before non-essential tracking; failing this breaks the privacy eval and risks fines.",
-			Action:   "Either flip on CookieProof (PATCH /api/agent/settings analytics.cookieproof_enabled=1 + cookieproof_org_id) or paste a banner snippet (analytics.cookie_banner_snippet) for Cookiebot, OneTrust, Termly, etc.",
+			Action:   "Either flip on the bundled cookie banner (PATCH /api/agent/settings analytics.cookieproof_enabled=1; branding flows in automatically, copy/categories live in cookie_banner_* and cookie_cat_*) or paste a third-party snippet (analytics.cookie_banner_snippet) for Cookiebot, OneTrust, Termly, etc.",
 			Endpoint: "PATCH /api/agent/settings",
 			Severity: "required",
 		})

@@ -91,13 +91,18 @@ func (h *TrackHandler) InboundVerifier() *sharedsecret.Verifier { return h.inbou
 // swap its signing secret in place.
 func (h *TrackHandler) CRMClient() *crmsync.Client { return h.crmClient }
 
-// consentRequest is the body the in-page relay POSTs to /t/consent.
+// consentRequest is the body the embedded widget posts to /t/consent.
+// Domain is the public origin the widget reported (used for the audit row);
+// GPC is hoisted out of consent.method so the row can capture both
+// (e.g. method=reject-all + gpc=true means GPC happened to also reject all).
 type consentRequest struct {
 	SiteID    string          `json:"siteId"`
 	SessionID string          `json:"sessionId"`
+	Domain    string          `json:"domain"`
 	Consent   *consentPayload `json:"consent"`
 	Page      string          `json:"page"`
 	Referrer  string          `json:"referrer"`
+	GPC       bool            `json:"gpc"`
 }
 
 // consentPayload mirrors the detail.consent shape emitted by CookieProof's
@@ -112,10 +117,31 @@ type consentPayload struct {
 	GPC        bool            `json:"gpc"`
 }
 
-// Consent receives consent decisions from the in-page relay and updates
-// visit_sessions accordingly. Always returns 204 on success; errors that the
-// client can't act on are logged server-side and answered with 204 anyway so
-// the relay doesn't keep retrying.
+// validConsentMethods is the enum CookieProof's widget emits and tests pin
+// (see CookieProof/CLAUDE.md). Anything else is a malformed POST.
+var validConsentMethods = map[string]bool{
+	"accept-all":  true,
+	"reject-all":  true,
+	"custom":      true,
+	"gpc":         true,
+	"dns":         true,
+	"do-not-sell": true,
+}
+
+// Consent receives consent decisions from the embedded widget. Two outcomes:
+//
+//  1. Always: append a row to consent_records as the GDPR proof-of-consent
+//     log entry. Stores method, categories, version, page, hashed IP, GPC
+//     flag, and an ISO timestamp. This is the system of record after the
+//     CookieProof fold-in; the dashboard reads from this table.
+//
+//  2. If the consent payload grants analytics, lift the visit_session from
+//     anonymous to identified (existing behavior preserved).
+//
+// Returns 204 on success. Bad payloads return 400 so the widget logs and the
+// retry loop on the client doesn't churn forever. Storage failures are
+// logged but answered 204 .  the proof is best-effort and the visitor's
+// experience must not depend on our database.
 func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
 	defer r.Body.Close()
@@ -132,8 +158,22 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Site must exist. Cheap guard against random POSTs.
-	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+	site, err := h.queries.GetSiteByID(r.Context(), siteID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Unknown siteId")
+		return
+	}
+
+	// Validate consent.method against the widget's emit enum. Anything else
+	// is malformed and gets rejected so a bad client doesn't pollute the
+	// proof log with garbage methods.
+	if req.Consent == nil {
+		writeError(w, http.StatusBadRequest, "Missing consent payload")
+		return
+	}
+	method := strings.TrimSpace(req.Consent.Method)
+	if !validConsentMethods[method] {
+		writeError(w, http.StatusBadRequest, "Invalid consent method")
 		return
 	}
 
@@ -159,21 +199,70 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve the audit-row inputs. Domain falls back to the site's known
+	// domain when the widget didn't echo it. IP is hashed with the daily
+	// salt .  never stored raw.
+	auditDomain := strings.TrimSpace(req.Domain)
+	if auditDomain == "" {
+		auditDomain = strings.TrimSpace(site.CookieproofDomain)
+	}
+	if auditDomain == "" {
+		auditDomain = strings.TrimSpace(site.Domain)
+	}
+	salt, err := getOrCreateConsentSalt(r.Context(), h.queries)
+	if err != nil {
+		slog.Error("track: get consent salt", "site_id", siteID, "err", err)
+		// Still record with empty hash rather than dropping the proof.
+		salt = ""
+	}
+	ipHash := ""
+	if salt != "" {
+		ipHash = hashIPWithSalt(clientIP(r), salt)
+	}
+
+	// Append the proof. Truncate long strings defensively .  the schema
+	// columns are TEXT but we don't want anyone smuggling massive UAs.
+	categoriesJSON := encodeCategories(req.Consent.Categories)
+	gpcActive := int64(0)
+	if req.GPC || method == "gpc" {
+		gpcActive = 1
+	}
+	createdAtMs := time.Now().UTC().UnixMilli()
+	if err := h.queries.RecordConsent(r.Context(), store.RecordConsentParams{
+		ID:             newID(),
+		SiteID:         siteID,
+		SessionID:      truncateString(req.SessionID, 64),
+		Domain:         truncateString(auditDomain, 255),
+		PageUrl:        truncateString(req.Page, 2000),
+		Referrer:       truncateString(req.Referrer, 2000),
+		UserAgent:      truncateString(r.UserAgent(), 500),
+		IpHash:         ipHash,
+		ConsentMethod:  method,
+		ConsentVersion: int64(req.Consent.Version),
+		CategoriesJson: categoriesJSON,
+		GpcActive:      gpcActive,
+		CreatedAt:      createdAtMs,
+	}); err != nil {
+		slog.Error("track: record consent proof", "site_id", siteID, "err", err)
+		// Continue .  the visit-session lift below is independently useful,
+		// and we don't want the dashboard's read path to be the only thing
+		// that breaks if SQLite blips.
+	}
+
 	// If the consent payload grants analytics, lift the session to identified.
 	// "Identified" here means: we have a stable visitor_id we can stitch
 	// future visits against. Email arrives later via form submissions; we do
 	// not invent one.
-	if req.Consent != nil && req.Consent.Categories["analytics"] {
-		method := req.Consent.Method
+	if req.Consent.Categories["analytics"] {
+		liftMethod := method
 		if req.Consent.GPC {
-			method = "gpc"
+			liftMethod = "gpc"
 		}
-		categoriesJSON := encodeCategories(req.Consent.Categories)
 		visitorID := deriveVisitorID(siteID, fp)
 		if err := h.queries.IdentifyVisitSession(r.Context(), store.IdentifyVisitSessionParams{
 			VisitorID:             visitorID,
 			Email:                 "",
-			ConsentMethod:         method,
+			ConsentMethod:         liftMethod,
 			ConsentCategoriesJson: categoriesJSON,
 			IdentifiedAt:          now,
 			LastSeenAt:            now,
@@ -186,11 +275,45 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 			// contact when an email is present and otherwise drops the event;
 			// we let it decide. Fire on a goroutine so the user-facing /t/consent
 			// response never blocks on the CRM round-trip.
-			h.crmEmitIdentified(siteID, visitorID, method, req)
+			h.crmEmitIdentified(siteID, visitorID, liftMethod, req)
 		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// truncateString clamps s to maxLen runes (not bytes .  UTF-8 safe).
+func truncateString(s string, maxLen int) string {
+	if maxLen <= 0 || s == "" {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= maxLen {
+		return s
+	}
+	return string(r[:maxLen])
+}
+
+// clientIP extracts the visitor's IP from the request. Prefers
+// CF-Connecting-IP (Cloudflare) over X-Forwarded-For / RemoteAddr because
+// the fronting proxy is the only header we know not to be spoofed.
+func clientIP(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); v != "" {
+		// First entry is the closest client.
+		if idx := strings.Index(v, ","); idx != -1 {
+			return strings.TrimSpace(v[:idx])
+		}
+		return v
+	}
+	// RemoteAddr is "host:port"; strip the port.
+	addr := r.RemoteAddr
+	if i := strings.LastIndex(addr, ":"); i != -1 {
+		return addr[:i]
+	}
+	return addr
 }
 
 // crmEmitIdentified fires an identified event toward BrightCRM. It bypasses

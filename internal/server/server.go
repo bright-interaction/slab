@@ -273,6 +273,15 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/sites/{siteID}/analytics/conversion-paths", anH.AnalyticsConversionPaths)
 		r.Get("/api/sites/{siteID}/analytics/tracked-fields", anH.AnalyticsTrackedFields)
 
+		// Consent records (GDPR proof log). atomicsite became system of record
+		// for tenant consent after the CookieProof fold-in (2026-04-30); these
+		// endpoints back the dashboard's Cookies section.
+		coH := handlers.NewConsentHandler(s.cfg, s.queries)
+		r.Get("/api/sites/{siteID}/consent/records", coH.List)
+		r.Get("/api/sites/{siteID}/consent/records/{recordID}", coH.Get)
+		r.Get("/api/sites/{siteID}/consent/stats", coH.Stats)
+		r.Get("/api/sites/{siteID}/consent/export.csv", coH.ExportCSV)
+
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)
 		r.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)

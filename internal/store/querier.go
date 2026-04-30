@@ -17,9 +17,12 @@ type Querier interface {
 	AvgEngagementSince(ctx context.Context, arg AvgEngagementSinceParams) (AvgEngagementSinceRow, error)
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
+	ConsentDailyBySite(ctx context.Context, arg ConsentDailyBySiteParams) ([]ConsentDailyBySiteRow, error)
+	ConsentStatsBySite(ctx context.Context, arg ConsentStatsBySiteParams) (ConsentStatsBySiteRow, error)
 	// For every identified session, return its full path history ordered by ts.
 	// The handler groups by session_id / fingerprint to assemble the journey.
 	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
+	CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error)
 	// Distinct fingerprints in the last N minutes (caller passes the cutoff
 	// timestamp). Used for the "live now" widget.
 	CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error)
@@ -60,6 +63,8 @@ type Querier interface {
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
 	DeleteComponent(ctx context.Context, id string) error
+	DeleteConsentOlderThan(ctx context.Context, createdAt int64) error
+	DeleteConsentSaltsOlderThan(ctx context.Context, dayUtc string) error
 	DeleteDeployTarget(ctx context.Context, id string) error
 	DeleteDeployment(ctx context.Context, id string) error
 	DeleteDesignReference(ctx context.Context, arg DeleteDesignReferenceParams) error
@@ -88,6 +93,8 @@ type Querier interface {
 	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
 	GetComponentByID(ctx context.Context, id string) (Component, error)
 	GetComponentByName(ctx context.Context, arg GetComponentByNameParams) (Component, error)
+	GetConsentByID(ctx context.Context, arg GetConsentByIDParams) (ConsentRecord, error)
+	GetConsentSalt(ctx context.Context, dayUtc string) (string, error)
 	GetDeployTarget(ctx context.Context, id string) (DeployTarget, error)
 	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
 	GetDesignReference(ctx context.Context, arg GetDesignReferenceParams) (DesignReference, error)
@@ -125,6 +132,7 @@ type Querier interface {
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
 	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
+	ListConsentBySite(ctx context.Context, arg ListConsentBySiteParams) ([]ConsentRecord, error)
 	ListDeployTargetsBySite(ctx context.Context, siteID string) ([]DeployTarget, error)
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
 	ListDesignReferences(ctx context.Context, siteID string) ([]DesignReference, error)
@@ -166,9 +174,11 @@ type Querier interface {
 	PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error)
 	// Pageviews per UTC hour for the last day window. Used when range = 1d.
 	PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error)
+	RecordConsent(ctx context.Context, arg RecordConsentParams) error
 	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
+	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
 	TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error)
 	TopDevices(ctx context.Context, arg TopDevicesParams) ([]TopDevicesRow, error)
@@ -208,6 +218,7 @@ type Querier interface {
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
+	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error
