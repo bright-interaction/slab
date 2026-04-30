@@ -194,6 +194,14 @@ type DesignPlaybookInfo struct {
 	// Distilled from Bright Interaction's voice guidelines + the
 	// taste-skill content rules.
 	CopyVoice VoiceRules `json:"copy_voice"`
+
+	// StackRecommendations names the four canonical site stacks
+	// atomicsite supports: pure static Astro (default), Astro + Svelte
+	// islands (light interactivity), Astro + Svelte + headless commerce
+	// (ecom), and Astro + Svelte + Stripe Checkout (paid digital
+	// goods). Tells the agent which to pick AND which payment provider
+	// (Stripe vs Mollie) to wire based on customer geography.
+	StackRecommendations StackGuidance `json:"stack_recommendations"`
 }
 
 // DesignPrinciple is a first-principles design rule with a concrete
@@ -386,6 +394,52 @@ type VoiceRules struct {
 	Subheading []string `json:"subheading"`
 	CTA        []string `json:"cta"`
 	Forbidden  []string `json:"forbidden"`
+}
+
+// StackGuidance documents the four canonical stacks atomicsite
+// supports + a decision tree for picking one + payment-provider rules.
+type StackGuidance struct {
+	Philosophy string         `json:"philosophy"`
+	Stacks     []StackVariant `json:"stacks"`
+	Payments   PaymentRules   `json:"payments"`
+	WhenToPick []StackPick    `json:"when_to_pick"`
+}
+
+type StackVariant struct {
+	Name        string   `json:"name"`
+	Use         string   `json:"use"`
+	Composition []string `json:"composition"`
+	Constraints []string `json:"constraints"`
+	HowApplied  string   `json:"how_applied"`
+}
+
+type StackPick struct {
+	IfSiteIs string `json:"if_site_is"`
+	Pick     string `json:"pick"`
+	Why      string `json:"why"`
+}
+
+type PaymentRules struct {
+	Philosophy string             `json:"philosophy"`
+	Providers  []PaymentProvider  `json:"providers"`
+	WhenToPick []PaymentPick      `json:"when_to_pick"`
+	HowApplied string             `json:"how_applied"`
+}
+
+type PaymentProvider struct {
+	Name        string   `json:"name"`
+	BestFor     []string `json:"best_for"`
+	Strengths   []string `json:"strengths"`
+	Weaknesses  []string `json:"weaknesses"`
+	Geography   string   `json:"geography"`
+	Methods     []string `json:"methods"`
+	Pricing     string   `json:"pricing"`
+}
+
+type PaymentPick struct {
+	IfCustomerIs string `json:"if_customer_is"`
+	Pick         string `json:"pick"`
+	Why          string `json:"why"`
 }
 
 // PageTemplate is the canonical block sequence the eval engine rewards.
@@ -1280,6 +1334,22 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 					{BlockType: "text", Role: "Direct contact escape hatch", Notes: "Email + phone for visitors who don't trust forms."},
 				},
 			},
+			{
+				Name:        "Ecommerce — catalog + product detail",
+				Use:         "Selling physical/digital goods. Covers two page types: collection (catalog grid) and product (single item).",
+				Description: "Atomicsite renders the static shell — catalog grid, product hero, content. Interactive bits (cart, variant picker, search-as-you-type) ship as Svelte 5 islands via the `component` block_type pointing at registered Svelte components. Checkout is OUTSOURCED to Stripe Checkout or Mollie hosted pages — atomicsite does not handle PCI/SCA. Cart state lives in the browser (localStorage) until checkout, then the Svelte island POSTs to a Go worker that creates the Stripe/Mollie session. Catalog page (8 blocks) — Hero, search component (Svelte island), feature_grid OR replacement_grid as filter chips, custom block with product-card-grid Svelte island, pagination component, related-products feature_grid, FAQ, CTA. Product page (10 blocks) — split_hero with product image gallery, stat_grid with reviews + stock + ship-time, custom variant-picker Svelte island, pricing-style block for tier/quantity, feature_grid with 'What's included', accordion_faq for shipping/returns, about_split for brand story, related-products feature_grid, social-proof testimonials, sticky cart-CTA component.",
+				Blocks: []ArchetypeBlock{
+					{BlockType: "split_hero", Role: "Product image gallery + name + headline + price + add-to-cart", Notes: "image_id is the hero shot. headline = product name. subheading = one-line value prop. cta_text='Add to cart' wired to a Svelte cart-button island via component block_type."},
+					{BlockType: "stat_grid", Role: "Trust signals: rating, in-stock, ships-in", Notes: "Items: {value: '4.8/5', label: 'Reviews', context: '847 ratings'}, {value: 'In stock', context: 'Ships next day'}, etc. 3-4 items."},
+					{BlockType: "component", Role: "Variant picker (Svelte island)", Notes: "Register a Svelte component via /api/agent/components. Props: product_id, available_variants[]. Component handles size/color selection, updates price, syncs cart-button. shadcn-svelte's Select + RadioGroup primitives."},
+					{BlockType: "feature_grid", Role: "What's included / specs / materials", Notes: "Each item is a spec line. Use icon + body. 4-6 items max."},
+					{BlockType: "accordion_faq", Role: "Shipping, returns, sizing, care instructions", Notes: "Pre-purchase objection handling. 5-7 items."},
+					{BlockType: "about_split", Role: "Brand story / craftsmanship moment", Notes: "Why this product, who makes it. Builds trust premium ecom needs."},
+					{BlockType: "feature_grid", Role: "Related products / 'You might also like'", Notes: "Product cards as feature_grid items with image_id. 3-4 max."},
+					{BlockType: "stat_grid", Role: "Social proof: customer count, rating, repeat-buyer rate", Notes: "Different from #2 — broader brand stats not product-specific."},
+					{BlockType: "component", Role: "Sticky cart-CTA bar (Svelte island)", Notes: "Mobile-first sticky bottom bar with current selection + Add to cart button. Shows above-fold on scroll past first viewport."},
+				},
+			},
 		},
 		BlockSelection: []BlockSelectionRule{
 			{Question: "Centered hero with no image vs split_hero with image right?", Choose: "hero (centered) when one CTA + clean message. split_hero when the image carries actual information (dashboard preview, product screenshot).", Why: "A decorative image right of the hero competes with the headline. Use split_hero only when the image is part of the value prop."},
@@ -1417,6 +1487,20 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				BestFor: []string{"Documentation sites + knowledge bases", "Sidebar navigation patterns", "Search overlays", "Versioned docs / i18n routing", "MDX content pipelines", "Component-libraries patterns (callouts, tabs, code blocks)"},
 				License: "MIT",
 				Notes:   "Official Astro docs framework — used by Astro itself, Bun, Tauri, and 100+ open-source projects. packages/starlight/components/ has the canonical implementations of Sidebar, Search, TableOfContents, Tabs, Card, LinkCard, FileTree, Badge, Aside (callout). docs/ contains the actual Astro.build documentation site as a real production reference. Use when atomicsite needs to render docs/wiki/changelog archetypes (which is on the roadmap, not currently a built-in primitive). NOT a Tailwind reference — starlight uses its own CSS variable system, which is itself a clean reference for design-token architecture.",
+			},
+			{
+				Path:    "automations/design-references/shadcn-svelte/",
+				Stack:   "SvelteKit + Tailwind 4 + bits-ui (Svelte port of Radix UI)",
+				BestFor: []string{"Svelte 5 component DNA — Button, Card, Dialog, Tabs, Form, Select, Combobox, DatePicker, DataTable, Toast", "Component-library patterns the agent's interactive islands should follow", "Ecom UI: Cart drawer, Variant picker, Quickview modal — built on Sheet + Dialog + Select", "Calendar/date pickers (calendar-01 through calendar-10 in registry/blocks)", "Form patterns with proper a11y + validation"},
+				License: "MIT",
+				Notes:   "The OFFICIAL Svelte port of shadcn — same design language, same component DNA, but Svelte 5 instead of React. ALIGNED with atomicsite's stack: the admin frontend already uses Svelte 5 + SvelteKit + Tailwind 4. When atomicsite renders interactive islands (cart drawer, variant picker, search-as-you-type, modals), this is the design vocabulary to copy. docs/src/lib/registry/blocks/ has 100+ production block compositions including calendars, dashboards, login flows. docs/src/lib/registry/ui/ has the primitives (Button, Card, Dialog, etc).",
+			},
+			{
+				Path:    "automations/design-references/shadcn-ui/",
+				Stack:   "Next.js + React + Tailwind 4 + Radix UI",
+				BestFor: []string{"Component design language gold standard (50k+ stars)", "Cross-framework component vocabulary", "Tailwind class composition patterns", "Radix accessibility primitives mapped to common components"},
+				License: "MIT",
+				Notes:   "Sparse-checkout of apps/v4/registry + apps/v4/lib only (~9MB instead of full 111MB monorepo). React stack — does NOT match atomicsite's output. Used as cross-stack reference for: Tailwind class composition patterns, accessibility patterns (Radix), component prop shapes. When you need the canonical 'how should a Combobox / DatePicker / DataTable look', read this. When you need it in our stack, read shadcn-svelte instead.",
 			},
 		},
 
@@ -1638,6 +1722,79 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				"Common usable icons: Mail, Phone, MapPin, Lock, Shield, Server, Cloud, Database, Workflow, Sparkles, Zap, BarChart, TrendingUp, Layers, FileText, MessageCircle, ArrowRight, Check, ChevronDown, Linkedin, Github, Twitter, Instagram.",
 			},
 			HowToUse: "feature_grid items[].icon = 'Mail' (case-sensitive Pascal name). Renderer looks up the SVG in icons.go and embeds it inline. Unknown icons fall back to a generic placeholder — check the icon dictionary first.",
+		},
+
+		StackRecommendations: StackGuidance{
+			Philosophy: "Atomicsite is Astro static by default — fastest TTFB, best SEO, lowest hosting cost. Reach for client-side reactivity ONLY when the page genuinely needs it (cart, search-as-you-type, real-time status). Avoid React; prefer Svelte 5 islands when interactivity is required because (1) atomicsite's admin already runs Svelte 5 + SvelteKit so the team has the muscle memory, (2) Svelte's compiled output is smaller than React's runtime — matters for ecom CWV, (3) Astro + Svelte islands hydrate per-component, not per-page.",
+			Stacks: []StackVariant{
+				{
+					Name:        "Static-only (default)",
+					Use:         "Marketing sites, blogs, docs, landing pages — anything where every interaction is server-rendered or a plain anchor link. Covers ~80% of atomicsite use cases.",
+					Composition: []string{"Astro 5 (output: static)", "Tailwind 4 + atomicsite's per-site CSS pipeline", "TypeScript only inside built-in widgets (CookieProof, hero canvas, hydration script)", "Forms POST to a worker URL or n8n webhook"},
+					Constraints: []string{"No state across pages beyond cookies/localStorage", "No real-time updates", "Forms get HTML5 validation, not custom states"},
+					HowApplied:  "Default. Just compose blocks via the agent API. No custom components needed.",
+				},
+				{
+					Name:        "Astro + Svelte islands (light interactivity)",
+					Use:         "Sites with one or two interactive moments: a search-as-you-type bar, a configurator, a calendar booking embed, a copy-to-clipboard button, a theme toggle that respects system preference.",
+					Composition: []string{"Astro 5 static for the shell", "Svelte 5 islands registered via /api/agent/components", "shadcn-svelte primitives for component design DNA", "Tailwind 4 utilities inside Svelte components"},
+					Constraints: []string{"Each island hydrates on its own — no shared state across islands without a tiny store", "Total island JS budget should stay under 50KB gzipped to preserve perf eval"},
+					HowApplied:  "Register Svelte components via PUT /api/agent/components with name + props schema. Use block_type=component in pages, set data.component=<name> + data.props={...}. The renderer wires the Astro <Component client:load /> directive.",
+				},
+				{
+					Name:        "Astro + Svelte + headless commerce (ecom)",
+					Use:         "Selling physical or digital goods. Cart, variant pickers, search, sticky add-to-cart, real-time inventory.",
+					Composition: []string{"Astro 5 static for catalog + product pages", "Svelte 5 islands for cart drawer, variant picker, search, quickview", "shadcn-svelte for UI primitives (Sheet for cart, Dialog for quickview, Select for variants)", "Cart state in localStorage (until checkout)", "Stripe Checkout OR Mollie hosted pages for the transaction (NEVER PCI in our shell)", "Backend: a Go worker that creates Stripe/Mollie sessions + webhooks for order events", "Optional: Medusa as headless commerce backend if catalog needs admin UI / inventory / fulfillment"},
+					Constraints: []string{"Catalog product data lives in atomicsite's media + a custom store (or external like Medusa) — atomicsite has no built-in product schema yet", "Checkout success/cancel pages need to handle Stripe/Mollie redirect query params", "Webhooks need an exposed endpoint (the Go worker), CSP must allow the provider's webhook origin"},
+					HowApplied:  "Use the Ecom page archetype above. Register cart-button, variant-picker, search, cart-drawer, quickview as Svelte components. Add Stripe and/or Mollie public keys to settings. Wire success/cancel pages with hide_global_blocks=1 for clean conversion. The Go worker that creates checkout sessions can live in a sibling project (brightcrm has Stripe wired already — reuse that pattern).",
+				},
+				{
+					Name:        "Astro + Stripe Checkout (paid digital goods, courses, subs)",
+					Use:         "Selling subscriptions, courses, downloads, tickets — single product or simple catalog. Doesn't need full cart / variants / inventory.",
+					Composition: []string{"Astro 5 static", "ONE Svelte island: the Buy button (hits a Go worker → Stripe Checkout session → redirects)", "Stripe-hosted Customer Portal for subscription management", "Webhooks for order fulfilment + license-key delivery"},
+					Constraints: []string{"No cart needed (single-product or pick-one-of-N)", "All transactional UI is Stripe-hosted (Checkout + Customer Portal)"},
+					HowApplied:  "Pricing block with cta_url=/checkout?plan=<id>. The /checkout route is a Go worker endpoint that creates the Stripe session and 302s. Saves building cart UI, variant pickers, etc.",
+				},
+			},
+			Payments: PaymentRules{
+				Philosophy: "Always use a hosted checkout (Stripe Checkout or Mollie hosted pages) — never PCI inside atomicsite. Atomicsite is a static-site platform, not a payment processor; PCI compliance scope is exactly what we don't want. Both Stripe and Mollie are wired via the same pattern: Go worker creates session, redirect user, listen for webhook, update order in your data layer.",
+				Providers: []PaymentProvider{
+					{
+						Name:       "Stripe Checkout",
+						BestFor:    []string{"Global B2B / B2C", "Subscriptions (Billing)", "Card-heavy markets (US, UK, AU)", "Marketplace flows (Connect)", "Crypto opt-in"},
+						Strengths:  []string{"Best developer experience by a wide margin", "Strong subscription primitives (Billing + Customer Portal)", "Handles SCA / 3DS automatically", "Apple Pay + Google Pay built-in", "Customer Portal eliminates building self-serve sub management UI", "Excellent dispute / fraud tooling (Radar)"},
+						Weaknesses: []string{"~2.9% + €0.25 per EU transaction (higher than Mollie for SEPA-heavy traffic)", "iDEAL (Netherlands) and Bancontact (Belgium) cost 1.20%+ — more than Mollie's flat €0.29", "Less native presence in DACH and Nordics consumer markets"},
+						Geography:  "Global. Strongest in US/UK/AU. Acceptable in EU.",
+						Methods:    []string{"Card (Visa/MC/Amex)", "Apple Pay", "Google Pay", "Klarna", "Afterpay/Clearpay", "iDEAL", "Bancontact", "SEPA Direct Debit", "ACH (US)"},
+						Pricing:    "EU: 1.5% + €0.25 standard / 2.5% + €0.25 international. SEPA Direct Debit: 0.8%. Apple Pay / Google Pay: same as card.",
+					},
+					{
+						Name:       "Mollie",
+						BestFor:    []string{"EU-focused B2B / B2C", "NL / BE / DE / FR consumer", "Stores where iDEAL or Bancontact is the dominant method", "Brands that want to avoid US payment processors for political / sovereignty reasons"},
+						Strengths:  []string{"Native EU company (Amsterdam) — same compliance posture as Bright Interaction's GDPR / CLOUD-Act-free positioning", "Cheaper iDEAL (€0.29 flat) and Bancontact (€0.39 flat) than Stripe", "Cleaner invoice / B2B-style flows (Klarna Pay Later, In3)", "Better SEPA Direct Debit pricing for recurring payments", "Strong dashboard UX for non-technical operators"},
+						Weaknesses: []string{"No subscription engine as polished as Stripe Billing — recurring needs more glue code", "Smaller ecosystem (fewer prebuilt integrations than Stripe)", "Customer Portal for self-serve sub management isn't first-class — you build it"},
+						Geography:  "EU-first. Available globally but EU is where it's strongest.",
+						Methods:    []string{"Card", "iDEAL", "Bancontact", "SEPA Direct Debit", "Klarna Pay Later", "In3", "Apple Pay", "Google Pay", "PayPal", "Belfius", "KBC", "Sofort (deprecating)"},
+						Pricing:    "iDEAL: €0.29 flat. Bancontact: €0.39 flat. Card EU: 1.8% + €0.25. SEPA: €0.25. Often cheaper than Stripe for EU-only traffic.",
+					},
+				},
+				WhenToPick: []PaymentPick{
+					{IfCustomerIs: "Global SaaS subscription business", Pick: "Stripe Checkout + Stripe Billing", Why: "Best subscription primitives + Customer Portal saves building self-serve UI."},
+					{IfCustomerIs: "EU-only B2C ecom (NL, BE, DE)", Pick: "Mollie", Why: "Cheaper iDEAL/Bancontact, native EU sovereignty story."},
+					{IfCustomerIs: "EU B2B with international expansion plans", Pick: "BOTH — Stripe primary + Mollie for iDEAL/Bancontact local methods", Why: "Stripe's developer experience for the long tail; Mollie unblocks the Dutch/Belgian methods that Stripe charges more for."},
+					{IfCustomerIs: "Bright Interaction itself or aligned 'EU sovereignty' brand", Pick: "Mollie primary + Stripe fallback", Why: "Customer-facing message is 'EU-hosted, GDPR-friendly, no US lock-in' — Mollie aligns with that. Stripe stays as the edge case for non-EU customers."},
+					{IfCustomerIs: "US / UK marketplace or platform with Connect-style splits", Pick: "Stripe", Why: "Mollie has nothing equivalent to Stripe Connect."},
+					{IfCustomerIs: "Selling courses / digital downloads under €100", Pick: "Stripe Checkout", Why: "Faster setup, cleaner one-shot checkout, no need for Mollie's EU-method advantage on small purchases."},
+				},
+				HowApplied: "Add provider keys to settings: integrations.stripe_publishable_key + .stripe_secret_key + .stripe_webhook_secret, OR integrations.mollie_api_key + .mollie_webhook_secret. Buy/cart-button Svelte islands POST to a Go worker endpoint (atomicsite hosts no payment logic itself); the worker creates the Stripe Checkout session or Mollie payment, returns a redirect URL, the island redirects the browser. CSP must allow the provider's domain — set security.allowed_scripts (admin-only) for stripe.com / mollie.com if you embed their JS for Apple Pay etc. For both providers, the success/cancel return pages should be atomicsite pages with hide_global_blocks=1 for a clean conversion finish.",
+			},
+			WhenToPick: []StackPick{
+				{IfSiteIs: "Marketing site, blog, docs, portfolio, contact page", Pick: "Static-only", Why: "No interactivity needed. Fastest TTFB, lowest hosting cost, perfect SEO."},
+				{IfSiteIs: "Marketing site + a calendar booker / search bar / configurator / theme toggle", Pick: "Astro + Svelte islands (light interactivity)", Why: "Just need a single hydrated component for the interactive moment. Rest stays static."},
+				{IfSiteIs: "Selling physical or digital goods with cart + variants + inventory", Pick: "Astro + Svelte + headless commerce (ecom)", Why: "Cart + variant picker + search-as-you-type + real-time stock all need client state. Static can't do that."},
+				{IfSiteIs: "Selling a single course / subscription / download", Pick: "Astro + Stripe Checkout (paid digital goods)", Why: "No cart needed. One Svelte 'Buy' button is enough. Skip the ecom complexity."},
+				{IfSiteIs: "Internal dashboard or admin tool", Pick: "Different platform — atomicsite is for public-facing static sites only", Why: "BrightCRM / dockyard / sentinel are the internal-tool platforms. Atomicsite would be the wrong fit (no auth, no real-time, no row-level access control)."},
+			},
 		},
 
 		CopyVoice: VoiceRules{
