@@ -36,3 +36,12 @@ func CookieProofWidgetFilename() string {
 	return "_ccb." + CookieProofWidgetHash() + ".js"
 }
 
+// CircuitBgScript is the animated circuit-board background JS, embedded so
+// any block with data-bg="circuit" can opt into a ~3.5KB animated PCB
+// pattern in the site's primary color. Reads --color-primary from CSS so
+// it auto-tints. Inline-rendered next to the canvas element by the
+// renderer; no separate asset URL.
+//
+//go:embed assets/circuit-bg.js
+var CircuitBgScript []byte
+

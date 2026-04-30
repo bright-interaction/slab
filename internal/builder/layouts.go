@@ -525,7 +525,13 @@ func renderFooterHTML(data map[string]any) string {
 
 func renderFooterColumnsHTML(data map[string]any, columnsRaw []any) string {
 	var b strings.Builder
-	b.WriteString(`<footer class="site-footer"><div class="container">`)
+	cls := "site-footer"
+	if t, _ := data["theme"].(string); t == "dark" {
+		cls += " is-dark"
+	}
+	b.WriteString(`<footer class="`)
+	b.WriteString(cls)
+	b.WriteString(`"><div class="container">`)
 	b.WriteString(`<div class="footer-columns">`)
 	for _, c := range columnsRaw {
 		col, ok := c.(map[string]any)
