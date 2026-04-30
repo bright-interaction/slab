@@ -362,6 +362,12 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderLogoCarouselBlock(data, mediaByID)
 	case "replacement_grid":
 		return renderReplacementGridBlock(data)
+	case "process_steps":
+		return renderProcessStepsBlock(data)
+	case "about_split":
+		return renderAboutSplitBlock(data, mediaByID)
+	case "custom":
+		return renderCustomBlock(data)
 	case "code_block":
 		return renderCodeBlock(data)
 	case "form":
@@ -443,7 +449,22 @@ func renderTextParagraphs(b *strings.Builder, text string) {
 
 func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) string {
 	var b strings.Builder
-	b.WriteString("  <section class=\"block block--hero\">\n")
+	bg := dataString(data, "bg")
+	cls := "block block--hero"
+	if bg == "circuit" || bg == "circuit-static" {
+		cls += " has-circuit-bg"
+	}
+	b.WriteString(fmt.Sprintf("  <section class=\"%s\"", cls))
+	if bg == "circuit-static" {
+		b.WriteString(` data-bg="circuit"`)
+	}
+	b.WriteString(">\n")
+	if bg == "circuit" {
+		b.WriteString("    <canvas data-circuit-canvas class=\"block-circuit-canvas\" aria-hidden=\"true\"></canvas>\n")
+		b.WriteString("    <script>")
+		b.Write(CircuitBgScript)
+		b.WriteString("</script>\n")
+	}
 	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
 		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
 	}

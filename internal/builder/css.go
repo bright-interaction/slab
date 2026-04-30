@@ -216,6 +216,76 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	// primitives (form, feature_grid, replacement_grid, embed) the agent
 	// composes from.
 
+	// --- process_steps: 4-up numbered cards. Big primary-coloured numeral + h3 + body. Used for "How it works" / "Our process". ---
+	b.WriteString(".block--process_steps { max-width: var(--container-width); }\n")
+	b.WriteString(".process-steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; }\n")
+	b.WriteString(".process-step { padding: 0; }\n")
+	b.WriteString(".process-step-num { font-family: var(--font-heading); font-size: 2.25rem; font-weight: 700; color: var(--color-primary); line-height: 1; margin-block-end: 0.875rem; letter-spacing: -0.02em; }\n")
+	b.WriteString(".process-step-title { font-family: var(--font-heading); font-size: 1.25rem; font-weight: 600; line-height: 1.3; margin: 0 0 0.5rem 0; }\n")
+	b.WriteString(".process-step-desc { font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); line-height: 1.55; margin: 0; }\n\n")
+
+	// --- about_split: side-by-side founder photo + bio. Photo right by default, optional left via .is-image-left. ---
+	b.WriteString(".block--about_split { display: grid; grid-template-columns: 1fr auto; gap: 4rem; align-items: start; max-width: var(--container-width); }\n")
+	b.WriteString(".block--about_split.is-image-left { grid-template-columns: auto 1fr; }\n")
+	b.WriteString(".block--about_split.is-image-left .about-split-image { order: 0; }\n")
+	b.WriteString(".block--about_split.is-image-left .about-split-content { order: 1; }\n")
+	b.WriteString(".about-split-content { max-width: 44rem; }\n")
+	b.WriteString(".about-split-content h2 { margin-block-end: 1.25rem; }\n")
+	b.WriteString(".about-split-content p { font-size: 1rem; line-height: 1.65; color: color-mix(in oklab, var(--color-text) 75%, transparent); margin-block-end: 1rem; }\n")
+	b.WriteString(".about-split-stats { list-style: none; padding: 0; margin: 1.5rem 0 0 0; display: flex; flex-wrap: wrap; gap: 2rem; }\n")
+	b.WriteString(".about-split-stats li { padding: 0; }\n")
+	b.WriteString(".about-split-stat-value { font-family: var(--font-heading); font-size: 1.625rem; font-weight: 700; line-height: 1; }\n")
+	b.WriteString(".about-split-stat-label { font-size: 0.8125rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin-block-start: 0.25rem; }\n")
+	b.WriteString(".about-split-link { display: inline-block; margin-block-start: 1.5rem; color: var(--color-primary); font-size: 0.9375rem; font-weight: 500; }\n")
+	b.WriteString(".about-split-link:hover { text-decoration: underline; }\n")
+	b.WriteString(".about-split-image { flex-shrink: 0; }\n")
+	b.WriteString(".about-split-image img, .about-split-image picture { width: 18rem; height: auto; border-radius: 1rem; box-shadow: 0 12px 32px color-mix(in oklab, var(--color-text) 12%, transparent); }\n\n")
+
+	// --- custom block: just the section wrapper + auto-id. Markup is rendered verbatim. ---
+	b.WriteString(".block--custom { max-width: var(--container-width); }\n\n")
+
+	// --- Animated circuit canvas: sized absolutely behind the hero content. Hero/split-hero with bg=circuit set position:relative + z-index'd contents. ---
+	b.WriteString(".block.has-circuit-bg { position: relative; min-height: clamp(36rem, 65vh, 48rem); display: flex; align-items: center; justify-content: center; overflow: hidden; }\n")
+	b.WriteString(".block.has-circuit-bg .block-circuit-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }\n")
+	b.WriteString(".block.has-circuit-bg > *:not(.block-circuit-canvas) { position: relative; z-index: 1; }\n")
+	b.WriteString(".block--split_hero.has-circuit-bg { display: grid; }\n\n")
+
+	// --- Improved CTA buttons: BI-style dark primary + outline secondary. .btn-accent kept for sites that prefer brand-coloured CTAs. ---
+	b.WriteString(".btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.875rem 1.75rem; border-radius: 0.625rem; font-weight: 500; font-size: 0.9375rem; transition: background-color 150ms ease-out, color 150ms ease-out, transform 100ms ease-out, border-color 150ms ease-out; cursor: pointer; }\n")
+	b.WriteString(".btn:active { transform: scale(0.985); }\n")
+	b.WriteString(".btn-primary { background: var(--color-text); color: white; border: 1px solid var(--color-text); }\n")
+	b.WriteString(".btn-primary:hover { background: color-mix(in oklab, var(--color-text) 85%, white); border-color: color-mix(in oklab, var(--color-text) 85%, white); color: white; text-decoration: none; }\n")
+	b.WriteString(".btn-secondary { background: transparent; color: var(--color-text); border: 1px solid color-mix(in oklab, var(--color-text) 20%, transparent); }\n")
+	b.WriteString(".btn-secondary:hover { background: color-mix(in oklab, var(--color-text) 5%, transparent); border-color: color-mix(in oklab, var(--color-text) 35%, transparent); text-decoration: none; }\n")
+	b.WriteString(".btn-accent { background: var(--color-primary); color: var(--color-on-primary, white); border: 1px solid var(--color-primary); }\n")
+	b.WriteString(".btn-accent:hover { background: color-mix(in oklab, var(--color-primary) 88%, black); text-decoration: none; }\n")
+	b.WriteString("a.btn-primary, a.btn-secondary, a.btn-accent { text-decoration: none; }\n\n")
+
+	// --- Improved navbar: compact h-14, white/90 + backdrop-blur, mono brand wordmark style. Last nav link auto-styles as a primary CTA pill. ---
+	b.WriteString(".site-header { height: 3.5rem; padding-block: 0; padding-inline: 1.5rem; display: flex; align-items: center; }\n")
+	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }\n")
+	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); }\n")
+	b.WriteString(".site-header .brand-mark img { height: 1.5rem; width: auto; }\n")
+	b.WriteString(".site-nav { flex: 1; }\n")
+	b.WriteString(".site-nav ul { gap: 0.25rem; justify-content: center; }\n")
+	b.WriteString(".site-nav a { padding: 0.375rem 0.75rem; font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); }\n")
+	b.WriteString(".site-nav a:hover { color: var(--color-text); }\n")
+	b.WriteString(".site-nav li:first-child { margin-right: 0; }\n")
+	b.WriteString(".site-nav li:first-child a { font-family: var(--font-heading); font-weight: 700; font-size: 0.9375rem; color: var(--color-text); }\n")
+	b.WriteString(".site-nav li:last-child a { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; }\n")
+	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n\n")
+
+	// --- Dark footer variant: opt in via data.theme="dark" on the footer global block. ---
+	b.WriteString(".site-footer.is-dark { background: var(--color-text); color: white; padding-block: 4rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 0; }\n")
+	b.WriteString(".site-footer.is-dark .footer-column h3 { color: white; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; letter-spacing: 0.12em; }\n")
+	b.WriteString(".site-footer.is-dark .footer-column p, .site-footer.is-dark .footer-column a { color: color-mix(in oklab, white 70%, transparent); }\n")
+	b.WriteString(".site-footer.is-dark .footer-column a:hover { color: var(--color-primary); }\n")
+	b.WriteString(".site-footer.is-dark .footer-tagline { color: var(--color-primary); font-weight: 500; }\n")
+	b.WriteString(".site-footer.is-dark .site-footer-copy { color: color-mix(in oklab, white 50%, transparent); font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; }\n")
+	b.WriteString(".site-footer.is-dark .footer-bottom { border-top-color: color-mix(in oklab, white 12%, transparent); }\n")
+	b.WriteString(".site-footer.is-dark .footer-social a { background: color-mix(in oklab, white 10%, transparent); width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; color: white; }\n")
+	b.WriteString(".site-footer.is-dark .footer-social a:hover { background: var(--color-primary); color: white; }\n\n")
+
 
 	// --- New block layouts (split_hero, stat_grid, accordion_faq, pricing, logo_strip, code_block, form, embed) ---
 	// split_hero: side-by-side on desktop (image right, text left), stacks on mobile.

@@ -12,9 +12,29 @@ import (
 // on desktop, stacked on mobile). Use when the page wants a SaaS-marketing
 // shape rather than the centered hero. Layout flips to centered when the
 // site setting general.hero_layout=centered or the block's data.layout=centered.
+//
+// Optional bg modes via data.bg:
+//   - "circuit": ships an animated PCB-style canvas behind the content
+//     (auto-tints to --color-primary, prefers-reduced-motion respected).
+//   - "circuit-static": same SVG pattern but static (no canvas / no JS).
 func renderSplitHeroBlock(data map[string]any, mediaByID map[string]store.Medium) string {
 	var b strings.Builder
-	b.WriteString("  <section class=\"block block--split_hero\">\n")
+	bg := dataString(data, "bg")
+	cls := "block block--split_hero"
+	if bg == "circuit" || bg == "circuit-static" {
+		cls += " has-circuit-bg"
+	}
+	b.WriteString(fmt.Sprintf("  <section class=\"%s\"", cls))
+	if bg == "circuit-static" {
+		b.WriteString(` data-bg="circuit"`)
+	}
+	b.WriteString(">\n")
+	if bg == "circuit" {
+		b.WriteString("    <canvas data-circuit-canvas class=\"block-circuit-canvas\" aria-hidden=\"true\"></canvas>\n")
+		b.WriteString("    <script>")
+		b.Write(CircuitBgScript)
+		b.WriteString("</script>\n")
+	}
 	b.WriteString("    <div class=\"split-hero-content\">\n")
 	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
 		b.WriteString(fmt.Sprintf("      <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
@@ -602,6 +622,157 @@ func intOrDefault(v any, def int) int {
 		}
 	}
 	return def
+}
+
+// renderCustomBlock is the agnostic escape-hatch block. The agent writes
+// arbitrary markup (Tailwind classes, atomicsite design tokens, semantic
+// HTML); atomicsite emits it verbatim wrapped in a <section> with auto-id
+// from the block's name. Used when a customer needs a layout that doesn't
+// fit the typed templates (hero, feature_grid, pricing, etc.).
+//
+// Data shape: {name, markup, eyebrow?, props?}.
+//   - name: human label, also drives the section id (slugified) so cross-
+//     section anchors resolve.
+//   - markup: full HTML for the section body. atomicsite's design-token
+//     CSS variables (--color-primary, --color-text, --color-bg, --bp-*,
+//     --container-width, etc.) are available; baseline utility classes
+//     (.btn-primary, .btn-secondary, .actions, .container) work too.
+//   - eyebrow: optional small-caps label rendered before the markup.
+//   - props: optional object the agent can read at edit time (e.g. for
+//     decisions in a future code-mod step). Not rendered.
+//
+// Security: the existing block-time guardrail rejects <script> and
+// <iframe> in markup unless explicitly approved; agent-supplied alt
+// text + plaintext-email rules still apply. For iframes use the `embed`
+// block (CSP-aware); for scripts use a registered component (component
+// block_type).
+func renderCustomBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--custom\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if markup := dataString(data, "markup"); markup != "" {
+		b.WriteString("    " + markup + "\n")
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// renderProcessStepsBlock renders a numbered 4-up grid of process steps.
+// Each step shows a big primary-coloured number + h3 title + body. Use for
+// "How it works" / "Our process" / "How to get started" sections — the
+// canonical 4-step marketing pattern.
+//
+// Each item: {number, title, description}. Number is a string (e.g. "01",
+// "02") so the renderer doesn't second-guess formatting.
+func renderProcessStepsBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--process_steps\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	if itemsRaw, ok := data["items"].([]any); ok && len(itemsRaw) > 0 {
+		b.WriteString("    <ol class=\"process-steps\">\n")
+		for i, it := range itemsRaw {
+			item, ok := it.(map[string]any)
+			if !ok {
+				continue
+			}
+			num := dataString(item, "number")
+			if num == "" {
+				num = fmt.Sprintf("%02d", i+1)
+			}
+			b.WriteString("      <li class=\"process-step\">\n")
+			b.WriteString(fmt.Sprintf("        <div class=\"process-step-num\">%s</div>\n", escapeHTML(num)))
+			if title := dataString(item, "title"); title != "" {
+				b.WriteString(fmt.Sprintf("        <h3 class=\"process-step-title\">%s</h3>\n", escapeHTML(title)))
+			}
+			if desc := dataString(item, "description"); desc != "" {
+				b.WriteString(fmt.Sprintf("        <p class=\"process-step-desc\">%s</p>\n", escapeHTML(desc)))
+			}
+			b.WriteString("      </li>\n")
+		}
+		b.WriteString("    </ol>\n")
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// renderAboutSplitBlock renders a side-by-side about / founder section
+// with content on the left + photo on the right (stacks on mobile, photo
+// above content). Includes optional stats row + secondary text link CTA
+// underneath. Use for founder bios, "About us", team intros — anywhere
+// you want a personal photo paired with narrative.
+//
+// Data: {eyebrow, heading, paragraphs[], image_id, image_alt, image_position,
+//        stats: [{value, label}], cta_text, cta_url}.
+// image_position: "right" (default) or "left".
+func renderAboutSplitBlock(data map[string]any, mediaByID map[string]store.Medium) string {
+	var b strings.Builder
+	pos := dataString(data, "image_position")
+	cls := "block block--about_split"
+	if pos == "left" {
+		cls += " is-image-left"
+	}
+	b.WriteString(fmt.Sprintf("  <section class=\"%s\">\n", cls))
+	b.WriteString("    <div class=\"about-split-content\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("      <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("      <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if parasRaw, ok := data["paragraphs"].([]any); ok {
+		for _, p := range parasRaw {
+			if ps, ok := p.(string); ok && ps != "" {
+				b.WriteString(fmt.Sprintf("      <p>%s</p>\n", escapeHTML(ps)))
+			}
+		}
+	} else if text := dataString(data, "text"); text != "" {
+		// Fall back to the same paragraph splitter the text block uses.
+		renderTextParagraphs(&b, text)
+	}
+	if statsRaw, ok := data["stats"].([]any); ok && len(statsRaw) > 0 {
+		b.WriteString("      <ul class=\"about-split-stats\">\n")
+		for _, s := range statsRaw {
+			st, ok := s.(map[string]any)
+			if !ok {
+				continue
+			}
+			b.WriteString("        <li>\n")
+			if v := dataString(st, "value"); v != "" {
+				b.WriteString(fmt.Sprintf("          <div class=\"about-split-stat-value\">%s</div>\n", escapeHTML(v)))
+			}
+			if l := dataString(st, "label"); l != "" {
+				b.WriteString(fmt.Sprintf("          <div class=\"about-split-stat-label\">%s</div>\n", escapeHTML(l)))
+			}
+			b.WriteString("        </li>\n")
+		}
+		b.WriteString("      </ul>\n")
+	}
+	if ctaText := dataString(data, "cta_text"); ctaText != "" {
+		ctaURL := dataString(data, "cta_url")
+		if ctaURL == "" {
+			ctaURL = "#"
+		}
+		b.WriteString(fmt.Sprintf("      <a href=\"%s\" class=\"about-split-link\">%s →</a>\n",
+			escapeURL(ctaURL), escapeHTML(ctaText)))
+	}
+	b.WriteString("    </div>\n")
+	b.WriteString("    <div class=\"about-split-image\">\n")
+	if imageID := dataString(data, "image_id"); imageID != "" {
+		b.WriteString("      " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "heading"), "about-split-img", mediaByID) + "\n")
+	}
+	b.WriteString("    </div>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
 }
 
 // renderEmbedBlock renders an iframe wrapped in an aspect-ratio container.

@@ -1050,6 +1050,24 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}, {Key: "footer", Label: "Footer line under the grid"}},
 			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {from, to, description, span?} where span='wide' makes the card 2-col"}},
 		},
+		{
+			BlockType: "process_steps",
+			Use:       "4-up numbered grid for 'How it works' / 'Our process' / 'Get started in 4 steps' sections. Each step shows a big primary-coloured numeral + h3 title + body. Counts as a list (>=3 items) for the AI-Friendly Formatting eval check.",
+			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {number, title, description}"}},
+		},
+		{
+			BlockType: "about_split",
+			Use:       "Side-by-side founder / about section: text left + photo right (stacks on mobile). Optional stats row + secondary text link CTA below the body. Use for founder bios, About pages, team intros — anywhere a personal photo paired with narrative is the right shape.",
+			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "cta_text", Label: "Secondary link text"}, {Key: "image_alt", Label: "Photo alt text"}},
+			OtherKeys: []BlockSchemaField{{Key: "paragraphs", Label: "Array of paragraph strings"}, {Key: "image_id", Label: "Photo media id"}, {Key: "image_position", Label: "'right' (default) | 'left'"}, {Key: "stats", Label: "Array of {value, label}"}, {Key: "cta_url", Label: "Secondary link URL"}},
+		},
+		{
+			BlockType: "custom",
+			Use:       "Agnostic escape-hatch block. The agent writes arbitrary markup (atomicsite design tokens + utility classes available); atomicsite emits it verbatim wrapped in a <section> with auto-id from the block's name. Use when a customer needs a layout that doesn't fit the typed templates. Atomicsite still applies eval guardrails (no inline scripts via CSP, no plaintext emails, alt-text required on images).",
+			TextKeys:  []BlockSchemaField{{Key: "name", Label: "Block name (also drives the auto-id)"}, {Key: "eyebrow", Label: "Optional eyebrow above the markup"}},
+			OtherKeys: []BlockSchemaField{{Key: "markup", Label: "Full HTML for the section body. Tailwind classes work once the site enables Tailwind in its build pipeline; for now, use atomicsite's CSS variables + utility classes (.btn-primary, .btn-secondary, .btn-accent, .actions, .container, .feature-grid, .stat-grid, etc.)"}, {Key: "props", Label: "Optional metadata object the agent reads at edit time"}},
+		},
 	}
 }
 
