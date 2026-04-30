@@ -51,6 +51,29 @@ type Component struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+type ConsentRecord struct {
+	ID             string `json:"id"`
+	SiteID         string `json:"site_id"`
+	SessionID      string `json:"session_id"`
+	Domain         string `json:"domain"`
+	PageUrl        string `json:"page_url"`
+	Referrer       string `json:"referrer"`
+	UserAgent      string `json:"user_agent"`
+	IpHash         string `json:"ip_hash"`
+	ConsentMethod  string `json:"consent_method"`
+	ConsentVersion int64  `json:"consent_version"`
+	CategoriesJson string `json:"categories_json"`
+	GpcActive      int64  `json:"gpc_active"`
+	CreatedAt      int64  `json:"created_at"`
+	CreatedAtIso   string `json:"created_at_iso"`
+}
+
+type ConsentSalt struct {
+	DayUtc    string `json:"day_utc"`
+	Salt      string `json:"salt"`
+	CreatedAt string `json:"created_at"`
+}
+
 type CssClass struct {
 	ID        string `json:"id"`
 	SiteID    string `json:"site_id"`

@@ -167,18 +167,18 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString("  </script>\n")
 	}
 
-	// CookieProof + Atomicsite consent relay. Gated on
-	// analytics.cookieproof_enabled. siteDomain comes from the site row
-	// (CookieProof keys multi-tenant configs by domain), site_id is baked
-	// into the relay so /t/consent knows which site posted.
+	// CookieProof banner .  vendored, same-origin, inline-configured. Gated
+	// on analytics.cookieproof_enabled. The snippet emits a synchronous GCM
+	// default-denied stub, an inline window.__CCB__ config blob (branding
+	// colors flow in as cssVars, banner copy from settings), and a deferred
+	// <script> tag pointing at /_ccb.{hash}.js .  the widget bundle we
+	// wrote into the workspace's public/ dir from the embedded widget bytes.
+	// No third-party fetch. Proofs POST to same-origin /t/consent and land
+	// in atomicsite's consent_records table.
 	cookieProofEnabled := boolSetting(settingsMap["analytics.cookieproof_enabled"], false)
 	if cookieProofEnabled {
-		cpDomain := site.CookieproofDomain
-		if cpDomain == "" {
-			cpDomain = site.Domain
-		}
-		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
-		snippet := RenderCookieProofSnippet(site.ID, cpDomain, trackPath)
+		cpCfg := BuildCookieProofConfig(site, settingsMap)
+		snippet := RenderCookieProofSnippet(cpCfg)
 		// Indent two spaces so the snippet sits flush with surrounding <head> children.
 		for _, line := range strings.Split(strings.TrimRight(snippet, "\n"), "\n") {
 			if line == "" {
@@ -186,6 +186,12 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 				continue
 			}
 			b.WriteString("  " + line + "\n")
+		}
+		// Drop the same-origin widget bundle into public/. Failure here is
+		// fatal .  the snippet references the file, so a missing asset would
+		// 404 in production and the banner would never render.
+		if err := WriteCookieProofWidgetAsset(wsDir); err != nil {
+			return fmt.Errorf("write cookieproof widget asset: %w", err)
 		}
 	}
 

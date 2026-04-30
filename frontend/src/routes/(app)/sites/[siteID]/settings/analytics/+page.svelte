@@ -24,8 +24,6 @@
 	let loading = $state(true);
 	let saving = $state(false);
 
-	let cookieproofEnabled = $state(false);
-	let cookieproofOrgId = $state('');
 	let atomicsiteTrackingEnabled = $state(true);
 	let ga4Enabled = $state(false);
 	let ga4Id = $state('');
@@ -39,8 +37,6 @@
 	let identityMaxAgeDays = $state('30');
 
 	type State = {
-		cookieproofEnabled: boolean;
-		cookieproofOrgId: string;
 		atomicsiteTrackingEnabled: boolean;
 		ga4Enabled: boolean;
 		ga4Id: string;
@@ -55,8 +51,6 @@
 	};
 
 	let initial: State = $state({
-		cookieproofEnabled: false,
-		cookieproofOrgId: '',
 		atomicsiteTrackingEnabled: true,
 		ga4Enabled: false,
 		ga4Id: '',
@@ -76,8 +70,6 @@
 			const rows = await settingsApi.listByCategory(siteID, 'analytics');
 			const m = categoryMap(rows);
 
-			cookieproofEnabled = toBool(m.cookieproof_enabled);
-			cookieproofOrgId = m.cookieproof_org_id || m.cookieproof_widget_id || '';
 			atomicsiteTrackingEnabled =
 				m.atomicsite_tracking_enabled === undefined
 					? true
@@ -94,8 +86,6 @@
 			identityMaxAgeDays = m.identity_max_age_days || '30';
 
 			initial = {
-				cookieproofEnabled,
-				cookieproofOrgId,
 				atomicsiteTrackingEnabled,
 				ga4Enabled,
 				ga4Id,
@@ -120,9 +110,7 @@
 	});
 
 	const dirty = $derived(
-		cookieproofEnabled !== initial.cookieproofEnabled ||
-			cookieproofOrgId !== initial.cookieproofOrgId ||
-			atomicsiteTrackingEnabled !== initial.atomicsiteTrackingEnabled ||
+		atomicsiteTrackingEnabled !== initial.atomicsiteTrackingEnabled ||
 			ga4Enabled !== initial.ga4Enabled ||
 			ga4Id !== initial.ga4Id ||
 			umamiEnabled !== initial.umamiEnabled ||
@@ -136,8 +124,6 @@
 	);
 
 	function discard() {
-		cookieproofEnabled = initial.cookieproofEnabled;
-		cookieproofOrgId = initial.cookieproofOrgId;
 		atomicsiteTrackingEnabled = initial.atomicsiteTrackingEnabled;
 		ga4Enabled = initial.ga4Enabled;
 		ga4Id = initial.ga4Id;
@@ -160,12 +146,6 @@
 		saving = true;
 		try {
 			const items: settingsApi.SettingUpsertInput[] = [
-				{ category: 'analytics', key: 'cookieproof_enabled', value: b(cookieproofEnabled) },
-				{
-					category: 'analytics',
-					key: 'cookieproof_org_id',
-					value: cookieproofEnabled ? cookieproofOrgId : ''
-				},
 				{
 					category: 'analytics',
 					key: 'atomicsite_tracking_enabled',
@@ -197,8 +177,6 @@
 			await settingsApi.bulkUpsert(siteID, items);
 
 			initial = {
-				cookieproofEnabled,
-				cookieproofOrgId,
 				atomicsiteTrackingEnabled,
 				ga4Enabled,
 				ga4Id,
@@ -303,26 +281,13 @@
 
 			<Card padding="md">
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-					CookieProof consent
+					Cookie consent banner
 				</h2>
-				<div class="mt-4 flex flex-col gap-3">
-					<div class="flex items-center justify-between gap-4">
-						<div class="flex flex-col">
-							<span class="text-[13px] text-text-primary">Enable consent banner</span>
-							<span class="text-[12px] text-text-muted">
-								Loads CookieProof widget on every page.
-							</span>
-						</div>
-						<Switch bind:checked={cookieproofEnabled} ariaLabel="Enable CookieProof" />
-					</div>
-					{#if cookieproofEnabled}
-						<Input
-							label="Organisation ID"
-							placeholder="cp_org_xxxxxxxxxxxx"
-							bind:value={cookieproofOrgId}
-						/>
-					{/if}
-				</div>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Atomic Site ships a same-origin cookie banner that auto-styles to your brand and
+					stores consent proofs in your own database. Configure it on the dedicated
+					<a class="underline" href={`/sites/${siteID}/cookies`}>Cookies page</a>.
+				</p>
 			</Card>
 
 			<Card padding="md">

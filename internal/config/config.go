@@ -20,11 +20,11 @@ type Config struct {
 	MaxUploadSize int64
 	MediaVariants []int
 
-	// Analytics + CookieProof integration (Phase 10).
-	TrackPath             string // public tracking endpoint prefix, default "/t"
-	AnalyticsSalt         string // server secret mixed into visitor fingerprints
-	CookieProofAPIBase    string // e.g. https://consent.example.com
-	CookieProofAdminToken string // bearer token for provisioning calls
+	// Analytics. The CookieProof widget is now embedded directly into the
+	// atomicsite Go binary (see internal/builder/widget_embed.go); the
+	// remote-API admin token + base URL fields were removed 2026-04-30.
+	TrackPath     string // public tracking endpoint prefix, default "/t"
+	AnalyticsSalt string // server secret mixed into visitor fingerprints
 
 	// BrightCRM analytics sync (Phase 10 C2). When either the URL or secret
 	// is empty, crmsync becomes a no-op so dev environments don't crash.
@@ -65,10 +65,8 @@ func Load() *Config {
 		MaxUploadSize: envInt64("MAX_UPLOAD_SIZE", 20<<20), // 20 MB
 		MediaVariants: envIntList("MEDIA_VARIANTS", []int{320, 640, 1280, 1920}),
 
-		TrackPath:             envOr("TRACK_PATH", "/t"),
-		AnalyticsSalt:         envOr("ANALYTICS_SALT", "atomicsite-default-fingerprint-salt-change-me"),
-		CookieProofAPIBase:    envOr("COOKIEPROOF_API_BASE", "https://consent.example.com"),
-		CookieProofAdminToken: os.Getenv("COOKIEPROOF_ADMIN_TOKEN"),
+		TrackPath:     envOr("TRACK_PATH", "/t"),
+		AnalyticsSalt: envOr("ANALYTICS_SALT", "atomicsite-default-fingerprint-salt-change-me"),
 
 		BrightCRMWebhookURL:            envOr("BRIGHTCRM_WEBHOOK_URL", ""),
 		BrightCRMWebhookSecret:         envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),

@@ -526,3 +526,43 @@ CREATE TABLE IF NOT EXISTS design_references (
     UNIQUE(site_id, url)
 );
 CREATE INDEX IF NOT EXISTS idx_design_references_site ON design_references(site_id);
+
+-- consent_records is the GDPR proof-of-consent log. One row per consent
+-- decision (accept/reject/custom/GPC/DNS/do-not-sell), keyed by site_id.
+-- Stores enough to prove "this visitor said X at time T from page P" without
+-- retaining identifying data: ip is hashed with a daily-rotating salt
+-- (consent_salts table) so audit lookups within a day work, but the IP
+-- itself never lands on disk.
+--
+-- This table is the system of record for tenants of Atomic Site after the
+-- CookieProof fold-in (2026-04-30). Before that, proofs were posted to
+-- consent.example.com; now they live here, same-origin.
+CREATE TABLE IF NOT EXISTS consent_records (
+    id                TEXT PRIMARY KEY,
+    site_id           TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    session_id        TEXT NOT NULL DEFAULT '',
+    domain            TEXT NOT NULL,
+    page_url          TEXT NOT NULL DEFAULT '',
+    referrer          TEXT NOT NULL DEFAULT '',
+    user_agent        TEXT NOT NULL DEFAULT '',
+    ip_hash           TEXT NOT NULL,
+    consent_method    TEXT NOT NULL,
+    consent_version   INTEGER NOT NULL DEFAULT 1,
+    categories_json   TEXT NOT NULL DEFAULT '{}',
+    gpc_active        INTEGER NOT NULL DEFAULT 0,
+    created_at        INTEGER NOT NULL,
+    created_at_iso    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_consent_records_site_created ON consent_records(site_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_consent_records_site_method ON consent_records(site_id, consent_method);
+CREATE INDEX IF NOT EXISTS idx_consent_records_session ON consent_records(session_id);
+
+-- consent_salts holds daily-rotated salts used to hash IPs in
+-- consent_records.ip_hash. One row per UTC day. Old rows are pruned by the
+-- retention job (default 30 days) so historical hashes can never be
+-- correlated back to an IP.
+CREATE TABLE IF NOT EXISTS consent_salts (
+    day_utc    TEXT PRIMARY KEY,
+    salt       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
