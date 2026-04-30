@@ -524,30 +524,54 @@ func renderHeaderHTML(data map[string]any) string {
 		b.WriteString(`</a>`)
 	}
 
+	// 3-zone header layout (mirrors brightinteraction.com / Linear / Vercel):
+	//   [brand-mark]  [primary nav (centred)]  [actions: lang switchers + CTA]
+	// Splitting links into primary + actions lets CSS grid place each zone
+	// without flex-wrap rescuing overflow on narrow viewports. Locale links
+	// (data.lang set) and CTA links (data.cta=true) belong in the right
+	// actions cluster; everything else is primary.
 	if len(links) > 0 {
-		b.WriteString(`<nav class="site-nav" aria-label="Primary"><ul>`)
+		var primary []navLink
+		var actions []navLink
 		for _, l := range links {
-			liCls := ""
-			aCls := ""
-			if l.cta {
-				liCls = ` class="nav-cta-item"`
-				aCls = ` class="nav-cta"`
+			if l.cta || l.lang != "" {
+				actions = append(actions, l)
+			} else {
+				primary = append(primary, l)
 			}
-			liData := ""
-			// `lang` on a nav link marks it as a locale switcher. CSS uses
-			// :lang() to hide the link that matches the current page's lang
-			// so visitors only see the OTHER locales (mirrors brightinteraction.com's
-			// single-toggle pattern: show "SV" on /en/, "EN" on /sv/).
-			if l.lang != "" {
-				liData = fmt.Sprintf(` data-lang="%s"`, escapeAttr(l.lang))
-			}
-			b.WriteString(`<li` + liCls + liData + `><a href="`)
-			b.WriteString(escapeAttr(l.href))
-			b.WriteString(`"` + aCls + `>`)
-			b.WriteString(escapeText(l.label))
-			b.WriteString(`</a></li>`)
 		}
-		b.WriteString(`</ul></nav>`)
+		if len(primary) > 0 {
+			b.WriteString(`<nav class="site-nav site-nav-primary" aria-label="Primary"><ul>`)
+			for _, l := range primary {
+				b.WriteString(`<li><a href="`)
+				b.WriteString(escapeAttr(l.href))
+				b.WriteString(`">`)
+				b.WriteString(escapeText(l.label))
+				b.WriteString(`</a></li>`)
+			}
+			b.WriteString(`</ul></nav>`)
+		}
+		if len(actions) > 0 {
+			b.WriteString(`<div class="site-nav-actions"><ul>`)
+			for _, l := range actions {
+				liCls := ""
+				aCls := ""
+				if l.cta {
+					liCls = ` class="nav-cta-item"`
+					aCls = ` class="nav-cta"`
+				}
+				liData := ""
+				if l.lang != "" {
+					liData = fmt.Sprintf(` data-lang="%s"`, escapeAttr(l.lang))
+				}
+				b.WriteString(`<li` + liCls + liData + `><a href="`)
+				b.WriteString(escapeAttr(l.href))
+				b.WriteString(`"` + aCls + `>`)
+				b.WriteString(escapeText(l.label))
+				b.WriteString(`</a></li>`)
+			}
+			b.WriteString(`</ul></div>`)
+		}
 	}
 	b.WriteString(`</div></header>`)
 	return b.String()
