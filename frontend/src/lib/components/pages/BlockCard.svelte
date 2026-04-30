@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { GripVertical, ChevronDown, Trash2, Code, Copy, Check } from 'lucide-svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import BlockTypeForm from './BlockTypeForm.svelte';
@@ -89,11 +90,19 @@
 
 	// Re-fetch when the underlying data changes after the panel was opened
 	// at least once. Otherwise the code would lag behind a fresh edit.
+	// CRITICAL: Svelte 5 $effect tracks every reactive read in its body.
+	// Reading codeAstro/codeOpen/codeLoading inside the effect would make
+	// it self-trigger when those state vars change inside refreshCode
+	// (codeAstro flips null → string → re-runs effect → re-fetches → loop).
+	// Only block.data_json should be reactive here; the rest read via
+	// untrack so the effect only fires on actual data changes.
 	$effect(() => {
 		void block.data_json;
-		if (codeOpen && codeAstro !== null && !codeLoading) {
-			void refreshCode();
-		}
+		untrack(() => {
+			if (codeOpen && codeAstro !== null && !codeLoading) {
+				void refreshCode();
+			}
+		});
 	});
 
 	let visibleBound = $state(false);
@@ -121,11 +130,36 @@
 	function summary(): string {
 		try {
 			const parsed = JSON.parse(block.data_json || '{}') as Record<string, unknown>;
-			const candidates = ['headline', 'title', 'content', 'alt'];
+			// Try the most-distinctive text field for each block type. Order
+			// matters: prefer the user-visible headline over generic labels
+			// when both exist (hero blocks have 'headline' AND a 'subheading').
+			const candidates = [
+				'headline', // hero, split_hero
+				'heading', // stat_grid, replacement_grid, process_steps, pricing, about_split, accordion_faq, cta, feature_grid, code_block, form
+				'title', // legacy + custom
+				'label', // logo_strip, logo_carousel
+				'name', // pricing tier
+				'eyebrow', // custom block fallback
+				'text', // text block, cta
+				'content', // legacy
+				'alt', // image
+				'quote' // quote block
+			];
 			for (const key of candidates) {
 				const v = parsed[key];
 				if (typeof v === 'string' && v.trim().length > 0) {
-					return v.length > 60 ? `${v.slice(0, 60)}.` : v;
+					// Strip the [[accent]] markers from the preview so the text
+					// reads cleanly in the block list.
+					const clean = v.replace(/\[\[|\]\]/g, '');
+					return clean.length > 60 ? `${clean.slice(0, 60)}.` : clean;
+				}
+			}
+			// Fall through: count items[] / tiers[] / paragraphs[] so the user
+			// at least sees how many entries the block holds.
+			for (const key of ['items', 'tiers', 'paragraphs']) {
+				const arr = parsed[key];
+				if (Array.isArray(arr) && arr.length > 0) {
+					return `${arr.length} ${key}`;
 				}
 			}
 		} catch {
