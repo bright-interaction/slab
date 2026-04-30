@@ -25,7 +25,8 @@ func RenderSingleBlock(ctx context.Context, queries *store.Queries, siteID, bloc
 	for _, c := range components {
 		componentNames[c.Name] = true
 	}
-	return renderBlock(block, componentNames), nil
+	mediaByID := loadBlockMedia(ctx, queries, []store.Block{block})
+	return renderBlock(block, componentNames, mediaByID), nil
 }
 
 // RenderPagePreview returns the rendered Astro source for a single page.
@@ -113,6 +114,13 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		}
 		slog.Info("build: rendering page", "slug", page.Slug, "blocks", len(blocks))
 
+		// Pre-fetch every media row referenced by blocks so the renderer can
+		// emit a proper <picture> with WebP source + width/height instead of
+		// a bare <img src="/media/<id>"> that 404s. Lookup once per page,
+		// pass the map into renderPageWithContext via pageCtx.
+		mediaByID := loadBlockMedia(ctx, queries, blocks)
+		pageCtx.mediaByID = mediaByID
+
 		content := renderPageWithContext(page, blocks, componentNames, pageCtx)
 		pagePath := slugToFilePath(page.Slug, wsDir)
 
@@ -124,16 +132,40 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 	return len(pages), nil
 }
 
+// loadBlockMedia walks every block's data_json for image_id references and
+// returns a map from media id to the full row so the renderer can pick a
+// WebP variant + width/height. Empty map when no blocks reference media or
+// the lookups fail; the renderer falls back to a bare <img> in that case.
+func loadBlockMedia(ctx context.Context, queries *store.Queries, blocks []store.Block) map[string]store.Medium {
+	out := make(map[string]store.Medium)
+	for _, bl := range blocks {
+		var data map[string]any
+		if err := json.Unmarshal([]byte(bl.DataJson), &data); err != nil {
+			continue
+		}
+		if id, ok := data["image_id"].(string); ok && id != "" {
+			if _, dup := out[id]; dup {
+				continue
+			}
+			if m, err := queries.GetMediaByID(ctx, id); err == nil {
+				out[id] = m
+			}
+		}
+	}
+	return out
+}
+
 // pageRenderContext bundles everything needed to render one page that
 // isn't on the page row itself: the parent site, the i18n config, and
 // the seo template strings. RenderPages computes this once per build
 // and passes a copy to every renderPageWithContext call so renderPage
 // stays cheap and free of context.Context plumbing.
 type pageRenderContext struct {
-	site     store.Site
-	i18n     I18nConfig
-	titleTpl string
-	descTpl  string
+	site      store.Site
+	i18n      I18nConfig
+	titleTpl  string
+	descTpl   string
+	mediaByID map[string]store.Medium
 }
 
 // renderPage is the legacy entry point used by the standalone preview
@@ -226,14 +258,14 @@ func renderPageWithContext(page store.Page, blocks []store.Block, components map
 		if bl.IsVisible == 0 {
 			continue
 		}
-		b.WriteString(renderBlock(bl, components))
+		b.WriteString(renderBlock(bl, components, ctx.mediaByID))
 	}
 
 	b.WriteString("</Base>\n")
 	return b.String()
 }
 
-func renderBlock(bl store.Block, components map[string]bool) string {
+func renderBlock(bl store.Block, components map[string]bool, mediaByID map[string]store.Medium) string {
 	var data map[string]any
 	if err := json.Unmarshal([]byte(bl.DataJson), &data); err != nil {
 		return fmt.Sprintf("  <!-- block %s: invalid data -->\n", bl.ID)
@@ -250,7 +282,7 @@ func renderBlock(bl store.Block, components map[string]bool) string {
 		inner = fmt.Sprintf("  %s\n", data["html"])
 	default:
 		// Default: render as a section with data-driven content
-		inner = renderDataBlock(bl.BlockType, data)
+		inner = renderDataBlock(bl.BlockType, data, mediaByID)
 	}
 
 	// Phase 18.3: optional per-visitor condition. The hydration script
@@ -303,10 +335,10 @@ func renderComponentBlock(name string, data map[string]any) string {
 	return b.String()
 }
 
-func renderDataBlock(blockType string, data map[string]any) string {
+func renderDataBlock(blockType string, data map[string]any, mediaByID map[string]store.Medium) string {
 	switch blockType {
 	case "hero":
-		return renderHeroBlock(data)
+		return renderHeroBlock(data, mediaByID)
 	case "feature_grid":
 		return renderFeatureGridBlock(data)
 	case "text":
@@ -314,7 +346,7 @@ func renderDataBlock(blockType string, data map[string]any) string {
 	case "cta":
 		return renderCTABlock(data)
 	case "image":
-		return renderImageBlock(data)
+		return renderImageBlock(data, mediaByID)
 	case "quote":
 		return renderQuoteBlock(data)
 	default:
@@ -350,7 +382,7 @@ func renderTextParagraphs(b *strings.Builder, text string) {
 	}
 }
 
-func renderHeroBlock(data map[string]any) string {
+func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) string {
 	var b strings.Builder
 	b.WriteString("  <section class=\"block block--hero\">\n")
 	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
@@ -363,12 +395,7 @@ func renderHeroBlock(data map[string]any) string {
 		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
 	}
 	if imageID := dataString(data, "image_id"); imageID != "" {
-		alt := dataString(data, "image_alt")
-		if alt == "" {
-			alt = dataString(data, "headline")
-		}
-		b.WriteString(fmt.Sprintf("    <img src=\"/media/%s\" alt=\"%s\" />\n",
-			escapeAttr(imageID), escapeAttr(alt)))
+		b.WriteString("    " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "hero-image", mediaByID) + "\n")
 	}
 	ctaText := dataString(data, "cta_text")
 	if ctaText != "" {
@@ -391,6 +418,31 @@ func renderHeroBlock(data map[string]any) string {
 	return b.String()
 }
 
+// renderMediaImg returns a <picture> element when the media row is found in
+// mediaByID (with WebP source + width/height + alt + lazy), or a fallback
+// <img> with /media/<id>/original.png when the lookup misses. The alt
+// argument wins over the medium's stored alt_text; fallbackAlt is used when
+// alt is empty (typically the hero headline).
+func renderMediaImg(mediaID, alt, fallbackAlt, cssClass string, mediaByID map[string]store.Medium) string {
+	if alt == "" {
+		alt = fallbackAlt
+	}
+	if m, ok := mediaByID[mediaID]; ok {
+		// RenderPicture reads m.AltText for the alt; override if the
+		// caller passed a non-empty alt that should win.
+		if alt != "" {
+			m.AltText = alt
+		}
+		out := RenderPicture(m, cssClass)
+		if out != "" {
+			return out
+		}
+	}
+	// Fallback for when media lookup misses (preview helper, missing row).
+	return fmt.Sprintf(`<img src="/media/%s/original.png" alt="%s" loading="lazy" />`,
+		escapeAttr(mediaID), escapeAttr(alt))
+}
+
 func renderFeatureGridBlock(data map[string]any) string {
 	var b strings.Builder
 	b.WriteString("  <section class=\"block block--feature_grid\">\n")
@@ -408,6 +460,11 @@ func renderFeatureGridBlock(data map[string]any) string {
 				continue
 			}
 			b.WriteString("      <li class=\"feature-grid-item\">\n")
+			if iconName := dataString(item, "icon"); iconName != "" {
+				if svg := renderLucideIcon(iconName); svg != "" {
+					b.WriteString("        " + svg + "\n")
+				}
+			}
 			if title := dataString(item, "title"); title != "" {
 				b.WriteString(fmt.Sprintf("        <h3>%s</h3>\n", escapeHTML(title)))
 			}
@@ -478,24 +535,11 @@ func renderCTABlock(data map[string]any) string {
 	return b.String()
 }
 
-func renderImageBlock(data map[string]any) string {
+func renderImageBlock(data map[string]any, mediaByID map[string]store.Medium) string {
 	var b strings.Builder
 	b.WriteString("  <section class=\"block block--image\">\n")
-	imageID := dataString(data, "image_id")
-	alt := dataString(data, "alt")
-	if imageID != "" {
-		// Width/height attributes prevent CLS when the surrounding layout
-		// reserves the box. Optional in the schema; emit only when set.
-		widthAttr := ""
-		heightAttr := ""
-		if w, ok := data["width"].(string); ok && w != "" {
-			widthAttr = fmt.Sprintf(" width=\"%s\"", escapeAttr(w))
-		}
-		if h, ok := data["height"].(string); ok && h != "" {
-			heightAttr = fmt.Sprintf(" height=\"%s\"", escapeAttr(h))
-		}
-		b.WriteString(fmt.Sprintf("    <img src=\"/media/%s\" alt=\"%s\"%s%s loading=\"lazy\" />\n",
-			escapeAttr(imageID), escapeAttr(alt), widthAttr, heightAttr))
+	if imageID := dataString(data, "image_id"); imageID != "" {
+		b.WriteString("    " + renderMediaImg(imageID, dataString(data, "alt"), "", "", mediaByID) + "\n")
 	}
 	if caption := dataString(data, "caption"); caption != "" {
 		b.WriteString(fmt.Sprintf("    <p class=\"caption\">%s</p>\n", escapeHTML(caption)))
