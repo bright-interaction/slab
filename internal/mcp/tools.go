@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/brightinteraction/atomicsite/internal/handlers"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -699,7 +700,7 @@ func (s *Server) registerTools() {
 	// --- build + evaluation --------------------------------------------
 	register(Tool{
 		Name:          "trigger_build",
-		Description:   "Triggers an async build of the current site. Returns build_id; poll get_build_status until status==success or failed, then call get_evaluation(build_id) to read the eval results.",
+		Description:   "Triggers an async build of the current site. Returns build_id; poll get_build_status until status==success or failed, then call get_evaluation(build_id) to read the eval results. After success, call screenshot to see the rendered output.",
 		InputSchema:   schema(`{"type":"object","properties":{}}`),
 		RequiresWrite: true,
 		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
@@ -711,6 +712,24 @@ func (s *Server) registerTools() {
 				return "", err
 			}
 			return mustJSON(map[string]string{"build_id": id, "status": "building"}), nil
+		},
+	})
+
+	register(Tool{
+		Name:          "screenshot",
+		Description:   "Captures a headless Chromium screenshot of a deployed page and returns base64-encoded PNG. Use after trigger_build success to visually verify the rendered output. The agent should decode the image and reason about pixels — that's how you tell whether a layout looks right vs. needs another iteration. Defaults: 1440x900 viewport, full_page=true, wait_ms=800. SSRF-locked to atomicsite tenant subdomains + brightinteraction.com.",
+		InputSchema:   schema(`{"type":"object","properties":{"url":{"type":"string","description":"https://<slug>.atomicsite.example.com/<path>"},"viewport_width":{"type":"integer","minimum":320,"maximum":3840},"viewport_height":{"type":"integer","minimum":240,"maximum":2160},"full_page":{"type":"boolean","description":"Capture entire scrollable page; false = only the viewport."},"wait_ms":{"type":"integer","minimum":0,"maximum":10000,"description":"Ms to wait after navigation before capturing (lets fonts + JS islands settle)."}},"required":["url"]}`),
+		RequiresWrite: true,
+		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
+			var args handlers.ScreenshotRequest
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+			res, err := handlers.CaptureScreenshot(ctx, args)
+			if err != nil {
+				return "", err
+			}
+			return mustJSON(res), nil
 		},
 	})
 

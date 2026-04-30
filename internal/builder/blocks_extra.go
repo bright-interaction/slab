@@ -671,6 +671,51 @@ func renderCustomBlock(data map[string]any) string {
 	return b.String()
 }
 
+// renderRawAstroBlock emits author-supplied Astro/HTML/Tailwind code
+// verbatim into the page Astro source. The escape hatch for sections
+// where the typed block_types can't reach pixel parity (e.g. cloning
+// brightinteraction.com's hero exactly).
+//
+// Data:
+//   code:  full Astro markup string. Wrapped in a <section> only when
+//          the supplied code doesn't already start with one.
+//   class: optional class added to the auto-generated <section>.
+//
+// Trade-off: NO renderer-side validation, NO auto-section-id, NO
+// alternating-bg, NO eyebrow CSS, NO accent-span helper. Author owns
+// the markup. If the build fails because the code has a syntax error,
+// trigger_build returns the Astro error log so the agent can fix.
+//
+// Security: this block runs through the same _headers / CSP pipeline
+// as everything else. A `<script>` here that isn't covered by
+// security.allowed_scripts will be blocked at runtime by the meta CSP.
+func renderRawAstroBlock(data map[string]any) string {
+	code := dataString(data, "code")
+	if code == "" {
+		return "  <!-- raw_astro block: empty code -->\n"
+	}
+	trimmed := strings.TrimLeft(code, " \t\n")
+	// If author already opens with a section/div/header/footer, emit
+	// verbatim. Otherwise wrap in a <section> so the renderer's
+	// auto-section-id helper has a hook.
+	hasOuterTag := strings.HasPrefix(trimmed, "<section") ||
+		strings.HasPrefix(trimmed, "<div") ||
+		strings.HasPrefix(trimmed, "<header") ||
+		strings.HasPrefix(trimmed, "<footer") ||
+		strings.HasPrefix(trimmed, "<nav") ||
+		strings.HasPrefix(trimmed, "<article") ||
+		strings.HasPrefix(trimmed, "<aside") ||
+		strings.HasPrefix(trimmed, "<main")
+	if hasOuterTag {
+		return "  " + code + "\n"
+	}
+	cls := "block block--raw_astro"
+	if extra := dataString(data, "class"); extra != "" {
+		cls += " " + extra
+	}
+	return fmt.Sprintf("  <section class=\"%s\">\n    %s\n  </section>\n", cls, code)
+}
+
 // renderProcessStepsBlock renders a numbered 4-up grid of process steps.
 // Each step shows a big primary-coloured number + h3 title + body. Use for
 // "How it works" / "Our process" / "How to get started" sections — the

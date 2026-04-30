@@ -360,6 +360,13 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/agent/build", agentBuildH.TriggerBuild)
 		r.Get("/api/agent/build/{buildID}/status", agentBuildH.BuildStatus)
 
+		// Screenshot. Closes the visual-feedback loop: agent edits blocks,
+		// triggers build, calls /api/agent/screenshot to get a base64 PNG of
+		// the rendered page, and can iterate against pixels in the same turn.
+		// SSRF-locked to atomicsite tenant subdomains + brightinteraction.com.
+		screenshotH := handlers.NewScreenshotHandler()
+		r.Post("/api/agent/screenshot", screenshotH.Screenshot)
+
 		// MCP server (Model Context Protocol). One JSON-RPC endpoint
 		// translating tools/call + resources/read into the same store
 		// + builder logic the REST handlers use. Allow-list driven so
