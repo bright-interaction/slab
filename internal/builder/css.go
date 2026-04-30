@@ -312,7 +312,16 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	// Explicit `.nav-cta` overrides + neutralises the auto last-child styling.
 	b.WriteString(".site-nav .nav-cta { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; }\n")
 	b.WriteString(".site-nav .nav-cta:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n")
-	b.WriteString(".site-nav:has(.nav-cta) li:last-child a:not(.nav-cta) { background: transparent; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.5rem 0.75rem; border-radius: 0; font-size: 0.875rem; font-weight: 500; }\n\n")
+	b.WriteString(".site-nav:has(.nav-cta) li:last-child a:not(.nav-cta) { background: transparent; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.5rem 0.75rem; border-radius: 0; font-size: 0.875rem; font-weight: 500; }\n")
+	// Single-language toggle pattern: hide the locale-switcher link that
+	// matches the current page's lang so visitors only see the OTHER
+	// locales (mirrors brightinteraction.com — show "SV" on /en/, "EN"
+	// on /sv/). Renderer emits data-lang="xx" on locale-switcher <li>s;
+	// :lang() pseudo matches based on the html lang attribute.
+	b.WriteString(":lang(en) .site-nav li[data-lang='en'], :lang(sv) .site-nav li[data-lang='sv'], :lang(de) .site-nav li[data-lang='de'], :lang(fr) .site-nav li[data-lang='fr'], :lang(es) .site-nav li[data-lang='es'], :lang(no) .site-nav li[data-lang='no'], :lang(da) .site-nav li[data-lang='da'] { display: none; }\n")
+	// Locale-switcher pill style: small mono uppercase, neutral.
+	b.WriteString(".site-nav li[data-lang] a { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.25rem 0.5rem; }\n")
+	b.WriteString(".site-nav li[data-lang] a:hover { color: var(--color-text); }\n\n")
 
 	// --- Dark footer variant: opt in via data.theme="dark" on the footer global block. ---
 	b.WriteString(".site-footer.is-dark { background: var(--color-text); color: white; padding-block: 4rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 0; }\n")

@@ -234,6 +234,13 @@ func renderPageWithContext(page store.Page, blocks []store.Block, components map
 	if description != "" {
 		b.WriteString(fmt.Sprintf(" description=\"%s\"", escapeAttr(description)))
 	}
+	// Per-page lang stamp. Defaults to site.Lang in the layout; override
+	// here when the page slug carries a locale prefix the renderer
+	// recognises (drives <html lang> + the :lang() CSS that hides the
+	// current-locale link in the nav switcher).
+	if pageLang := ctx.i18n.LangForSlug(page.Slug); pageLang != "" && pageLang != ctx.site.Lang {
+		b.WriteString(fmt.Sprintf(` lang="%s"`, escapeAttr(pageLang)))
+	}
 	if page.NoIndex == 1 {
 		b.WriteString(` robots="noindex, nofollow"`)
 	}
