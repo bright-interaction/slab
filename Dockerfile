@@ -45,7 +45,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.20
 # bun is dynamically linked against libstdc++ / libgcc / unwind; without these
 # `bun install` inside the runtime aborts with "_ZNSt... symbol not found".
-RUN apk add --no-cache ca-certificates tzdata libstdc++ libgcc
+# chromium is used by the /api/agent/screenshot endpoint (chromedp) so the
+# agent can see the rendered output and iterate against pixels.
+# nss / freetype / harfbuzz / ca-certificates are chromium runtime deps.
+RUN apk add --no-cache ca-certificates tzdata libstdc++ libgcc \
+    chromium nss freetype harfbuzz ttf-freefont
+ENV CHROMEDP_HEADLESS_FLAGS="" \
+    CHROMEDP_NO_SANDBOX=1
 COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun
 RUN addgroup -S atomicsite && adduser -S atomicsite -G atomicsite
 RUN mkdir -p /app/data && chown -R atomicsite:atomicsite /app

@@ -375,6 +375,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderAboutSplitBlock(data, mediaByID)
 	case "custom":
 		return renderCustomBlock(data)
+	case "raw_astro":
+		return renderRawAstroBlock(data)
 	case "code_block":
 		return renderCodeBlock(data)
 	case "form":

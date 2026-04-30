@@ -2164,6 +2164,12 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 			TextKeys:  []BlockSchemaField{{Key: "name", Label: "Block name (also drives the auto-id)"}, {Key: "eyebrow", Label: "Optional eyebrow above the markup"}},
 			OtherKeys: []BlockSchemaField{{Key: "markup", Label: "Full HTML for the section body. Tailwind classes work once the site enables Tailwind in its build pipeline; for now, use atomicsite's CSS variables + utility classes (.btn-primary, .btn-secondary, .btn-accent, .actions, .container, .feature-grid, .stat-grid, etc.)"}, {Key: "props", Label: "Optional metadata object the agent reads at edit time"}},
 		},
+		{
+			BlockType: "raw_astro",
+			Use:       "RAW Astro/HTML/Tailwind code block. The escape hatch when typed primitives can't reach pixel parity (e.g. cloning brightinteraction.com's hero exactly, building a bespoke hero with custom layout, embedding a Svelte island with specific markup). Author writes the full markup; atomicsite emits it verbatim into the page Astro source — no auto-section-id, no alternating-bg, no eyebrow CSS, no accent-span helper. Author owns every pixel. Use sparingly — typed primitives carry render polish for free; raw_astro starts from zero. If the code has a syntax error, trigger_build returns the Astro error log so the agent can fix.",
+			TextKeys:  []BlockSchemaField{{Key: "code", Label: "Full Astro/HTML/Tailwind markup. Wrapped in a <section> only if the code doesn't already start with one. Tailwind utility classes work; atomicsite's design tokens (--color-text, --color-primary, --font-heading, etc.) are available; data-circuit-canvas activates the platform's animated bg. NO inline <script> (blocked by CSP); for JS use a registered Svelte island via the component block_type instead.", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "class", Label: "Optional class added to the auto-section wrapper (only applies when the code doesn't already begin with a section/header/footer/nav/article/aside/main/div tag)"}},
+		},
 	}
 }
 
