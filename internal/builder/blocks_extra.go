@@ -40,26 +40,32 @@ func renderSplitHeroBlock(data map[string]any, mediaByID map[string]store.Medium
 		b.WriteString(fmt.Sprintf("      <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
 	}
 	if headline := dataString(data, "headline"); headline != "" {
-		b.WriteString(fmt.Sprintf("      <h1>%s</h1>\n", escapeHTML(headline)))
+		b.WriteString(fmt.Sprintf("      <h1>%s</h1>\n", renderHeadlineWithAccent(headline, dataString(data, "headline_accent"))))
 	}
 	if sub := dataString(data, "subheading"); sub != "" {
 		b.WriteString(fmt.Sprintf("      <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
 	}
-	if ctaText := dataString(data, "cta_text"); ctaText != "" {
-		ctaURL := dataString(data, "cta_url")
-		if ctaURL == "" {
-			ctaURL = "#"
+	ctaText := dataString(data, "cta_text")
+	secLabel := dataString(data, "secondary_label")
+	if ctaText != "" || secLabel != "" {
+		b.WriteString("      <div class=\"hero-actions\">\n")
+		if ctaText != "" {
+			ctaURL := dataString(data, "cta_url")
+			if ctaURL == "" {
+				ctaURL = "#"
+			}
+			b.WriteString(fmt.Sprintf("        <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
+				escapeURL(ctaURL), escapeHTML(ctaText)))
 		}
-		b.WriteString(fmt.Sprintf("      <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
-			escapeURL(ctaURL), escapeHTML(ctaText)))
-	}
-	if secLabel := dataString(data, "secondary_label"); secLabel != "" {
-		secURL := dataString(data, "secondary_url")
-		if secURL == "" {
-			secURL = "#"
+		if secLabel != "" {
+			secURL := dataString(data, "secondary_url")
+			if secURL == "" {
+				secURL = "#"
+			}
+			b.WriteString(fmt.Sprintf("        <a href=\"%s\" class=\"btn-secondary\">%s</a>\n",
+				escapeURL(secURL), escapeHTML(secLabel)))
 		}
-		b.WriteString(fmt.Sprintf("      <a href=\"%s\" class=\"btn-secondary\">%s</a>\n",
-			escapeURL(secURL), escapeHTML(secLabel)))
+		b.WriteString("      </div>\n")
 	}
 	b.WriteString("    </div>\n")
 	b.WriteString("    <div class=\"split-hero-image\">\n")
@@ -96,6 +102,9 @@ func renderStatGridBlock(data map[string]any) string {
 			}
 			if l := dataString(item, "label"); l != "" {
 				b.WriteString(fmt.Sprintf("        <div class=\"stat-label\">%s</div>\n", escapeHTML(l)))
+			}
+			if c := dataString(item, "context"); c != "" {
+				b.WriteString(fmt.Sprintf("        <div class=\"stat-context\">%s</div>\n", escapeHTML(c)))
 			}
 			b.WriteString("      </li>\n")
 		}
@@ -198,6 +207,9 @@ func renderPricingBlock(data map[string]any) string {
 				cls += " is-featured"
 			}
 			b.WriteString(fmt.Sprintf("      <li class=\"%s\">\n", cls))
+			if step := dataString(tier, "step"); step != "" {
+				b.WriteString(fmt.Sprintf("        <div class=\"tier-step\">%s</div>\n", escapeHTML(step)))
+			}
 			if n := dataString(tier, "name"); n != "" {
 				b.WriteString(fmt.Sprintf("        <div class=\"tier-name\">%s</div>\n", escapeHTML(n)))
 			}

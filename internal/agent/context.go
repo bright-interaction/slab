@@ -901,7 +901,8 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 	}
 	heroTextKeys := []BlockSchemaField{
 		{Key: "eyebrow", Label: "Eyebrow", Multiline: false},
-		{Key: "headline", Label: "Headline", Multiline: false},
+		{Key: "headline", Label: "Headline (wrap an inline accent fragment in [[double brackets]] to colour it with --color-primary)", Multiline: false},
+		{Key: "headline_accent", Label: "Optional accent line appended after the headline in --color-primary (alternative to [[brackets]])", Multiline: false},
 		{Key: "subheading", Label: "Subheading", Multiline: true},
 		{Key: "cta_text", Label: "Primary CTA label", Multiline: false},
 		{Key: "secondary_label", Label: "Secondary CTA label", Multiline: false},
@@ -994,9 +995,9 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 		},
 		{
 			BlockType: "stat_grid",
-			Use:       "Trust signals / social proof. Horizontal grid of large numbers + labels. Counts as list >= 3 items for the AI-Friendly Formatting eval check.",
+			Use:       "Trust signals / social proof. Horizontal grid of large numbers + labels (+ optional context). Counts as list >= 3 items for the AI-Friendly Formatting eval check.",
 			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {value, label}"}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {value, label, context?}. The optional context line appears below the label in muted small text and is the right place for industry-average comparisons or qualifiers."}},
 		},
 		{
 			BlockType: "accordion_faq",
@@ -1006,9 +1007,9 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 		},
 		{
 			BlockType: "pricing",
-			Use:       "3-up pricing tier cards with feature bullets + per-tier CTA. Set tiers[i].featured=true on the recommended plan to give it a primary border + shadow.",
+			Use:       "3-up pricing tier cards with feature bullets + per-tier CTA. Set tiers[i].featured=true on the recommended plan to give it a dark fill + accent border. Optional tiers[i].step shows a small mono uppercase 'STEP 01' eyebrow above the tier name.",
 			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "tiers", Label: "Array of {name, price, price_period, description, features[], cta_text, cta_url, featured?}"}},
+			OtherKeys: []BlockSchemaField{{Key: "tiers", Label: "Array of {step?, name, price, price_period, description, features[], cta_text, cta_url, featured?}"}},
 		},
 		{
 			BlockType: "logo_strip",

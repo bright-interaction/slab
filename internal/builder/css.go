@@ -126,12 +126,11 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block .subheading { font-size: 1.0625rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); max-width: 60ch; margin-block-end: 1.5rem; }\n\n")
 
 	// Hero: centred, large headline, optional image below subheading, CTA row.
-	b.WriteString(".block--hero { text-align: center; max-width: 56rem; padding-block: 5rem 4rem; }\n")
-	b.WriteString(".block--hero .eyebrow { margin-inline: auto; }\n")
-	b.WriteString(".block--hero h1 { font-size: clamp(2.25rem, 5vw, 3.75rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; margin-block: 0.75rem 1rem; }\n")
-	b.WriteString(".block--hero .subheading { font-size: 1.25rem; max-width: 50ch; margin-inline: auto; }\n")
-	b.WriteString(".block--hero img { max-width: 100%; max-height: 26rem; width: auto; margin: 2rem auto 1rem; border-radius: 1rem; box-shadow: 0 12px 40px color-mix(in oklab, var(--color-text) 12%, transparent); }\n")
-	b.WriteString(".block--hero a.btn-primary, .block--hero a.btn-secondary { margin: 0.5rem 0.5rem 0 0.5rem; }\n\n")
+	b.WriteString(".block--hero { text-align: center; max-width: 64rem; padding-block: 6rem 5rem; min-height: clamp(36rem, 70vh, 50rem); display: flex; flex-direction: column; align-items: center; justify-content: center; }\n")
+	b.WriteString(".block--hero .eyebrow { margin-inline: auto; margin-block-end: 1.5rem; }\n")
+	b.WriteString(".block--hero h1 { font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 700; line-height: 1.06; letter-spacing: -0.025em; margin-block: 0 2rem; max-width: 18ch; }\n")
+	b.WriteString(".block--hero .subheading { font-size: 1.25rem; max-width: 42rem; margin-inline: auto; margin-block-end: 0; line-height: 1.55; color: color-mix(in oklab, var(--color-text) 70%, transparent); }\n")
+	b.WriteString(".block--hero img { max-width: 100%; max-height: 26rem; width: auto; margin: 2rem auto 1rem; border-radius: 1rem; box-shadow: 0 12px 40px color-mix(in oklab, var(--color-text) 12%, transparent); }\n\n")
 
 	// Feature grid: heading top-left, grid below.
 	b.WriteString(".block--feature_grid { max-width: 72rem; }\n")
@@ -165,8 +164,13 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".feature-grid-item .icon { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0.625rem; border-radius: 0.625rem; background: color-mix(in oklab, var(--color-bg) 80%, var(--color-primary)); color: var(--color-primary); margin-block-end: 1rem; }\n")
 	b.WriteString(".feature-grid-item .icon svg, .feature-grid-item .icon { box-sizing: border-box; }\n\n")
 
-	// Visual rhythm: every other block--feature_grid gets a tinted background so sections don't blur into one continuous column. Alternate via :nth-of-type.
-	b.WriteString(".block--feature_grid:nth-of-type(even) { background: color-mix(in oklab, var(--color-bg) 96%, var(--color-text)); border-radius: 1.25rem; }\n")
+	// Visual rhythm: every other major content block gets a tinted "surface"
+	// background so consecutive sections don't blur together. The surface
+	// covers the full viewport width while the inner content stays inside
+	// the container — implemented by full-bleed background on the section
+	// itself and an inner max-width via the existing .block padding.
+	b.WriteString("main > .block:nth-of-type(even):not(.block--hero):not(.block--split_hero):not(.block--cta):not(.block--logo_carousel):not(.block--logo_strip) { background: color-mix(in oklab, var(--color-bg) 94%, var(--color-text)); }\n")
+	b.WriteString("main > .block:nth-of-type(even):not(.block--hero):not(.block--split_hero):not(.block--cta):not(.block--logo_carousel):not(.block--logo_strip) { max-width: none; padding-inline: max(1.5rem, calc((100vw - var(--container-width)) / 2)); }\n")
 	b.WriteString(".block--text + .block--feature_grid, .block--feature_grid + .block--text { margin-block-start: 0; }\n\n")
 
 	// Site-wide spacing: more generous block padding so sections breathe.
@@ -175,8 +179,11 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	// --- Editorial eyebrow pattern (used by every block with .eyebrow). Mono + uppercase + tracking-widest matches brightinteraction.com's typographic system. ---
 	b.WriteString(".block .eyebrow, .block-eyebrow { font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 1rem; }\n\n")
 
-	// --- Hero typography upgrade: matches the brightinteraction.com 4xl-7xl scale, line-height 1.05, negative letter-spacing. ---
-	b.WriteString(".block--hero h1, .block--split_hero h1 { font-size: clamp(2.5rem, 5.5vw, 4.5rem); line-height: 1.05; letter-spacing: -0.02em; font-weight: 700; }\n\n")
+	// --- Section header pattern: eyebrow (mono-uppercase, color-primary) above
+	// any h2, then optional subheading. Used by every block that opens with
+	// .eyebrow + h2. Spacing matches brightinteraction.com's section heads. ---
+	b.WriteString(".block > .eyebrow + h2 { margin-block: 0 1rem; font-size: clamp(1.875rem, 3.5vw, 2.5rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }\n")
+	b.WriteString(".block > h2 + .subheading { margin-block-end: 2.5rem; font-size: 1.0625rem; max-width: 36rem; }\n\n")
 
 	// --- Circuit-board background pattern. Optional decoration; activate by adding `data-bg=\"circuit\"` on the section element. Pure SVG, scales infinitely, ~600 bytes. ---
 	b.WriteString(".block[data-bg='circuit'] { position: relative; }\n")
@@ -263,6 +270,17 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".btn-accent { background: var(--color-primary); color: var(--color-on-primary, white); border: 1px solid var(--color-primary); }\n")
 	b.WriteString(".btn-accent:hover { background: color-mix(in oklab, var(--color-primary) 88%, black); border-color: color-mix(in oklab, var(--color-primary) 88%, black); color: white; text-decoration: none; }\n\n")
 
+	// --- BI-style headline accent: span color-primary fragment of an h1/h2.
+	// Renderer auto-wraps `[[fragment]]` in headline strings, or appends a
+	// `headline_accent` field as a colored second line. Universal across
+	// hero, split_hero, and any block that uses renderHeadlineWithAccent. ---
+	b.WriteString(".headline-accent { color: var(--color-primary); }\n\n")
+
+	// --- Hero action row: wraps the primary + secondary CTA so they sit on a
+	// single flex row with consistent spacing across hero variants. ---
+	b.WriteString(".hero-actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-block-start: 2rem; align-items: center; }\n")
+	b.WriteString(".block--hero .hero-actions { justify-content: center; }\n\n")
+
 	// --- Improved navbar: compact h-14, white/90 + backdrop-blur, mono brand wordmark style. Last nav link auto-styles as a primary CTA pill. ---
 	b.WriteString(".site-header { height: 3.5rem; padding-block: 0; padding-inline: 1.5rem; display: flex; align-items: center; }\n")
 	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }\n")
@@ -309,8 +327,9 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block--stat_grid > .subheading { text-align: center; margin-inline: auto; margin-block-end: 2.5rem; }\n")
 	b.WriteString(".stat-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 2rem; text-align: center; }\n")
 	b.WriteString(".stat-grid-item { padding: 1.5rem; }\n")
-	b.WriteString(".stat-grid-item .stat-value { font-family: var(--font-heading); font-size: clamp(2.25rem, 4vw, 3rem); font-weight: 700; line-height: 1; color: var(--color-primary); margin-block-end: 0.5rem; letter-spacing: -0.02em; }\n")
-	b.WriteString(".stat-grid-item .stat-label { font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); line-height: 1.4; }\n\n")
+	b.WriteString(".stat-grid-item .stat-value { font-family: var(--font-heading); font-size: clamp(2.25rem, 4vw, 3rem); font-weight: 700; line-height: 1; color: var(--color-text); margin-block-end: 0.5rem; letter-spacing: -0.02em; }\n")
+	b.WriteString(".stat-grid-item .stat-label { font-size: 0.9375rem; font-weight: 500; color: var(--color-text); line-height: 1.4; }\n")
+	b.WriteString(".stat-grid-item .stat-context { font-size: 0.8125rem; color: color-mix(in oklab, var(--color-text) 55%, transparent); line-height: 1.4; margin-block-start: 0.125rem; }\n\n")
 
 	// accordion_faq: native <details> / <summary> accordion. No JS needed.
 	b.WriteString(".block--accordion_faq { max-width: 56rem; }\n")
@@ -329,7 +348,12 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block--pricing > .subheading { text-align: center; margin-inline: auto; margin-block-end: 2.5rem; }\n")
 	b.WriteString(".pricing-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem; align-items: stretch; }\n")
 	b.WriteString(".pricing-tier { display: flex; flex-direction: column; padding: 2rem; border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent); border-radius: 1rem; background: color-mix(in oklab, var(--color-bg) 96%, white); }\n")
-	b.WriteString(".pricing-tier.is-featured { border-color: var(--color-primary); border-width: 2px; box-shadow: 0 12px 32px color-mix(in oklab, var(--color-primary) 18%, transparent); }\n")
+	b.WriteString(".pricing-tier.is-featured { background: var(--color-text); color: white; border-color: var(--color-text); border-width: 2px; box-shadow: 0 16px 40px color-mix(in oklab, var(--color-text) 22%, transparent); }\n")
+	b.WriteString(".pricing-tier.is-featured .tier-name, .pricing-tier.is-featured .tier-price { color: white; }\n")
+	b.WriteString(".pricing-tier.is-featured .tier-description, .pricing-tier.is-featured ul.tier-features li { color: color-mix(in oklab, white 80%, transparent); }\n")
+	b.WriteString(".pricing-tier.is-featured ul.tier-features li::before { color: var(--color-primary); }\n")
+	b.WriteString(".pricing-tier.is-featured .tier-step { color: var(--color-primary); }\n")
+	b.WriteString(".pricing-tier .tier-step { font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 0.5rem; }\n")
 	b.WriteString(".pricing-tier .tier-name { font-family: var(--font-heading); font-weight: 700; font-size: 1.25rem; margin-block-end: 0.5rem; }\n")
 	b.WriteString(".pricing-tier .tier-price { font-size: 2rem; font-weight: 700; color: var(--color-primary); line-height: 1; margin-block-end: 0.25rem; }\n")
 	b.WriteString(".pricing-tier .tier-price-period { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin-block-end: 1.25rem; }\n")
