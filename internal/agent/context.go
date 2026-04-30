@@ -977,6 +977,63 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 				{Key: "props", Label: "Object of props the component accepts"},
 			},
 		},
+		{
+			BlockType: "split_hero",
+			Use:       "Side-by-side hero with text on the left + image on the right (collapses to stacked on mobile). Better for SaaS marketing pages than the centred hero.",
+			TextKeys:  heroTextKeys,
+			OtherKeys: []BlockSchemaField{
+				{Key: "cta_url", Label: "Primary CTA URL"},
+				{Key: "secondary_url", Label: "Secondary CTA URL"},
+				{Key: "image_id", Label: "Hero image media ID (right column)"},
+				{Key: "image_alt", Label: "Hero image alt text"},
+			},
+		},
+		{
+			BlockType: "stat_grid",
+			Use:       "Trust signals / social proof. Horizontal grid of large numbers + labels. Counts as list >= 3 items for the AI-Friendly Formatting eval check.",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {value, label}"}},
+		},
+		{
+			BlockType: "accordion_faq",
+			Use:       "Q&A accordion using native <details>/<summary> (no JS needed). Auto-emits FAQPage JSON-LD so the FAQ Schema eval check passes.",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {question, answer}"}},
+		},
+		{
+			BlockType: "pricing",
+			Use:       "3-up pricing tier cards with feature bullets + per-tier CTA. Set tiers[i].featured=true on the recommended plan to give it a primary border + shadow.",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "tiers", Label: "Array of {name, price, price_period, description, features[], cta_text, cta_url, featured?}"}},
+		},
+		{
+			BlockType: "logo_strip",
+			Use:       "Row of customer / partner logos. Use under the hero on a real production marketing site to anchor trust before the first feature.",
+			TextKeys:  []BlockSchemaField{{Key: "label", Label: "Label (e.g. 'Trusted by')"}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {image_id, alt, href?}"}},
+		},
+		{
+			BlockType: "code_block",
+			Use:       "Monospace code presentation with optional language label. Use for technical-blog and developer-docs sites; not for executable code (atomicsite is static).",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "code", Label: "Code body", Multiline: true}},
+			OtherKeys: []BlockSchemaField{{Key: "language", Label: "Language label (e.g. 'go', 'typescript')"}},
+		},
+		{
+			BlockType: "form",
+			Use:       "Basic HTML form. Browser POSTs to the action URL. Operator wires the receiving endpoint (a worker, Formspree, n8n webhook, etc.). For simple contact + lead-capture flows.",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}, {Key: "submit_label", Label: "Submit button label"}},
+			OtherKeys: []BlockSchemaField{
+				{Key: "action", Label: "Form POST URL"},
+				{Key: "method", Label: "HTTP method ('post' default; 'get' for query-string forms)"},
+				{Key: "fields", Label: "Array of {name, type ('text'|'email'|'tel'|'url'|'textarea'|'select'), label, placeholder?, required?, options?}"},
+			},
+		},
+		{
+			BlockType: "embed",
+			Use:       "iframe wrapped in 16:9 aspect-ratio container. Use for cal.com bookings, YouTube videos, Stripe Checkout, Typeform. The src host MUST be in trusted_domains (kind=frame) — admin grants via /sites/{id}/settings/allowed-scripts.",
+			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "title", Label: "iframe title (a11y)"}},
+			OtherKeys: []BlockSchemaField{{Key: "src", Label: "iframe src URL"}, {Key: "aspect_ratio", Label: "Aspect ratio (default '16/9')"}},
+		},
 	}
 }
 

@@ -339,8 +339,24 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 	switch blockType {
 	case "hero":
 		return renderHeroBlock(data, mediaByID)
+	case "split_hero":
+		return renderSplitHeroBlock(data, mediaByID)
 	case "feature_grid":
 		return renderFeatureGridBlock(data)
+	case "stat_grid":
+		return renderStatGridBlock(data)
+	case "accordion_faq":
+		return renderAccordionFAQBlock(data)
+	case "pricing":
+		return renderPricingBlock(data)
+	case "logo_strip":
+		return renderLogoStripBlock(data, mediaByID)
+	case "code_block":
+		return renderCodeBlock(data)
+	case "form":
+		return renderFormBlock(data)
+	case "embed":
+		return renderEmbedBlock(data)
 	case "text":
 		return renderTextBlock(data)
 	case "cta":
