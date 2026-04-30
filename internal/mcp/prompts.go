@@ -53,6 +53,85 @@ func (s *Server) registerPrompts() {
 	})
 
 	register(Prompt{
+		Name:        "build_for_perfect_eval",
+		Description: "Read the site state + pending_setup + settings_catalog + block_schemas, then build out the site to maximize the eval score. Treats the eval engine's checklist as the spec; iterates until the categories the agent can write hit at least 95%. Use this when the site is empty or near-empty and you want a full set-up pass in one shot.",
+		Render: func(ctx context.Context, agent *authmw.AgentIdentity, _ map[string]string) ([]PromptMessage, error) {
+			return []PromptMessage{
+				{Role: "user", Content: Content{Type: "text", Text: `Goal: get this site to A+ on the atomicsite eval engine without me hand-holding each step.
+
+Read atomicsite://site/context first. The payload carries everything you need to plan: pending_setup (gaps), block_schemas (what each block_type expects), settings_catalog (every settable key + writable_by_agent flag), security_posture (admin-only items you can't touch), i18n (locale + hreflang strategy), endpoints (REST mirror of MCP).
+
+Then converge on the perfect-score checklist below. Treat each item as a hard requirement before claiming done.
+
+== Foundation ==
+1. Profile completeness via update_profile: business_name, registration_nr, country, contact_email, privacy_email, security_email, address_line1, city, postal_code. Drives Organization JSON-LD + security.txt.
+2. Branding via PATCH /api/agent/branding: meta_title (30-60 chars, fallback for any page without override), meta_description (120-160 chars with action verbs like "learn / try / get / book / läs / prova"), og_image_id (1200x630 from media library, brand folder), favicon_id (square PNG/JPEG/GIF/WebP; SVG is rejected, use PNG), lang.
+3. Settings via bulk_upsert_settings:
+   - seo.canonical_base = absolute https URL of the production domain
+   - seo.meta_title_template = "{page_title} {separator} {site_name}"
+   - seo.meta_description_template = "{page_description}"
+   - seo.same_as = newline-separated social URLs (LinkedIn, GitHub, Instagram, etc.; drives JSON-LD sameAs)
+   - seo.sitemap_enabled = "1"
+   - general.hreflang_strategy = "path" (default)
+   - general.additional_langs = "en,sv,..." for every locale you'll publish
+   - analytics.atomicsite_tracking_enabled = "1"
+   - analytics.cookieproof_enabled = "1" if you're using CookieProof; the cookieproof_org_id can stay empty (falls back to site domain)
+
+== Structure ==
+4. URL convention: pick one. Either root = default lang (e.g. / + /sv/ matching brightinteraction.com) OR symmetric (/en/ + /sv/ + a noindex splash at /). Don't mix. Hreflang emission is path-based on actually-published page slugs.
+5. For every page you publish, set BOTH meta_title and meta_description on the page row via update_page (don't rely on branding fallback alone — eval flags pages with empty per-page meta on title-length / description-length checks).
+6. Set no_index=0 on real content pages. The splash page should be no_index=1 + hide_global_blocks=1.
+7. Each locale needs a counterpart for hreflang to emit cleanly: /en/about ↔ /sv/about, /en/privacy ↔ /sv/privacy, /en/404 ↔ /sv/404. If a counterpart is missing, eval flags the multi-language pages.
+
+== Pages ==
+8. Every content page (not splash) needs at minimum:
+   - 1 hero block at sort_order=0 with: eyebrow (optional), headline (becomes h1, REQUIRED for eval Has H1), subheading, cta_text + cta_url, optional secondary_label + secondary_url, optional image_id from media library
+   - 1+ feature_grid OR text block carrying real content (300+ words across the page total — eval flags pages under 300 words)
+   - 1 cta block at the end with heading, text, cta_text, cta_url
+9. Use feature_grid for cards (each item: title, body, icon Lucide name like Mail/Server/Lock/Workflow). 3-6 items renders cleanly.
+10. Use text blocks for long-form prose. Multi-paragraph by separating with blank lines (\n\n); single \n inside a paragraph becomes <br>.
+11. Don't use raw HTML blocks unless absolutely necessary; the forbidden_patterns guardrail rejects <iframe> and inline scripts.
+12. No plaintext emails in block text — eval flags them as info. Use mailto: via raw HTML carefully OR refer to a contact page that uses an obfuscated address pattern.
+
+== Global blocks ==
+13. PUT /api/agent/global/header with name, block_type=header, data.links = primary nav + lang switcher + booking CTA (last link auto-styled as a primary pill).
+14. PUT /api/agent/global/footer with name, block_type=footer, data.copyright + data.links pointing at /<lang>/privacy, /<lang>/terms, /<lang>/cookies, plus social URLs.
+
+== Build verb is publish verb ==
+15. trigger_build = "build static Astro output + run eval engine + auto-deploy to /srv/atomicsite/<slug>/dist where Caddy serves from". After it returns success, the live site reflects the new content.
+16. After every build, get_evaluation(build_id) returns 5 categories: accessibility (33pt), performance (12pt), privacy (14pt), security (26pt), seo (64pt). Walk failing checks, fix, re-build. Iterate until the categories you can write are above 95%.
+
+== Block-time guardrails ==
+17. Generic alt text ("image", "photo") is rejected at create_block / update_block time.
+18. Empty meta_description, missing CTA verbs, slug with underscores or trailing slash are all rejected at update_page time.
+19. Personalization conditions (data.condition) are validated against a small DSL; complex booleans rejected.
+
+== Admin-only items you can't fix ==
+The eval will flag these but you can't write them:
+- security category settings (HSTS preload, CSP extra directives, COOP/CORP/COEP, X-Frame-Options): admin only at human_admin_url shown in settings_catalog.
+- allowed-scripts (CSP allowlist for cal.com, YouTube, etc.): admin only.
+- Subresource Integrity: requires layout-level SHA-384 fetch.
+- Focus Indicators: requires layout-level :focus-visible CSS.
+- Resource Hints: requires layout-level <link rel=preconnect> for fonts.
+- Modern Image Formats: hero/image renderer doesn't yet pick WebP variants from media.variants_json.
+- Image dimensions on hero: renderer doesn't emit width/height (yet).
+
+For these, surface them to the human at the end with the exact admin URL each one points at. Don't loop trying to write them — bulk_upsert_settings rejects them with rejected_admin_only.
+
+== Verification gate ==
+Before claiming the site is "done":
+- list_pages returns every page you intended.
+- list_blocks for the home page returns 5+ blocks in order (sort_order increasing).
+- get_site_context's pending_setup list is empty (or only admin-only items remain).
+- get_evaluation shows 95%+ on agent-writable categories.
+- The live URL serves correctly: curl -I returns 200, the HTML contains <h1> from the hero block, OG meta tags reference /media/<og_image_id>, headers carry HSTS + CSP.
+
+Drive end-to-end now. Ask me only when you genuinely need a value (org-nr, social URL, copy direction); otherwise pick sensible defaults from the brand voice and keep moving.`}},
+			}, nil
+		},
+	})
+
+	register(Prompt{
 		Name:        "create_landing_page",
 		Description: "Create a high-conversion landing page that suppresses the global nav + footer (hide_global_blocks=true). Walks through the standard sections (hero, problem, solution, social proof, CTA).",
 		Render: func(ctx context.Context, agent *authmw.AgentIdentity, _ map[string]string) ([]PromptMessage, error) {

@@ -84,6 +84,55 @@ type SiteContext struct {
 	// excluded from the catalog so an agent doesn't spend tokens setting
 	// values that go nowhere.
 	SettingsCatalog SettingsCatalogInfo `json:"settings_catalog"`
+	// EvalPlaybook is a hard-coded checklist the agent reads on first
+	// session to know exactly how to converge the site to A+ on the
+	// atomicsite eval engine. It connects every block-renderer field,
+	// every settings_catalog key, and every pending_setup item to the
+	// specific eval check it satisfies, so the agent doesn't have to
+	// trial-and-error the eval to figure out what each failing check
+	// wants. Updated 2026-04-30 after the first end-to-end agent
+	// walkthrough surfaced 7 contradictions between documented surface
+	// and handler behaviour. Treat as the spec; the eval engine is the
+	// scoreboard.
+	EvalPlaybook EvalPlaybookInfo `json:"eval_playbook"`
+}
+
+// EvalPlaybookInfo is a structured playbook the agent reads to know the
+// shape every page should take and which fields/settings drive which
+// eval checks. Hard-coded in agent/context.go so every site gets it
+// without per-site KB seeding.
+type EvalPlaybookInfo struct {
+	Goal           string             `json:"goal"`
+	PageTemplate   PageTemplate       `json:"page_template"`
+	HardRules      []HardRule         `json:"hard_rules"`
+	BuildLoop      []string           `json:"build_loop"`
+	AdminOnlyItems []AdminOnlyItem    `json:"admin_only_items"`
+	VerificationGate []string         `json:"verification_gate"`
+}
+
+// PageTemplate is the canonical block sequence the eval engine rewards.
+// Use as the default when creating a fresh content page.
+type PageTemplate struct {
+	Description string             `json:"description"`
+	Blocks      []TemplateBlock    `json:"blocks"`
+}
+
+type TemplateBlock struct {
+	BlockType string `json:"block_type"`
+	Required  bool   `json:"required"`
+	Notes     string `json:"notes"`
+}
+
+type HardRule struct {
+	Rule      string `json:"rule"`
+	WhyItMatters string `json:"why"`
+	HowToApply   string `json:"how"`
+}
+
+type AdminOnlyItem struct {
+	Setting       string `json:"setting"`
+	HumanAdminURL string `json:"human_admin_url"`
+	EvalImpact    string `json:"eval_impact"`
 }
 
 // I18nInfo is the agent-facing summary of the site's multi-language
@@ -585,7 +634,65 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		SecurityPosture:  b.computeSecurityPosture(ctx, siteID),
 		I18n:             b.computeI18n(ctx, siteID, site, pageInfos),
 		SettingsCatalog:  buildSettingsCatalog(siteID, settingMap),
+		EvalPlaybook:     defaultEvalPlaybook(siteID),
 	}, nil
+}
+
+// defaultEvalPlaybook returns the hard-coded agent playbook for converging
+// a site to A+ on the atomicsite eval engine. Connects every block-renderer
+// field, every settings_catalog key, and every pending_setup item to the
+// eval check it satisfies, so an agent reading the context can plan the
+// whole setup pass without trial-and-error against the eval.
+func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
+	return EvalPlaybookInfo{
+		Goal: "Drive the site to 95%+ on agent-writable eval categories (accessibility, seo, privacy partial, performance partial, plus parts of security). The remaining gap is admin-only items the agent surfaces to the human at the end. Read this section first; it tells you what to write and why each write satisfies a specific eval check.",
+		PageTemplate: PageTemplate{
+			Description: "Canonical block sequence for a content page. Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
+			Blocks: []TemplateBlock{
+				{BlockType: "hero", Required: true, Notes: "Sort 0. headline -> h1 (REQUIRED for eval Has H1 + Single H1). eyebrow + subheading + cta_text + cta_url. image_id from media library for OG-quality hero image. secondary_label + secondary_url optional."},
+				{BlockType: "feature_grid", Required: false, Notes: "Sort 1+. heading + subheading + items[]. Each item: title (h3), body (p), icon (Lucide name). 3-6 items renders cleanly. Counts as list >= 3 items for AI-Friendly Formatting eval check."},
+				{BlockType: "text", Required: false, Notes: "Long-form prose. eyebrow + heading + multi-paragraph body (split paragraphs with \\n\\n; single \\n becomes <br>). Optional inline cta_text + cta_url. Targets the 300+ word eval check."},
+				{BlockType: "feature_grid", Required: false, Notes: "Repeat for additional sections (services, pricing, FAQ, social proof). Each grid is its own card cluster."},
+				{BlockType: "cta", Required: true, Notes: "Last block. heading + text + cta_text + cta_url + variant ('primary'|'secondary'). Renders as a tinted banner card. Don't end a page on a feature_grid; conversion + content-density both improve with a closing CTA."},
+			},
+		},
+		HardRules: []HardRule{
+			{Rule: "Set both meta_title (30-60 chars) AND meta_description (120-160 chars with action verbs like learn / try / get / book / läs / prova) on every page row via update_page.", WhyItMatters: "Eval flags Title Length 30-60, Meta Description 120-160, Meta Description Has CTA per page; branding fallback alone fails these.", HowToApply: "update_page(slug=..., meta_title=..., meta_description=...) for every published page including legal + 404."},
+			{Rule: "Use a hero block at sort_order=0 on every content page so the renderer emits an h1 from the headline field.", WhyItMatters: "Eval Has H1 + Single H1 are page-level checks. Without a hero block, no h1 renders, both checks fail.", HowToApply: "create_block(page_slug, block_type='hero', sort_order=0, data={headline, subheading, cta_text, cta_url, ...})"},
+			{Rule: "Set per-page no_index=0 on real content pages. Use no_index=1 only for splash + admin pages.", WhyItMatters: "Eval Not Noindexed expects content pages to be indexable. Splash pages are fine to flag here as long as they're the only ones.", HowToApply: "update_page(slug=..., no_index=0). Default is 0; only flip to 1 for splash."},
+			{Rule: "For multi-language sites, every page needs a counterpart in every other locale at the matching slug pattern.", WhyItMatters: "Eval Hreflang Tags fires when general.additional_langs is set; missing counterparts cause atomicsite to skip emitting hreflang for those pages, which the eval flags as missing.", HowToApply: "create_page for each locale. Slug convention: /<lang>/<slug>. Mirror /en/about ↔ /sv/about, /en/privacy ↔ /sv/privacy, etc."},
+			{Rule: "PATCH /api/agent/branding to set meta_title, meta_description, og_image_id, favicon_id, lang as a fallback layer.", WhyItMatters: "Pages that don't override get the fallback. og_image_id + favicon_id drive the OG Image, OG Image Size 1200x630, Favicon, Apple Touch Icon, Organization Schema (logo) eval checks all at once.", HowToApply: "Upload a 1200x630 PNG to brand folder via /api/agent/media (no MCP wrapper for upload, use curl POST /api/agent/media/from-url or media/from-base64). Then PATCH branding with the returned media id."},
+			{Rule: "Wire seo.same_as with newline-separated social URLs (LinkedIn, GitHub, Instagram, X, YouTube).", WhyItMatters: "Drives JSON-LD Organization sameAs which is the Organization Schema Completeness eval check.", HowToApply: "bulk_upsert_settings([{category:'seo', key:'same_as', value:'https://...\\nhttps://...'}])"},
+			{Rule: "trigger_build is the publish verb. After it returns success, the live URL reflects the new content via auto-deploy.", WhyItMatters: "Build also runs eval. The eval response is the source of truth for what's failing; act on its checks_json directly rather than guessing.", HowToApply: "trigger_build -> poll get_build_status until status=='success' -> get_evaluation(build_id) -> walk failing checks -> fix -> repeat."},
+			{Rule: "No plaintext emails in block text. Use mailto: links via raw block sparingly OR refer the reader to a contact page.", WhyItMatters: "Block-time guardrail rejects plaintext emails on create/update_block. Eval also flags any that slip through.", HowToApply: "Rephrase 'email privacy@example.com' to 'reach our privacy team via the address on the Privacy Policy page' or use 'privacy at example dot com' as obfuscation."},
+			{Rule: "Update block sort_order via update_block (now persists; previously dropped). Don't delete-and-recreate to reorder.", WhyItMatters: "Was a contradiction in the agent surface; fixed in the same session that authored this playbook (commit 8a0f87d0). Block sort_order writes are now reliable.", HowToApply: "update_block(block_id, sort_order=N, data=...). Use unique sort_order values per page so render order is deterministic."},
+		},
+		BuildLoop: []string{
+			"1. Read /api/agent/context to get pending_setup + settings_catalog + block_schemas + this playbook.",
+			"2. Profile + branding + settings via update_profile / PATCH /api/agent/branding / bulk_upsert_settings.",
+			"3. Page structure: create_page for every page in every locale.",
+			"4. Per-page meta: update_page(slug, meta_title, meta_description, no_index, og_image_id) for every page.",
+			"5. Block content: create_block per the page template (hero -> feature_grids/text -> cta).",
+			"6. Global blocks: PUT /api/agent/global/{header,footer} once per site.",
+			"7. trigger_build, wait for success, get_evaluation.",
+			"8. For every failing check the agent can write: fix, re-build. For admin-only: collect into a final report.",
+			"9. Stop when the agent-writable categories hit 95%+. Hand off the admin-only list with the human_admin_url for each item.",
+		},
+		AdminOnlyItems: []AdminOnlyItem{
+			{Setting: "security category (HSTS preload, CSP extra directives, COOP/CORP/COEP, X-Frame-Options)", HumanAdminURL: "/sites/" + siteID + "/settings/security", EvalImpact: "Up to 6 security points (HSTS preload directive, CSP customisation)"},
+			{Setting: "allowed-scripts (CSP allowlist for cal.com, YouTube, Stripe Checkout, GA, GTM)", HumanAdminURL: "/sites/" + siteID + "/settings/allowed-scripts", EvalImpact: "Required before iframe / third-party script blocks render. CSP Quality eval check at risk if you skip."},
+			{Setting: "Cross-Origin-Embedder-Policy", HumanAdminURL: "/sites/" + siteID + "/settings/security", EvalImpact: "1 security point"},
+		},
+		VerificationGate: []string{
+			"list_pages returns every page you intended (count matches your plan).",
+			"list_blocks for the home page returns 5+ blocks in increasing sort_order.",
+			"get_site_context.pending_setup is empty (or only admin-only items remain).",
+			"Latest get_evaluation shows >= 95% on at least 3 of 5 categories (accessibility / seo / privacy on agent-writable parts; security depends on admin items).",
+			"curl -I returns 200 on /, /<en>/, /<sv>/, /<en>/privacy, etc.",
+			"Live HTML at the homepage contains <h1> from the hero block, <img> with /media/<og_image_id> reference, og:image meta tag, JSON-LD Organization schema with logo + sameAs.",
+			"Response headers carry Strict-Transport-Security, Content-Security-Policy, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-Content-Type-Options.",
+		},
+	}
 }
 
 // computeI18n surfaces the multi-language config for one site. Reads
