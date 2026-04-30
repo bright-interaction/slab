@@ -535,9 +535,9 @@ func renderFooterColumnsHTML(data map[string]any, columnsRaw []any) string {
 		title, _ := col["title"].(string)
 		b.WriteString(`<div class="footer-column">`)
 		if title != "" {
-			b.WriteString(`<h4>`)
+			b.WriteString(`<h3>`)
 			b.WriteString(escapeText(title))
-			b.WriteString(`</h4>`)
+			b.WriteString(`</h3>`)
 		}
 		if linksRaw, ok := col["links"].([]any); ok && len(linksRaw) > 0 {
 			b.WriteString(`<ul>`)
