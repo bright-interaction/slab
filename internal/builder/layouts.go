@@ -97,18 +97,17 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	// browsers degrade silently if /favicon.ico or /apple-touch-icon.png is missing.
 	// The Media library's `folder=brand` is the intended home for these files.
 	b.WriteString("  <link rel=\"icon\" type=\"image/x-icon\" href=\"/favicon.ico\" />\n")
-	b.WriteString("  <link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\" />\n")
+	b.WriteString("  <link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\" />\n\n")
 
-	// Google Fonts — preconnect + stylesheet. We load three families that
-	// cover the platform's curated set: Inter (body), Space Grotesk (display
-	// heading), Space Mono (eyebrows + brand wordmarks). The site picks
-	// which one wins via the --font-heading / --font-body CSS custom
-	// properties; unused families cost ~0 because the browser only fetches
-	// glyphs that match an actual font-family declaration. preconnect satisfies
-	// the perf eval's Resource Hints check, killing two birds with one stone.
-	b.WriteString("  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n")
-	b.WriteString("  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n")
-	b.WriteString("  <link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap\" />\n\n")
+	// Fonts: self-hosted woff2 only. NEVER Google Fonts (leaks visitor IP
+	// to Google, fails Subresource Integrity eval, clashes with the
+	// EU-sovereignty positioning many atomicsite tenants ship).
+	// Per-site fonts are uploaded via POST /api/sites/{id}/fonts and
+	// served from /atomicsite-fonts/{siteID}/{fontID}.woff2; the @font-face
+	// block below renders one rule per uploaded font. When no fonts are
+	// uploaded the site falls back to system-ui through the --font-heading
+	// / --font-body CSS custom properties (still readable, just system-
+	// styled).
 
 	// Open Graph
 	b.WriteString(fmt.Sprintf("  <meta property=\"og:site_name\" content=\"%s\" />\n", escapeAttr(site.Name)))

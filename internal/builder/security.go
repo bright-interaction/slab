@@ -168,12 +168,8 @@ func buildCSP(opts CSPOptions) string {
 	scriptSrc := join("'self'", opts.Allow.Script)
 	connectSrc := join("'self'", opts.Allow.Connect)
 	imgSrc := join("'self' data: https:", opts.Allow.Image)
-	fontSrc := "'self' https: data:"
-	// fonts.googleapis.com serves @font-face CSS files (the actual font binaries
-	// come from fonts.gstatic.com which is already covered by font-src https:).
-	// We always allow it so layouts can opt sites into Google Fonts without
-	// admins manually editing CSP.
-	styleSrc := "'self' 'unsafe-inline' https://fonts.googleapis.com"
+	fontSrc := "'self' data:"
+	styleSrc := "'self' 'unsafe-inline'"
 
 	frameAncestors := strings.TrimSpace(opts.FrameAncestors)
 	if frameAncestors == "" {
