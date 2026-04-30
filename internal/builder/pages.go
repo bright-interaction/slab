@@ -402,7 +402,7 @@ func dataString(data map[string]any, key string) string {
 func sectionIDFromHeading(data map[string]any) string {
 	for _, k := range []string{"id", "section_id", "headline", "heading"} {
 		if v := dataString(data, k); v != "" {
-			s := strings.ToLower(v)
+			s := transliterateForSlug(strings.ToLower(v))
 			s = strings.Map(func(r rune) rune {
 				switch {
 				case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
@@ -413,7 +413,6 @@ func sectionIDFromHeading(data map[string]any) string {
 					return -1
 				}
 			}, s)
-			// collapse runs of '-'
 			for strings.Contains(s, "--") {
 				s = strings.ReplaceAll(s, "--", "-")
 			}
@@ -424,6 +423,25 @@ func sectionIDFromHeading(data map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// transliterateForSlug folds common non-ASCII characters into their closest
+// ASCII equivalent so slugifying produces stable, readable section ids across
+// languages (sv, de, da, no, fr, es). Without this, "Vad jag ersätter" would
+// drop the ä entirely and become "vad-jag-erstter".
+func transliterateForSlug(s string) string {
+	repl := []struct{ from, to string }{
+		{"ä", "a"}, {"å", "a"}, {"ö", "o"}, {"ø", "o"}, {"æ", "ae"},
+		{"ü", "u"}, {"ß", "ss"}, {"é", "e"}, {"è", "e"}, {"ê", "e"},
+		{"ë", "e"}, {"á", "a"}, {"à", "a"}, {"â", "a"}, {"ã", "a"},
+		{"í", "i"}, {"ì", "i"}, {"î", "i"}, {"ï", "i"}, {"ó", "o"},
+		{"ò", "o"}, {"ô", "o"}, {"õ", "o"}, {"ú", "u"}, {"ù", "u"},
+		{"û", "u"}, {"ñ", "n"}, {"ç", "c"}, {"ý", "y"}, {"ÿ", "y"},
+	}
+	for _, r := range repl {
+		s = strings.ReplaceAll(s, r.from, r.to)
+	}
+	return s
 }
 
 // renderTextParagraphs splits a multi-line text body on blank lines and emits

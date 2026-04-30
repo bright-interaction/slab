@@ -250,16 +250,18 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block.has-circuit-bg > *:not(.block-circuit-canvas) { position: relative; z-index: 1; }\n")
 	b.WriteString(".block--split_hero.has-circuit-bg { display: grid; }\n\n")
 
-	// --- Improved CTA buttons: BI-style dark primary + outline secondary. .btn-accent kept for sites that prefer brand-coloured CTAs. ---
-	b.WriteString(".btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.875rem 1.75rem; border-radius: 0.625rem; font-weight: 500; font-size: 0.9375rem; transition: background-color 150ms ease-out, color 150ms ease-out, transform 100ms ease-out, border-color 150ms ease-out; cursor: pointer; }\n")
-	b.WriteString(".btn:active { transform: scale(0.985); }\n")
+	// --- CTA buttons: BI-style dark primary + outline secondary + brand-coloured accent.
+	// Layout rules apply to all variants directly so authors can write
+	// `class="btn-primary"` without needing to co-apply `.btn`. The `.btn` class
+	// remains for explicit base-only buttons. ---
+	b.WriteString(".btn, .btn-primary, .btn-secondary, .btn-accent { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.875rem 1.75rem; border-radius: 0.625rem; font-weight: 500; font-size: 0.9375rem; line-height: 1; transition: background-color 150ms ease-out, color 150ms ease-out, transform 100ms ease-out, border-color 150ms ease-out; cursor: pointer; text-decoration: none; white-space: nowrap; }\n")
+	b.WriteString(".btn:active, .btn-primary:active, .btn-secondary:active, .btn-accent:active { transform: scale(0.985); }\n")
 	b.WriteString(".btn-primary { background: var(--color-text); color: white; border: 1px solid var(--color-text); }\n")
 	b.WriteString(".btn-primary:hover { background: color-mix(in oklab, var(--color-text) 85%, white); border-color: color-mix(in oklab, var(--color-text) 85%, white); color: white; text-decoration: none; }\n")
-	b.WriteString(".btn-secondary { background: transparent; color: var(--color-text); border: 1px solid color-mix(in oklab, var(--color-text) 20%, transparent); }\n")
-	b.WriteString(".btn-secondary:hover { background: color-mix(in oklab, var(--color-text) 5%, transparent); border-color: color-mix(in oklab, var(--color-text) 35%, transparent); text-decoration: none; }\n")
+	b.WriteString(".btn-secondary { background: transparent; color: var(--color-text); border: 1px solid color-mix(in oklab, var(--color-text) 22%, transparent); }\n")
+	b.WriteString(".btn-secondary:hover { background: color-mix(in oklab, var(--color-text) 5%, transparent); border-color: color-mix(in oklab, var(--color-text) 40%, transparent); color: var(--color-text); text-decoration: none; }\n")
 	b.WriteString(".btn-accent { background: var(--color-primary); color: var(--color-on-primary, white); border: 1px solid var(--color-primary); }\n")
-	b.WriteString(".btn-accent:hover { background: color-mix(in oklab, var(--color-primary) 88%, black); text-decoration: none; }\n")
-	b.WriteString("a.btn-primary, a.btn-secondary, a.btn-accent { text-decoration: none; }\n\n")
+	b.WriteString(".btn-accent:hover { background: color-mix(in oklab, var(--color-primary) 88%, black); border-color: color-mix(in oklab, var(--color-primary) 88%, black); color: white; text-decoration: none; }\n\n")
 
 	// --- Improved navbar: compact h-14, white/90 + backdrop-blur, mono brand wordmark style. Last nav link auto-styles as a primary CTA pill. ---
 	b.WriteString(".site-header { height: 3.5rem; padding-block: 0; padding-inline: 1.5rem; display: flex; align-items: center; }\n")
@@ -289,12 +291,17 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 
 	// --- New block layouts (split_hero, stat_grid, accordion_faq, pricing, logo_strip, code_block, form, embed) ---
 	// split_hero: side-by-side on desktop (image right, text left), stacks on mobile.
-	b.WriteString(".block--split_hero { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; padding-block: 5rem 4rem; max-width: var(--container-width); }\n")
+	b.WriteString(".block--split_hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 3.5rem; align-items: center; padding-block: 6rem 5rem; max-width: var(--container-width); }\n")
 	b.WriteString(".block--split_hero .split-hero-content { min-width: 0; }\n")
-	b.WriteString(".block--split_hero h1 { font-size: clamp(2rem, 4.5vw, 3.5rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; margin-block: 0.75rem 1rem; }\n")
-	b.WriteString(".block--split_hero .subheading { font-size: 1.125rem; max-width: 36ch; margin-block-end: 1.75rem; }\n")
+	b.WriteString(".block--split_hero h1 { font-size: clamp(2.25rem, 5vw, 4rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; margin-block: 1rem 1.25rem; }\n")
+	b.WriteString(".block--split_hero .subheading { font-size: 1.125rem; max-width: 48ch; margin-block-end: 2rem; line-height: 1.6; }\n")
+	b.WriteString(".block--split_hero .split-hero-image { min-width: 0; display: flex; justify-content: center; align-items: center; }\n")
 	b.WriteString(".block--split_hero img, .block--split_hero picture { width: 100%; max-width: 100%; height: auto; border-radius: 1rem; box-shadow: 0 16px 48px color-mix(in oklab, var(--color-text) 14%, transparent); }\n")
-	b.WriteString(".block--split_hero a.btn-primary, .block--split_hero a.btn-secondary { margin-right: 0.75rem; margin-block-start: 0.5rem; }\n\n")
+	b.WriteString(".block--split_hero a.btn-primary, .block--split_hero a.btn-secondary, .block--split_hero a.btn-accent { margin-right: 0.75rem; margin-block-start: 0.5rem; }\n")
+	b.WriteString(".block--split_hero.is-centered { text-align: center; grid-template-columns: 1fr; }\n")
+	b.WriteString(".block--split_hero.is-centered .split-hero-content { margin-inline: auto; max-width: 48rem; }\n")
+	b.WriteString(".block--split_hero.is-centered .subheading { margin-inline: auto; }\n")
+	b.WriteString("@media (max-width: 768px) { .block--split_hero { grid-template-columns: 1fr; gap: 2.5rem; padding-block: 3.5rem 3rem; text-align: center; } .block--split_hero .subheading { margin-inline: auto; } .block--split_hero .split-hero-image { order: -1; } }\n\n")
 
 	// stat_grid: 4-up large numbers row. Used for trust signals, social proof.
 	b.WriteString(".block--stat_grid { padding-block: 3rem; }\n")
