@@ -349,6 +349,261 @@ func renderFormBlock(data map[string]any) string {
 	return b.String()
 }
 
+// renderLogoCarouselBlock renders a horizontal infinite-scroll marquee of
+// customer / partner logos. Pure CSS animation (no JS). Items duplicate
+// once in markup so the loop is seamless. Use under hero on a real
+// production marketing site to anchor trust before the first feature
+// section. Each item: {image_id, alt, href?} OR {label, href?} for
+// text-mark logos when an image isn't available.
+func renderLogoCarouselBlock(data map[string]any, mediaByID map[string]store.Medium) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--logo_carousel\">\n")
+	if label := dataString(data, "label"); label != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"logo-carousel-label\">%s</p>\n", escapeHTML(label)))
+	}
+	itemsRaw, ok := data["items"].([]any)
+	if !ok || len(itemsRaw) == 0 {
+		b.WriteString("  </section>\n")
+		return b.String()
+	}
+	// Render the inner ul twice so the CSS animation can loop seamlessly.
+	b.WriteString("    <div class=\"logo-carousel\" aria-label=\"Trusted by\">\n")
+	for pass := 0; pass < 2; pass++ {
+		ariaHidden := ""
+		if pass == 1 {
+			ariaHidden = ` aria-hidden="true"`
+		}
+		b.WriteString(fmt.Sprintf("      <ul class=\"logo-carousel-track\"%s>\n", ariaHidden))
+		for _, it := range itemsRaw {
+			item, ok := it.(map[string]any)
+			if !ok {
+				continue
+			}
+			imageID := dataString(item, "image_id")
+			label := dataString(item, "label")
+			alt := dataString(item, "alt")
+			if alt == "" {
+				alt = label
+			}
+			if imageID == "" && label == "" {
+				continue
+			}
+			href := dataString(item, "href")
+			b.WriteString("        <li>")
+			if href != "" {
+				b.WriteString(fmt.Sprintf(`<a href="%s">`, escapeURL(href)))
+			}
+			if imageID != "" {
+				b.WriteString(renderMediaImg(imageID, alt, label, "carousel-img", mediaByID))
+			} else {
+				b.WriteString(fmt.Sprintf(`<span class="carousel-mark">%s</span>`, escapeHTML(label)))
+			}
+			if href != "" {
+				b.WriteString("</a>")
+			}
+			b.WriteString("</li>\n")
+		}
+		b.WriteString("      </ul>\n")
+	}
+	b.WriteString("    </div>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// renderReplacementGridBlock renders a bento-style grid of "old → new"
+// replacement cards. Each card shows the SaaS being replaced with a
+// strikethrough on the "from" name + arrow + bold replacement, plus a
+// short description below. Some items can span 2 columns via
+// items[i].span ("wide") to break up the grid rhythm. Matches the
+// brightinteraction.com /#services bento pattern.
+//
+// Each item: {from, to, description, span?, icon?}.
+// span values: "" (1 col, default), "wide" (2 cols on md+).
+func renderReplacementGridBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--replacement_grid\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	if itemsRaw, ok := data["items"].([]any); ok && len(itemsRaw) > 0 {
+		b.WriteString("    <ul class=\"replacement-grid\">\n")
+		for _, it := range itemsRaw {
+			item, ok := it.(map[string]any)
+			if !ok {
+				continue
+			}
+			from := dataString(item, "from")
+			to := dataString(item, "to")
+			desc := dataString(item, "description")
+			span := dataString(item, "span")
+			cls := "replacement-card"
+			if span == "wide" {
+				cls += " is-wide"
+			}
+			b.WriteString(fmt.Sprintf("      <li class=\"%s\">\n", cls))
+			b.WriteString("        <div class=\"replacement-pair\">\n")
+			if from != "" {
+				b.WriteString(fmt.Sprintf("          <span class=\"replacement-from\">%s</span>\n", escapeHTML(from)))
+			}
+			b.WriteString("          <svg class=\"replacement-arrow\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>\n")
+			if to != "" {
+				b.WriteString(fmt.Sprintf("          <span class=\"replacement-to\">%s</span>\n", escapeHTML(to)))
+			}
+			b.WriteString("        </div>\n")
+			if desc != "" {
+				b.WriteString(fmt.Sprintf("        <p class=\"replacement-desc\">%s</p>\n", escapeHTML(desc)))
+			}
+			b.WriteString("      </li>\n")
+		}
+		b.WriteString("    </ul>\n")
+	}
+	if footer := dataString(data, "footer"); footer != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"replacement-footer\">%s</p>\n", escapeHTML(footer)))
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// renderCalculatorBlock is intentionally NOT registered in renderDataBlock's
+// switch. Calculators are bespoke per customer (the cost formula, the
+// services list, the currency, the layout — all site-specific). Atomicsite
+// provides the general primitives (form, feature_grid, replacement_grid,
+// embed, raw) so an agent or developer can hand-build the calculator for
+// the customer who needs one. This function is kept as a reference shape
+// for that custom build, demonstrating the right pattern: data-config JSON
+// + inline <script> hydrated by a small vanilla-JS reader. See the demo
+// site's component catalog if you need the actual implementation.
+func renderCalculatorBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--calculator\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+
+	// JSON config blob the embedded JS reads. We pass it via a JSON-encoded
+	// data attribute (rather than a separate <script> tag) so the CSP path
+	// stays clean.
+	configBytes, _ := json.Marshal(map[string]any{
+		"services":            data["services"],
+		"currency_symbol":     dataString(data, "currency_symbol"),
+		"currency_rate":       data["currency_rate"],
+		"team_size_min":       data["team_size_min"],
+		"team_size_max":       data["team_size_max"],
+		"team_size_default":   data["team_size_default"],
+		"hardware_monthly":    data["hardware_monthly"],
+		"maintenance_yearly":  data["maintenance_yearly"],
+		"labels":              data["labels"],
+	})
+
+	b.WriteString(fmt.Sprintf("    <div class=\"calculator-root\" data-config='%s'>\n",
+		escapeAttr(string(configBytes))))
+
+	// Service tile grid. Initial markup uses the operator-supplied selected
+	// flags so the form looks right pre-hydration; the JS replays the same
+	// state on load and then takes over.
+	b.WriteString("      <div class=\"calculator-services\" role=\"group\" aria-label=\"Pick the tools you currently pay for\">\n")
+	if servicesRaw, ok := data["services"].([]any); ok {
+		for _, sv := range servicesRaw {
+			svc, ok := sv.(map[string]any)
+			if !ok {
+				continue
+			}
+			key := dataString(svc, "key")
+			label := dataString(svc, "label")
+			brand := dataString(svc, "saas_brand")
+			selected, _ := svc["selected"].(bool)
+			selCls := ""
+			if selected {
+				selCls = " is-selected"
+			}
+			b.WriteString(fmt.Sprintf("        <button type=\"button\" class=\"calculator-service%s\" data-key=\"%s\" data-selected=\"%t\">\n",
+				selCls, escapeAttr(key), selected))
+			b.WriteString("          <span class=\"calculator-service-body\">\n")
+			b.WriteString(fmt.Sprintf("            <span class=\"calculator-service-label\">%s</span>\n", escapeHTML(label)))
+			if brand != "" {
+				b.WriteString(fmt.Sprintf("            <span class=\"calculator-service-brand\">%s</span>\n", escapeHTML(brand)))
+			}
+			b.WriteString("          </span>\n")
+			b.WriteString("          <span class=\"calculator-service-check\" aria-hidden=\"true\">✓</span>\n")
+			b.WriteString("        </button>\n")
+		}
+	}
+	b.WriteString("      </div>\n")
+
+	// Team-size slider.
+	teamMin := intOrDefault(data["team_size_min"], 1)
+	teamMax := intOrDefault(data["team_size_max"], 100)
+	teamDefault := intOrDefault(data["team_size_default"], 10)
+	b.WriteString("      <div class=\"calculator-slider\">\n")
+	b.WriteString("        <label for=\"calc-team-size\">Team size</label>\n")
+	b.WriteString(fmt.Sprintf("        <input type=\"range\" id=\"calc-team-size\" min=\"%d\" max=\"%d\" value=\"%d\" />\n",
+		teamMin, teamMax, teamDefault))
+	b.WriteString(fmt.Sprintf("        <output for=\"calc-team-size\" id=\"calc-team-display\">%d</output>\n", teamDefault))
+	b.WriteString("        <span class=\"calculator-slider-unit\">people</span>\n")
+	b.WriteString("      </div>\n")
+
+	// Three-column result. JS fills in the numbers; markup is the skeleton.
+	b.WriteString("      <div class=\"calculator-results\">\n")
+	for _, col := range []struct {
+		key, title, kind string
+	}{
+		{"saas", "Your SaaS cost", "saas"},
+		{"hardware", "Hardware only", "hardware"},
+		{"selfhosted", "Self-hosted with us", "selfhosted"},
+	} {
+		b.WriteString(fmt.Sprintf("        <div class=\"calculator-col is-%s\">\n", col.kind))
+		b.WriteString(fmt.Sprintf("          <p class=\"calculator-col-label\">%s</p>\n", col.title))
+		b.WriteString(fmt.Sprintf("          <p class=\"calculator-col-monthly\" data-out=\"%s-monthly\">—</p>\n", col.key))
+		b.WriteString(fmt.Sprintf("          <p class=\"calculator-col-yearly\" data-out=\"%s-yearly\">—</p>\n", col.key))
+		b.WriteString("        </div>\n")
+	}
+	b.WriteString("      </div>\n")
+
+	if ctaText := dataString(data, "cta_text"); ctaText != "" {
+		ctaURL := dataString(data, "cta_url")
+		if ctaURL == "" {
+			ctaURL = "#"
+		}
+		b.WriteString(fmt.Sprintf("      <div class=\"calculator-cta\"><a href=\"%s\" class=\"btn-primary\">%s</a></div>\n",
+			escapeURL(ctaURL), escapeHTML(ctaText)))
+	}
+	b.WriteString("    </div>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+func intOrDefault(v any, def int) int {
+	if v == nil {
+		return def
+	}
+	switch x := v.(type) {
+	case float64:
+		return int(x)
+	case int:
+		return x
+	case string:
+		// best-effort parse
+		var n int
+		_, err := fmt.Sscanf(x, "%d", &n)
+		if err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 // renderEmbedBlock renders an iframe wrapped in an aspect-ratio container.
 // The src host MUST already be in the trusted-domains allowlist (kind=frame)
 // or the build will pass but the browser will block via CSP frame-src. The
