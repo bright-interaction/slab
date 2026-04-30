@@ -318,9 +318,16 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	// Hide the locale-switcher matching the current page's lang.
 	b.WriteString(":lang(en) .site-nav-actions li[data-lang='en'], :lang(sv) .site-nav-actions li[data-lang='sv'], :lang(de) .site-nav-actions li[data-lang='de'], :lang(fr) .site-nav-actions li[data-lang='fr'], :lang(es) .site-nav-actions li[data-lang='es'], :lang(no) .site-nav-actions li[data-lang='no'], :lang(da) .site-nav-actions li[data-lang='da'] { display: none; }\n")
 
-	// Primary CTA pill in the actions cluster.
-	b.WriteString(".site-nav-actions .nav-cta { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; transition: background-color 150ms ease-out; }\n")
-	b.WriteString(".site-nav-actions .nav-cta:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; text-decoration: none; }\n\n")
+	// Primary CTA pill in the actions cluster. white-space: nowrap stops
+	// "Get started" from breaking onto two lines when the column is tight,
+	// which would push the header to wrap and double its height.
+	b.WriteString(".site-nav-actions .nav-cta { display: inline-flex; align-items: center; background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; line-height: 1; white-space: nowrap; transition: background-color 150ms ease-out; }\n")
+	b.WriteString(".site-nav-actions .nav-cta:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; text-decoration: none; }\n")
+	// Header zone heights are constrained so flex children inside don't
+	// cause the parent grid row to grow. Belt-and-suspenders for the
+	// nowrap above.
+	b.WriteString(".site-header .brand-mark, .site-nav-primary, .site-nav-actions { height: 100%; align-items: center; }\n")
+	b.WriteString(".site-nav-primary, .site-nav-actions { display: flex; }\n\n")
 
 	// --- Dark footer variant: opt in via data.theme="dark" on the footer global block. ---
 	b.WriteString(".site-footer.is-dark { background: var(--color-text); color: white; padding-block: 4rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 0; }\n")

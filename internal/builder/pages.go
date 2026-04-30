@@ -534,17 +534,24 @@ func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) str
 // line break, or (2) wrap an inline span of the headline itself with
 // `[[accent]]` markers (unicode-safe, no HTML in the input).
 func renderHeadlineWithAccent(headline, accent string) string {
+	convertNewlines := func(s string) string {
+		// Authors writing multi-line headlines (e.g. "Stop renting\nyour
+		// business.\nOwn [[it]].") want each segment on its own visual line
+		// like brightinteraction.com. Render each \n as <br>; CSS handles
+		// the wrapping otherwise.
+		return strings.ReplaceAll(s, "\n", "<br>")
+	}
 	if strings.Contains(headline, "[[") && strings.Contains(headline, "]]") {
 		out := escapeHTML(headline)
 		out = strings.ReplaceAll(out, "[[", `<span class="headline-accent">`)
 		out = strings.ReplaceAll(out, "]]", `</span>`)
-		return out
+		return convertNewlines(out)
 	}
 	if accent != "" {
 		return fmt.Sprintf("%s<br><span class=\"headline-accent\">%s</span>",
-			escapeHTML(headline), escapeHTML(accent))
+			convertNewlines(escapeHTML(headline)), escapeHTML(accent))
 	}
-	return escapeHTML(headline)
+	return convertNewlines(escapeHTML(headline))
 }
 
 // renderMediaImg returns a <picture> element when the media row is found in
