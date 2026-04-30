@@ -50,10 +50,12 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString("  robots?: string;\n")
 	b.WriteString("  hideGlobalBlocks?: boolean;\n")
 	b.WriteString("  alternates?: Array<{ lang: string; url: string }>;\n")
+	b.WriteString("  lang?: string;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("const {\n")
 	b.WriteString(fmt.Sprintf("  title = '%s',\n", escapeAstroString(site.MetaTitle)))
 	b.WriteString(fmt.Sprintf("  description = '%s',\n", escapeAstroString(site.MetaDescription)))
+	b.WriteString(fmt.Sprintf("  lang = '%s',\n", escapeAstroString(site.Lang)))
 	// Default OG image. Resolution order:
 	//   1. seo.og_default_image_id (Settings -> SEO -> Default Open Graph image)
 	//   2. sites.og_image_id (legacy column written by the wizard)
@@ -77,8 +79,12 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	b.WriteString(fmt.Sprintf("\nconst canonicalURL = new URL(Astro.url.pathname, '%s');\n", domain))
 	b.WriteString("---\n\n")
 
-	// HTML
-	b.WriteString(fmt.Sprintf("<!DOCTYPE html>\n<html lang=\"%s\">\n<head>\n", site.Lang))
+	// HTML. Per-page lang prop overrides site default so multi-language
+	// sites stamp /en/* with lang="en" and /sv/* with lang="sv". The
+	// site default lang is the fallback for pages whose locale can't be
+	// derived from the slug. CSS :lang() pseudo + locale-aware nav hide
+	// rules rely on this being correct.
+	b.WriteString("<!DOCTYPE html>\n<html lang={lang}>\n<head>\n")
 	b.WriteString("  <meta charset=\"UTF-8\" />\n")
 	b.WriteString("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n")
 	b.WriteString("  <title>{title}</title>\n")
@@ -527,7 +533,15 @@ func renderHeaderHTML(data map[string]any) string {
 				liCls = ` class="nav-cta-item"`
 				aCls = ` class="nav-cta"`
 			}
-			b.WriteString(`<li` + liCls + `><a href="`)
+			liData := ""
+			// `lang` on a nav link marks it as a locale switcher. CSS uses
+			// :lang() to hide the link that matches the current page's lang
+			// so visitors only see the OTHER locales (mirrors brightinteraction.com's
+			// single-toggle pattern: show "SV" on /en/, "EN" on /sv/).
+			if l.lang != "" {
+				liData = fmt.Sprintf(` data-lang="%s"`, escapeAttr(l.lang))
+			}
+			b.WriteString(`<li` + liCls + liData + `><a href="`)
 			b.WriteString(escapeAttr(l.href))
 			b.WriteString(`"` + aCls + `>`)
 			b.WriteString(escapeText(l.label))
@@ -674,6 +688,7 @@ type navLink struct {
 	label string
 	href  string
 	cta   bool
+	lang  string
 }
 
 func extractNavLinks(raw any) []navLink {
@@ -690,12 +705,13 @@ func extractNavLinks(raw any) []navLink {
 		label, _ := obj["label"].(string)
 		href, _ := obj["href"].(string)
 		cta, _ := obj["cta"].(bool)
+		lang, _ := obj["lang"].(string)
 		label = strings.TrimSpace(label)
 		href = strings.TrimSpace(href)
 		if label == "" || href == "" {
 			continue
 		}
-		out = append(out, navLink{label: label, href: href, cta: cta})
+		out = append(out, navLink{label: label, href: href, cta: cta, lang: strings.TrimSpace(lang)})
 	}
 	return out
 }

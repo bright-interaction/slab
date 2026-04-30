@@ -98,6 +98,21 @@ func LoadI18nConfig(ctx context.Context, queries *store.Queries, siteID string) 
 	}, nil
 }
 
+// LangForSlug returns the locale code for a page slug, derived from
+// its prefix when one of AdditionalLangs matches, otherwise DefaultLang.
+// Used by the layout to set <html lang> per-page so multi-language
+// sites stamp /en/* with lang="en" and /sv/* with lang="sv".
+func (c I18nConfig) LangForSlug(slug string) string {
+	if len(c.AdditionalLangs) == 0 {
+		return c.DefaultLang
+	}
+	_, lang := stripLocalePrefix(slug, c.DefaultLang, c.AdditionalLangs)
+	if lang != "" {
+		return lang
+	}
+	return c.DefaultLang
+}
+
 // ComputeAlternates returns the hreflang list for one page slug. The
 // list always includes:
 //   - one self-referencing entry for the page's own locale
