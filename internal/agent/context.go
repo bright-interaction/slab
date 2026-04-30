@@ -95,6 +95,15 @@ type SiteContext struct {
 	// and handler behaviour. Treat as the spec; the eval engine is the
 	// scoreboard.
 	EvalPlaybook EvalPlaybookInfo `json:"eval_playbook"`
+	// DesignPlaybook is the platform-level design DNA the agent reads
+	// before composing pages. Where EvalPlaybook tells the agent what
+	// the eval engine rewards, DesignPlaybook tells it what makes a
+	// site actually look good and feel right to a human. First
+	// principles, page archetypes, typography + spacing scales, block
+	// taxonomy decisions ("when do I use stat_grid vs feature_grid"),
+	// and the common mistakes the agent must avoid. Hard-coded so every
+	// site agent gets the same DNA on first read, no per-site seeding.
+	DesignPlaybook DesignPlaybookInfo `json:"design_playbook"`
 }
 
 // EvalPlaybookInfo is a structured playbook the agent reads to know the
@@ -108,6 +117,129 @@ type EvalPlaybookInfo struct {
 	BuildLoop      []string           `json:"build_loop"`
 	AdminOnlyItems []AdminOnlyItem    `json:"admin_only_items"`
 	VerificationGate []string         `json:"verification_gate"`
+}
+
+// DesignPlaybookInfo is the agent's design DNA — first principles, the
+// stack atomicsite renders into (Astro + TypeScript + Tailwind output),
+// page archetypes with concrete block sequences, typography + spacing
+// scales, block selection rules, and the mistakes to avoid. Read this
+// before composing any page. The agent that reads carefully should
+// be able to one-shot a B+ site that looks intentional, not generic.
+type DesignPlaybookInfo struct {
+	Stack             string                  `json:"stack"`
+	Principles        []DesignPrinciple       `json:"principles"`
+	PageArchetypes    []PageArchetype         `json:"page_archetypes"`
+	BlockSelection    []BlockSelectionRule    `json:"block_selection"`
+	Typography        TypographyScale         `json:"typography"`
+	Spacing           SpacingScale            `json:"spacing"`
+	Color             ColorGuidance           `json:"color"`
+	CommonMistakes    []DesignMistake         `json:"common_mistakes"`
+	OneShotRecipe     OneShotRecipe           `json:"one_shot_recipe"`
+	ReferenceRepos    []DesignReferenceRepo   `json:"reference_repos"`
+}
+
+// DesignPrinciple is a first-principles design rule with a concrete
+// "how-to-apply-via-atomicsite" mapping so the agent isn't left
+// translating abstract advice into block fields.
+type DesignPrinciple struct {
+	Name        string `json:"name"`
+	Rule        string `json:"rule"`
+	WhyItMatters string `json:"why"`
+	HowToApply   string `json:"how"`
+}
+
+// PageArchetype is a recommended block sequence for one common page
+// type. Agents pick an archetype, instantiate it, then customize copy.
+// Each block entry names the block_type the agent should create_block
+// against, plus a one-line "why this slot."
+type PageArchetype struct {
+	Name        string                `json:"name"`
+	Use         string                `json:"use"`
+	Description string                `json:"description"`
+	Blocks      []ArchetypeBlock      `json:"blocks"`
+}
+
+type ArchetypeBlock struct {
+	BlockType string `json:"block_type"`
+	Role      string `json:"role"`
+	Notes     string `json:"notes"`
+}
+
+// BlockSelectionRule resolves "which block_type should I use?" decisions
+// the agent commonly faces. Phrased as a question the agent might ask
+// itself, with the decision criterion that picks the right primitive.
+type BlockSelectionRule struct {
+	Question string `json:"question"`
+	Choose   string `json:"choose"`
+	Why      string `json:"why"`
+}
+
+// TypographyScale documents the rhythm the CSS pipeline emits via
+// --font-heading / --font-body / --font-mono. Sizes are clamp() values
+// the renderer ships, expressed in rem so the agent knows the ratios
+// without inspecting CSS.
+type TypographyScale struct {
+	HeadingFont      string         `json:"heading_font"`
+	BodyFont         string         `json:"body_font"`
+	MonoFont         string         `json:"mono_font"`
+	Scale            []TypeStep     `json:"scale"`
+	UsageRules       []string       `json:"usage_rules"`
+}
+
+type TypeStep struct {
+	Element string `json:"element"`
+	Size    string `json:"size"`
+	Weight  string `json:"weight"`
+	Use     string `json:"use"`
+}
+
+// SpacingScale documents block padding, container max-widths, and the
+// rhythm between sections so the agent knows what's already wired into
+// the renderer (and shouldn't try to fight via custom CSS).
+type SpacingScale struct {
+	ContainerWidths   map[string]string `json:"container_widths"`
+	BlockPadding      map[string]string `json:"block_padding"`
+	SectionRhythm     []string          `json:"section_rhythm"`
+}
+
+// ColorGuidance maps the CSS custom properties to "what they're for."
+// Atomicsite emits --color-primary / --color-text / --color-bg /
+// --color-surface-elevated and others; this tells the agent which one
+// belongs in which UI moment.
+type ColorGuidance struct {
+	Tokens          []ColorToken `json:"tokens"`
+	UsageRules      []string     `json:"usage_rules"`
+}
+
+type ColorToken struct {
+	Name string `json:"name"`
+	Use  string `json:"use"`
+}
+
+type DesignMistake struct {
+	Mistake  string `json:"mistake"`
+	Symptom  string `json:"symptom"`
+	Fix      string `json:"fix"`
+}
+
+// OneShotRecipe is the canonical block sequence for a B2B SaaS marketing
+// homepage that scores B+ on the eval and looks intentional. Used as
+// the default when the agent has no other guidance.
+type OneShotRecipe struct {
+	Description string             `json:"description"`
+	Blocks      []ArchetypeBlock   `json:"blocks"`
+	Settings    []string           `json:"settings"`
+}
+
+// DesignReferenceRepo points at one of the curated repos checked into
+// automations/design-references/. Agents reading this know which folder
+// to inspect for production-grade Astro+Tailwind patterns.
+type DesignReferenceRepo struct {
+	Path        string   `json:"path"`
+	Stack       string   `json:"stack"`
+	BestFor     []string `json:"best_for"`
+	License     string   `json:"license"`
+	Notes       string   `json:"notes"`
 }
 
 // PageTemplate is the canonical block sequence the eval engine rewards.
@@ -635,6 +767,7 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		I18n:             b.computeI18n(ctx, siteID, site, pageInfos),
 		SettingsCatalog:  buildSettingsCatalog(siteID, settingMap),
 		EvalPlaybook:     defaultEvalPlaybook(siteID),
+		DesignPlaybook:   defaultDesignPlaybook(),
 	}, nil
 }
 
@@ -884,6 +1017,247 @@ func defaultEndpoints() EndpointsInfo {
 		},
 		TrustedDomains: []EndpointInfo{
 			{Method: "GET", Path: "/api/agent/allowed-scripts", Use: "Read the trusted-domain rows that feed CSP. Each row has a kind (script | frame | image | media | connect | all). Use this to detect 'is cal.com already trusted?' before asking the user to add it. Mutations are admin-only at /api/sites/{id}/allowed-scripts (UI: /sites/{id}/settings/allowed-scripts)."},
+		},
+	}
+}
+
+// defaultDesignPlaybook is the platform-level design DNA every agent
+// reads on first /api/agent/context call. Curated against
+// brightinteraction.com + onwidget/astrowind + a year of marketing-site
+// audits. Keep punchy and actionable; agents skim, they don't study.
+func defaultDesignPlaybook() DesignPlaybookInfo {
+	return DesignPlaybookInfo{
+		Stack: "Atomicsite renders agent input into static Astro 5 sites styled with Tailwind 4 utilities + a per-site CSS pipeline (internal/builder/css.go). Block content is authored as JSON via the agent API; the renderer turns it into semantic HTML. TypeScript is reserved for built-in interactive widgets (CookieProof, hydration script, circuit canvas) — agents do not write Astro/TS by hand. Every visual decision flows through block_type + data fields + settings + the eight CSS custom properties (--color-primary, --color-text, --color-bg, --color-surface-elevated, --font-heading, --font-body, --font-mono, --container-width).",
+		Principles: []DesignPrinciple{
+			{
+				Name:         "Hierarchy first, decoration last",
+				Rule:         "The visitor's eye moves down the page in this order: eyebrow → headline → subheading → primary CTA. Anything that fights that order is decoration.",
+				WhyItMatters: "Marketing sites convert when one path is obvious within 1.5s. A reader who has to choose between two equal-weight options reads neither.",
+				HowToApply:   "Use the section-header pattern (eyebrow + h2 + subheading) on every block. Set ONE primary CTA per section via cta_text. Use secondary_label sparingly — at most one per page. Never give two buttons the same colour.",
+			},
+			{
+				Name:         "One eyebrow colour, one headline accent, one CTA dark",
+				Rule:         "The brand primary colour appears in three places only: eyebrows, the [[bracketed]] accent in headlines, and inline link/btn-accent strokes. The primary CTA uses --color-text (near-black) on white, not the brand colour. Colour-everywhere reads cheap.",
+				WhyItMatters: "Brightinteraction.com, Linear, Vercel, Stripe all follow this pattern. A reserved palette with one accent = expensive feel. A rainbow = template feel.",
+				HowToApply:   "Set primary CTA via .btn-primary (dark fill). Use .btn-accent (brand fill) only for high-stakes secondary moments (final CTA section, featured pricing tier). Eyebrows and accent spans are the brand-colour budget — spend them.",
+			},
+			{
+				Name:         "White space is a feature, not a bug",
+				Rule:         "Section padding-block ≥ 5rem on desktop, ≥ 3rem on mobile. Subheading max-width ≤ 50ch. Don't fill empty space with extra cards.",
+				WhyItMatters: "Density signals downmarket. The most expensive sites in a category have the most whitespace. AstroWind, brightinteraction.com, Resend all use 5-7rem section gutters.",
+				HowToApply:   "Atomicsite's renderer ships these defaults — don't override them with style_json overrides unless you have a specific reason. If a section feels cramped, REMOVE content (drop one feature card), don't reduce padding.",
+			},
+			{
+				Name:         "Visual rhythm via alternating surfaces",
+				Rule:         "Sections alternate between --color-bg (white) and --color-surface-elevated (whisper-grey). Never run two same-colour sections back-to-back, never tint adjacent sections at different intensities.",
+				WhyItMatters: "Visitors scroll based on perceived structure, not content. Alternating bg gives the page a heartbeat. The renderer wires this automatically via :nth-of-type(even).",
+				HowToApply:   "Use the default block sequence. The CSS pipeline alternates :nth-of-type(even) main-blocks (excluding hero/cta/logos) automatically. Don't fight it with custom backgrounds.",
+			},
+			{
+				Name:         "Three primitives carry 80% of marketing pages",
+				Rule:         "hero (or split_hero) → stat_grid (proof) → feature_grid or replacement_grid (offer) → process_steps or about_split (story) → pricing → accordion_faq → cta. Most B2B SaaS homepages need only this set.",
+				WhyItMatters: "Resisting the urge to invent new primitives keeps the renderer surface stable AND keeps the agent from drifting into bespoke implementations. If it's not in the block taxonomy, it's probably an embed (Cal.com, YouTube, Typeform) or a custom block with raw markup — not a missing primitive.",
+				HowToApply:   "Read block_schemas before reaching for block_type=custom. The 21 built-in types cover the standard marketing-site catalog; custom is a last resort for genuinely bespoke widgets.",
+			},
+			{
+				Name:         "Copy is design",
+				Rule:         "An eyebrow tells the visitor what category they're in. A headline tells them what changes. A subheading tells them why now. A CTA tells them what happens next. If any of those is generic, the section reads as filler.",
+				WhyItMatters: "Atomicsite renders whatever you give it — beautifully. But beautiful generic copy still converts at 0.5%. Specific copy at 3-4%.",
+				HowToApply:   "Reject 'Welcome', 'Our services', 'Get in touch' as eyebrows. Use the noun the visitor is shopping for ('Open-source infrastructure', 'GDPR compliance', 'EU hosting'). For headlines, use a transformation verb + concrete noun ('Stop renting your business. Own it.' beats 'Our solutions for your business.').",
+			},
+			{
+				Name:         "Mobile is the design, desktop is a remix",
+				Rule:         "Compose for a 375px column first. If the section reads at that width, it'll work on desktop. The renderer's @media queries collapse multi-column blocks below 768px.",
+				WhyItMatters: "60-70% of marketing-site traffic is mobile. The renderer's mobile rules are the silent default — agents who design for desktop and ignore mobile create layout shifts and orphan content on small screens.",
+				HowToApply:   "Don't put more than 4 items in feature_grid (it stacks on mobile, becoming a long list). Don't use replacement_grid spans wider than 1 unless paired with a span-2 sibling. Prefer process_steps over feature_grid for sequential content (numbered cards stack cleaner).",
+			},
+		},
+		PageArchetypes: []PageArchetype{
+			{
+				Name:        "B2B SaaS homepage",
+				Use:         "Software/service company selling to other companies. Primary goal: book a call or trial signup.",
+				Description: "9 blocks. Hero (centred or split), stats for proof, optional logo strip, replacement_grid or feature_grid for the offer, process_steps for how-it-works, pricing, about_split for trust, FAQ for objection-handling, final CTA.",
+				Blocks: []ArchetypeBlock{
+					{BlockType: "hero", Role: "Above-the-fold attention grab", Notes: "bg=circuit for tech/security/infra, bg=image for everything else. ONE primary CTA + one secondary_label. headline gets a [[bracketed]] accent on the verb that matters."},
+					{BlockType: "stat_grid", Role: "Receipts under the hero", Notes: "3-4 numbers with label + context. Hits the AI-Friendly Formatting eval check (≥3-item list)."},
+					{BlockType: "logo_carousel", Role: "Trust signal", Notes: "Use logo_strip if logos are stationary; logo_carousel if marquee. Short label like 'Trusted by' or 'Founder previously worked with'."},
+					{BlockType: "replacement_grid", Role: "What we offer (with strikethrough comparison)", Notes: "Best when positioning AS A REPLACEMENT for an incumbent (X → Y). Otherwise use feature_grid."},
+					{BlockType: "process_steps", Role: "How it works", Notes: "Always 4 steps. Numbered 01-04, mono font for numerals via --font-mono."},
+					{BlockType: "pricing", Role: "Three ways to work", Notes: "3 tiers. Mark middle tier featured=true. Use tiers[].step for STEP 01/02/03 eyebrows. Tier names ≤ 3 words."},
+					{BlockType: "about_split", Role: "Founder / team trust", Notes: "Photo right by default. Three stats next to bio. CTA links to /about/<slug>/ for long-form."},
+					{BlockType: "accordion_faq", Role: "Objection handling", Notes: "5-7 items. Auto-emits FAQPage JSON-LD. Mix factual + sales-objection questions."},
+					{BlockType: "cta", Role: "Final close", Notes: "Centred banner. variant=primary (default) or secondary. Single CTA, same destination as hero CTA."},
+				},
+			},
+			{
+				Name:        "Pricing page",
+				Use:         "Standalone pricing page when homepage pricing isn't enough.",
+				Description: "5 blocks. Skinny hero, pricing table, comparison feature_grid, FAQ, CTA.",
+				Blocks: []ArchetypeBlock{
+					{BlockType: "hero", Role: "One-line proposition", Notes: "Smaller padding than homepage hero. No image. Single sentence subheading."},
+					{BlockType: "pricing", Role: "The tiers", Notes: "Same structure as homepage but with a richer features[] list per tier."},
+					{BlockType: "feature_grid", Role: "Cross-tier comparison", Notes: "Grid of 'What's included in every tier'."},
+					{BlockType: "accordion_faq", Role: "Pricing-specific FAQ", Notes: "Billing, refunds, can-I-cancel, what-if-I-grow. Different from homepage FAQ."},
+					{BlockType: "cta", Role: "Talk-to-sales escape hatch", Notes: "For enterprise leads who don't fit the tiers."},
+				},
+			},
+			{
+				Name:        "About page",
+				Use:         "Origin story + team. Builds trust for skeptical buyers.",
+				Description: "4-5 blocks. Hero, founder story (text), stat_grid, optional team feature_grid, CTA.",
+				Blocks: []ArchetypeBlock{
+					{BlockType: "hero", Role: "Mission statement", Notes: "Single h1, no image. Short subheading."},
+					{BlockType: "text", Role: "Founder story", Notes: "Long-form paragraphs. max-width: 42rem auto-applied."},
+					{BlockType: "stat_grid", Role: "Track record", Notes: "Years of experience, clients served, etc."},
+					{BlockType: "feature_grid", Role: "Team (optional)", Notes: "icon=user per item; body is role + bio one-liner."},
+					{BlockType: "cta", Role: "Book a call", Notes: "Pull through to the same booking link the homepage uses."},
+				},
+			},
+			{
+				Name:        "Blog post / insight article",
+				Use:         "Long-form content. SEO surface for keyword targeting.",
+				Description: "Hero with article meta, table of contents component, body text blocks, related-articles feature_grid, CTA.",
+				Blocks: []ArchetypeBlock{
+					{BlockType: "hero", Role: "Article title + meta", Notes: "h1 = article title. Subheading = TL;DR. eyebrow = category."},
+					{BlockType: "text", Role: "Article body", Notes: "Multiple text blocks separated by image, quote, or code_block as visual breaks. Don't compose one giant text block — Site Inspector dings under-broken articles."},
+					{BlockType: "feature_grid", Role: "Related articles", Notes: "3-up grid of links to other articles."},
+					{BlockType: "cta", Role: "Convert the reader", Notes: "Article → product transition CTA."},
+				},
+			},
+			{
+				Name:        "Contact page",
+				Use:         "Lead capture + direct contact info.",
+				Description: "3 blocks. Hero, form, contact strip.",
+				Blocks: []ArchetypeBlock{
+					{BlockType: "hero", Role: "What happens after they submit", Notes: "Set expectations: 'I reply within 24h'. No image."},
+					{BlockType: "form", Role: "The form itself", Notes: "5-6 fields max. action= a worker URL or n8n webhook. Submit label is action-oriented ('Send', not 'Submit')."},
+					{BlockType: "text", Role: "Direct contact escape hatch", Notes: "Email + phone for visitors who don't trust forms."},
+				},
+			},
+		},
+		BlockSelection: []BlockSelectionRule{
+			{Question: "Centered hero with no image vs split_hero with image right?", Choose: "hero (centered) when one CTA + clean message. split_hero when the image carries actual information (dashboard preview, product screenshot).", Why: "A decorative image right of the hero competes with the headline. Use split_hero only when the image is part of the value prop."},
+			{Question: "stat_grid vs feature_grid?", Choose: "stat_grid for numbers (599, 100/100, 60-90%, 20+). feature_grid for ideas (icon + title + body).", Why: "stat_grid renders large numerals with hierarchy; feature_grid is icon + text-balanced cards. Mixing them muddies both."},
+			{Question: "feature_grid vs replacement_grid?", Choose: "replacement_grid when positioning as 'X but better than Y' (Notion → Outline, Slack → Mattermost). feature_grid for standalone capabilities.", Why: "replacement_grid renders strikethrough+arrow+bold pattern that explicit comparison demands. feature_grid is for non-comparative cards."},
+			{Question: "process_steps vs ordered text list?", Choose: "process_steps for 3-5 sequential phases with names. text-with-list when the steps are sub-points of a paragraph.", Why: "process_steps uses big mono numerals + heading-font titles. Text lists are inline. Don't put numbered-step content into text bullet lists — you lose the hierarchy."},
+			{Question: "logo_strip vs logo_carousel?", Choose: "logo_strip for ≤6 stationary logos. logo_carousel for ≥8 OR when motion adds energy.", Why: "Carousel pauses on hover, so it's accessible. But always-on motion creates noise on small pages."},
+			{Question: "accordion_faq vs feature_grid Q+A?", Choose: "accordion_faq for ANY FAQ — never Q+A as feature_grid items.", Why: "accordion_faq auto-emits FAQPage JSON-LD which Google + AI search engines reward. feature_grid Q+A produces no schema."},
+			{Question: "Should this page have hide_global_blocks=true?", Choose: "Yes only for: splash language-chooser, dedicated landing pages with no nav, embed-style pages.", Why: "Per-page suppression of header + footer destroys cross-section navigation. Default is keep them on."},
+			{Question: "How many blocks per page?", Choose: "Homepage 8-10. Subpage 4-7. Blog post variable.", Why: "Past 12 blocks readers get fatigue and bounce. Past 10 the renderer's alternating-bg pattern starts to feel mechanical."},
+			{Question: "When to use the custom block_type?", Choose: "Only when the agent has tried 3 built-in primitives + the embed block, AND none fit. Final escape hatch.", Why: "custom emits raw markup which doesn't get the auto-section-id, eyebrow CSS, or any other render polish. Built-in blocks pull their weight automatically."},
+			{Question: "headline_accent field vs [[brackets]] in headline?", Choose: "[[brackets]] for inline accent in the same line ('Stop renting. Own [[it]].'). headline_accent for a coloured second line ('Stop renting your business. / Own it.' where 'Own it' is the second line).", Why: "Inline brackets read as one sentence with emphasis. Two-line accent reads as sequential statement. Pick the rhythm the headline wants."},
+		},
+		Typography: TypographyScale{
+			HeadingFont: "Space Grotesk (loaded via Google Fonts in the layout). Falls back to system-ui, sans-serif. Used for h1-h6, brand badges, process step numbers, stat values, tier names.",
+			BodyFont:    "Inter (Google Fonts). Falls back to system-ui, sans-serif. Used for paragraphs, lists, form labels, FAQ summaries.",
+			MonoFont:    "Space Mono (Google Fonts). Used for eyebrows, brand wordmarks, pricing tier-step labels (STEP 01), code blocks, footer copy fine-print.",
+			Scale: []TypeStep{
+				{Element: "Hero h1", Size: "clamp(2.5rem, 6vw, 5rem)", Weight: "700", Use: "Above-the-fold headline. Max 18ch line-length. Letter-spacing -0.025em."},
+				{Element: "split_hero h1", Size: "clamp(2.25rem, 5vw, 4rem)", Weight: "700", Use: "Slightly smaller — sharing space with hero image."},
+				{Element: "Section h2", Size: "clamp(1.875rem, 3.5vw, 2.5rem)", Weight: "700", Use: "Block headings (stat_grid, pricing, FAQ, etc). Letter-spacing -0.02em."},
+				{Element: "Card h3", Size: "1.25rem", Weight: "600", Use: "feature_grid card titles, process step titles, FAQ summaries."},
+				{Element: "Eyebrow", Size: "0.75rem", Weight: "700", Use: "Mono font, uppercase, letter-spacing 0.18em, --color-primary. The genre marker above headlines."},
+				{Element: "Subheading", Size: "1.0625-1.25rem", Weight: "400", Use: "Below headlines. Max-width 36-50ch. Line-height 1.55."},
+				{Element: "Body", Size: "1rem (16px)", Weight: "400", Use: "Default paragraph size. Line-height 1.6."},
+				{Element: "Caption / context", Size: "0.8125rem", Weight: "400", Use: "stat_grid context line, footer fine print, captions. Color 55% text-mix."},
+			},
+			UsageRules: []string{
+				"Headings ≤ 4 lines visually. If a headline wraps to 5 lines on desktop, the copy is too long.",
+				"Eyebrow ≤ 4 words. Single-noun categories work best ('Open Source Infrastructure', not 'About our open source infrastructure offerings').",
+				"Subheadings ≤ 2 sentences. The reader needs to be moved to the CTA, not informed of every detail.",
+				"NEVER use the heading font on body paragraphs — it's display-grade, gets tiring at small sizes.",
+				"NEVER use the body font on h1/h2 — flat hierarchy looks unintentional.",
+			},
+		},
+		Spacing: SpacingScale{
+			ContainerWidths: map[string]string{
+				"narrow":  "64rem (1024px) — for blogs, long-form articles, landing pages with focused content",
+				"default": "72rem (1152px) — recommended default. Same as Tailwind's max-w-6xl approx.",
+				"wide":    "80rem (1280px) — for dashboards, dense feature pages.",
+				"fluid":   "100% — only for bleed sections that handle their own padding (logo_carousel does this).",
+			},
+			BlockPadding: map[string]string{
+				"hero":           "padding-block: 6rem 5rem (desktop), 3.5rem 3rem (mobile)",
+				"split_hero":     "padding-block: 6rem 5rem (desktop), 3.5rem 3rem (mobile)",
+				"standard block": "padding-block: 4rem (desktop), 3rem (mobile). Renderer default.",
+				"cta":            "padding: 4rem 1.5rem. Tinted background card.",
+			},
+			SectionRhythm: []string{
+				"Hero (white) → stat_grid (white) → logos (white, no padding-inline) → replacement_grid (alternating tinted) → process_steps (white) → pricing (alternating tinted) → about_split (white) → FAQ (alternating tinted) → cta (its own bg colour).",
+				"The :nth-of-type(even) selector handles alternating automatically — agents do not set background per block. Excluded blocks: hero, split_hero, cta, logo_carousel, logo_strip (they manage their own visual rhythm).",
+				"NEVER set padding-block via style_json. The renderer's defaults are tuned. If a section feels cramped, you have too much content — remove an item, don't reduce padding.",
+				"Margin-block-start between sections is 0 (sections butt up against each other). The padding inside each section provides the breathing room.",
+			},
+		},
+		Color: ColorGuidance{
+			Tokens: []ColorToken{
+				{Name: "--color-primary", Use: "Brand accent. Eyebrows, headline-accent spans, links, btn-accent fills, replacement-grid arrows, FAQ + icons, stat-value numerals (when no stat-context override), pricing-tier-step labels."},
+				{Name: "--color-text", Use: "Near-black body + heading text. Primary CTA fill (.btn-primary uses this, NOT --color-primary). Featured pricing-tier dark fill. Footer dark variant background. Brand-badge fill."},
+				{Name: "--color-bg", Use: "Page background. Default block background. .btn-primary text colour."},
+				{Name: "--color-surface-elevated", Use: "Whisper-grey for alternating sections (97.5% bg + 2.5% text mix). Set automatically — never override."},
+				{Name: "--color-on-primary", Use: "Text colour ON --color-primary fills (defaults to white). Override only when the brand primary is light enough that white text fails contrast."},
+				{Name: "--font-heading", Use: "Heading family. Whatever the site sets in branding."},
+				{Name: "--font-body", Use: "Body family."},
+				{Name: "--font-mono", Use: "Mono family for eyebrows + brand wordmarks + code."},
+				{Name: "--container-width", Use: "Driven by general.container_width setting (narrow|default|wide|fluid)."},
+			},
+			UsageRules: []string{
+				"Primary colour appears in 4-7 places per page max. More than that = brand budget exceeded.",
+				"NEVER use --color-primary as a section background. It's a stroke colour, not a fill colour. Backgrounds are bg / surface-elevated / text (dark variants only).",
+				"NEVER use --color-text as a fill in the middle of the page. It's reserved for: primary CTA, featured pricing tier, dark footer, brand badge. If you fill a generic section with --color-text it competes with the navbar.",
+				"For dark sections in the page body, use the .block--cta block (which has its own tinted background) or .pricing-tier.is-featured (single-tier dark fill). Don't invent dark sections via custom blocks.",
+				"Contrast ratio ≥ 4.5:1 for body text — verified by the eval. If you change --color-primary to a light tint, also set --color-on-primary so .btn-accent text stays readable.",
+			},
+		},
+		CommonMistakes: []DesignMistake{
+			{Mistake: "Filling every section's headline + subheading with the maximum char count", Symptom: "Page feels heavy, scroll feels long, reader bounces before pricing", Fix: "Cut subheadings to one sentence. Cut headlines to ≤ 6 words. Whitespace carries the message — copy fills the gaps."},
+			{Mistake: "Using feature_grid items as Q+A or as numbered process steps", Symptom: "Hierarchy feels flat. FAQ schema missing. Process visual rhythm broken.", Fix: "Use accordion_faq for Q+A (auto JSON-LD), process_steps for numbered phases (auto big numerals)."},
+			{Mistake: "Using the brand colour for the primary CTA", Symptom: "Page reads as 'template-y'. Primary doesn't stand apart from eyebrows + accents.", Fix: ".btn-primary uses --color-text (dark) by design. The brand colour is reserved for accents (eyebrows, links, btn-accent). To make CTAs more prominent, use larger padding or icon, NOT colour saturation."},
+			{Mistake: "Setting style_json overrides on standard blocks", Symptom: "Visual inconsistency between sections. Rhythm broken. Site feels like 'agent grabbed every option.'", Fix: "Resist style_json. The renderer's defaults are tuned. If you can't get the look you want, the answer is usually a different block_type, not custom CSS."},
+			{Mistake: "Embedding raw HTML via block_type=raw or custom when a built-in primitive fits", Symptom: "Section misses auto-section-id, alternating bg, eyebrow styling. Drifts from house style.", Fix: "Read block_schemas first. Use custom only when none of the 21 primitives match."},
+			{Mistake: "Multiple H1s per page", Symptom: "SEO eval fails Single H1. Heading hierarchy fails.", Fix: "Exactly one hero or split_hero per page (h1). Every other block uses h2 (heading or h2 field). Sub-cards use h3."},
+			{Mistake: "Hero with no secondary_label", Symptom: "Visitor with one-question hesitation has no soft path. Bounce.", Fix: "secondary_label like 'See pricing' or 'Read the docs' — points lower on the same page (#pricing) so the hesitant visitor scrolls instead of leaving."},
+			{Mistake: "Pricing tiers with no featured tier", Symptom: "Visitor compares all three equally → analysis paralysis → no decision.", Fix: "Mark the recommended middle tier featured=true. Dark fill + accent CTA pulls the eye and makes the choice obvious."},
+			{Mistake: "Long FAQ where every answer is one sentence", Symptom: "Reads as marketing fluff. AI search snippets get under-filled.", Fix: "Each FAQ answer should be 2-4 sentences with one concrete number or example. Search engines reward specificity."},
+			{Mistake: "Process_steps with text-only step descriptions where action verbs are missing", Symptom: "Steps feel passive. Process feels long.", Fix: "Each step starts with a verb (Audit, Plan, Migrate, Monitor — not Audit phase, Plan stage, Migration step, Ongoing monitoring)."},
+			{Mistake: "About_split with stock photo + generic stats", Symptom: "Trust signal works backwards — visitor distrusts.", Fix: "Real photo of the actual person. Specific stats with context (599 audited, not '500+ projects'). Without these the section is worse than removing it."},
+			{Mistake: "Splash language-chooser pages indexed by search engines", Symptom: "SEO eval fails Not Noindexed; root URL outranks the locale roots.", Fix: "Set no_index=1 on the splash. Locale roots (/en/, /sv/) get indexed; splash is a UX detail."},
+		},
+		OneShotRecipe: OneShotRecipe{
+			Description: "The 9-block + 5-setting recipe that produces a B+/A homepage on the eval, every time. Use as the default when the user gives short briefs ('build me a homepage for X').",
+			Blocks: []ArchetypeBlock{
+				{BlockType: "hero", Role: "Sort 0", Notes: "bg=circuit OR image_id, eyebrow (3-4 words), headline with [[bracket-accent]], subheading (1-2 sentences), cta_text + cta_url (booking), secondary_label (anchor to #pricing or similar)."},
+				{BlockType: "stat_grid", Role: "Sort 1", Notes: "4 items. Each {value, label, context}. Hits AI-Friendly Formatting eval (≥3 items)."},
+				{BlockType: "logo_carousel", Role: "Sort 2", Notes: "Optional but high-trust. label='Trusted by' or 'Founder previously worked with'. 6 entries minimum."},
+				{BlockType: "replacement_grid OR feature_grid", Role: "Sort 3", Notes: "6 items max. replacement_grid if you have an incumbent to position against; feature_grid otherwise. heading + subheading + items[] with span variants for visual interest."},
+				{BlockType: "process_steps", Role: "Sort 4", Notes: "4 steps. items[] = {number, title, description}. eyebrow='How it works' (or local equivalent)."},
+				{BlockType: "pricing", Role: "Sort 5", Notes: "3 tiers. Middle tier featured=true. Each tier: step (STEP 01/02/03) + name + price + price_period + description + features[] + cta_text + cta_url."},
+				{BlockType: "about_split", Role: "Sort 6", Notes: "Real founder photo (image_id), eyebrow='About', heading, 3 paragraphs, 3 stats next to bio, optional cta_text linking to long-form."},
+				{BlockType: "accordion_faq", Role: "Sort 7", Notes: "5-7 items. Mix factual + objection-handling questions. Each answer 2-4 sentences with concrete numbers."},
+				{BlockType: "cta", Role: "Sort 8", Notes: "Final close. Same destination as hero CTA. heading + text + cta_text + cta_url."},
+			},
+			Settings: []string{
+				"general.container_width: default (72rem)",
+				"general.mobile_breakpoint: 640",
+				"general.tablet_breakpoint: 1024",
+				"branding.font_heading: Space Grotesk",
+				"branding.font_body: Inter",
+				"branding.primary_color: brand colour (NOT #000 or #fff)",
+				"seo.canonical_base: https://<domain>",
+				"seo.meta_title_template: '{page_title} {separator} {site_name}'",
+				"seo.meta_description_template: '{page_description}'",
+				"analytics.cookieproof_enabled: 1 (auto-emits consent banner)",
+				"+ global header + footer block (PUT /api/agent/global/header and /footer)",
+			},
+		},
+		ReferenceRepos: []DesignReferenceRepo{
+			{
+				Path:    "automations/design-references/astrowind/",
+				Stack:   "Astro 5 + Tailwind 3",
+				BestFor: []string{"Hero variants (Hero, Hero2, HeroText)", "Pricing layouts", "Features grids (Features, Features2, Features3)", "FAQ accordion patterns", "Stats + Testimonials primitives", "Steps / process flows"},
+				License: "MIT",
+				Notes:   "src/components/widgets/ has 1:1 analogues for most atomicsite block types. Read the source when you need to see how a primitive is composed in production-grade Astro/Tailwind. NOT a code-import target — atomicsite has its own renderers.",
+			},
 		},
 	}
 }
