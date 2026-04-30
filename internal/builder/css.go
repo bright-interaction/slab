@@ -436,14 +436,8 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".site-footer .footer-social a { color: color-mix(in oklab, var(--color-text) 65%, transparent); }\n")
 	b.WriteString(".site-footer .footer-social a:hover { color: var(--color-primary); }\n\n")
 
-	// Header brand mark: image takes precedence over the first nav link's text when set.
-	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.625rem; font-family: var(--font-heading); font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.01em; text-decoration: none; color: var(--color-text); margin-right: auto; }\n")
-	b.WriteString(".site-header .brand-mark img { height: 1.75rem; width: auto; }\n\n")
-
-	// Lang switcher: small pill row that the operator can swap into the header global block.
-	b.WriteString(".lang-switcher { display: inline-flex; gap: 0.25rem; padding: 0.25rem; background: color-mix(in oklab, var(--color-bg) 88%, var(--color-text)); border-radius: 0.5rem; }\n")
-	b.WriteString(".lang-switcher a { font-size: 0.8125rem; padding: 0.25rem 0.625rem; border-radius: 0.375rem; text-transform: uppercase; letter-spacing: 0.05em; color: color-mix(in oklab, var(--color-text) 70%, transparent); }\n")
-	b.WriteString(".lang-switcher a.is-active { background: var(--color-bg); color: var(--color-text); font-weight: 600; }\n\n")
+	// (Old single-row .site-header / .brand-mark / .lang-switcher rules
+	// moved into the consolidated 3-zone block above. See lines ~290-330.)
 
 	// --- Responsive breakpoints. Mobile-first: collapse multi-column blocks below tablet_breakpoint. ---
 	b.WriteString("@media (max-width: " + tabletBP + ") {\n")
@@ -458,25 +452,13 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString("  .block--split_hero h1 { font-size: clamp(1.875rem, 7vw, 2.5rem); }\n")
 	b.WriteString("  .services-grid, .feature-grid, .team-grid, .project-grid, .stat-grid { grid-template-columns: 1fr; gap: 1rem; }\n")
 	b.WriteString("  .site-footer .footer-columns { grid-template-columns: 1fr; }\n")
-	b.WriteString("  .site-nav ul { gap: 1rem; }\n")
-	b.WriteString("  .site-nav li:first-child a { font-size: 1rem; }\n")
 	b.WriteString("  .site-footer .footer-bottom { flex-direction: column; align-items: flex-start; }\n")
 	b.WriteString("  .stat-grid-item .stat-value { font-size: clamp(1.875rem, 8vw, 2.5rem); }\n")
 	b.WriteString("}\n\n")
 
-	// Site header + footer chrome (rendered from global blocks).
-	b.WriteString(".site-header { padding-block: 1.25rem; padding-inline: 1.5rem; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); position: sticky; top: 0; background: color-mix(in oklab, var(--color-bg) 88%, white); backdrop-filter: blur(12px); z-index: 10; }\n")
-	b.WriteString(".site-header > .container, .site-header > div { max-width: 72rem; margin-inline: auto; display: flex; align-items: center; justify-content: space-between; }\n")
-	b.WriteString(".site-nav { width: 100%; }\n")
-	b.WriteString(".site-nav ul { display: flex; flex-wrap: wrap; gap: 1.75rem; list-style: none; padding: 0; margin: 0; align-items: center; justify-content: flex-end; }\n")
-	b.WriteString(".site-nav a { color: var(--color-text); font-weight: 500; font-size: 0.9375rem; text-decoration: none; }\n")
-	b.WriteString(".site-nav a:hover { color: var(--color-primary); }\n")
-	// First nav link doubles as the brand mark (pull it left, bolder type, no underline). Conventionally agents put the site name with href=/ as the first link.
-	b.WriteString(".site-nav li:first-child { margin-right: auto; }\n")
-	b.WriteString(".site-nav li:first-child a { font-family: var(--font-heading); font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.01em; }\n")
-	// Last nav link auto-styles as the primary CTA pill (book audit / sign up / etc.).
-	b.WriteString(".site-nav li:last-child a { background: var(--color-primary); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; }\n")
-	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-primary) 85%, black); color: white; }\n")
+	// (.site-header / .site-nav rules consolidated into the 3-zone block
+	// above. The legacy auto-pill `:last-child a` and `:first-child a`
+	// rules are removed; explicit .nav-cta + .brand-mark replace them.)
 	b.WriteString(".site-footer { padding-block: 3rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
 	b.WriteString(".site-footer > .container, .site-footer > div { max-width: 72rem; margin-inline: auto; }\n")
 	b.WriteString(".site-footer nav ul { display: flex; flex-wrap: wrap; gap: 1.5rem; list-style: none; padding: 0; margin: 0 0 1rem 0; font-size: 0.875rem; }\n")
