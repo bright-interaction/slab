@@ -195,6 +195,13 @@ type DesignPlaybookInfo struct {
 	// taste-skill content rules.
 	CopyVoice VoiceRules `json:"copy_voice"`
 
+	// Fonts documents atomicsite's font system: self-hosted woff2 only,
+	// per-site uploads, admin UI path, recommended families with
+	// download sources, system fallback behaviour. The agent reads
+	// this BEFORE setting branding.font_heading or font_body — picking
+	// a family that's not uploaded results in system-ui fallback.
+	Fonts FontGuidance `json:"fonts"`
+
 	// StackRecommendations names the four canonical site stacks
 	// atomicsite supports: pure static Astro (default), Astro + Svelte
 	// islands (light interactivity), Astro + Svelte + headless commerce
@@ -394,6 +401,36 @@ type VoiceRules struct {
 	Subheading []string `json:"subheading"`
 	CTA        []string `json:"cta"`
 	Forbidden  []string `json:"forbidden"`
+}
+
+// FontGuidance tells the agent how atomicsite's font system works,
+// where to upload fonts in the admin UI, how to list / register
+// fonts via the agent API, and which families are good picks for
+// each archetype + how to obtain the woff2 files (all SIL OFL 1.1
+// licensed, free to self-host).
+type FontGuidance struct {
+	Philosophy       string             `json:"philosophy"`
+	System           []string           `json:"system"`
+	APIEndpoints     []FontEndpoint     `json:"api_endpoints"`
+	AdminUI          []string           `json:"admin_ui"`
+	UploadFlow       []string           `json:"upload_flow"`
+	Recommended      []FontFamily       `json:"recommended"`
+	SystemFallback   string             `json:"system_fallback"`
+	HowToSet         string             `json:"how_to_set"`
+}
+
+type FontEndpoint struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Use    string `json:"use"`
+}
+
+type FontFamily struct {
+	Name        string   `json:"name"`
+	GoodFor     []string `json:"good_for"`
+	License     string   `json:"license"`
+	DownloadFrom string  `json:"download_from"`
+	Notes       string   `json:"notes"`
 }
 
 // StackGuidance documents the four canonical stacks atomicsite
@@ -1722,6 +1759,118 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				"Common usable icons: Mail, Phone, MapPin, Lock, Shield, Server, Cloud, Database, Workflow, Sparkles, Zap, BarChart, TrendingUp, Layers, FileText, MessageCircle, ArrowRight, Check, ChevronDown, Linkedin, Github, Twitter, Instagram.",
 			},
 			HowToUse: "feature_grid items[].icon = 'Mail' (case-sensitive Pascal name). Renderer looks up the SVG in icons.go and embeds it inline. Unknown icons fall back to a generic placeholder — check the icon dictionary first.",
+		},
+
+		Fonts: FontGuidance{
+			Philosophy: "Self-hosted woff2 only. NEVER Google Fonts. Two reasons: (1) Google Fonts CSS doesn't carry SRI hashes — fails the Subresource Integrity eval check; (2) every font fetch leaks visitor IP to Google, which clashes with the EU-sovereignty positioning many atomicsite tenants ship. Self-hosting via the per-site upload mechanism is one POST + one branding setting away. All recommended families below are SIL OFL 1.1 licensed — free to self-host with attribution preserved in the woff2 metadata.",
+			System: []string{
+				"Per-site fonts live in the `site_fonts` table (id, site_id, family_name, weight, style, source_url, file_path, ...).",
+				"Upload accepted formats: woff2 only (rejects woff, ttf, otf — woff2 compresses ~30% better and is universally supported).",
+				"Storage: {DataDir}/fonts/{site_id}/{font_id}.woff2.",
+				"Public serving: GET /atomicsite-fonts/{siteID}/{fontID}.woff2 — same-origin, no CORS, no CSP exception needed.",
+				"The Astro layout auto-emits @font-face rules + <link rel=preload> for every uploaded font. You don't write CSS — uploading is enough.",
+				"When no fonts are uploaded, sites fall back to system-ui via the --font-heading / --font-body custom properties. Still readable, just system-styled.",
+			},
+			APIEndpoints: []FontEndpoint{
+				{Method: "GET", Path: "/api/agent/fonts", Use: "List every font uploaded to the current site. Returns {fonts: [{id, family_name, weight, style}]}."},
+				{Method: "POST", Path: "/api/agent/fonts", Use: "Upload a woff2 file. Multipart/form-data: family_name (string), weight (100-900), style (normal|italic), file (woff2 binary)."},
+				{Method: "DELETE", Path: "/api/agent/fonts/{id}", Use: "Remove an uploaded font."},
+				{Method: "GET", Path: "/atomicsite-fonts/{siteID}/{fontID}.woff2", Use: "Public font serving (used by the rendered site, not by the agent directly)."},
+			},
+			AdminUI: []string{
+				"Path: /sites/{siteID}/branding (the same page where palette + colours live).",
+				"Section: 'Fonts' — shows currently uploaded fonts in a table, with weight + style + delete affordance.",
+				"Upload affordance: 'Upload font' button → file picker for woff2, then a small form for family_name / weight / style.",
+				"Setting form below the table: dropdown for `font_heading` and `font_body` populated from the uploaded fonts list + system fallbacks.",
+			},
+			UploadFlow: []string{
+				"1. Pick families: 1 heading + 1 body + (optional) 1 mono. See `recommended` below for vetted picks.",
+				"2. Download the variable woff2 files: fontsource.org or rsms.me/inter. SIL OFL 1.1 — free to redistribute.",
+				"3. Upload via admin UI (/sites/{id}/branding) OR via curl with multipart form to /api/agent/fonts.",
+				"4. Set `branding.font_heading` and `branding.font_body` to the uploaded family_name strings (case-sensitive).",
+				"5. Trigger build. Layout auto-emits @font-face + preload tags. No further wiring.",
+			},
+			Recommended: []FontFamily{
+				{
+					Name:        "Inter",
+					GoodFor:     []string{"Body text on B2B SaaS sites", "Form labels", "Long-form prose", "Default fallback paired with a display heading font"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://rsms.me/inter/download/ (Variable woff2). Or @fontsource/inter on npm.",
+					Notes:       "The most-used display+body font on the web. Geometric, neutral, hyper-legible. Good default body. AVOID using as the heading font when 'premium' is the goal — Inter as h1 is the AI-default tell.",
+				},
+				{
+					Name:        "Space Grotesk",
+					GoodFor:     []string{"Display headlines on tech/SaaS marketing sites", "Soft Structuralism vibe archetype", "Pairs well with Inter body + Space Mono eyebrow"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://github.com/floriankarsten/space-grotesk (Variable woff2). Or @fontsource-variable/space-grotesk.",
+					Notes:       "Wide geometric grotesk with character. Works at heading + display sizes. Used by brightinteraction.com.",
+				},
+				{
+					Name:        "Space Mono",
+					GoodFor:     []string{"Eyebrows (uppercase, tracking-widest)", "Brand wordmarks", "Code labels", "Tier-step tags (STEP 01)"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://fonts.google.com/specimen/Space+Mono (download → host the woff2). Or @fontsource/space-mono.",
+					Notes:       "Atomicsite's --font-mono default. Use for ANY mono surface (eyebrow, code, brand badge, footer fine print).",
+				},
+				{
+					Name:        "Geist + Geist Mono",
+					GoodFor:     []string{"Premium SaaS dashboards", "Ethereal Glass vibe archetype", "AI/ML product marketing"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://github.com/vercel/geist-font (Variable woff2). Or @fontsource/geist-sans + @fontsource/geist-mono.",
+					Notes:       "Vercel's house font. Flatter geometric grotesk than Space Grotesk, very 'tech-product'. Best paired together (sans + mono) for a unified system feel.",
+				},
+				{
+					Name:        "Outfit",
+					GoodFor:     []string{"Premium consumer brands", "Health/wellness", "Lifestyle marketing"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://fonts.google.com/specimen/Outfit (download → host). Or @fontsource-variable/outfit.",
+					Notes:       "Geometric grotesk with a softer, friendlier silhouette than Space Grotesk. Good when the brand wants to feel approachable but still premium.",
+				},
+				{
+					Name:        "Cabinet Grotesk",
+					GoodFor:     []string{"Editorial Luxury vibe archetype", "Creative agencies", "Portfolio sites"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://www.fontshare.com/fonts/cabinet-grotesk (Variable woff2, requires free Fontshare account).",
+					Notes:       "Tighter, more characterful grotesk. Premium feel without the 'tech-product' association of Geist. Used by many agency sites.",
+				},
+				{
+					Name:        "Satoshi",
+					GoodFor:     []string{"Modern SaaS marketing", "Crypto/Web3", "Premium consumer"},
+					License:     "Free for commercial use (Fontshare custom)",
+					DownloadFrom: "https://www.fontshare.com/fonts/satoshi (requires free Fontshare account).",
+					Notes:       "Sharper, more confident grotesk. Often paired with JetBrains Mono. Works well at all sizes.",
+				},
+				{
+					Name:        "Plus Jakarta Sans",
+					GoodFor:     []string{"International brands", "Fintech / professional services", "Multilingual sites (broad Latin/Cyrillic coverage)"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://fonts.google.com/specimen/Plus+Jakarta+Sans. Or @fontsource-variable/plus-jakarta-sans.",
+					Notes:       "Geometric grotesk with strong i18n coverage. Good when the site needs to render Cyrillic / Greek / Vietnamese without FOUT.",
+				},
+				{
+					Name:        "Newsreader",
+					GoodFor:     []string{"Editorial Luxury vibe", "Long-form journalism / publishing", "Lifestyle brands"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://fonts.google.com/specimen/Newsreader. Or @fontsource-variable/newsreader.",
+					Notes:       "Variable serif with optical sizing. The serif pick when you want editorial luxury without the dated feel of Playfair Display.",
+				},
+				{
+					Name:        "Instrument Serif",
+					GoodFor:     []string{"Editorial Luxury vibe", "Brands that want a 'magazine' feel", "Hero display type only"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://fonts.google.com/specimen/Instrument+Serif.",
+					Notes:       "Display-only serif with character. Use ONLY for the hero h1 or section headings — not body text. Pair with Inter body.",
+				},
+				{
+					Name:        "JetBrains Mono",
+					GoodFor:     []string{"Code blocks on developer sites", "Stat values on data-heavy dashboards", "Alternative to Space Mono"},
+					License:     "SIL OFL 1.1",
+					DownloadFrom: "https://www.jetbrains.com/lp/mono/ (woff2). Or @fontsource/jetbrains-mono.",
+					Notes:       "Higher legibility at small sizes than Space Mono. Pick when the site is developer-heavy.",
+				},
+			},
+			SystemFallback: "If no font is uploaded, atomicsite emits --font-heading: 'Space Grotesk', system-ui, sans-serif (where 'Space Grotesk' is just a name in the cascade with no actual file). The browser falls through to system-ui — readable but not the intended look. The agent should ALWAYS check `GET /api/agent/fonts` first; if empty, ask the user to upload via /sites/{id}/branding before claiming the site is design-complete.",
+			HowToSet: "After uploading a font with family_name='Space Grotesk', call `bulk_upsert_settings` with category='general' (NOT possible — branding fields are separate) — actually use the agent branding endpoint: PATCH /api/agent/branding {font_heading: 'Space Grotesk', font_body: 'Inter'}. The family_name string must match exactly what was used during upload (case-sensitive). Verify after build by checking the rendered global.css for the @font-face rule with the matching family-name.",
 		},
 
 		StackRecommendations: StackGuidance{
