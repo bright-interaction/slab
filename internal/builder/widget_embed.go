@@ -35,3 +35,4 @@ func CookieProofWidgetHash() string {
 func CookieProofWidgetFilename() string {
 	return "_ccb." + CookieProofWidgetHash() + ".js"
 }
+

@@ -172,6 +172,51 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	// Site-wide spacing: more generous block padding so sections breathe.
 	b.WriteString(".block + .block { margin-block-start: 0; }\n\n")
 
+	// --- Editorial eyebrow pattern (used by every block with .eyebrow). Mono + uppercase + tracking-widest matches brightinteraction.com's typographic system. ---
+	b.WriteString(".block .eyebrow, .block-eyebrow { font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 1rem; }\n\n")
+
+	// --- Hero typography upgrade: matches the brightinteraction.com 4xl-7xl scale, line-height 1.05, negative letter-spacing. ---
+	b.WriteString(".block--hero h1, .block--split_hero h1 { font-size: clamp(2.5rem, 5.5vw, 4.5rem); line-height: 1.05; letter-spacing: -0.02em; font-weight: 700; }\n\n")
+
+	// --- Circuit-board background pattern. Optional decoration; activate by adding `data-bg=\"circuit\"` on the section element. Pure SVG, scales infinitely, ~600 bytes. ---
+	b.WriteString(".block[data-bg='circuit'] { position: relative; }\n")
+	b.WriteString(".block[data-bg='circuit']::before { content: ''; position: absolute; inset: 0; background-image: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><g fill='none' stroke='%230E7490' stroke-width='1' stroke-opacity='0.08'><path d='M0 30 H40 V60 H80 V90 H120'/><path d='M30 0 V40 H60 V80 H90 V120'/><path d='M0 90 H30 V60 H70'/></g><g fill='%230E7490' fill-opacity='0.18'><circle cx='40' cy='30' r='2'/><circle cx='80' cy='60' r='2'/><circle cx='30' cy='40' r='2'/><circle cx='90' cy='80' r='2'/></g></svg>\"); background-size: 240px 240px; opacity: 0.6; pointer-events: none; z-index: 0; }\n")
+	b.WriteString(".block[data-bg='circuit'] > * { position: relative; z-index: 1; }\n\n")
+
+	// --- logo_carousel: rolling marquee. Two ULs side-by-side animate -50% so the loop is seamless. Pause on hover. ---
+	b.WriteString(".block--logo_carousel { padding-block: 3rem; padding-inline: 0; max-width: none; overflow: hidden; }\n")
+	b.WriteString(".block--logo_carousel > .logo-carousel-label { text-align: center; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.16em; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin-block-end: 1.5rem; }\n")
+	b.WriteString(".logo-carousel { display: flex; width: 100%; gap: 4rem; mask-image: linear-gradient(90deg, transparent 0, black 8%, black 92%, transparent 100%); }\n")
+	b.WriteString(".logo-carousel-track { list-style: none; padding: 0; margin: 0; display: flex; flex-shrink: 0; gap: 4rem; align-items: center; min-width: 100%; animation: logo-marquee 30s linear infinite; }\n")
+	b.WriteString(".logo-carousel:hover .logo-carousel-track { animation-play-state: paused; }\n")
+	b.WriteString(".logo-carousel-track li { flex-shrink: 0; }\n")
+	b.WriteString(".logo-carousel-track img.carousel-img { height: 2.25rem; width: auto; max-width: 9rem; filter: grayscale(100%) opacity(0.6); transition: filter 200ms ease-out; }\n")
+	b.WriteString(".logo-carousel-track li:hover img.carousel-img { filter: grayscale(0) opacity(1); }\n")
+	b.WriteString(".logo-carousel-track .carousel-mark { font-family: var(--font-heading); font-weight: 600; font-size: 1.125rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); white-space: nowrap; letter-spacing: -0.01em; }\n")
+	b.WriteString(".logo-carousel-track li a { color: inherit; text-decoration: none; }\n")
+	b.WriteString("@keyframes logo-marquee { from { transform: translateX(0); } to { transform: translateX(calc(-100% - 4rem)); } }\n")
+	b.WriteString("@media (prefers-reduced-motion: reduce) { .logo-carousel-track { animation: none; } }\n\n")
+
+	// --- replacement_grid: bento layout with strikethrough -> arrow -> bold pattern. Some cards span 2 columns via .is-wide. ---
+	b.WriteString(".block--replacement_grid { max-width: var(--container-width); }\n")
+	b.WriteString(".replacement-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }\n")
+	b.WriteString(".replacement-card { padding: 1.5rem 1.75rem; border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); border-radius: 1rem; background: color-mix(in oklab, var(--color-bg) 96%, white); transition: border-color 200ms ease-out, transform 200ms ease-out; }\n")
+	b.WriteString(".replacement-card:hover { border-color: color-mix(in oklab, var(--color-primary) 35%, transparent); transform: translateY(-1px); }\n")
+	b.WriteString(".replacement-card.is-wide { grid-column: span 2; }\n")
+	b.WriteString(".replacement-pair { display: flex; align-items: center; gap: 0.625rem; margin-block-end: 0.5rem; flex-wrap: wrap; }\n")
+	b.WriteString(".replacement-from { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 55%, transparent); text-decoration: line-through; text-decoration-thickness: 1px; }\n")
+	b.WriteString(".replacement-arrow { color: var(--color-primary); flex-shrink: 0; }\n")
+	b.WriteString(".replacement-to { font-size: 0.9375rem; font-weight: 600; color: var(--color-text); }\n")
+	b.WriteString(".replacement-desc { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); line-height: 1.5; margin: 0; }\n")
+	b.WriteString(".replacement-footer { margin-block-start: 2rem; text-align: center; font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 75%, transparent); }\n\n")
+
+	// Note: no built-in calculator block. Calculators are bespoke per
+	// customer; build one as a custom Astro component (see the `component`
+	// block_type) when a specific customer needs one. Atomicsite ships the
+	// primitives (form, feature_grid, replacement_grid, embed) the agent
+	// composes from.
+
+
 	// --- New block layouts (split_hero, stat_grid, accordion_faq, pricing, logo_strip, code_block, form, embed) ---
 	// split_hero: side-by-side on desktop (image right, text left), stacks on mobile.
 	b.WriteString(".block--split_hero { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; padding-block: 5rem 4rem; max-width: var(--container-width); }\n")

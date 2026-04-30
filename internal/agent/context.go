@@ -645,14 +645,15 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 // whole setup pass without trial-and-error against the eval.
 func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 	return EvalPlaybookInfo{
-		Goal: "Drive the site to 95%+ on agent-writable eval categories (accessibility, seo, privacy partial, performance partial, plus parts of security). The remaining gap is admin-only items the agent surfaces to the human at the end. Read this section first; it tells you what to write and why each write satisfies a specific eval check.",
+		Goal: "Atomicsite is a website builder where designers / agents pick blocks and content freely; the platform guardrails the technical side so the site ends up correctly architected. You handle: design (block sequence, copy, imagery), brand (palette, fonts, logo), structure (pages, slugs, locales). Atomicsite handles automatically: SEO meta + JSON-LD, hreflang emission, sitemap, robots.txt, llms.txt, security.txt, security headers (HSTS, CSP, X-Frame-Options, COOP/CORP/COEP, Permissions-Policy), <picture> + WebP variants + width/height, lazy loading, mobile breakpoints, focus indicators, semantic landmarks, FAQPage / Organization JSON-LD, h1/h2 hierarchy enforcement at block-render time. Drive the site to 95%+ on agent-writable eval categories. Custom interactive widgets (calculators, scanners, custom visualisations) are bespoke — build them as Astro components in the site's component catalog (see component block_type) when a customer needs one; atomicsite ships the generic primitives (form, feature_grid, replacement_grid, embed, logo_carousel, etc.) the agent composes from.",
 		PageTemplate: PageTemplate{
 			Description: "Canonical block sequence for a marketing-grade homepage modeled after brightinteraction.com. Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
 			Blocks: []TemplateBlock{
 				{BlockType: "split_hero", Required: true, Notes: "Sort 0. Side-by-side hero (text left, image right) for SaaS marketing. headline -> h1 (REQUIRED for eval Has H1 + Single H1). eyebrow + subheading + cta_text + cta_url + secondary_label + secondary_url + image_id. Use 'hero' (centered) instead when the page sells a single product or service with one big CTA."},
-				{BlockType: "stat_grid", Required: false, Notes: "Sort 1. Trust signals row. items[] = {value, label}. 3-4 stats hits the AI-Friendly Formatting eval check (>= 3-item list). Place under the hero before the first content section."},
-				{BlockType: "logo_strip", Required: false, Notes: "Customer / partner logos under hero. items[] = {image_id, alt, href?}. Skip if you don't have actual logos."},
-				{BlockType: "feature_grid", Required: false, Notes: "Services / What I Replace / How it works. heading + subheading + items[] each with title (h3), body (p), icon (Lucide name like Mail/Server/Lock/Workflow). 3-6 items per grid, alternate sections get a tinted background automatically."},
+				{BlockType: "logo_carousel", Required: false, Notes: "Sort 1. Rolling marquee of customer / partner logos directly under hero. Pure CSS animation, no JS, pauses on hover. Skip when you don't have actual logos to show — empty marquee feels worse than no marquee."},
+				{BlockType: "stat_grid", Required: false, Notes: "Trust signals row. items[] = {value, label}. 3-4 stats hits the AI-Friendly Formatting eval check (>= 3-item list)."},
+				{BlockType: "replacement_grid", Required: false, Notes: "For SaaS-alternative / migration sites: bento grid of 'old → new' cards with strikethrough on the 'from' name + arrow + bold replacement. Items can span 2 columns via items[i].span='wide'. Better than feature_grid for before/after pages."},
+				{BlockType: "feature_grid", Required: false, Notes: "Services / How it works / generic 3-6-card sections. heading + subheading + items[] each with title (h3), body (p), icon (Lucide name). Alternating sections get a tinted background automatically."},
 				{BlockType: "text", Required: false, Notes: "Long-form section: founder bio, About, methodology, deep-dive. eyebrow + heading + multi-paragraph body (split with \\n\\n; single \\n becomes <br>). Targets the 300+ word eval check."},
 				{BlockType: "pricing", Required: false, Notes: "3-up tier cards. heading + subheading + tiers[] each with name + price + price_period + description + features[] + cta_text + cta_url + featured?. Set featured=true on the recommended plan for primary border + shadow."},
 				{BlockType: "accordion_faq", Required: false, Notes: "Q&A section near the bottom. heading + items[] each with question + answer. Auto-emits FAQPage JSON-LD."},
@@ -1036,6 +1037,18 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 			Use:       "iframe wrapped in 16:9 aspect-ratio container. Use for cal.com bookings, YouTube videos, Stripe Checkout, Typeform. The src host MUST be in trusted_domains (kind=frame) — admin grants via /sites/{id}/settings/allowed-scripts.",
 			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "title", Label: "iframe title (a11y)"}},
 			OtherKeys: []BlockSchemaField{{Key: "src", Label: "iframe src URL"}, {Key: "aspect_ratio", Label: "Aspect ratio (default '16/9')"}},
+		},
+		{
+			BlockType: "logo_carousel",
+			Use:       "Horizontal infinite-scroll marquee of customer / partner logos. Pure CSS animation (no JS). Loop is seamless via duplicated track. Pauses on hover. Use under hero on a real production marketing site to anchor trust before the first feature section. Each item supports a media image OR a text mark when no logo image is available.",
+			TextKeys:  []BlockSchemaField{{Key: "label", Label: "Eyebrow label (e.g. 'Trusted by')"}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {image_id, alt, label?, href?} OR {label, href?} for text marks"}},
+		},
+		{
+			BlockType: "replacement_grid",
+			Use:       "Bento-style grid showing 'old → new' replacement cards. Each card has the SaaS being replaced with strikethrough on the 'from' name + arrow + bold replacement, plus a short description. Some items can span 2 columns via items[i].span='wide' to break up the grid rhythm. Used by SaaS-alternative / migration / before-after marketing pages.",
+			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}, {Key: "footer", Label: "Footer line under the grid"}},
+			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {from, to, description, span?} where span='wide' makes the card 2-col"}},
 		},
 	}
 }

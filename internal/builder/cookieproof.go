@@ -166,6 +166,7 @@ func WriteCookieProofWidgetAsset(workspaceDir string) error {
 	return WriteFile(target, string(CookieProofWidget))
 }
 
+
 // BuildCookieProofConfig assembles a CookieProofConfig from a site row +
 // settings map + any per-site profile, picking sensible defaults so the
 // caller doesn't have to know which keys map where.

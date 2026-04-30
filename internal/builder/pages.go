@@ -358,6 +358,10 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderPricingBlock(data)
 	case "logo_strip":
 		return renderLogoStripBlock(data, mediaByID)
+	case "logo_carousel":
+		return renderLogoCarouselBlock(data, mediaByID)
+	case "replacement_grid":
+		return renderReplacementGridBlock(data)
 	case "code_block":
 		return renderCodeBlock(data)
 	case "form":
