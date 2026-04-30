@@ -487,7 +487,7 @@ func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) str
 		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
 	}
 	if headline := dataString(data, "headline"); headline != "" {
-		b.WriteString(fmt.Sprintf("    <h1>%s</h1>\n", escapeHTML(headline)))
+		b.WriteString(fmt.Sprintf("    <h1>%s</h1>\n", renderHeadlineWithAccent(headline, dataString(data, "headline_accent"))))
 	}
 	if sub := dataString(data, "subheading"); sub != "" {
 		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
@@ -496,24 +496,48 @@ func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) str
 		b.WriteString("    " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "hero-image", mediaByID) + "\n")
 	}
 	ctaText := dataString(data, "cta_text")
-	if ctaText != "" {
-		ctaURL := dataString(data, "cta_url")
-		if ctaURL == "" {
-			ctaURL = "#"
+	secLabel := dataString(data, "secondary_label")
+	if ctaText != "" || secLabel != "" {
+		b.WriteString("    <div class=\"hero-actions\">\n")
+		if ctaText != "" {
+			ctaURL := dataString(data, "cta_url")
+			if ctaURL == "" {
+				ctaURL = "#"
+			}
+			b.WriteString(fmt.Sprintf("      <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
+				escapeURL(ctaURL), escapeHTML(ctaText)))
 		}
-		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-primary\">%s</a>\n",
-			escapeURL(ctaURL), escapeHTML(ctaText)))
-	}
-	if secLabel := dataString(data, "secondary_label"); secLabel != "" {
-		secURL := dataString(data, "secondary_url")
-		if secURL == "" {
-			secURL = "#"
+		if secLabel != "" {
+			secURL := dataString(data, "secondary_url")
+			if secURL == "" {
+				secURL = "#"
+			}
+			b.WriteString(fmt.Sprintf("      <a href=\"%s\" class=\"btn-secondary\">%s</a>\n",
+				escapeURL(secURL), escapeHTML(secLabel)))
 		}
-		b.WriteString(fmt.Sprintf("    <a href=\"%s\" class=\"btn-secondary\">%s</a>\n",
-			escapeURL(secURL), escapeHTML(secLabel)))
+		b.WriteString("    </div>\n")
 	}
 	b.WriteString("  </section>\n")
 	return b.String()
+}
+
+// renderHeadlineWithAccent emits an h1/h2 inner that supports an optional
+// accent fragment shown in --color-primary. Two ways to flag the accent:
+// (1) pass a separate `headline_accent` field which gets appended after a
+// line break, or (2) wrap an inline span of the headline itself with
+// `[[accent]]` markers (unicode-safe, no HTML in the input).
+func renderHeadlineWithAccent(headline, accent string) string {
+	if strings.Contains(headline, "[[") && strings.Contains(headline, "]]") {
+		out := escapeHTML(headline)
+		out = strings.ReplaceAll(out, "[[", `<span class="headline-accent">`)
+		out = strings.ReplaceAll(out, "]]", `</span>`)
+		return out
+	}
+	if accent != "" {
+		return fmt.Sprintf("%s<br><span class=\"headline-accent\">%s</span>",
+			escapeHTML(headline), escapeHTML(accent))
+	}
+	return escapeHTML(headline)
 }
 
 // renderMediaImg returns a <picture> element when the media row is found in
