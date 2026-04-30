@@ -119,12 +119,15 @@ type EvalPlaybookInfo struct {
 	VerificationGate []string         `json:"verification_gate"`
 }
 
-// DesignPlaybookInfo is the agent's design DNA — first principles, the
-// stack atomicsite renders into (Astro + TypeScript + Tailwind output),
-// page archetypes with concrete block sequences, typography + spacing
-// scales, block selection rules, and the mistakes to avoid. Read this
-// before composing any page. The agent that reads carefully should
-// be able to one-shot a B+ site that looks intentional, not generic.
+// DesignPlaybookInfo is the agent's design DNA. Read before composing any
+// page. Distilled from four in-house design skills (taste-skill,
+// high-end-visual-design, minimalist-ui, redesign-existing) + Bright
+// Interaction's Swiss-Minimal CRM design system + a year of
+// marketing-site audits. The agent that reads this carefully should
+// one-shot a B+ site that looks like a real agency built it, not
+// "AI template + nice fonts". Every rule has been adapted to
+// atomicsite's static-Astro reality (no React/Framer Motion — CSS
+// animations only, JSON authoring instead of utility classes).
 type DesignPlaybookInfo struct {
 	Stack             string                  `json:"stack"`
 	Principles        []DesignPrinciple       `json:"principles"`
@@ -136,6 +139,61 @@ type DesignPlaybookInfo struct {
 	CommonMistakes    []DesignMistake         `json:"common_mistakes"`
 	OneShotRecipe     OneShotRecipe           `json:"one_shot_recipe"`
 	ReferenceRepos    []DesignReferenceRepo   `json:"reference_repos"`
+
+	// AntiPatterns lists the AI design tells that make a site look
+	// generic. Each entry pairs a banned pattern with the preferred
+	// alternative AND the atomicsite-specific way to apply it. Read
+	// before every site build — nothing else in this playbook helps
+	// if the output ships an AI tell.
+	AntiPatterns []AntiPattern `json:"anti_patterns"`
+
+	// VibeArchetypes are the three high-level aesthetic identities
+	// the agent picks ONE of per site. Picking commits the agent to
+	// a coherent palette + typography + materiality choice, killing
+	// the "soup of patterns" that ships when an agent borrows from
+	// every reference at once.
+	VibeArchetypes []VibeArchetype `json:"vibe_archetypes"`
+
+	// Materiality describes how surfaces look — borders, shadows,
+	// glass, double-bezel patterns. Atomicsite's renderer ships
+	// most of these as defaults; this section tells the agent
+	// what's already wired up so it doesn't try to invent custom CSS.
+	Materiality MaterialityGuidance `json:"materiality"`
+
+	// ContentAuthenticity is the rule set against AI slop copy.
+	// "John Doe", "99.99%", "Acme Corp", "Elevate", "Seamless" — all
+	// banned. The agent reads this BEFORE writing copy, not after.
+	ContentAuthenticity ContentRules `json:"content_authenticity"`
+
+	// MotionGuidance is the agent's motion-design rules. Atomicsite
+	// is static Astro — no Framer Motion, no scroll listeners. CSS
+	// animations only, prefers-reduced-motion respected, transform
+	// + opacity only.
+	Motion MotionGuidance `json:"motion"`
+
+	// StrategicOmissions is the checklist of things AI typically
+	// forgets. Skip-to-content, custom 404, form validation,
+	// favicon, legal links, cookie consent, "back" navigation.
+	// Atomicsite handles many automatically — this section tells
+	// the agent which ones it gets for free vs which need explicit
+	// authorship.
+	StrategicOmissions []OmissionItem `json:"strategic_omissions"`
+
+	// AuditChecklist is the final pre-flight checklist the agent
+	// runs against its own output before declaring the site done.
+	// Mirrors redesign-existing's audit but scoped to atomicsite
+	// authoring (block_type + data + settings, not arbitrary CSS).
+	AuditChecklist []AuditItem `json:"audit_checklist"`
+
+	// IconPolicy says which icon set to use, banned strokes, and how
+	// to wire icons through atomicsite's icons.go dictionary.
+	IconPolicy IconRules `json:"icon_policy"`
+
+	// CopyVoice gives the agent a tight, opinionated voice rule set
+	// for writing eyebrows, headlines, subheadings, and CTAs.
+	// Distilled from Bright Interaction's voice guidelines + the
+	// taste-skill content rules.
+	CopyVoice VoiceRules `json:"copy_voice"`
 }
 
 // DesignPrinciple is a first-principles design rule with a concrete
@@ -240,6 +298,94 @@ type DesignReferenceRepo struct {
 	BestFor     []string `json:"best_for"`
 	License     string   `json:"license"`
 	Notes       string   `json:"notes"`
+}
+
+// AntiPattern is one banned AI-design tell with its preferred replacement
+// and how to apply that replacement through atomicsite primitives.
+type AntiPattern struct {
+	Banned     string `json:"banned"`
+	Preferred  string `json:"preferred"`
+	HowInAtomicsite string `json:"how_in_atomicsite"`
+}
+
+// VibeArchetype names one of three coherent aesthetic identities. The
+// agent picks ONE per site — never mixes — and follows its palette,
+// typography, materiality choices through every block.
+type VibeArchetype struct {
+	Name         string   `json:"name"`
+	BestFor      []string `json:"best_for"`
+	Palette      string   `json:"palette"`
+	Typography   string   `json:"typography"`
+	Materiality  string   `json:"materiality"`
+	BgColor      string   `json:"bg_color"`
+	PrimaryColor string   `json:"primary_color"`
+	TextColor    string   `json:"text_color"`
+	FontHeading  string   `json:"font_heading"`
+	FontBody     string   `json:"font_body"`
+	ApplyVia     string   `json:"apply_via"`
+}
+
+// MaterialityGuidance describes the surface treatments atomicsite
+// supports + the patterns the agent should reach for vs avoid.
+type MaterialityGuidance struct {
+	Defaults  []string `json:"defaults"`
+	DoUse     []string `json:"do_use"`
+	DontUse   []string `json:"dont_use"`
+	HowToApply []string `json:"how_to_apply"`
+}
+
+// ContentRules is the AI-slop firewall for copy.
+type ContentRules struct {
+	BannedNames     []string `json:"banned_names"`
+	BannedNumbers   []string `json:"banned_numbers"`
+	BannedCompanies []string `json:"banned_companies"`
+	BannedPhrases   []string `json:"banned_phrases"`
+	StyleRules      []string `json:"style_rules"`
+	HowInAtomicsite string   `json:"how_in_atomicsite"`
+}
+
+// MotionGuidance scopes animation to atomicsite reality (CSS only, no JS).
+type MotionGuidance struct {
+	StackReality string   `json:"stack_reality"`
+	DoUse        []string `json:"do_use"`
+	DontUse      []string `json:"dont_use"`
+	Performance  []string `json:"performance"`
+	A11y         []string `json:"a11y"`
+}
+
+// OmissionItem is one thing AI typically forgets, and whether
+// atomicsite handles it automatically or needs explicit authorship.
+type OmissionItem struct {
+	Item       string `json:"item"`
+	Importance string `json:"importance"`
+	Status     string `json:"status"`
+	HowApplied string `json:"how_applied"`
+}
+
+// AuditItem is one final-pass check the agent runs before claiming the
+// site is done.
+type AuditItem struct {
+	Check string `json:"check"`
+	Why   string `json:"why"`
+}
+
+// IconRules tells the agent which icons to use and which to avoid.
+type IconRules struct {
+	UseSet      string   `json:"use_set"`
+	StrokeWidth string   `json:"stroke_width"`
+	Banned      []string `json:"banned"`
+	Available   []string `json:"available"`
+	HowToUse    string   `json:"how_to_use"`
+}
+
+// VoiceRules is the copywriting voice for marketing pages.
+type VoiceRules struct {
+	Tone       string   `json:"tone"`
+	Eyebrow    []string `json:"eyebrow"`
+	Headline   []string `json:"headline"`
+	Subheading []string `json:"subheading"`
+	CTA        []string `json:"cta"`
+	Forbidden  []string `json:"forbidden"`
 }
 
 // PageTemplate is the canonical block sequence the eval engine rewards.
@@ -1257,6 +1403,261 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				BestFor: []string{"Hero variants (Hero, Hero2, HeroText)", "Pricing layouts", "Features grids (Features, Features2, Features3)", "FAQ accordion patterns", "Stats + Testimonials primitives", "Steps / process flows"},
 				License: "MIT",
 				Notes:   "src/components/widgets/ has 1:1 analogues for most atomicsite block types. Read the source when you need to see how a primitive is composed in production-grade Astro/Tailwind. NOT a code-import target — atomicsite has its own renderers.",
+			},
+		},
+
+		AntiPatterns: []AntiPattern{
+			// Typography
+			{Banned: "Inter font (anywhere)", Preferred: "Space Grotesk (heading), Inter is acceptable as body fallback only when paired with a display heading. For premium feel: Geist, Outfit, Cabinet Grotesk, Satoshi, Switzer, Plus Jakarta Sans.", HowInAtomicsite: "Update branding.font_heading to Space Grotesk (default already) or one of the premium families. Do NOT set font_heading to Inter. Body can be Inter for legibility but the eye reads heading first."},
+			{Banned: "Roboto, Open Sans, Helvetica, Arial as heading fonts", Preferred: "Same as above — Space Grotesk default, Geist/Outfit/Cabinet Grotesk for character.", HowInAtomicsite: "branding.font_heading. The Google Fonts link in the Astro layout already loads Inter + Space Grotesk + Space Mono; Geist/Outfit etc. require updating the layout's <link> href."},
+			{Banned: "Pure black (#000000) anywhere", Preferred: "Off-black: zinc-950 (#0a0a0a), charcoal (#18181b — atomicsite default --color-text), or a tinted dark.", HowInAtomicsite: "Default --color-text is #18181b. Don't override branding.text_color to #000000."},
+			{Banned: "Generic shadow-md / shadow-lg / shadow-xl on cards", Preferred: "Tinted shadows that carry the bg hue. Or no shadow + 1px subtle border. Or inner shadow for elevation.", HowInAtomicsite: "Atomicsite's renderer ships subtle box-shadows tuned for each block (.replacement-card, .pricing-tier, .about-split-image). Do not override via style_json — the defaults match this rule."},
+			{Banned: "Oversaturated brand colours (saturation > 80%)", Preferred: "Desaturated, muted accents (max ~75% saturation). Brand colour appears in 4-7 places per page max.", HowInAtomicsite: "branding.primary_color. Avoid pure #FF0000, #00FF00, #0000FF. Use OKLCH-tuned colours or muted variants like #0E7490 (BI's teal)."},
+			{Banned: "Purple/blue 'AI gradient' aesthetic (the most common AI fingerprint)", Preferred: "Neutral bases (Zinc/Slate) with one considered accent: Emerald, Electric Blue, Deep Rose, Burnt Orange, Forest Green.", HowInAtomicsite: "Set branding.primary_color to a single non-purple accent. NEVER use linear gradients on backgrounds (atomicsite has no gradient block by design)."},
+			{Banned: "Mixing warm and cool grays in the same site", Preferred: "Pick ONE gray family. All borders, muted text, surfaces follow it.", HowInAtomicsite: "branding.border_color + muted_color + surface_color must share a temperature with text_color + bg_color."},
+			{Banned: "Linear or ease-in-out CSS transitions", Preferred: "Custom cubic-bezier with weight: cubic-bezier(0.16, 1, 0.3, 1) for 'soft landing', cubic-bezier(0.32, 0.72, 0, 1) for premium feel.", HowInAtomicsite: "Atomicsite's CSS uses ease-out + 150-200ms by default. For richer feel, the agent can author CSS classes via /api/agent/css-classes; the renderer respects them."},
+			// Icons
+			{Banned: "Lucide / Feather icons in their default state", Preferred: "Phosphor Light (icon stroke 1.5), Radix Icons, Heroicons. Standardize stroke width across all icons.", HowInAtomicsite: "Atomicsite ships a curated 52-icon Lucide subset in internal/builder/icons.go. They're already tuned (stroke 2). For non-marketing icon needs the agent registers a custom component via /api/agent/components."},
+			{Banned: "Cliché icons: rocket for 'Launch', shield for 'Security', cog for 'Settings'", Preferred: "Less obvious metaphors: bolt for speed, fingerprint for security, spark for launch, vault for storage.", HowInAtomicsite: "feature_grid items[].icon picks from the icon dictionary. Pick the less-obvious match."},
+			// Layouts
+			{Banned: "Three equal cards horizontally as feature row", Preferred: "2-column zig-zag, asymmetric grid (replacement_grid with .is-wide spans), horizontal scroll, or masonry.", HowInAtomicsite: "Use replacement_grid (which has .is-wide span variants for visual interest), or feature_grid with 4 items (auto-flow handles 2/2 on tablet, 4-up on desktop)."},
+			{Banned: "Centered hero with text over an image", Preferred: "Asymmetric: left-aligned content with image right (split_hero), or centered text WITHOUT image but with circuit-canvas / mesh-gradient bg.", HowInAtomicsite: "split_hero (image right) OR hero with bg=circuit (canvas animation). Don't use hero with image_id + center alignment — atomicsite's hero is always centered without image."},
+			{Banned: "h-screen on hero (iOS Safari viewport bug)", Preferred: "min-h-[100dvh] always.", HowInAtomicsite: "Atomicsite's .block--hero uses min-height: clamp(36rem, 70vh, 50rem) — already correct. Do not override via style_json."},
+			{Banned: "Edge-to-edge content (no max-width container)", Preferred: "Container max-width 1024-1440px (--container-width).", HowInAtomicsite: "general.container_width setting (narrow|default|wide|fluid). Default is 72rem (1152px) — leave it alone unless the brand demands otherwise."},
+			{Banned: "Symmetric vertical padding (top = bottom always)", Preferred: "Optical adjustment — bottom often slightly larger.", HowInAtomicsite: "Renderer's defaults have this baked in (.block--hero { padding-block: 6rem 5rem }). Don't override."},
+			// Visual
+			{Banned: "Generic 1px solid gray border on every card", Preferred: "Hairline border at 8-12% opacity of text colour. Tinted to bg.", HowInAtomicsite: "Renderer uses border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent) — already correct."},
+			{Banned: "Edge-to-edge sticky navbars glued to top", Preferred: "Floating glass pill or detached fixed bar with mt-6. backdrop-blur on fixed elements only.", HowInAtomicsite: "Atomicsite ships a sticky h-14 header with backdrop-blur. Don't author custom navbars."},
+			{Banned: "Filling sections with full-width container + max char count", Preferred: "Narrow content columns. Subheading max-width 36-50ch. Heroic whitespace.", HowInAtomicsite: "Renderer enforces max-width per block (.block--text 42rem, .block--accordion_faq 56rem). Don't override."},
+			// Content
+			{Banned: "John Doe / Jane Smith / Sarah Chan in testimonials", Preferred: "Realistic, specific names (e.g. Anna Lindqvist, Mehdi Ahmadi, Tom Isgren).", HowInAtomicsite: "Quote blocks + about_split. Author real names — never the AI defaults."},
+			{Banned: "Round fake numbers: 99.99%, 50%, $100.00, 1234567", Preferred: "Organic data: 47.2%, 599 audited, +46 76 297 80 35, $4,892.", HowInAtomicsite: "stat_grid items[].value, replacement_grid descriptions, FAQ answers. Specific > round."},
+			{Banned: "Acme Corp / Nexus / SmartFlow / TechFlow in logo bars", Preferred: "Real customer names (with consent) or a 'Founder previously worked with' frame using real prior employers.", HowInAtomicsite: "logo_carousel items[].label OR logo_strip items[].alt. Real names build trust; fakes destroy it."},
+			{Banned: "Title Case On Every Heading", Preferred: "Sentence case for headlines (better readability), Title Case only for product names + section eyebrows.", HowInAtomicsite: "headline + heading + eyebrow fields. Default to sentence case."},
+			{Banned: "Exclamation marks in success messages and CTAs", Preferred: "Be confident, not loud. 'Audit booked.' beats 'Audit booked!'", HowInAtomicsite: "cta_text, form submit_label, FAQ answers."},
+			// Behaviour
+			{Banned: "AI copywriting clichés: Elevate, Seamless, Unleash, Next-Gen, Game-changer, Delve, Tapestry, In the world of...", Preferred: "Concrete verbs (replace, audit, migrate, save, ship, host, sell). Specific nouns (CRM, server, GDPR, EU, audit).", HowInAtomicsite: "All copy fields. The instant fix: read aloud — if it sounds like marketing fluff, rewrite."},
+			{Banned: "Lorem ipsum or 'placeholder copy' anywhere", Preferred: "Real draft copy. The 5-minute version of real copy beats perfect Lorem.", HowInAtomicsite: "Never ship a block with Lorem text. The text field is content, not a placeholder."},
+		},
+
+		VibeArchetypes: []VibeArchetype{
+			{
+				Name:         "Soft Structuralism",
+				BestFor:      []string{"B2B SaaS marketing", "Health/wellness", "Consumer apps", "Portfolio/agency"},
+				Palette:      "Warm neutrals — bg #fafaf9 (warm white), surface-elevated #f5f5f4, text #18181b. Single accent (teal/emerald/burnt-orange).",
+				Typography:   "Massive bold Grotesk for headlines (Space Grotesk 700, clamp 2.5-5rem, tracking -0.025em). Inter body. Space Mono eyebrows + brand wordmark.",
+				Materiality:  "Airy, floating components. Diffused 0.05-opacity shadows. 1rem radius. No glass. No gradients.",
+				BgColor:      "#fafaf9",
+				PrimaryColor: "#0E7490",
+				TextColor:    "#18181b",
+				FontHeading:  "Space Grotesk",
+				FontBody:     "Inter",
+				ApplyVia:     "Default atomicsite branding maps here. Set branding.bg_color=#fafaf9, primary_color=brand-accent, text_color=#18181b. Use bg=circuit on hero for tech/security/infra; bg=image otherwise. This is the atomicsite default and the right pick for ~70% of marketing sites.",
+			},
+			{
+				Name:         "Editorial Luxury",
+				BestFor:      []string{"Lifestyle brands", "Real estate", "Creative agencies", "High-end consumer"},
+				Palette:      "Warm cream #FDFBF7, muted sage / deep espresso accents. High-contrast.",
+				Typography:   "Variable serif headlines (Lyon, Newsreader, Playfair, Instrument Serif) + Inter / Switzer body. Tight serif tracking -0.03em line-height 1.1.",
+				Materiality:  "Subtle CSS noise/film-grain overlay (opacity-[0.03]) for paper-like physical texture. Mixed aspect ratios (4:3 next to 16:9). Asymmetric content blocks.",
+				BgColor:      "#FDFBF7",
+				PrimaryColor: "#5C4033",
+				TextColor:    "#1F1A14",
+				FontHeading:  "Playfair Display",
+				FontBody:     "Inter",
+				ApplyVia:     "branding.bg_color=#FDFBF7, primary_color=#5C4033 (espresso) or #6B7359 (sage), font_heading=Playfair Display. Layout's Google Fonts link must be extended to load Playfair Display — currently only Inter+Space Grotesk+Space Mono are loaded. Apply ONLY when the brand is editorial/lifestyle.",
+			},
+			{
+				Name:         "Ethereal Glass",
+				BestFor:      []string{"AI/ML products", "Premium SaaS dashboards", "Tech infrastructure", "Crypto/Web3"},
+				Palette:      "Deepest OLED black #050505 background. Vantablack cards. Subtle glowing radial mesh gradients (purple/emerald/blue orbs).",
+				Typography:   "Wide geometric Grotesk (Geist Sans, Plus Jakarta) for everything. Mono for stats + brand. NO serif.",
+				Materiality:  "Heavy backdrop-blur-2xl on cards. Pure white/10 hairlines. True glass with 1px inner border + inset shadow.",
+				BgColor:      "#050505",
+				PrimaryColor: "#06B6D4",
+				TextColor:    "#FAFAFA",
+				FontHeading:  "Geist",
+				FontBody:     "Geist",
+				ApplyVia:     "branding.bg_color=#050505, primary_color=#06B6D4 (electric cyan) or #10B981 (emerald), text_color=#FAFAFA. Layout Google Fonts link must include Geist (currently only loads Inter+Space Grotesk). Use sparingly — dark sites convert worse than light for B2B; only ship this for genuine 'we build futuristic AI' brands.",
+			},
+		},
+
+		Materiality: MaterialityGuidance{
+			Defaults: []string{
+				"Cards (.replacement-card, .pricing-tier, .feature-grid-item, .faq-item) have 1px hairline border at ~10% text-opacity, soft 0.875-1rem radius, subtle box-shadow on hover only.",
+				"Buttons (.btn-primary, .btn-secondary, .btn-accent) have 0.625rem radius, 0.875rem 1.75rem padding, no shadow by default — visible from contrast not from elevation.",
+				"Hero+split_hero with bg=circuit overlay an animated SVG canvas behind content (block-circuit-canvas + script tag emitted automatically).",
+				"Images (.split-hero-img, .about-split-image) get 1rem radius + 0 16px 48px diffused tinted shadow.",
+				"Pricing featured tier flips to dark fill (--color-text background) with brand-coloured CTA — no extra elevation needed.",
+			},
+			DoUse: []string{
+				"Tinted shadows that carry the bg hue: color-mix(in oklab, var(--color-text) 12%, transparent). Built into renderer defaults.",
+				"Hairline borders ≤ 10% opacity. Anything darker reads as a 'cheap card outline'.",
+				"Inner highlight on glass-style cards: shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] for top-edge refraction.",
+				"Squircle radii (0.875-1.25rem). Pure pill (rounded-full) ONLY for badges, lang switchers, never on large containers.",
+				"Concentric radii on nested elements: outer rounded-[1rem] + inner rounded-[calc(1rem-0.375rem)] = visual harmony.",
+				"Generous padding inside cards: 1.5-2rem. Cramped cards read low-end.",
+			},
+			DontUse: []string{
+				"shadow-md / shadow-lg / shadow-xl Tailwind defaults — too generic, untinted.",
+				"Pure black box-shadows (rgba(0,0,0,0.3+)). Always at most ~12% mixed with bg hue.",
+				"Neon outer glows. The 'AI fingerprint' look. Banned.",
+				"Generic white cards on white bg with shadow-sm. Either remove the card OR commit to a different surface.",
+				"Multiple radii in the same view (4px next to 16px next to 24px). Pick a radius family per archetype.",
+				"backdrop-blur on scrolling content. Apply only to fixed/sticky elements (the navbar already has it).",
+			},
+			HowToApply: []string{
+				"For 99% of cards, use the renderer defaults — atomicsite has all these patterns wired into the per-block CSS rules.",
+				"To customise card materiality across a site, write CSS classes via PUT /api/agent/css-classes. Don't author per-block style_json overrides.",
+				"For an 'expensive feel' upgrade: bump general.container_width to 'wide', use bg=circuit hero, mark a stat as featured (it auto-promotes visually).",
+			},
+		},
+
+		ContentAuthenticity: ContentRules{
+			BannedNames: []string{
+				"John Doe", "Jane Smith", "Jane Doe", "Sarah Chan", "Jack Su", "Mike Johnson", "Test User",
+			},
+			BannedNumbers: []string{
+				"99.99%", "100%", "50%", "$100.00", "$1000", "1234567", "$9.99", "10x faster", "100x", "999",
+			},
+			BannedCompanies: []string{
+				"Acme Corp", "Acme Inc", "Nexus", "SmartFlow", "TechFlow", "Innovate Co", "Synergy", "ClientCo", "Example Inc",
+			},
+			BannedPhrases: []string{
+				"Elevate", "Seamless", "Unleash", "Next-Gen", "Game-changer", "Delve", "Tapestry",
+				"In the world of", "Imagine a world where", "Welcome to the future of",
+				"Revolutionary", "Disruptive", "Cutting-edge", "World-class", "Best-in-class",
+				"Lorem ipsum", "Coming soon", "Click here", "Learn more (as a bare CTA — be specific)",
+			},
+			StyleRules: []string{
+				"Sentence case for headlines, not Title Case.",
+				"Confident period instead of exclamation. 'Audit booked.' not 'Audit booked!'",
+				"Active voice always. 'We couldn't save your changes' not 'Mistakes were made'.",
+				"Specific over general: '599 Swedish law firms audited' beats '500+ projects shipped'.",
+				"Concrete verbs: replace, audit, migrate, save, ship, host, sell — not Elevate, Unleash.",
+				"Numbers with context: 100/100 + 'Industry average 73' is 10x stronger than just '100/100'.",
+				"Phone numbers in real local format: '+46 76 297 80 35' beats '1-800-555-0100'.",
+				"Email addresses on a domain you control. Never gmail/outlook for company contact.",
+			},
+			HowInAtomicsite: "All copy ships through the agent API: hero/split_hero text fields, stat_grid items, replacement_grid descriptions, pricing tier names, FAQ Q+A. The renderer doesn't validate copy quality — that's on the agent. Read aloud before saving: if it sounds like marketing fluff, rewrite.",
+		},
+
+		Motion: MotionGuidance{
+			StackReality: "Atomicsite renders STATIC Astro. No React, no Framer Motion, no client-side reactivity beyond CookieProof + the hero circuit canvas + the visitor-hydration script. ALL animation is CSS-only. Anything that requires JS state has to register as a custom component via /api/agent/components or live in a custom block_type.",
+			DoUse: []string{
+				"CSS transitions on :hover and :active states (already wired on .btn-*, .replacement-card, .faq-item).",
+				"CSS animations for marquees (logo_carousel uses a 30s linear infinite translate).",
+				"CSS @keyframes for circuit-bg canvas (already shipped as embedded JS asset).",
+				"Custom cubic-bezier timing: cubic-bezier(0.16, 1, 0.3, 1) for soft landing, cubic-bezier(0.32, 0.72, 0, 1) for premium overshoot.",
+				"Transform + opacity ONLY for animated properties (GPU-accelerated).",
+				"@media (prefers-reduced-motion: reduce) overrides — already applied to .logo-carousel-track. Honor it on any custom motion.",
+			},
+			DontUse: []string{
+				"window.addEventListener('scroll') — kills mobile performance.",
+				"useState magnetic buttons or hover trackers (not even available — atomicsite is server-rendered).",
+				"Animating top/left/width/height — layout-thrashing, slow.",
+				"GSAP, ThreeJS, Lottie unless registered as a custom component (heavy + needs CSP allow-list).",
+				"Animations that fire on initial load without prefers-reduced-motion check.",
+				"Continuous animations on scrolling containers (causes GPU repaints).",
+			},
+			Performance: []string{
+				"transform + opacity only. Atomicsite's CSS is already this strict.",
+				"will-change: transform sparingly, only on actively-animating elements.",
+				"backdrop-blur on FIXED elements only (navbar has it; nothing else should).",
+				"Avoid > 1s transitions on hover — visitors lose context.",
+			},
+			A11y: []string{
+				"prefers-reduced-motion: reduce → set animation: none + transition: none on motion elements.",
+				"Focus indicators stay visible always — never use :focus { outline: none } without :focus-visible alternative.",
+				"Don't use motion as the ONLY signal for state change (e.g. don't only fade-in success — also change colour + icon).",
+			},
+		},
+
+		StrategicOmissions: []OmissionItem{
+			{Item: "Skip-to-content link", Importance: "WCAG required, eval check", Status: "Auto", HowApplied: "Layout emits <a href='#main' class='sr-only-focusable'> as first focusable element on every page."},
+			{Item: "Custom 404 page", Importance: "Brand consistency + conversion recovery", Status: "Auto-seeded but agent should populate copy", HowApplied: "atomicsite's wizard creates /<lang>/404 pages. Agent should author hero + a couple of links to popular pages — don't ship the default."},
+			{Item: "Favicon + apple-touch-icon", Importance: "SEO + brand presence in tabs/bookmarks", Status: "Auto-emitted (degrades silently if missing)", HowApplied: "Upload favicon.ico + apple-touch-icon.png to media library folder='brand'. Set branding.favicon_id."},
+			{Item: "OG image (1200x630 social card)", Importance: "Conversion on shared links", Status: "Auto-emitted from sites.og_image_id with proper meta tags + width/height", HowApplied: "Upload OG image to media. Set seo.og_default_image_id."},
+			{Item: "Privacy + Terms + Cookie policy pages", Importance: "Legal requirement + privacy eval check", Status: "Auto-seeded with starter content, agent populates", HowApplied: "Pages exist at /<lang>/privacy, /terms, /cookies. Edit with create_block on a text block."},
+			{Item: "Cookie consent banner", Importance: "GDPR + privacy eval check", Status: "Auto when analytics.cookieproof_enabled=1", HowApplied: "bulk_upsert_settings analytics.cookieproof_enabled=1. CookieProof banner emits automatically."},
+			{Item: "Form validation (HTML5 required + email + tel)", Importance: "UX + a11y eval", Status: "Renderer emits required + type=email/tel/url", HowApplied: "form block items[].required=true, items[].type=email/tel."},
+			{Item: "JSON-LD Organization + FAQPage schema", Importance: "AI search + Google rich results", Status: "Auto", HowApplied: "Layout emits Organization JSON-LD. accordion_faq emits FAQPage JSON-LD inline."},
+			{Item: "robots.txt + sitemap.xml + llms.txt", Importance: "SEO + AI search", Status: "Auto", HowApplied: "Builder writes all three. Agent only sets seo.canonical_base, seo.sitemap_enabled, seo.same_as."},
+			{Item: "Hreflang alternates for multi-lang", Importance: "International SEO eval", Status: "Auto when general.additional_langs is set", HowApplied: "bulk_upsert_settings general.additional_langs='en,sv', general.hreflang_strategy='path'."},
+			{Item: "Security headers (CSP, HSTS, X-Frame-Options, etc)", Importance: "Security eval (A grade)", Status: "Auto, with sane defaults", HowApplied: "Defaults are good. Use settings_catalog security.* keys (admin-writable) only when adding allowed domains for embeds."},
+			{Item: "'Back to top' / current-page nav indicator / breadcrumbs", Importance: "Long-page UX", Status: "Manual — agent authors", HowApplied: "Add a breadcrumb section as a text block, or use the BreadcrumbList JSON-LD pattern (currently a platform gap on /en/404)."},
+			{Item: "Loading + empty + error states for forms", Importance: "Form UX", Status: "HTML5 default for now (custom states need a custom component)", HowApplied: "form block uses native browser validation. For richer flows, register a component via /api/agent/components."},
+			{Item: "Branded 'Powered by' or attribution", Importance: "Optional — most sites omit", Status: "Manual", HowApplied: "Footer block columns or copyright field."},
+		},
+
+		AuditChecklist: []AuditItem{
+			{Check: "Exactly one hero or split_hero block, exactly one h1 on the page.", Why: "Heading hierarchy + Single H1 eval check."},
+			{Check: "Hero has primary CTA (cta_text + cta_url) AND a secondary_label pointing further down the page (#anchor).", Why: "Hesitant visitors need a soft path or they bounce."},
+			{Check: "stat_grid has 3-4 items with {value, label, context}, not 1-2 generic values.", Why: "AI-Friendly Formatting eval check requires ≥3 list items. Context line carries social proof."},
+			{Check: "Pricing has exactly one tier with featured=true.", Why: "Decision paralysis kills conversion. The visual default has to make the choice obvious."},
+			{Check: "FAQ has 5-7 items, each answer 2-4 sentences with at least one concrete number.", Why: "Search engines + AI search reward specificity. Single-sentence answers under-fill snippets."},
+			{Check: "Final CTA destination matches hero CTA destination.", Why: "Two booking links to different calendars confuses; one repeated booking link reinforces."},
+			{Check: "Header has brand badge + 5-9 nav items + ONE explicit CTA (cta=true).", Why: "Header is the second-most-clicked surface. Coherent nav signals competent product."},
+			{Check: "Footer has 3-4 columns with legal links present, copyright with real org-nr if relevant.", Why: "Legal compliance + trust signal."},
+			{Check: "Every block reads on a 375px column without horizontal scroll, broken images, or overflow.", Why: "60-70% of marketing-site traffic is mobile. The renderer's @media handles most cases — but custom blocks can break."},
+			{Check: "No copy contains banned phrases (Elevate, Seamless, Unleash, etc) or fake numbers (99.99%, etc).", Why: "AI tells destroy the 'real product' feel."},
+			{Check: "Brand primary colour appears in 4-7 places per page, NOT as a section background.", Why: "Brand budget rule. Primary as bg makes the page scream."},
+			{Check: "Heading font is NOT Inter — it's Space Grotesk, Geist, or another premium grotesk.", Why: "Inter as the heading font is the AI-default tell."},
+			{Check: "Site builds successfully on the first trigger_build call. No empty blocks, no broken anchors, no missing images.", Why: "If the first build fails, the agent's design choices haven't been tested. Iterate eval until clean."},
+			{Check: "Eval grade ≥ B on all categories. Splash and 404 aside, all agent-fixable items pass.", Why: "Eval is the platform's quality scoreboard. Below B = ship blocker."},
+			{Check: "OG image is a real designed image (not a screenshot of the homepage).", Why: "Social sharing previews are seen by 10x more people than the page itself."},
+			{Check: "Final page count ≤ 11 (homepage + legal + 404 EN/SV pairs). More = scope creep.", Why: "Scope discipline. Sites grow on what's needed, not what's possible."},
+		},
+
+		IconPolicy: IconRules{
+			UseSet:      "Lucide subset — atomicsite ships 52 curated icons in internal/builder/icons.go (Mail, Server, Lock, Workflow, FileText, MessageCircle, Shield, ChevronRight, Linkedin, Github, Sparkles, BarChart, Layers, Cloud, etc).",
+			StrokeWidth: "2 (atomicsite default). Standardized across the icon set so feature_grid items don't visually clash.",
+			Banned: []string{
+				"Lucide rocket for 'Launch' (cliché). Use Sparkles or BarChart instead.",
+				"Shield for 'Security' (cliché). Use Lock or Fingerprint variant.",
+				"Cog for 'Settings' (cliché). Use Layers or Workflow.",
+				"Standard SVG 'egg' avatar placeholders.",
+				"Emojis in any icon position. Banned by atomicsite's voice rules + WCAG.",
+			},
+			Available: []string{
+				"To list available icons: read internal/builder/icons.go on disk, or query graphify.",
+				"Common usable icons: Mail, Phone, MapPin, Lock, Shield, Server, Cloud, Database, Workflow, Sparkles, Zap, BarChart, TrendingUp, Layers, FileText, MessageCircle, ArrowRight, Check, ChevronDown, Linkedin, Github, Twitter, Instagram.",
+			},
+			HowToUse: "feature_grid items[].icon = 'Mail' (case-sensitive Pascal name). Renderer looks up the SVG in icons.go and embeds it inline. Unknown icons fall back to a generic placeholder — check the icon dictionary first.",
+		},
+
+		CopyVoice: VoiceRules{
+			Tone: "Confident, specific, restrained. Like an expert who doesn't need to convince you — they're just stating what's true. Examples to match: Linear's docs, Stripe's marketing, Vercel's announcements, brightinteraction.com. Voices to AVOID: HubSpot's enthusiasm, Salesforce's corporate speak, generic SaaS template copy.",
+			Eyebrow: []string{
+				"3-4 words max. Mono font, uppercase, brand colour.",
+				"Names the category the visitor is shopping for: 'OPEN SOURCE INFRASTRUCTURE', 'GDPR COMPLIANCE', 'EU HOSTING'.",
+				"Never 'About Us', 'Our Services', 'Why Choose Us' — that's filler.",
+			},
+			Headline: []string{
+				"≤ 6 words. ≤ 18ch line-length. Sentence case.",
+				"Transformation verb + concrete noun: 'Stop renting your business. Own it.', 'Replace SaaS with self-hosted.'",
+				"Use [[bracket-accent]] on the verb that matters: 'Stop [[renting]]. Own it.'",
+				"NEVER 'Welcome to X', 'Discover Y', 'The future of Z'.",
+			},
+			Subheading: []string{
+				"≤ 2 sentences, ≤ 50ch wide.",
+				"Names the painful current state + the relief atomicsite-style site delivers.",
+				"Specific numbers if available: '200 EUR per employee per month' beats 'expensive software'.",
+				"Avoid AI clichés (Elevate, Seamless, Unleash) at all costs.",
+			},
+			CTA: []string{
+				"Action verb + specific outcome: 'Book audit', 'See pricing', 'Calculate savings'.",
+				"NEVER 'Click here', 'Submit', 'Learn more' (alone — pair with destination), 'Get started' (vague).",
+				"Primary CTA matches what the user wants to do, not what you want them to do.",
+				"Secondary label often sends them lower on the page (#pricing, #faq) — softer commitment.",
+			},
+			Forbidden: []string{
+				"Marketing clichés: Elevate, Unleash, Seamless, Game-changer, Next-gen, Best-in-class, World-class.",
+				"Vague nouns: solutions, offerings, experiences, journey, ecosystem.",
+				"Generic openers: 'Welcome to', 'Imagine a world', 'In today's fast-paced'.",
+				"Exclamation marks (!) in CTAs and success messages.",
+				"Title Case On Every Heading.",
+				"Passive voice: 'Mistakes were made' → 'We dropped the ball'.",
 			},
 		},
 	}
