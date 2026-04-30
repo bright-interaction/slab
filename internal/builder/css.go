@@ -75,6 +75,10 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	}
 	b.WriteString(fmt.Sprintf("  --font-heading: '%s', system-ui, sans-serif;\n", site.FontHeading))
 	b.WriteString(fmt.Sprintf("  --font-body: '%s', system-ui, sans-serif;\n", site.FontBody))
+	// Monospace family used for brand wordmarks, eyebrows, code labels.
+	// Space Mono is loaded by the layout (Google Fonts); falls back through
+	// system mono fonts when offline. Not a per-site setting yet.
+	b.WriteString("  --font-mono: 'Space Mono', ui-monospace, 'SF Mono', Monaco, Menlo, monospace;\n")
 	b.WriteString("}\n\n")
 
 	// Reset
@@ -164,20 +168,20 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".feature-grid-item .icon { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0.625rem; border-radius: 0.625rem; background: color-mix(in oklab, var(--color-bg) 80%, var(--color-primary)); color: var(--color-primary); margin-block-end: 1rem; }\n")
 	b.WriteString(".feature-grid-item .icon svg, .feature-grid-item .icon { box-sizing: border-box; }\n\n")
 
-	// Visual rhythm: every other major content block gets a tinted "surface"
-	// background so consecutive sections don't blur together. The surface
-	// covers the full viewport width while the inner content stays inside
-	// the container — implemented by full-bleed background on the section
-	// itself and an inner max-width via the existing .block padding.
-	b.WriteString("main > .block:nth-of-type(even):not(.block--hero):not(.block--split_hero):not(.block--cta):not(.block--logo_carousel):not(.block--logo_strip) { background: color-mix(in oklab, var(--color-bg) 94%, var(--color-text)); }\n")
-	b.WriteString("main > .block:nth-of-type(even):not(.block--hero):not(.block--split_hero):not(.block--cta):not(.block--logo_carousel):not(.block--logo_strip) { max-width: none; padding-inline: max(1.5rem, calc((100vw - var(--container-width)) / 2)); }\n")
+	// Visual rhythm: every other major content block gets a faint "elevated
+	// surface" tint so consecutive sections don't blur together. Tone is
+	// deliberately whisper-quiet — matches brightinteraction.com's #f5f5f4
+	// against #fafaf9, which is roughly a 2-3% step away from --color-bg.
+	// Heavier tints turn into stripes that fight the content.
+	b.WriteString(":root { --color-surface-elevated: color-mix(in oklab, var(--color-bg) 97.5%, var(--color-text)); }\n")
+	b.WriteString("main > .block:nth-of-type(even):not(.block--hero):not(.block--split_hero):not(.block--cta):not(.block--logo_carousel):not(.block--logo_strip) { background: var(--color-surface-elevated); max-width: none; padding-inline: max(1.5rem, calc((100vw - var(--container-width)) / 2)); }\n")
 	b.WriteString(".block--text + .block--feature_grid, .block--feature_grid + .block--text { margin-block-start: 0; }\n\n")
 
 	// Site-wide spacing: more generous block padding so sections breathe.
 	b.WriteString(".block + .block { margin-block-start: 0; }\n\n")
 
 	// --- Editorial eyebrow pattern (used by every block with .eyebrow). Mono + uppercase + tracking-widest matches brightinteraction.com's typographic system. ---
-	b.WriteString(".block .eyebrow, .block-eyebrow { font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 1rem; }\n\n")
+	b.WriteString(".block .eyebrow, .block-eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 1rem; }\n\n")
 
 	// --- Section header pattern: eyebrow (mono-uppercase, color-primary) above
 	// any h2, then optional subheading. Used by every block that opens with
@@ -192,7 +196,7 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 
 	// --- logo_carousel: rolling marquee. Two ULs side-by-side animate -50% so the loop is seamless. Pause on hover. ---
 	b.WriteString(".block--logo_carousel { padding-block: 3rem; padding-inline: 0; max-width: none; overflow: hidden; }\n")
-	b.WriteString(".block--logo_carousel > .logo-carousel-label { text-align: center; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.16em; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin-block-end: 1.5rem; }\n")
+	b.WriteString(".block--logo_carousel > .logo-carousel-label { text-align: center; font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.16em; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin-block-end: 1.5rem; }\n")
 	b.WriteString(".logo-carousel { display: flex; width: 100%; gap: 4rem; mask-image: linear-gradient(90deg, transparent 0, black 8%, black 92%, transparent 100%); }\n")
 	b.WriteString(".logo-carousel-track { list-style: none; padding: 0; margin: 0; display: flex; flex-shrink: 0; gap: 4rem; align-items: center; min-width: 100%; animation: logo-marquee 30s linear infinite; }\n")
 	b.WriteString(".logo-carousel:hover .logo-carousel-track { animation-play-state: paused; }\n")
@@ -282,26 +286,41 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block--hero .hero-actions { justify-content: center; }\n\n")
 
 	// --- Improved navbar: compact h-14, white/90 + backdrop-blur, mono brand wordmark style. Last nav link auto-styles as a primary CTA pill. ---
-	b.WriteString(".site-header { height: 3.5rem; padding-block: 0; padding-inline: 1.5rem; display: flex; align-items: center; }\n")
+	// --- Header: sticky/fixed top bar with brand mark + nav. Compact h-14 row.
+	// Backwards-compat: nav last-child auto-styles as a primary CTA pill, so
+	// short demo nav arrays still get a button. Explicit `cta: true` on a
+	// link emits class="nav-cta" which takes precedence and works in any
+	// position. ---
+	b.WriteString(".site-header { position: sticky; top: 0; z-index: 50; height: 3.5rem; padding-block: 0; padding-inline: 1.5rem; display: flex; align-items: center; background: color-mix(in oklab, var(--color-bg) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
 	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }\n")
-	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); }\n")
+
+	// Brand mark: badge (B-square) + wordmark with optional accent split.
+	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); text-decoration: none; }\n")
 	b.WriteString(".site-header .brand-mark img { height: 1.5rem; width: auto; }\n")
-	b.WriteString(".site-nav { flex: 1; }\n")
-	b.WriteString(".site-nav ul { gap: 0.25rem; justify-content: center; }\n")
-	b.WriteString(".site-nav a { padding: 0.375rem 0.75rem; font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); }\n")
-	b.WriteString(".site-nav a:hover { color: var(--color-text); }\n")
-	b.WriteString(".site-nav li:first-child { margin-right: 0; }\n")
-	b.WriteString(".site-nav li:first-child a { font-family: var(--font-heading); font-weight: 700; font-size: 0.9375rem; color: var(--color-text); }\n")
-	b.WriteString(".site-nav li:last-child a { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; }\n")
-	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n\n")
+	b.WriteString(".brand-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; background: var(--color-text); color: white; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; flex-shrink: 0; }\n")
+	b.WriteString(".brand-wordmark { font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); }\n")
+	b.WriteString(".brand-wordmark-accent { color: var(--color-primary); }\n")
+
+	// Nav: middle/right cluster of links.
+	b.WriteString(".site-nav ul { display: flex; gap: 0.125rem; justify-content: flex-end; align-items: center; list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }\n")
+	b.WriteString(".site-nav a { padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: 500; color: color-mix(in oklab, var(--color-text) 65%, transparent); transition: color 150ms ease-out; }\n")
+	b.WriteString(".site-nav a:hover { color: var(--color-text); text-decoration: none; }\n")
+
+	// Backwards-compat last-child CTA pill (kicks in when no link has cta:true).
+	b.WriteString(".site-nav li:last-child a { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; }\n")
+	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n")
+	// Explicit `.nav-cta` overrides + neutralises the auto last-child styling.
+	b.WriteString(".site-nav .nav-cta { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; }\n")
+	b.WriteString(".site-nav .nav-cta:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n")
+	b.WriteString(".site-nav:has(.nav-cta) li:last-child a:not(.nav-cta) { background: transparent; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.5rem 0.75rem; border-radius: 0; font-size: 0.875rem; font-weight: 500; }\n\n")
 
 	// --- Dark footer variant: opt in via data.theme="dark" on the footer global block. ---
 	b.WriteString(".site-footer.is-dark { background: var(--color-text); color: white; padding-block: 4rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 0; }\n")
-	b.WriteString(".site-footer.is-dark .footer-column h3 { color: white; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; letter-spacing: 0.12em; }\n")
+	b.WriteString(".site-footer.is-dark .footer-column h3 { color: white; font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.12em; }\n")
 	b.WriteString(".site-footer.is-dark .footer-column p, .site-footer.is-dark .footer-column a { color: color-mix(in oklab, white 70%, transparent); }\n")
 	b.WriteString(".site-footer.is-dark .footer-column a:hover { color: var(--color-primary); }\n")
 	b.WriteString(".site-footer.is-dark .footer-tagline { color: var(--color-primary); font-weight: 500; }\n")
-	b.WriteString(".site-footer.is-dark .site-footer-copy { color: color-mix(in oklab, white 50%, transparent); font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; }\n")
+	b.WriteString(".site-footer.is-dark .site-footer-copy { color: color-mix(in oklab, white 50%, transparent); font-family: var(--font-mono); font-size: 0.75rem; }\n")
 	b.WriteString(".site-footer.is-dark .footer-bottom { border-top-color: color-mix(in oklab, white 12%, transparent); }\n")
 	b.WriteString(".site-footer.is-dark .footer-social a { background: color-mix(in oklab, white 10%, transparent); width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; color: white; }\n")
 	b.WriteString(".site-footer.is-dark .footer-social a:hover { background: var(--color-primary); color: white; }\n\n")
@@ -353,7 +372,7 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".pricing-tier.is-featured .tier-description, .pricing-tier.is-featured ul.tier-features li { color: color-mix(in oklab, white 80%, transparent); }\n")
 	b.WriteString(".pricing-tier.is-featured ul.tier-features li::before { color: var(--color-primary); }\n")
 	b.WriteString(".pricing-tier.is-featured .tier-step { color: var(--color-primary); }\n")
-	b.WriteString(".pricing-tier .tier-step { font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 0.5rem; }\n")
+	b.WriteString(".pricing-tier .tier-step { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 0.5rem; }\n")
 	b.WriteString(".pricing-tier .tier-name { font-family: var(--font-heading); font-weight: 700; font-size: 1.25rem; margin-block-end: 0.5rem; }\n")
 	b.WriteString(".pricing-tier .tier-price { font-size: 2rem; font-weight: 700; color: var(--color-primary); line-height: 1; margin-block-end: 0.25rem; }\n")
 	b.WriteString(".pricing-tier .tier-price-period { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin-block-end: 1.25rem; }\n")
@@ -372,7 +391,7 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 
 	// code_block: monospace code presentation, optional language label.
 	b.WriteString(".block--code_block { max-width: 56rem; }\n")
-	b.WriteString(".block--code_block pre { background: color-mix(in oklab, var(--color-bg) 88%, var(--color-text)); color: color-mix(in oklab, var(--color-text) 92%, transparent); border-radius: 0.75rem; padding: 1.5rem; overflow-x: auto; font-family: ui-monospace, 'SF Mono', Monaco, Menlo, monospace; font-size: 0.875rem; line-height: 1.6; }\n")
+	b.WriteString(".block--code_block pre { background: color-mix(in oklab, var(--color-bg) 88%, var(--color-text)); color: color-mix(in oklab, var(--color-text) 92%, transparent); border-radius: 0.75rem; padding: 1.5rem; overflow-x: auto; font-family: var(--font-mono); font-size: 0.875rem; line-height: 1.6; }\n")
 	b.WriteString(".block--code_block .code-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: color-mix(in oklab, var(--color-text) 55%, transparent); margin-block-end: 0.5rem; }\n\n")
 
 	// form block: built-in fields + submit. Posts to action URL agent supplies.
