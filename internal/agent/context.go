@@ -647,12 +647,15 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 	return EvalPlaybookInfo{
 		Goal: "Drive the site to 95%+ on agent-writable eval categories (accessibility, seo, privacy partial, performance partial, plus parts of security). The remaining gap is admin-only items the agent surfaces to the human at the end. Read this section first; it tells you what to write and why each write satisfies a specific eval check.",
 		PageTemplate: PageTemplate{
-			Description: "Canonical block sequence for a content page. Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
+			Description: "Canonical block sequence for a marketing-grade homepage modeled after brightinteraction.com. Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
 			Blocks: []TemplateBlock{
-				{BlockType: "hero", Required: true, Notes: "Sort 0. headline -> h1 (REQUIRED for eval Has H1 + Single H1). eyebrow + subheading + cta_text + cta_url. image_id from media library for OG-quality hero image. secondary_label + secondary_url optional."},
-				{BlockType: "feature_grid", Required: false, Notes: "Sort 1+. heading + subheading + items[]. Each item: title (h3), body (p), icon (Lucide name). 3-6 items renders cleanly. Counts as list >= 3 items for AI-Friendly Formatting eval check."},
-				{BlockType: "text", Required: false, Notes: "Long-form prose. eyebrow + heading + multi-paragraph body (split paragraphs with \\n\\n; single \\n becomes <br>). Optional inline cta_text + cta_url. Targets the 300+ word eval check."},
-				{BlockType: "feature_grid", Required: false, Notes: "Repeat for additional sections (services, pricing, FAQ, social proof). Each grid is its own card cluster."},
+				{BlockType: "split_hero", Required: true, Notes: "Sort 0. Side-by-side hero (text left, image right) for SaaS marketing. headline -> h1 (REQUIRED for eval Has H1 + Single H1). eyebrow + subheading + cta_text + cta_url + secondary_label + secondary_url + image_id. Use 'hero' (centered) instead when the page sells a single product or service with one big CTA."},
+				{BlockType: "stat_grid", Required: false, Notes: "Sort 1. Trust signals row. items[] = {value, label}. 3-4 stats hits the AI-Friendly Formatting eval check (>= 3-item list). Place under the hero before the first content section."},
+				{BlockType: "logo_strip", Required: false, Notes: "Customer / partner logos under hero. items[] = {image_id, alt, href?}. Skip if you don't have actual logos."},
+				{BlockType: "feature_grid", Required: false, Notes: "Services / What I Replace / How it works. heading + subheading + items[] each with title (h3), body (p), icon (Lucide name like Mail/Server/Lock/Workflow). 3-6 items per grid, alternate sections get a tinted background automatically."},
+				{BlockType: "text", Required: false, Notes: "Long-form section: founder bio, About, methodology, deep-dive. eyebrow + heading + multi-paragraph body (split with \\n\\n; single \\n becomes <br>). Targets the 300+ word eval check."},
+				{BlockType: "pricing", Required: false, Notes: "3-up tier cards. heading + subheading + tiers[] each with name + price + price_period + description + features[] + cta_text + cta_url + featured?. Set featured=true on the recommended plan for primary border + shadow."},
+				{BlockType: "accordion_faq", Required: false, Notes: "Q&A section near the bottom. heading + items[] each with question + answer. Auto-emits FAQPage JSON-LD."},
 				{BlockType: "cta", Required: true, Notes: "Last block. heading + text + cta_text + cta_url + variant ('primary'|'secondary'). Renders as a tinted banner card. Don't end a page on a feature_grid; conversion + content-density both improve with a closing CTA."},
 			},
 		},
