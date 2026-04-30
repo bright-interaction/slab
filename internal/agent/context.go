@@ -1400,9 +1400,23 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			{
 				Path:    "automations/design-references/astrowind/",
 				Stack:   "Astro 5 + Tailwind 3",
-				BestFor: []string{"Hero variants (Hero, Hero2, HeroText)", "Pricing layouts", "Features grids (Features, Features2, Features3)", "FAQ accordion patterns", "Stats + Testimonials primitives", "Steps / process flows"},
+				BestFor: []string{"B2B SaaS marketing — Hero/Pricing/FAQs/Stats/Steps/Brands/CTA widgets", "Bento grid patterns", "Primary archetype: Soft Structuralism"},
 				License: "MIT",
-				Notes:   "src/components/widgets/ has 1:1 analogues for most atomicsite block types. Read the source when you need to see how a primitive is composed in production-grade Astro/Tailwind. NOT a code-import target — atomicsite has its own renderers.",
+				Notes:   "src/components/widgets/ has 1:1 analogues for most atomicsite block types. Same stack as atomicsite output. The default reference for marketing-site builds.",
+			},
+			{
+				Path:    "automations/design-references/astro-paper/",
+				Stack:   "Astro 5 + TailwindCSS",
+				BestFor: []string{"Blog/portfolio archetype", "Long-form article rendering", "Tag/category systems", "Pagination patterns", "Search UX (fuzzy search component)", "Light/dark theme toggle patterns"},
+				License: "MIT",
+				Notes:   "Production-grade blog template (5k+ stars). Use when atomicsite renders insights/blog/article archetypes. src/components/ has clean Card, Pagination, Header, Footer, Datetime, ShareLinks patterns. src/layouts/ shows article-detail page composition. Particularly strong on typography for long-form prose.",
+			},
+			{
+				Path:    "automations/design-references/starlight/",
+				Stack:   "Astro 5 + native CSS (custom theme system, no Tailwind)",
+				BestFor: []string{"Documentation sites + knowledge bases", "Sidebar navigation patterns", "Search overlays", "Versioned docs / i18n routing", "MDX content pipelines", "Component-libraries patterns (callouts, tabs, code blocks)"},
+				License: "MIT",
+				Notes:   "Official Astro docs framework — used by Astro itself, Bun, Tauri, and 100+ open-source projects. packages/starlight/components/ has the canonical implementations of Sidebar, Search, TableOfContents, Tabs, Card, LinkCard, FileTree, Badge, Aside (callout). docs/ contains the actual Astro.build documentation site as a real production reference. Use when atomicsite needs to render docs/wiki/changelog archetypes (which is on the roadmap, not currently a built-in primitive). NOT a Tailwind reference — starlight uses its own CSS variable system, which is itself a clean reference for design-token architecture.",
 			},
 		},
 
