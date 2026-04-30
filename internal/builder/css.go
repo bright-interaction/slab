@@ -137,12 +137,28 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block--quote blockquote p { margin: 0; }\n")
 	b.WriteString(".block--quote cite { display: block; margin-block-start: 1.25rem; padding-inline-start: 1.25rem; font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 65%, transparent); font-style: normal; }\n\n")
 
+	// Lucide icon SVG inside feature_grid items: tinted square badge above the title.
+	b.WriteString(".feature-grid-item .icon { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0.625rem; border-radius: 0.625rem; background: color-mix(in oklab, var(--color-bg) 80%, var(--color-primary)); color: var(--color-primary); margin-block-end: 1rem; }\n")
+	b.WriteString(".feature-grid-item .icon svg, .feature-grid-item .icon { box-sizing: border-box; }\n\n")
+
+	// Visual rhythm: every other block--feature_grid gets a tinted background so sections don't blur into one continuous column. Alternate via :nth-of-type.
+	b.WriteString(".block--feature_grid:nth-of-type(even) { background: color-mix(in oklab, var(--color-bg) 96%, var(--color-text)); border-radius: 1.25rem; }\n")
+	b.WriteString(".block--text + .block--feature_grid, .block--feature_grid + .block--text { margin-block-start: 0; }\n\n")
+
+	// Site-wide spacing: more generous block padding so sections breathe.
+	b.WriteString(".block + .block { margin-block-start: 0; }\n\n")
+
 	// Site header + footer chrome (rendered from global blocks).
 	b.WriteString(".site-header { padding-block: 1.25rem; padding-inline: 1.5rem; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); position: sticky; top: 0; background: color-mix(in oklab, var(--color-bg) 88%, white); backdrop-filter: blur(12px); z-index: 10; }\n")
-	b.WriteString(".site-header > .container, .site-header > div { max-width: 72rem; margin-inline: auto; display: flex; align-items: center; justify-content: flex-end; }\n")
-	b.WriteString(".site-nav ul { display: flex; flex-wrap: wrap; gap: 1.75rem; list-style: none; padding: 0; margin: 0; align-items: center; }\n")
+	b.WriteString(".site-header > .container, .site-header > div { max-width: 72rem; margin-inline: auto; display: flex; align-items: center; justify-content: space-between; }\n")
+	b.WriteString(".site-nav { width: 100%; }\n")
+	b.WriteString(".site-nav ul { display: flex; flex-wrap: wrap; gap: 1.75rem; list-style: none; padding: 0; margin: 0; align-items: center; justify-content: flex-end; }\n")
 	b.WriteString(".site-nav a { color: var(--color-text); font-weight: 500; font-size: 0.9375rem; text-decoration: none; }\n")
 	b.WriteString(".site-nav a:hover { color: var(--color-primary); }\n")
+	// First nav link doubles as the brand mark (pull it left, bolder type, no underline). Conventionally agents put the site name with href=/ as the first link.
+	b.WriteString(".site-nav li:first-child { margin-right: auto; }\n")
+	b.WriteString(".site-nav li:first-child a { font-family: var(--font-heading); font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.01em; }\n")
+	// Last nav link auto-styles as the primary CTA pill (book audit / sign up / etc.).
 	b.WriteString(".site-nav li:last-child a { background: var(--color-primary); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; }\n")
 	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-primary) 85%, black); color: white; }\n")
 	b.WriteString(".site-footer { padding-block: 3rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
