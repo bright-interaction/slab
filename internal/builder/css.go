@@ -286,42 +286,41 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".block--hero .hero-actions { justify-content: center; }\n\n")
 
 	// --- Improved navbar: compact h-14, white/90 + backdrop-blur, mono brand wordmark style. Last nav link auto-styles as a primary CTA pill. ---
-	// --- Header: sticky/fixed top bar with brand mark + nav. Compact h-14 row.
-	// Backwards-compat: nav last-child auto-styles as a primary CTA pill, so
-	// short demo nav arrays still get a button. Explicit `cta: true` on a
-	// link emits class="nav-cta" which takes precedence and works in any
-	// position. ---
-	b.WriteString(".site-header { position: sticky; top: 0; z-index: 50; height: 3.5rem; padding-block: 0; padding-inline: 1.5rem; display: flex; align-items: center; background: color-mix(in oklab, var(--color-bg) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
-	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }\n")
+	// --- Header: sticky h-14 bar with backdrop-blur. 3-zone grid layout
+	// matching brightinteraction.com / Linear / Vercel:
+	//   [brand-mark]  [primary nav (centred)]  [actions: lang + CTA]
+	// Renderer emits each zone as a separate child so the grid columns
+	// don't fight flex-wrap. Below 1024px the primary nav hides — only
+	// brand + CTA stay visible (mirrors BI's `hidden lg:flex`). ---
+	b.WriteString(".site-header { position: sticky; top: 0; z-index: 50; padding-block: 0; padding-inline: 1.5rem; background: color-mix(in oklab, var(--color-bg) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; height: 3.5rem; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; }\n")
 
 	// Brand mark: badge (B-square) + wordmark with optional accent split.
-	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); text-decoration: none; }\n")
+	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); text-decoration: none; flex-shrink: 0; }\n")
 	b.WriteString(".site-header .brand-mark img { height: 1.5rem; width: auto; }\n")
 	b.WriteString(".brand-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; background: var(--color-text); color: white; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; flex-shrink: 0; }\n")
 	b.WriteString(".brand-wordmark { font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); }\n")
 	b.WriteString(".brand-wordmark-accent { color: var(--color-primary); }\n")
 
-	// Nav: middle/right cluster of links.
-	b.WriteString(".site-nav ul { display: flex; gap: 0.125rem; justify-content: flex-end; align-items: center; list-style: none; padding: 0; margin: 0; flex-wrap: wrap; }\n")
-	b.WriteString(".site-nav a { padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: 500; color: color-mix(in oklab, var(--color-text) 65%, transparent); transition: color 150ms ease-out; }\n")
-	b.WriteString(".site-nav a:hover { color: var(--color-text); text-decoration: none; }\n")
+	// Primary nav: centred row of links between brand and actions.
+	b.WriteString(".site-nav-primary ul { display: flex; gap: 0.125rem; justify-content: center; align-items: center; list-style: none; padding: 0; margin: 0; }\n")
+	b.WriteString(".site-nav-primary a { padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: 500; color: color-mix(in oklab, var(--color-text) 65%, transparent); transition: color 150ms ease-out; white-space: nowrap; }\n")
+	b.WriteString(".site-nav-primary a:hover { color: var(--color-text); text-decoration: none; }\n")
+	// Hide primary nav below tablet so the bar stays clean on small screens.
+	b.WriteString("@media (max-width: 1023px) { .site-nav-primary { display: none; } .site-header > .container, .site-header > div { grid-template-columns: auto auto; justify-content: space-between; } }\n")
 
-	// Backwards-compat last-child CTA pill (kicks in when no link has cta:true).
-	b.WriteString(".site-nav li:last-child a { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; }\n")
-	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n")
-	// Explicit `.nav-cta` overrides + neutralises the auto last-child styling.
-	b.WriteString(".site-nav .nav-cta { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; }\n")
-	b.WriteString(".site-nav .nav-cta:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; }\n")
-	b.WriteString(".site-nav:has(.nav-cta) li:last-child a:not(.nav-cta) { background: transparent; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.5rem 0.75rem; border-radius: 0; font-size: 0.875rem; font-weight: 500; }\n")
-	// Single-language toggle pattern: hide the locale-switcher link that
-	// matches the current page's lang so visitors only see the OTHER
-	// locales (mirrors brightinteraction.com — show "SV" on /en/, "EN"
-	// on /sv/). Renderer emits data-lang="xx" on locale-switcher <li>s;
-	// :lang() pseudo matches based on the html lang attribute.
-	b.WriteString(":lang(en) .site-nav li[data-lang='en'], :lang(sv) .site-nav li[data-lang='sv'], :lang(de) .site-nav li[data-lang='de'], :lang(fr) .site-nav li[data-lang='fr'], :lang(es) .site-nav li[data-lang='es'], :lang(no) .site-nav li[data-lang='no'], :lang(da) .site-nav li[data-lang='da'] { display: none; }\n")
-	// Locale-switcher pill style: small mono uppercase, neutral.
-	b.WriteString(".site-nav li[data-lang] a { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.25rem 0.5rem; }\n")
-	b.WriteString(".site-nav li[data-lang] a:hover { color: var(--color-text); }\n\n")
+	// Actions cluster (right side): lang switchers + CTA, in that order.
+	b.WriteString(".site-nav-actions ul { display: flex; gap: 0.5rem; align-items: center; list-style: none; padding: 0; margin: 0; }\n")
+
+	// Locale switcher links: small mono uppercase, neutral.
+	b.WriteString(".site-nav-actions li[data-lang] a { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in oklab, var(--color-text) 65%, transparent); padding: 0.25rem 0.5rem; transition: color 150ms ease-out; }\n")
+	b.WriteString(".site-nav-actions li[data-lang] a:hover { color: var(--color-text); text-decoration: none; }\n")
+	// Hide the locale-switcher matching the current page's lang.
+	b.WriteString(":lang(en) .site-nav-actions li[data-lang='en'], :lang(sv) .site-nav-actions li[data-lang='sv'], :lang(de) .site-nav-actions li[data-lang='de'], :lang(fr) .site-nav-actions li[data-lang='fr'], :lang(es) .site-nav-actions li[data-lang='es'], :lang(no) .site-nav-actions li[data-lang='no'], :lang(da) .site-nav-actions li[data-lang='da'] { display: none; }\n")
+
+	// Primary CTA pill in the actions cluster.
+	b.WriteString(".site-nav-actions .nav-cta { background: var(--color-text); color: white; padding: 0.4rem 0.875rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 500; transition: background-color 150ms ease-out; }\n")
+	b.WriteString(".site-nav-actions .nav-cta:hover { background: color-mix(in oklab, var(--color-text) 80%, white); color: white; text-decoration: none; }\n\n")
 
 	// --- Dark footer variant: opt in via data.theme="dark" on the footer global block. ---
 	b.WriteString(".site-footer.is-dark { background: var(--color-text); color: white; padding-block: 4rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 0; }\n")
