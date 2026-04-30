@@ -439,23 +439,63 @@ func extractHTMLFromGlobalBlock(gb store.GlobalBlock) string {
 
 func renderHeaderHTML(data map[string]any) string {
 	links := extractNavLinks(data["links"])
-	if len(links) == 0 {
+	brand, _ := data["brand"].(map[string]any)
+	if len(links) == 0 && brand == nil {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(`<header class="site-header"><div class="container"><nav class="site-nav" aria-label="Primary"><ul>`)
-	for _, l := range links {
-		b.WriteString(`<li><a href="`)
-		b.WriteString(escapeAttr(l.href))
+	b.WriteString(`<header class="site-header"><div class="container">`)
+
+	// Optional brand mark: image + label, image + label, or just label.
+	// When data.brand is set, render it pulled to the left; the nav links
+	// flow to the right via the existing CSS justify-content: space-between.
+	if brand != nil {
+		href, _ := brand["href"].(string)
+		if href == "" {
+			href = "/"
+		}
+		label, _ := brand["label"].(string)
+		imageID, _ := brand["image_id"].(string)
+		b.WriteString(`<a class="brand-mark" href="`)
+		b.WriteString(escapeAttr(href))
 		b.WriteString(`">`)
-		b.WriteString(escapeText(l.label))
-		b.WriteString(`</a></li>`)
+		if imageID != "" {
+			b.WriteString(`<img src="/media/`)
+			b.WriteString(escapeAttr(imageID))
+			b.WriteString(`/original.png" alt="`)
+			b.WriteString(escapeAttr(label))
+			b.WriteString(`" />`)
+		}
+		if label != "" {
+			b.WriteString(`<span>`)
+			b.WriteString(escapeText(label))
+			b.WriteString(`</span>`)
+		}
+		b.WriteString(`</a>`)
 	}
-	b.WriteString(`</ul></nav></div></header>`)
+
+	if len(links) > 0 {
+		b.WriteString(`<nav class="site-nav" aria-label="Primary"><ul>`)
+		for _, l := range links {
+			b.WriteString(`<li><a href="`)
+			b.WriteString(escapeAttr(l.href))
+			b.WriteString(`">`)
+			b.WriteString(escapeText(l.label))
+			b.WriteString(`</a></li>`)
+		}
+		b.WriteString(`</ul></nav>`)
+	}
+	b.WriteString(`</div></header>`)
 	return b.String()
 }
 
 func renderFooterHTML(data map[string]any) string {
+	// Multi-column path: when data.columns is set, render a 4-up footer with
+	// optional tagline + social row. Backwards-compatible single-row path
+	// triggered by data.links (the legacy shape) below.
+	if columnsRaw, ok := data["columns"].([]any); ok && len(columnsRaw) > 0 {
+		return renderFooterColumnsHTML(data, columnsRaw)
+	}
 	links := extractNavLinks(data["links"])
 	copyright, _ := data["copyright"].(string)
 	if len(links) == 0 && copyright == "" {
@@ -478,6 +518,97 @@ func renderFooterHTML(data map[string]any) string {
 		b.WriteString(`<p class="site-footer-copy">&copy; `)
 		b.WriteString(escapeText(copyright))
 		b.WriteString(`</p>`)
+	}
+	b.WriteString(`</div></footer>`)
+	return b.String()
+}
+
+func renderFooterColumnsHTML(data map[string]any, columnsRaw []any) string {
+	var b strings.Builder
+	b.WriteString(`<footer class="site-footer"><div class="container">`)
+	b.WriteString(`<div class="footer-columns">`)
+	for _, c := range columnsRaw {
+		col, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		title, _ := col["title"].(string)
+		b.WriteString(`<div class="footer-column">`)
+		if title != "" {
+			b.WriteString(`<h4>`)
+			b.WriteString(escapeText(title))
+			b.WriteString(`</h4>`)
+		}
+		if linksRaw, ok := col["links"].([]any); ok && len(linksRaw) > 0 {
+			b.WriteString(`<ul>`)
+			for _, lr := range linksRaw {
+				link, ok := lr.(map[string]any)
+				if !ok {
+					continue
+				}
+				href, _ := link["href"].(string)
+				label, _ := link["label"].(string)
+				b.WriteString(`<li><a href="`)
+				b.WriteString(escapeAttr(href))
+				b.WriteString(`">`)
+				b.WriteString(escapeText(label))
+				b.WriteString(`</a></li>`)
+			}
+			b.WriteString(`</ul>`)
+		}
+		if body, _ := col["body"].(string); body != "" {
+			b.WriteString(`<p>`)
+			b.WriteString(escapeText(body))
+			b.WriteString(`</p>`)
+		}
+		b.WriteString(`</div>`)
+	}
+	b.WriteString(`</div>`) // /.footer-columns
+
+	tagline, _ := data["tagline"].(string)
+	copyright, _ := data["copyright"].(string)
+	socialRaw, hasSocial := data["social"].([]any)
+	if tagline != "" || copyright != "" || hasSocial {
+		b.WriteString(`<div class="footer-bottom">`)
+		if tagline != "" {
+			b.WriteString(`<p class="footer-tagline">`)
+			b.WriteString(escapeText(tagline))
+			b.WriteString(`</p>`)
+		}
+		if hasSocial && len(socialRaw) > 0 {
+			b.WriteString(`<div class="footer-social">`)
+			for _, sr := range socialRaw {
+				s, ok := sr.(map[string]any)
+				if !ok {
+					continue
+				}
+				href, _ := s["href"].(string)
+				label, _ := s["label"].(string)
+				icon, _ := s["icon"].(string)
+				b.WriteString(`<a href="`)
+				b.WriteString(escapeAttr(href))
+				b.WriteString(`" aria-label="`)
+				b.WriteString(escapeAttr(label))
+				b.WriteString(`">`)
+				if icon != "" {
+					if svg := renderLucideIcon(icon); svg != "" {
+						b.WriteString(svg)
+					} else {
+						b.WriteString(escapeText(label))
+					}
+				} else {
+					b.WriteString(escapeText(label))
+				}
+				b.WriteString(`</a>`)
+			}
+			b.WriteString(`</div>`)
+		}
+		if copyright != "" {
+			b.WriteString(`<p class="site-footer-copy">&copy; `)
+			b.WriteString(escapeText(copyright))
+			b.WriteString(`</p>`)
+		}
+		b.WriteString(`</div>`)
 	}
 	b.WriteString(`</div></footer>`)
 	return b.String()
