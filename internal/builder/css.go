@@ -81,26 +81,72 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 	b.WriteString(".btn-secondary:hover { background: color-mix(in oklab, var(--color-text) 5%, transparent); text-decoration: none; }\n")
 	b.WriteString(".btn-link { background: transparent; color: var(--color-primary); padding-inline: 0; }\n")
 	b.WriteString(".services-grid, .feature-grid, .team-grid, .project-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem; margin-block-start: 2rem; }\n")
-	b.WriteString(".service-card, .feature-tile, .project-card { padding: 1.5rem; border: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent); border-radius: 0.75rem; background: color-mix(in oklab, var(--color-bg) 92%, white); transition: transform 200ms ease-out, box-shadow 200ms ease-out; }\n")
-	b.WriteString(".service-card:hover, .feature-tile:hover, .project-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
-	b.WriteString(".service-card h3, .feature-tile h3, .project-card h3 { font-size: 1.125rem; margin-block-end: 0.5rem; }\n")
-	b.WriteString(".service-card p, .feature-tile p, .project-card p { color: color-mix(in oklab, var(--color-text) 70%, transparent); margin-block-end: 1rem; }\n")
+	b.WriteString(".service-card, .feature-tile, .feature-grid-item, .project-card { list-style: none; padding: 1.75rem; border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); border-radius: 0.875rem; background: color-mix(in oklab, var(--color-bg) 95%, white); transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out; }\n")
+	b.WriteString(".service-card:hover, .feature-tile:hover, .feature-grid-item:hover, .project-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px color-mix(in oklab, var(--color-text) 8%, transparent); border-color: color-mix(in oklab, var(--color-primary) 30%, transparent); }\n")
+	b.WriteString(".service-card h3, .feature-tile h3, .feature-grid-item h3, .project-card h3 { font-size: 1.125rem; margin-block-end: 0.5rem; line-height: 1.3; }\n")
+	b.WriteString(".service-card p, .feature-tile p, .feature-grid-item p, .project-card p { color: color-mix(in oklab, var(--color-text) 70%, transparent); margin: 0; font-size: 0.9375rem; line-height: 1.55; }\n")
 	b.WriteString(".role { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); text-transform: uppercase; letter-spacing: 0.05em; }\n")
 	b.WriteString(".bio { font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 75%, transparent); }\n")
 	b.WriteString(".gdpr-notice { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 65%, transparent); margin-block-start: 1rem; }\n")
-	b.WriteString(".block { padding-block: 3rem; }\n")
-	b.WriteString(".block--text { max-width: 42rem; margin-inline: auto; padding-inline: 1.5rem; font-size: 1.0625rem; }\n")
 	b.WriteString(".pricing-table { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem; margin-block-start: 2rem; }\n")
 	b.WriteString(".faq-accordion { margin-block-start: 2rem; }\n")
-	b.WriteString("h2 { font-size: 2rem; margin-block-end: 1rem; }\n")
-	b.WriteString("h3 { font-size: 1.25rem; }\n")
+	b.WriteString("h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); margin-block-end: 1rem; }\n")
+	b.WriteString("h3 { font-size: 1.25rem; }\n\n")
+
+	// --- Block layouts. Each block_type renders into <section class="block block--TYPE">.
+	// All blocks live inside a centred max-width column; hero + cta + feature_grid get
+	// wider columns; text + quote stay narrow for readability.
+	b.WriteString("/* --- Block layouts --- */\n")
+	b.WriteString(".block { padding-block: 4rem; padding-inline: 1.5rem; max-width: 72rem; margin-inline: auto; }\n")
+	b.WriteString(".block .eyebrow { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.75rem; color: var(--color-primary); font-weight: 600; margin-block-end: 0.5rem; }\n")
+	b.WriteString(".block .subheading { font-size: 1.0625rem; color: color-mix(in oklab, var(--color-text) 70%, transparent); max-width: 60ch; margin-block-end: 1.5rem; }\n\n")
+
+	// Hero: centred, large headline, optional image below subheading, CTA row.
+	b.WriteString(".block--hero { text-align: center; max-width: 56rem; padding-block: 5rem 4rem; }\n")
+	b.WriteString(".block--hero .eyebrow { margin-inline: auto; }\n")
+	b.WriteString(".block--hero h1 { font-size: clamp(2.25rem, 5vw, 3.75rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; margin-block: 0.75rem 1rem; }\n")
+	b.WriteString(".block--hero .subheading { font-size: 1.25rem; max-width: 50ch; margin-inline: auto; }\n")
+	b.WriteString(".block--hero img { max-width: 100%; max-height: 26rem; width: auto; margin: 2rem auto 1rem; border-radius: 1rem; box-shadow: 0 12px 40px color-mix(in oklab, var(--color-text) 12%, transparent); }\n")
+	b.WriteString(".block--hero a.btn-primary, .block--hero a.btn-secondary { margin: 0.5rem 0.5rem 0 0.5rem; }\n\n")
+
+	// Feature grid: heading top-left, grid below.
+	b.WriteString(".block--feature_grid { max-width: 72rem; }\n")
+	b.WriteString(".block--feature_grid > h2 { margin-block-end: 0.5rem; }\n\n")
+
+	// Text: long-form column.
+	b.WriteString(".block--text { max-width: 42rem; }\n")
+	b.WriteString(".block--text h2 { margin-block-end: 1rem; }\n")
+	b.WriteString(".block--text p { font-size: 1.0625rem; line-height: 1.65; }\n")
+	b.WriteString(".block--text p + p { margin-block-start: 1.25rem; }\n")
+	b.WriteString(".block--text a.btn-primary { margin-block-start: 1.5rem; }\n\n")
+
+	// CTA: tinted banner card.
+	b.WriteString(".block--cta { text-align: center; max-width: 56rem; padding: 4rem 1.5rem; margin-block: 3rem; background: color-mix(in oklab, var(--color-bg) 80%, var(--color-primary)); border-radius: 1.25rem; }\n")
+	b.WriteString(".block--cta h2 { margin-block-end: 0.75rem; }\n")
+	b.WriteString(".block--cta p { max-width: 44ch; margin-inline: auto; margin-block-end: 1.5rem; color: color-mix(in oklab, var(--color-text) 80%, transparent); }\n")
+	b.WriteString(".block--cta-secondary { background: color-mix(in oklab, var(--color-bg) 92%, var(--color-text)); }\n\n")
+
+	// Image: centred figure with optional caption.
+	b.WriteString(".block--image { max-width: 64rem; }\n")
+	b.WriteString(".block--image img { margin-inline: auto; border-radius: 0.875rem; box-shadow: 0 8px 24px color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+	b.WriteString(".block--image .caption { font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); text-align: center; margin-block-start: 0.75rem; font-style: italic; }\n\n")
+
+	// Quote: editorial pull quote.
+	b.WriteString(".block--quote { max-width: 48rem; padding-block: 4rem; }\n")
+	b.WriteString(".block--quote blockquote { font-size: 1.5rem; font-weight: 500; line-height: 1.4; margin: 0; padding-inline-start: 1.25rem; border-inline-start: 3px solid var(--color-primary); }\n")
+	b.WriteString(".block--quote blockquote p { margin: 0; }\n")
+	b.WriteString(".block--quote cite { display: block; margin-block-start: 1.25rem; padding-inline-start: 1.25rem; font-size: 0.9375rem; color: color-mix(in oklab, var(--color-text) 65%, transparent); font-style: normal; }\n\n")
 
 	// Site header + footer chrome (rendered from global blocks).
-	b.WriteString(".site-header { padding-block: 1.25rem; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); position: sticky; top: 0; background: color-mix(in oklab, var(--color-bg) 90%, white); backdrop-filter: blur(8px); z-index: 10; }\n")
-	b.WriteString(".site-nav ul { display: flex; flex-wrap: wrap; gap: 1.75rem; list-style: none; padding: 0; margin: 0; }\n")
+	b.WriteString(".site-header { padding-block: 1.25rem; padding-inline: 1.5rem; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); position: sticky; top: 0; background: color-mix(in oklab, var(--color-bg) 88%, white); backdrop-filter: blur(12px); z-index: 10; }\n")
+	b.WriteString(".site-header > .container, .site-header > div { max-width: 72rem; margin-inline: auto; display: flex; align-items: center; justify-content: flex-end; }\n")
+	b.WriteString(".site-nav ul { display: flex; flex-wrap: wrap; gap: 1.75rem; list-style: none; padding: 0; margin: 0; align-items: center; }\n")
 	b.WriteString(".site-nav a { color: var(--color-text); font-weight: 500; font-size: 0.9375rem; text-decoration: none; }\n")
 	b.WriteString(".site-nav a:hover { color: var(--color-primary); }\n")
-	b.WriteString(".site-footer { padding-block: 3rem; margin-block-start: 6rem; border-top: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+	b.WriteString(".site-nav li:last-child a { background: var(--color-primary); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; }\n")
+	b.WriteString(".site-nav li:last-child a:hover { background: color-mix(in oklab, var(--color-primary) 85%, black); color: white; }\n")
+	b.WriteString(".site-footer { padding-block: 3rem; padding-inline: 1.5rem; margin-block-start: 6rem; border-top: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+	b.WriteString(".site-footer > .container, .site-footer > div { max-width: 72rem; margin-inline: auto; }\n")
 	b.WriteString(".site-footer nav ul { display: flex; flex-wrap: wrap; gap: 1.5rem; list-style: none; padding: 0; margin: 0 0 1rem 0; font-size: 0.875rem; }\n")
 	b.WriteString(".site-footer a { color: color-mix(in oklab, var(--color-text) 70%, transparent); text-decoration: none; }\n")
 	b.WriteString(".site-footer a:hover { color: var(--color-primary); }\n")
