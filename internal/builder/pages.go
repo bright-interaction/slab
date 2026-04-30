@@ -285,6 +285,13 @@ func renderBlock(bl store.Block, components map[string]bool, mediaByID map[strin
 		inner = renderDataBlock(bl.BlockType, data, mediaByID)
 	}
 
+	// Auto-id: inject id="<slug>" on the <section> opening tag so cross-section
+	// anchors like href="#what-i-replace" resolve without per-block manual
+	// wiring. Skip when the block already declares an id (e.g. raw HTML).
+	if id := sectionIDFromHeading(data); id != "" && strings.HasPrefix(inner, "  <section ") && !strings.Contains(inner[:strings.Index(inner, "\n")], " id=\"") {
+		inner = strings.Replace(inner, "  <section ", "  <section id=\""+escapeAttr(id)+"\" ", 1)
+	}
+
 	// Phase 18.3: optional per-visitor condition. The hydration script
 	// loaded by RenderVisitorHydration walks every [data-asp-when] node
 	// and removes `hidden` when the embedded DSL matches. Empty / missing
@@ -373,6 +380,38 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 func dataString(data map[string]any, key string) string {
 	if v, ok := data[key].(string); ok {
 		return v
+	}
+	return ""
+}
+
+// sectionIDFromHeading turns a heading like "What I replace" into a slug
+// "what-i-replace" the renderer can use as an id="..." anchor target. Empty
+// when no usable heading is set. Agents writing internal anchors like
+// "#what-i-replace" don't need to manually wire anything; the renderer
+// adds the id automatically.
+func sectionIDFromHeading(data map[string]any) string {
+	for _, k := range []string{"id", "section_id", "headline", "heading"} {
+		if v := dataString(data, k); v != "" {
+			s := strings.ToLower(v)
+			s = strings.Map(func(r rune) rune {
+				switch {
+				case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+					return r
+				case r == ' ' || r == '-' || r == '_':
+					return '-'
+				default:
+					return -1
+				}
+			}, s)
+			// collapse runs of '-'
+			for strings.Contains(s, "--") {
+				s = strings.ReplaceAll(s, "--", "-")
+			}
+			s = strings.Trim(s, "-")
+			if s != "" {
+				return s
+			}
+		}
 	}
 	return ""
 }

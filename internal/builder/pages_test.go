@@ -28,7 +28,8 @@ func TestRenderBlock_DataBlock(t *testing.T) {
 	out := renderBlock(bl, map[string]bool{}, nil)
 
 	wantSubstrings := []string{
-		`<section class="block block--hero">`,
+		`class="block block--hero"`,
+		`id="a-calm-site"`,
 		`<p class="eyebrow">Calm</p>`,
 		`<h1>A calm site</h1>`,
 		`<p class="subheading">that earns the click</p>`,
