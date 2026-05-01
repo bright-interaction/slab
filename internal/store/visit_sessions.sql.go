@@ -9,6 +9,33 @@ import (
 	"context"
 )
 
+const deleteVisitSessionsBySiteOlderThan = `-- name: DeleteVisitSessionsBySiteOlderThan :execrows
+
+DELETE FROM visit_sessions
+WHERE site_id = ? AND last_seen_at < ? AND identified_at = ''
+`
+
+type DeleteVisitSessionsBySiteOlderThanParams struct {
+	SiteID     string `json:"site_id"`
+	LastSeenAt string `json:"last_seen_at"`
+}
+
+// ListVisitorMetadataKeys is intentionally implemented as a raw *sql.DB
+// query in code (see internal/agent/context.go listVisitorMetadataKeys),
+// not via sqlc, because sqlc's static analyzer can't parse SQLite's
+// json_each(vs.metadata_json) key/value virtual columns.
+// Retention purge for stale sessions. last_seen_at is RFC3339 UTC; caller
+// passes the cutoff. Identified sessions are kept regardless (they back the
+// analytics dashboard's identified-visitor list and represent CRM-confirmed
+// contacts) -- only fully anonymous sessions older than the cutoff drop.
+func (q *Queries) DeleteVisitSessionsBySiteOlderThan(ctx context.Context, arg DeleteVisitSessionsBySiteOlderThanParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteVisitSessionsBySiteOlderThan, arg.SiteID, arg.LastSeenAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getSessionByFingerprint = `-- name: GetSessionByFingerprint :one
 SELECT id, site_id, fingerprint, visitor_id, email, consent_method, consent_categories_json, started_at, last_seen_at, page_count, identified_at, metadata_json, metadata_expires_at, identity_confirmed_at FROM visit_sessions
 WHERE site_id = ? AND fingerprint = ?
