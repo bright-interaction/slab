@@ -45,6 +45,14 @@ func main() {
 	}
 
 	cfg := config.Load()
+	// Refuse to boot in production-like deployments (BaseURL != localhost)
+	// when any documented-default secret is still in place. The seeded
+	// admin password is checked separately at seed time below. Keeps local
+	// dev permissive while making "deployed without env" impossible to miss.
+	if err := cfg.Validate(); err != nil {
+		slog.Error("config validation failed; refusing to start", "error", err.Error())
+		os.Exit(1)
+	}
 	// Default admin base URL for the personalization hydration script
 	// (Phase 18.2). Per-site override via the analytics.admin_base_url
 	// setting; falls back to cfg.BaseURL otherwise.
@@ -74,7 +82,7 @@ func main() {
 	queries := store.New(sqlDB)
 
 	// Seed admin user if none exists
-	seedAdminUser(queries, sqlDB)
+	seedAdminUser(cfg, queries, sqlDB)
 
 	// Set embedded frontend FS
 	sub, err := fs.Sub(frontendFiles, "frontend/build")
@@ -294,7 +302,7 @@ func addColumnIfMissing(sqlDB *sql.DB, table, column, spec string) error {
 	return err
 }
 
-func seedAdminUser(queries *store.Queries, sqlDB *sql.DB) {
+func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 	ctx := context.Background()
 	users, err := queries.ListUsers(ctx)
 	if err != nil || len(users) > 0 {
@@ -306,8 +314,22 @@ func seedAdminUser(queries *store.Queries, sqlDB *sql.DB) {
 	if email == "" {
 		email = "admin@atomicsite.dev"
 	}
+
+	// Production-like deployments must set ADMIN_PASSWORD explicitly.
+	// The audit's C3 finding: defaulting to "changeme123" lets a deploy
+	// without env vars come up with a known-by-everyone admin login.
+	// Local dev keeps the convenience default so contributors don't have
+	// to set five env vars to run `go run`.
+	if err := cfg.ValidateAdminPassword(password); err != nil {
+		slog.Error("seed admin: refusing to seed with weak/default password", "error", err.Error())
+		// Fail hard rather than silently using changeme123. The first
+		// boot's logs are the moment to surface this.
+		os.Exit(1)
+	}
 	if password == "" {
-		password = "changeme123"
+		// Reached only in local dev (Validate would have refused otherwise).
+		password = config.DefaultAdminPassword
+		slog.Warn("seeded admin with documented default password — local dev only", "email", email)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
