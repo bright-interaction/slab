@@ -180,7 +180,7 @@ func TestComputeAlternates_HomePage(t *testing.T) {
 		if a.Lang == "en" && a.URL == "https://example.com/" {
 			hasSelf = true
 		}
-		if a.Lang == "sv" && a.URL == "https://example.com/sv" {
+		if a.Lang == "sv" && a.URL == "https://example.com/sv/" {
 			hasSV = true
 		}
 	}

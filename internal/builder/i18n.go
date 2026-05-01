@@ -221,12 +221,18 @@ func buildLocaleURL(c I18nConfig, base, lang, shared string) string {
 
 // buildLocalePath returns "/<lang>/<shared>" for non-default locales and
 // "/<shared>" for the default. shared starts with "/".
+//
+// Trailing-slash convention: locale roots emit "/<lang>/" (with slash) so
+// hreflang URLs match the canonical URL Astro emits for the same page
+// ("/<lang>/" with slash). Without this, Site Inspector's "Hreflang
+// Self-Referencing" check fails because hreflang="<lang>" points to
+// "/<lang>" while canonical points to "/<lang>/".
 func buildLocalePath(lang, defaultLang, shared string) string {
 	if shared == "" || shared == "/" {
 		if lang == defaultLang {
 			return "/"
 		}
-		return "/" + lang
+		return "/" + lang + "/"
 	}
 	if lang == defaultLang {
 		return shared

@@ -114,6 +114,8 @@ func RenderNginxConfig(ctx context.Context, queries *store.Queries, siteID strin
 	writeNginxHeader(&b, "Cross-Origin-Opener-Policy", headers.COOP)
 	writeNginxHeader(&b, "Cross-Origin-Resource-Policy", headers.CORP)
 	writeNginxHeader(&b, "Cross-Origin-Embedder-Policy", headers.COEP)
+	writeNginxHeader(&b, "X-Permitted-Cross-Domain-Policies", headers.XPermittedCrossDomainPolicies)
+	writeNginxHeader(&b, "X-XSS-Protection", headers.XXSSProtection)
 	b.WriteString("\n")
 
 	// Rate limit
