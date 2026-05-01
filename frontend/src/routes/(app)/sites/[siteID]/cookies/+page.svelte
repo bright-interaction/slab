@@ -10,7 +10,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { categoryMap } from '$lib/settings/nginxPreview';
 	import type { Site } from '$lib/api/types';
-	import type { CookieDeclaration } from '$lib/api/settings';
+	import type { CookieDeclaration, CookieTranslation } from '$lib/api/settings';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -59,11 +59,106 @@
 	let cookieTheme = $state<'light' | 'dark' | 'auto'>('light');
 	let floatingTrigger = $state<'left' | 'right' | 'off'>('left');
 	let languageSelector = $state(false);
+	// 14 ISO codes the embedded CookieProof bundle ships translations for.
+	// Order them with the site's own language first (resolved at load time)
+	// so the form puts the most-relevant choice on the left.
+	const SUPPORTED_LANGUAGES: { code: string; label: string }[] = [
+		{ code: 'en', label: 'English' },
+		{ code: 'sv', label: 'Svenska' },
+		{ code: 'da', label: 'Dansk' },
+		{ code: 'de', label: 'Deutsch' },
+		{ code: 'es', label: 'Español' },
+		{ code: 'fi', label: 'Suomi' },
+		{ code: 'fr', label: 'Français' },
+		{ code: 'it', label: 'Italiano' },
+		{ code: 'ja', label: '日本語' },
+		{ code: 'nl', label: 'Nederlands' },
+		{ code: 'no', label: 'Norsk' },
+		{ code: 'pl', label: 'Polski' },
+		{ code: 'pt', label: 'Português' }
+	];
+	// Selected ISO codes (persisted as comma-separated in
+	// analytics.cookie_languages). Empty list + languageSelector=true
+	// means "all built-in languages"; empty list + languageSelector=false
+	// hides the dropdown entirely.
+	let selectedLanguages = $state<string[]>([]);
 	let ccpaEnabled = $state(false);
 	let ccpaUrl = $state('');
 
 	let userDeclarations = $state<CookieDeclaration[]>([]);
 	let presets = $state<CookieDeclaration[]>([]);
+
+	// Per-language string overrides. Mirrors CookieProof's customTranslations
+	// shape: { sv: { title, description, accept, reject, customize }, ... }.
+	// Empty fields fall back to the widget's built-in translation for that
+	// locale, so the operator only fills what they want to override.
+	// Persisted as JSON in analytics.cookie_translations.
+	let translations = $state<Record<string, CookieTranslation>>({});
+	let editingLang = $state<string>('');
+
+	function ensureLang(code: string): void {
+		if (!translations[code]) {
+			translations = { ...translations, [code]: {} };
+		}
+		editingLang = code;
+	}
+
+	function clearLang(code: string): void {
+		const next = { ...translations };
+		delete next[code];
+		translations = next;
+		if (editingLang === code) editingLang = '';
+	}
+
+	function tField(code: string, key: keyof CookieTranslation): string {
+		return translations[code]?.[key] ?? '';
+	}
+
+	function setTField(code: string, key: keyof CookieTranslation, value: string): void {
+		const cur = translations[code] ?? {};
+		const nextEntry: CookieTranslation = { ...cur, [key]: value };
+		// Strip empty-string keys so the JSON stays small and the widget
+		// merge logic falls back cleanly to built-ins.
+		for (const k of Object.keys(nextEntry) as (keyof CookieTranslation)[]) {
+			if (!nextEntry[k]) delete nextEntry[k];
+		}
+		translations = { ...translations, [code]: nextEntry };
+	}
+
+	function serializeTranslations(t: Record<string, CookieTranslation>): string {
+		// Drop empty per-lang entries so the JSON stays tight.
+		const out: Record<string, CookieTranslation> = {};
+		for (const [code, entry] of Object.entries(t)) {
+			if (entry && Object.values(entry).some((v) => typeof v === 'string' && v.length > 0)) {
+				out[code] = entry;
+			}
+		}
+		return JSON.stringify(out);
+	}
+
+	function parseTranslations(raw: string): Record<string, CookieTranslation> {
+		const trimmed = (raw || '').trim();
+		if (!trimmed) return {};
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+			const out: Record<string, CookieTranslation> = {};
+			for (const [code, entry] of Object.entries(parsed)) {
+				if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+					const e = entry as Record<string, unknown>;
+					const t: CookieTranslation = {};
+					for (const k of ['title', 'description', 'accept', 'reject', 'customize'] as const) {
+						const v = e[k];
+						if (typeof v === 'string' && v.length > 0) t[k] = v;
+					}
+					if (Object.keys(t).length > 0) out[code] = t;
+				}
+			}
+			return out;
+		} catch {
+			return {};
+		}
+	}
 
 	type State = {
 		enabled: boolean;
@@ -82,6 +177,8 @@
 		cookieTheme: 'light' | 'dark' | 'auto';
 		floatingTrigger: 'left' | 'right' | 'off';
 		languageSelector: boolean;
+		languages: string;
+		translationsJSON: string;
 		ccpaEnabled: boolean;
 		ccpaUrl: string;
 	};
@@ -103,6 +200,8 @@
 		cookieTheme: 'light',
 		floatingTrigger: 'left',
 		languageSelector: false,
+		languages: '',
+		translationsJSON: '{}',
 		ccpaEnabled: false,
 		ccpaUrl: ''
 	});
@@ -162,6 +261,10 @@
 			const ft = (m.cookie_floating_trigger || 'left').toLowerCase();
 			floatingTrigger = ft === 'right' || ft === 'off' ? (ft as 'right' | 'off') : 'left';
 			languageSelector = toBool(m.cookie_language_selector, false);
+			selectedLanguages = (m.cookie_languages || '')
+				.split(',')
+				.map((s) => s.trim().toLowerCase())
+				.filter((s) => s && SUPPORTED_LANGUAGES.some((l) => l.code === s));
 			ccpaEnabled = toBool(m.ccpa_enabled, false);
 			ccpaUrl = m.ccpa_url || '';
 
@@ -185,6 +288,7 @@
 				cookieTheme,
 				floatingTrigger,
 				languageSelector,
+				languages: selectedLanguages.join(','),
 				ccpaEnabled,
 				ccpaUrl
 			};
@@ -218,6 +322,7 @@
 			cookieTheme !== initial.cookieTheme ||
 			floatingTrigger !== initial.floatingTrigger ||
 			languageSelector !== initial.languageSelector ||
+			selectedLanguages.join(',') !== initial.languages ||
 			ccpaEnabled !== initial.ccpaEnabled ||
 			ccpaUrl !== initial.ccpaUrl
 	);
@@ -239,6 +344,9 @@
 		cookieTheme = initial.cookieTheme;
 		floatingTrigger = initial.floatingTrigger;
 		languageSelector = initial.languageSelector;
+		selectedLanguages = initial.languages
+			? initial.languages.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+			: [];
 		ccpaEnabled = initial.ccpaEnabled;
 		ccpaUrl = initial.ccpaUrl;
 	}
@@ -295,6 +403,7 @@
 				{ category: 'analytics', key: 'cookie_theme', value: cookieTheme },
 				{ category: 'analytics', key: 'cookie_floating_trigger', value: floatingTrigger },
 				{ category: 'analytics', key: 'cookie_language_selector', value: b(languageSelector) },
+				{ category: 'analytics', key: 'cookie_languages', value: selectedLanguages.join(',') },
 				{ category: 'analytics', key: 'ccpa_enabled', value: b(ccpaEnabled) },
 				{ category: 'analytics', key: 'ccpa_url', value: ccpaUrl },
 				{ category: 'analytics', key: 'cookie_banner_accept', value: acceptLabel },
@@ -351,6 +460,7 @@
 		set('reject_label', rejectLabel);
 		set('customize_label', customizeLabel);
 		set('language_selector', languageSelector ? '1' : '0');
+		set('languages', selectedLanguages.join(','));
 		set('theme', cookieTheme);
 		set('floating_trigger', floatingTrigger);
 		set('position', position);
@@ -388,6 +498,7 @@
 		void rejectLabel;
 		void customizeLabel;
 		void languageSelector;
+		void selectedLanguages;
 		void cookieTheme;
 		void floatingTrigger;
 		void position;
@@ -582,6 +693,50 @@
 						</div>
 						<Switch bind:checked={languageSelector} ariaLabel="Show language selector in banner" />
 					</div>
+
+					{#if languageSelector}
+						<div class="mt-4">
+							<div class="flex items-baseline justify-between gap-4">
+								<span class="text-[13px] text-text-primary">Languages in dropdown</span>
+								<span class="text-[11px] text-text-muted">
+									{selectedLanguages.length === 0
+										? 'All 13 languages'
+										: `${selectedLanguages.length} selected`}
+								</span>
+							</div>
+							<p class="mt-1 text-[12px] text-text-muted">
+								Pick which languages appear in the cookie banner's language switcher. Leave
+								all unchecked to show every built-in language. The site's own language
+								({data.site.lang}) is always available.
+							</p>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								{#each SUPPORTED_LANGUAGES as { code, label }}
+									{@const checked = selectedLanguages.includes(code)}
+									<label
+										class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer select-none transition-colors {checked
+											? 'border-text-primary bg-text-primary text-bg-base'
+											: 'border-border-light bg-bg-elevated text-text-secondary hover:border-text-muted'}"
+									>
+										<input
+											type="checkbox"
+											class="sr-only"
+											{checked}
+											onchange={(e) => {
+												const ch = (e.currentTarget as HTMLInputElement).checked;
+												if (ch && !selectedLanguages.includes(code)) {
+													selectedLanguages = [...selectedLanguages, code];
+												} else if (!ch) {
+													selectedLanguages = selectedLanguages.filter((c) => c !== code);
+												}
+											}}
+										/>
+										<span class="font-mono text-[10px] uppercase opacity-70">{code}</span>
+										<span>{label}</span>
+									</label>
+								{/each}
+							</div>
+						</div>
+					{/if}
 
 					<div class="mt-4 flex items-center justify-between gap-4">
 						<div class="flex flex-col">
