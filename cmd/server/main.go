@@ -156,6 +156,7 @@ func main() {
 
 	srv := server.New(cfg, sqlDB, queries, st)
 	srv.AnalyticsDB = analyticsMgrConn
+	srv.RetentionMgr = retentionMgr
 	srv.OnAnalyticsSettingsChange = func(_ context.Context) {
 		// Use a fresh background context: the request that triggered this may
 		// finish before Reload completes, and we don't want a cancelled context

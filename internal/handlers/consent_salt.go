@@ -74,6 +74,17 @@ func getOrCreateConsentSalt(ctx context.Context, queries *store.Queries) (string
 		}); err != nil {
 			return "", fmt.Errorf("upsert consent salt: %w", err)
 		}
+		// Audit M3: re-read after upsert. Two goroutines that both hit
+		// the cache miss can both call UpsertConsentSalt; the upsert
+		// uses ON CONFLICT DO NOTHING, so only one row's salt wins.
+		// Without the re-read the loser's local `salt` variable
+		// diverges from the persisted row, hashing IPs differently
+		// for ~1ms at midnight. Re-fetching the persisted row
+		// guarantees both goroutines cache the same value.
+		persisted, perr := queries.GetConsentSalt(ctx, day)
+		if perr == nil && persisted != "" {
+			salt = persisted
+		}
 	}
 
 	saltCache.day = day
