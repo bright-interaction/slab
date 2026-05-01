@@ -155,6 +155,31 @@ func (h *SettingsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+// CookiePresets returns the cookie declarations atomicsite auto-derives from
+// the site's enabled trackers (GA4, language settings, etc.). The admin
+// Cookies page calls this to show the read-only "from your stack" rows
+// alongside the user-edited list. Computed on the fly from current
+// settings so flipping GA4 on immediately surfaces the GA cookies.
+func (h *SettingsHandler) CookiePresets(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	site, err := h.queries.GetSiteByID(r.Context(), siteID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Site not found")
+		return
+	}
+	rows, err := h.queries.ListSettingsBySite(r.Context(), siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to list settings")
+		return
+	}
+	settingsMap := make(map[string]string, len(rows))
+	for _, s := range rows {
+		settingsMap[s.Category+"."+s.Key] = s.Value
+	}
+	presets := builder.PresetCookieDeclarations(site, settingsMap)
+	writeJSON(w, http.StatusOK, presets)
+}
+
 // SecurityPreview returns the resolved security headers the next build would
 // emit for this site. Used by the admin Security page to show "this is what
 // CSP will look like" before triggering a build, and by the kind-routing
@@ -168,14 +193,16 @@ func (h *SettingsHandler) SecurityPreview(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"csp":                          hdrs.CSP,
-		"hsts":                         hdrs.HSTS,
-		"x_frame_options":              hdrs.XFrameOptions,
-		"x_content_type_options":       hdrs.XContentTypeOptions,
-		"referrer_policy":              hdrs.ReferrerPolicy,
-		"permissions_policy":           hdrs.PermissionsPolicy,
-		"cross_origin_opener_policy":   hdrs.COOP,
-		"cross_origin_resource_policy": hdrs.CORP,
-		"cross_origin_embedder_policy": hdrs.COEP,
+		"csp":                                hdrs.CSP,
+		"hsts":                               hdrs.HSTS,
+		"x_frame_options":                    hdrs.XFrameOptions,
+		"x_content_type_options":             hdrs.XContentTypeOptions,
+		"referrer_policy":                    hdrs.ReferrerPolicy,
+		"permissions_policy":                 hdrs.PermissionsPolicy,
+		"cross_origin_opener_policy":         hdrs.COOP,
+		"cross_origin_resource_policy":       hdrs.CORP,
+		"cross_origin_embedder_policy":       hdrs.COEP,
+		"x_permitted_cross_domain_policies":  hdrs.XPermittedCrossDomainPolicies,
+		"x_xss_protection":                   hdrs.XXSSProtection,
 	})
 }
