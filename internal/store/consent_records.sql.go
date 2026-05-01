@@ -166,7 +166,7 @@ func (q *Queries) DeleteConsentSaltsOlderThan(ctx context.Context, dayUtc string
 }
 
 const getConsentByID = `-- name: GetConsentByID :one
-SELECT id, site_id, session_id, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records WHERE id = ? AND site_id = ?
+SELECT id, site_id, session_id, fingerprint, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records WHERE id = ? AND site_id = ?
 `
 
 type GetConsentByIDParams struct {
@@ -181,6 +181,7 @@ func (q *Queries) GetConsentByID(ctx context.Context, arg GetConsentByIDParams) 
 		&i.ID,
 		&i.SiteID,
 		&i.SessionID,
+		&i.Fingerprint,
 		&i.Domain,
 		&i.PageUrl,
 		&i.Referrer,
@@ -208,7 +209,7 @@ func (q *Queries) GetConsentSalt(ctx context.Context, dayUtc string) (string, er
 }
 
 const listConsentBySite = `-- name: ListConsentBySite :many
-SELECT id, site_id, session_id, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records
+SELECT id, site_id, session_id, fingerprint, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records
 WHERE site_id = ?
   AND created_at >= ?
   AND created_at <= ?
@@ -246,6 +247,7 @@ func (q *Queries) ListConsentBySite(ctx context.Context, arg ListConsentBySitePa
 			&i.ID,
 			&i.SiteID,
 			&i.SessionID,
+			&i.Fingerprint,
 			&i.Domain,
 			&i.PageUrl,
 			&i.Referrer,
@@ -273,10 +275,10 @@ func (q *Queries) ListConsentBySite(ctx context.Context, arg ListConsentBySitePa
 
 const recordConsent = `-- name: RecordConsent :exec
 INSERT INTO consent_records (
-    id, site_id, session_id, domain, page_url, referrer, user_agent,
+    id, site_id, session_id, fingerprint, domain, page_url, referrer, user_agent,
     ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 `
 
@@ -284,6 +286,7 @@ type RecordConsentParams struct {
 	ID             string `json:"id"`
 	SiteID         string `json:"site_id"`
 	SessionID      string `json:"session_id"`
+	Fingerprint    string `json:"fingerprint"`
 	Domain         string `json:"domain"`
 	PageUrl        string `json:"page_url"`
 	Referrer       string `json:"referrer"`
@@ -301,6 +304,7 @@ func (q *Queries) RecordConsent(ctx context.Context, arg RecordConsentParams) er
 		arg.ID,
 		arg.SiteID,
 		arg.SessionID,
+		arg.Fingerprint,
 		arg.Domain,
 		arg.PageUrl,
 		arg.Referrer,
@@ -316,7 +320,7 @@ func (q *Queries) RecordConsent(ctx context.Context, arg RecordConsentParams) er
 }
 
 const streamConsentBySite = `-- name: StreamConsentBySite :many
-SELECT id, site_id, session_id, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records
+SELECT id, site_id, session_id, fingerprint, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records
 WHERE site_id = ?
   AND created_at >= ?
   AND created_at <= ?
@@ -342,6 +346,7 @@ func (q *Queries) StreamConsentBySite(ctx context.Context, arg StreamConsentBySi
 			&i.ID,
 			&i.SiteID,
 			&i.SessionID,
+			&i.Fingerprint,
 			&i.Domain,
 			&i.PageUrl,
 			&i.Referrer,

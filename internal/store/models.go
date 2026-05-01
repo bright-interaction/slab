@@ -55,6 +55,7 @@ type ConsentRecord struct {
 	ID             string `json:"id"`
 	SiteID         string `json:"site_id"`
 	SessionID      string `json:"session_id"`
+	Fingerprint    string `json:"fingerprint"`
 	Domain         string `json:"domain"`
 	PageUrl        string `json:"page_url"`
 	Referrer       string `json:"referrer"`

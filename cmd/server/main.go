@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/brightinteraction/atomicsite/internal/analytics"
+	"github.com/brightinteraction/atomicsite/internal/analyticsdb"
 	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
@@ -109,7 +110,22 @@ func main() {
 	retentionMgr := retention.NewManager(queries, sqlDB)
 	retentionMgr.Start(mgrCtx)
 
+	// Stitched cookie-analytics layer: DuckDB ATTACHes the live SQLite file
+	// read-only and serves the /api/sites/{id}/cookies/analytics/* endpoints.
+	// Single source of truth (one .db file), columnar query engine on top.
+	// If DuckDB fails to open (missing extension, CGO disabled, etc.) we
+	// log + continue without analytics rather than abort startup; the
+	// CookieAnalyticsHandler returns 503 from each endpoint in that case.
+	analyticsMgrCtx, analyticsMgrCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	analyticsMgrConn, err := analyticsdb.Open(analyticsMgrCtx, analyticsdb.Config{SQLitePath: cfg.DBPath})
+	analyticsMgrCancel()
+	if err != nil {
+		slog.Warn("analyticsdb: failed to open; stitched analytics endpoints will return 503", "error", err)
+		analyticsMgrConn = nil
+	}
+
 	srv := server.New(cfg, sqlDB, queries, st)
+	srv.AnalyticsDB = analyticsMgrConn
 	srv.OnAnalyticsSettingsChange = func(_ context.Context) {
 		// Use a fresh background context: the request that triggered this may
 		// finish before Reload completes, and we don't want a cancelled context
@@ -146,6 +162,9 @@ func main() {
 	_ = httpSrv.Shutdown(shutCtx)
 	analyticsMgr.Stop(shutCtx)
 	retentionMgr.Stop(shutCtx)
+	if analyticsMgrConn != nil {
+		_ = analyticsMgrConn.Close()
+	}
 
 	slog.Info("atomicsite: stopped")
 }
@@ -205,6 +224,13 @@ func applySchema(sqlDB *sql.DB) error {
 		// the older UNIQUE on existing tables and allows the new (id, kind)
 		// combination at the application layer (handler dedupes per kind).
 		{"allowed_scripts", "kind", "TEXT NOT NULL DEFAULT 'script'"},
+		// Cookie analytics stitch key (Phase 11.2) added 2026-05-01.
+		// consent_records.fingerprint joins to visit_events / visit_sessions
+		// / visit_engagement on the existing fingerprint column so the
+		// DuckDB analytics layer can do (site_id, fingerprint) joins
+		// without going through visit_sessions.session_id (which doesn't
+		// match the client's atomicsite_sid for new visitors).
+		{"consent_records", "fingerprint", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

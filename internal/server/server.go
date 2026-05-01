@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/brightinteraction/atomicsite/internal/analyticsdb"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/handlers"
 	"github.com/brightinteraction/atomicsite/internal/mcp"
@@ -36,6 +37,10 @@ type Server struct {
 	storage storage.Store
 	authMW  *authmw.AuthMiddleware
 	agentMW *authmw.AgentAuthMiddleware
+	// AnalyticsDB is the read-only DuckDB ATTACH on the SQLite file.
+	// Optional: nil when DuckDB couldn't open at boot. Handlers that
+	// depend on it return 503 in that case rather than crashing.
+	AnalyticsDB *analyticsdb.Manager
 	// OnAnalyticsSettingsChange, when set, is invoked after settings writes that
 	// touch the analytics category so the analytics Manager can rescan parsers.
 	OnAnalyticsSettingsChange func(context.Context)
@@ -209,6 +214,7 @@ func (s *Server) Router() http.Handler {
 		}
 		r.Get("/api/sites/{siteID}/settings", seth.List)
 		r.Get("/api/sites/{siteID}/settings/security/preview", seth.SecurityPreview)
+		r.Get("/api/sites/{siteID}/settings/cookie-presets", seth.CookiePresets)
 		r.Get("/api/sites/{siteID}/settings/{category}", seth.ListByCategory)
 		r.Put("/api/sites/{siteID}/settings", seth.Upsert)
 		r.Put("/api/sites/{siteID}/settings/bulk", seth.BulkUpsert)
@@ -280,7 +286,22 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/sites/{siteID}/consent/records", coH.List)
 		r.Get("/api/sites/{siteID}/consent/records/{recordID}", coH.Get)
 		r.Get("/api/sites/{siteID}/consent/stats", coH.Stats)
+		r.Get("/api/sites/{siteID}/consent/stats-by-category", coH.StatsByCategory)
 		r.Get("/api/sites/{siteID}/consent/export.csv", coH.ExportCSV)
+		r.Delete("/api/sites/{siteID}/consent/purge", coH.Purge)
+
+		// Stitched cookie analytics — DuckDB ATTACH layer over the SQLite
+		// file. Returns 503 from each endpoint when the DuckDB layer
+		// failed to open at boot (e.g. a CGO-disabled build), so the
+		// dashboard can fall back gracefully.
+		caH := handlers.NewCookieAnalyticsHandler(s.cfg, s.queries, s.AnalyticsDB)
+		r.Get("/api/sites/{siteID}/cookies/analytics/funnel", caH.Funnel)
+		r.Get("/api/sites/{siteID}/cookies/analytics/pre-consent", caH.PreConsent)
+		r.Get("/api/sites/{siteID}/cookies/analytics/time-to-consent", caH.TimeToConsent)
+		r.Get("/api/sites/{siteID}/cookies/analytics/engaged-accept-rate", caH.EngagedAcceptRate)
+		r.Get("/api/sites/{siteID}/cookies/analytics/top-accepting-pages", caH.TopAcceptingPages)
+		r.Get("/api/sites/{siteID}/cookies/analytics/daily", caH.DailySplit)
+		r.Get("/api/sites/{siteID}/cookies/analytics/journey/{fingerprint}", caH.VisitorJourney)
 
 		// Agent keys (admin management)
 		agh := handlers.NewAgentHandler(s.cfg, s.queries)

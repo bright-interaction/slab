@@ -20,3 +20,4 @@ export * as deploy from './deploy';
 export * as analytics from './analytics';
 export * as members from './members';
 export * as consent from './consent';
+export * as cookieAnalytics from './cookieAnalytics';

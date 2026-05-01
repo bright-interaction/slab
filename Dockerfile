@@ -27,9 +27,16 @@ RUN bun run build
 
 # Stage 3: Build the Go server. Pulls in the freshly-built widget bundle so
 # go:embed picks up the latest bytes at compile time.
+#
+# CGO note: the analyticsdb package uses marcboeker/go-duckdb/v2, which
+# requires CGO + libduckdb. We build with CGO_ENABLED=1, target musl, and
+# install build-base + gcc + libstdc++ + g++ in the build stage. The
+# resulting binary is dynamically linked against libstdc++/libgcc . both
+# already present in the runtime image (bun + chromium need them too) so
+# no additional runtime libs needed.
 FROM golang:1.26-alpine AS backend
 WORKDIR /app
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates build-base gcc g++ musl-dev libstdc++
 COPY atomicsite/go.mod atomicsite/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -39,15 +46,15 @@ COPY --from=frontend /app/frontend/build ./cmd/server/frontend/build
 COPY --from=widget /app/dist/cookieproof.embed.esm.js ./internal/builder/assets/cookieproof.embed.esm.js
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+    CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 
 # Stage 4: Production image.
 FROM alpine:3.20
-# bun is dynamically linked against libstdc++ / libgcc / unwind; without these
-# `bun install` inside the runtime aborts with "_ZNSt... symbol not found".
-# chromium is used by the /api/agent/screenshot endpoint (chromedp) so the
-# agent can see the rendered output and iterate against pixels.
-# nss / freetype / harfbuzz / ca-certificates are chromium runtime deps.
+# bun + chromium + DuckDB (via go-duckdb) are all dynamically linked
+# against libstdc++ / libgcc / unwind; without these the binary won't
+# start. nss / freetype / harfbuzz / ca-certificates are chromium runtime
+# deps. The DuckDB sqlite_scanner extension downloads on first
+# `LOAD sqlite` (~6 MB); after that it's cached at /home/atomicsite/.duckdb.
 RUN apk add --no-cache ca-certificates tzdata libstdc++ libgcc \
     chromium nss freetype harfbuzz ttf-freefont
 ENV CHROMEDP_HEADLESS_FLAGS="" \
