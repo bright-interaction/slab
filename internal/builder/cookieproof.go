@@ -75,6 +75,15 @@ type CookieProofConfig struct {
 
 	// PrivacyPolicyURL surfaces a link in the banner footer when set.
 	PrivacyPolicyURL string
+
+	// CustomTranslations are per-language overrides for banner copy.
+	// Outer key = ISO language code (e.g. "sv", "de"). Inner map keys
+	// follow the widget's TranslationStrings shape: title, description,
+	// accept, reject, customize. Empty inner fields fall back to the
+	// widget's built-in translation for that locale, so operators only
+	// fill what they want to override. Mirrors CookieProof's
+	// customTranslations option (CookieProof/src/i18n/index.ts).
+	CustomTranslations map[string]map[string]string
 }
 
 // CookieCategory mirrors the relevant subset of the widget's CategoryConfig.
@@ -185,6 +194,10 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		CcpaURL           string            `json:"ccpaUrl,omitempty"`
 		CssVars           map[string]string `json:"cssVars,omitempty"`
 		Copy              map[string]string `json:"copy,omitempty"`
+		// CustomTranslations maps ISO language code -> partial
+		// TranslationStrings (title, description, accept, reject,
+		// customize). Widget merges over its built-in en/sv/de/etc.
+		CustomTranslations map[string]map[string]string `json:"customTranslations,omitempty"`
 	}
 
 	theme := strings.ToLower(strings.TrimSpace(cfg.Theme))
@@ -237,6 +250,30 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		CcpaEnabled:      cfg.CcpaEnabled,
 		CcpaURL:          cfg.CcpaURL,
 		CssVars:          cfg.CssVars,
+	}
+	// Per-language overrides (analytics.cookie_translations). Trimmed of
+	// empty strings + empty inner maps so the JSON stays small and the
+	// widget's fallback logic doesn't see no-op overrides.
+	if len(cfg.CustomTranslations) > 0 {
+		clean := map[string]map[string]string{}
+		for code, fields := range cfg.CustomTranslations {
+			if code == "" || len(fields) == 0 {
+				continue
+			}
+			inner := map[string]string{}
+			for k, v := range fields {
+				if v == "" {
+					continue
+				}
+				inner[k] = v
+			}
+			if len(inner) > 0 {
+				clean[code] = inner
+			}
+		}
+		if len(clean) > 0 {
+			out.CustomTranslations = clean
+		}
 	}
 	copy := map[string]string{}
 	if cfg.Title != "" {
@@ -359,6 +396,42 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 	cfg.Revision = intSetting(settingsMap["analytics.cookie_revision"], 0, 0, 9999)
 	cfg.CcpaEnabled = boolSetting(settingsMap["analytics.ccpa_enabled"], false)
 	cfg.CcpaURL = strings.TrimSpace(settingsMap["analytics.ccpa_url"])
+
+	// cookie_translations: JSON map of {lang: {title, description, accept,
+	// reject, customize}}. Per-language banner copy overrides. Widget
+	// merges over its built-in translations; empty inner fields fall back
+	// to the bundled string. Invalid JSON is ignored (admin UI guarantees
+	// well-formed JSON, but the agent API can write anything).
+	if raw := strings.TrimSpace(settingsMap["analytics.cookie_translations"]); raw != "" {
+		var parsed map[string]map[string]string
+		if err := json.Unmarshal([]byte(raw), &parsed); err == nil && len(parsed) > 0 {
+			// Whitelist allowed inner keys so a typo or future widget
+			// change can't leak unexpected strings into the bundle.
+			allowed := map[string]bool{
+				"title": true, "description": true,
+				"accept": true, "reject": true, "customize": true,
+			}
+			clean := map[string]map[string]string{}
+			for code, fields := range parsed {
+				code = strings.ToLower(strings.TrimSpace(code))
+				if code == "" {
+					continue
+				}
+				inner := map[string]string{}
+				for k, v := range fields {
+					if allowed[k] && v != "" {
+						inner[k] = v
+					}
+				}
+				if len(inner) > 0 {
+					clean[code] = inner
+				}
+			}
+			if len(clean) > 0 {
+				cfg.CustomTranslations = clean
+			}
+		}
+	}
 
 	cfg.Categories = []CookieCategory{
 		{ID: "necessary", Required: true, Enabled: true},
