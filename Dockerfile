@@ -1,60 +1,52 @@
-# Build context: this Dockerfile is built from the parent `automations/`
-# directory so it can COPY both `atomicsite/` (this app) and the sibling
-# `CookieProof/` source for the embedded widget bundle. the CI system CI is
-# configured accordingly; locally:
+# Atomic Site Dockerfile (self-contained).
 #
-#   cd automations && docker build -f atomicsite/Dockerfile -t atomicsite .
+# Builds entirely from the atomicsite/ directory. The CookieProof widget
+# bundle is vendored at internal/builder/assets/cookieproof.embed.esm.js
+# and embedded into the Go binary via go:embed (see widget_embed.go), so
+# Atomic Site has zero runtime or build-time dependency on the sibling
+# CookieProof source. To refresh the widget bundle from source, run a
+# CookieProof build separately and commit the regenerated asset.
+#
+# Local build:
+#   cd atomicsite && docker build -f Dockerfile -t atomicsite .
 
-# Stage 1: Build the CookieProof embed widget bundle. This produces the same
-# JS that gets vendored into the Go binary via go:embed (see
-# atomicsite/internal/builder/widget_embed.go).
-FROM oven/bun:1-alpine AS widget
-WORKDIR /app
-COPY CookieProof/package.json CookieProof/bun.lock ./
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --frozen-lockfile
-COPY CookieProof/ .
-RUN bun run build
-
-# Stage 2: Build atomicsite's SvelteKit admin SPA.
+# Stage 1: SvelteKit admin SPA.
 FROM oven/bun:1-alpine AS frontend
 WORKDIR /app/frontend
-COPY atomicsite/frontend/package.json atomicsite/frontend/bun.lock ./
+COPY frontend/package.json frontend/bun.lock ./
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile
-COPY atomicsite/frontend/ .
+COPY frontend/ .
 RUN bun run build
 
-# Stage 3: Build the Go server. Pulls in the freshly-built widget bundle so
-# go:embed picks up the latest bytes at compile time.
+# Stage 2: Go server. The frontend build is copied in for go:embed.
 #
-# CGO note: the analyticsdb package uses marcboeker/go-duckdb/v2, which
+# CGO note: the analyticsdb package uses marcboeker/go-duckdb/v2 which
 # requires CGO + libduckdb. We build with CGO_ENABLED=1, target musl, and
-# install build-base + gcc + libstdc++ + g++ in the build stage. The
-# resulting binary is dynamically linked against libstdc++/libgcc . both
-# already present in the runtime image (bun + chromium need them too) so
-# no additional runtime libs needed.
+# install build-base + gcc + g++ + libstdc++. The resulting binary is
+# dynamically linked against libstdc++/libgcc; both are present in the
+# runtime image (chromium runtime needs them too) so no extra runtime
+# libs are required.
 FROM golang:1.26-alpine AS backend
 WORKDIR /app
 RUN apk add --no-cache git ca-certificates build-base gcc g++ musl-dev libstdc++
-COPY atomicsite/go.mod atomicsite/go.sum ./
+COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
-COPY atomicsite/ .
+COPY . .
 COPY --from=frontend /app/frontend/build ./cmd/server/frontend/build
-COPY --from=widget /app/dist/cookieproof.embed.esm.js ./internal/builder/assets/cookieproof.embed.esm.js
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 
-# Stage 4: Production image.
+# Stage 3: Production image.
 FROM alpine:3.20
-# bun + chromium + DuckDB (via go-duckdb) are all dynamically linked
-# against libstdc++ / libgcc / unwind; without these the binary won't
-# start. nss / freetype / harfbuzz / ca-certificates are chromium runtime
-# deps. The DuckDB sqlite_scanner extension downloads on first
-# `LOAD sqlite` (~6 MB); after that it's cached at /home/atomicsite/.duckdb.
+# bun + chromium + DuckDB (via go-duckdb) are dynamically linked against
+# libstdc++ / libgcc / unwind; without these the binary won't start.
+# nss / freetype / harfbuzz / ca-certificates are chromium runtime deps.
+# The DuckDB sqlite_scanner extension downloads on first `LOAD sqlite`
+# (~6 MB); after that it's cached at /home/atomicsite/.duckdb.
 RUN apk add --no-cache ca-certificates tzdata libstdc++ libgcc \
     chromium nss freetype harfbuzz ttf-freefont
 ENV CHROMEDP_HEADLESS_FLAGS="" \
