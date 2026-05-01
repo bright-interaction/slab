@@ -23,6 +23,7 @@ import (
 	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/retention"
 	"github.com/bright-interaction/slab/internal/server"
 	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
@@ -99,6 +100,15 @@ func main() {
 		slog.Warn("analytics: initial start failed", "error", err)
 	}
 
+	// Retention manager: daily sweep that purges old visit_events, visit_engagement,
+	// visit_sessions, consent_records, and consent_salts. Per-site retention windows
+	// come from the general.{analytics,consent,engagement}_retention_days settings;
+	// defaults are 180 / 730 / 90 days. Without this the DB grows unbounded; at
+	// moderate traffic (10 sites, 1k visitors/day, 5 pageviews each) visit_events
+	// alone gains ~7 GB/year.
+	retentionMgr := retention.NewManager(queries, sqlDB)
+	retentionMgr.Start(mgrCtx)
+
 	srv := server.New(cfg, sqlDB, queries, st)
 	srv.OnAnalyticsSettingsChange = func(_ context.Context) {
 		// Use a fresh background context: the request that triggered this may
@@ -135,6 +145,7 @@ func main() {
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)
 	analyticsMgr.Stop(shutCtx)
+	retentionMgr.Stop(shutCtx)
 
 	slog.Info("atomicsite: stopped")
 }

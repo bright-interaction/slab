@@ -116,6 +116,17 @@ WHERE site_id = ? AND ts >= ?
 GROUP BY hour
 ORDER BY hour ASC;
 
+-- name: DeleteVisitEventsBySiteOlderThan :execrows
+-- Per-site retention purge. ts is RFC3339 (UTC). Caller passes the cutoff;
+-- everything strictly older gets dropped. The (site_id, ts) index keeps this
+-- O(rows-deleted) instead of a full scan.
+DELETE FROM visit_events WHERE site_id = ? AND ts < ?;
+
+-- name: CountVisitEventsBySiteOlderThan :one
+-- Pre-flight count for the retention manager so the slog line can name how
+-- many rows the upcoming DELETE will drop without re-running the query.
+SELECT COUNT(*) FROM visit_events WHERE site_id = ? AND ts < ?;
+
 -- name: ConversionPathsForIdentified :many
 -- For every identified session, return its full path history ordered by ts.
 -- The handler groups by session_id / fingerprint to assemble the journey.

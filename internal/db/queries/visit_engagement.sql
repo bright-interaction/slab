@@ -43,3 +43,8 @@ WHERE site_id = ? AND ts >= ? AND viewport_w > 0
 GROUP BY bucket
 ORDER BY count DESC
 LIMIT ?;
+
+-- name: DeleteVisitEngagementBySiteOlderThan :execrows
+-- Per-site retention purge for engagement rows (screen size, time-on-page,
+-- scroll depth). ts is RFC3339 UTC; caller passes the cutoff.
+DELETE FROM visit_engagement WHERE site_id = ? AND ts < ?;

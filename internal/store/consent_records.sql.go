@@ -127,6 +127,26 @@ func (q *Queries) CountConsentBySite(ctx context.Context, arg CountConsentBySite
 	return total, err
 }
 
+const deleteConsentBySiteOlderThan = `-- name: DeleteConsentBySiteOlderThan :execrows
+DELETE FROM consent_records WHERE site_id = ? AND created_at < ?
+`
+
+type DeleteConsentBySiteOlderThanParams struct {
+	SiteID    string `json:"site_id"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// Per-site retention purge for the GDPR proof log. created_at is unix-ms;
+// caller passes the cutoff. Returns the affected row count so the
+// retention manager can log per-site stats.
+func (q *Queries) DeleteConsentBySiteOlderThan(ctx context.Context, arg DeleteConsentBySiteOlderThanParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteConsentBySiteOlderThan, arg.SiteID, arg.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteConsentOlderThan = `-- name: DeleteConsentOlderThan :exec
 DELETE FROM consent_records WHERE created_at < ?
 `

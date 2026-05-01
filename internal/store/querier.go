@@ -31,6 +31,9 @@ type Querier interface {
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
+	// Pre-flight count for the retention manager so the slog line can name how
+	// many rows the upcoming DELETE will drop without re-running the query.
+	CountVisitEventsBySiteOlderThan(ctx context.Context, arg CountVisitEventsBySiteOlderThanParams) (int64, error)
 	CountVisitsByPath(ctx context.Context, arg CountVisitsByPathParams) ([]CountVisitsByPathRow, error)
 	CountVisitsBySite(ctx context.Context, arg CountVisitsBySiteParams) (int64, error)
 	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
@@ -63,6 +66,10 @@ type Querier interface {
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
 	DeleteComponent(ctx context.Context, id string) error
+	// Per-site retention purge for the GDPR proof log. created_at is unix-ms;
+	// caller passes the cutoff. Returns the affected row count so the
+	// retention manager can log per-site stats.
+	DeleteConsentBySiteOlderThan(ctx context.Context, arg DeleteConsentBySiteOlderThanParams) (int64, error)
 	DeleteConsentOlderThan(ctx context.Context, createdAt int64) error
 	DeleteConsentSaltsOlderThan(ctx context.Context, dayUtc string) error
 	DeleteDeployTarget(ctx context.Context, id string) error
@@ -85,6 +92,22 @@ type Querier interface {
 	DeleteSite(ctx context.Context, id string) error
 	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
 	DeleteUser(ctx context.Context, id string) error
+	// Per-site retention purge for engagement rows (screen size, time-on-page,
+	// scroll depth). ts is RFC3339 UTC; caller passes the cutoff.
+	DeleteVisitEngagementBySiteOlderThan(ctx context.Context, arg DeleteVisitEngagementBySiteOlderThanParams) (int64, error)
+	// Per-site retention purge. ts is RFC3339 (UTC). Caller passes the cutoff;
+	// everything strictly older gets dropped. The (site_id, ts) index keeps this
+	// O(rows-deleted) instead of a full scan.
+	DeleteVisitEventsBySiteOlderThan(ctx context.Context, arg DeleteVisitEventsBySiteOlderThanParams) (int64, error)
+	// ListVisitorMetadataKeys is intentionally implemented as a raw *sql.DB
+	// query in code (see internal/agent/context.go listVisitorMetadataKeys),
+	// not via sqlc, because sqlc's static analyzer can't parse SQLite's
+	// json_each(vs.metadata_json) key/value virtual columns.
+	// Retention purge for stale sessions. last_seen_at is RFC3339 UTC; caller
+	// passes the cutoff. Identified sessions are kept regardless (they back the
+	// analytics dashboard's identified-visitor list and represent CRM-confirmed
+	// contacts) -- only fully anonymous sessions older than the cutoff drop.
+	DeleteVisitSessionsBySiteOlderThan(ctx context.Context, arg DeleteVisitSessionsBySiteOlderThanParams) (int64, error)
 	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)

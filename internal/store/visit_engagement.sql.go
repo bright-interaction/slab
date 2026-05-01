@@ -104,6 +104,25 @@ func (q *Queries) AvgEngagementSince(ctx context.Context, arg AvgEngagementSince
 	return i, err
 }
 
+const deleteVisitEngagementBySiteOlderThan = `-- name: DeleteVisitEngagementBySiteOlderThan :execrows
+DELETE FROM visit_engagement WHERE site_id = ? AND ts < ?
+`
+
+type DeleteVisitEngagementBySiteOlderThanParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+// Per-site retention purge for engagement rows (screen size, time-on-page,
+// scroll depth). ts is RFC3339 UTC; caller passes the cutoff.
+func (q *Queries) DeleteVisitEngagementBySiteOlderThan(ctx context.Context, arg DeleteVisitEngagementBySiteOlderThanParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteVisitEngagementBySiteOlderThan, arg.SiteID, arg.Ts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const recordVisitEngagement = `-- name: RecordVisitEngagement :exec
 INSERT INTO visit_engagement (
     id, site_id, fingerprint, path, ts,

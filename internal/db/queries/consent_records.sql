@@ -57,6 +57,12 @@ ORDER BY created_at ASC;
 -- name: DeleteConsentOlderThan :exec
 DELETE FROM consent_records WHERE created_at < ?;
 
+-- name: DeleteConsentBySiteOlderThan :execrows
+-- Per-site retention purge for the GDPR proof log. created_at is unix-ms;
+-- caller passes the cutoff. Returns the affected row count so the
+-- retention manager can log per-site stats.
+DELETE FROM consent_records WHERE site_id = ? AND created_at < ?;
+
 -- name: GetConsentSalt :one
 SELECT salt FROM consent_salts WHERE day_utc = ?;
 

@@ -52,3 +52,11 @@ WHERE site_id = ? AND fingerprint = ?;
 -- query in code (see internal/agent/context.go listVisitorMetadataKeys),
 -- not via sqlc, because sqlc's static analyzer can't parse SQLite's
 -- json_each(vs.metadata_json) key/value virtual columns.
+
+-- name: DeleteVisitSessionsBySiteOlderThan :execrows
+-- Retention purge for stale sessions. last_seen_at is RFC3339 UTC; caller
+-- passes the cutoff. Identified sessions are kept regardless (they back the
+-- analytics dashboard's identified-visitor list and represent CRM-confirmed
+-- contacts) -- only fully anonymous sessions older than the cutoff drop.
+DELETE FROM visit_sessions
+WHERE site_id = ? AND last_seen_at < ? AND identified_at = '';

@@ -106,6 +106,24 @@ func (q *Queries) CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueV
 	return count, err
 }
 
+const countVisitEventsBySiteOlderThan = `-- name: CountVisitEventsBySiteOlderThan :one
+SELECT COUNT(*) FROM visit_events WHERE site_id = ? AND ts < ?
+`
+
+type CountVisitEventsBySiteOlderThanParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+// Pre-flight count for the retention manager so the slog line can name how
+// many rows the upcoming DELETE will drop without re-running the query.
+func (q *Queries) CountVisitEventsBySiteOlderThan(ctx context.Context, arg CountVisitEventsBySiteOlderThanParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countVisitEventsBySiteOlderThan, arg.SiteID, arg.Ts)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countVisitsByPath = `-- name: CountVisitsByPath :many
 SELECT path, COUNT(*) AS count FROM visit_events
 WHERE site_id = ? AND ts >= ?
@@ -163,6 +181,26 @@ func (q *Queries) CountVisitsBySite(ctx context.Context, arg CountVisitsBySitePa
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const deleteVisitEventsBySiteOlderThan = `-- name: DeleteVisitEventsBySiteOlderThan :execrows
+DELETE FROM visit_events WHERE site_id = ? AND ts < ?
+`
+
+type DeleteVisitEventsBySiteOlderThanParams struct {
+	SiteID string `json:"site_id"`
+	Ts     string `json:"ts"`
+}
+
+// Per-site retention purge. ts is RFC3339 (UTC). Caller passes the cutoff;
+// everything strictly older gets dropped. The (site_id, ts) index keeps this
+// O(rows-deleted) instead of a full scan.
+func (q *Queries) DeleteVisitEventsBySiteOlderThan(ctx context.Context, arg DeleteVisitEventsBySiteOlderThanParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteVisitEventsBySiteOlderThan, arg.SiteID, arg.Ts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const listVisitsBySite = `-- name: ListVisitsBySite :many
