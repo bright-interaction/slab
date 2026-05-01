@@ -134,6 +134,10 @@ func main() {
 	// moderate traffic (10 sites, 1k visitors/day, 5 pageviews each) visit_events
 	// alone gains ~7 GB/year.
 	retentionMgr := retention.NewManager(queries, sqlDB)
+	// Audit H8: tell the retention manager where workspaces live so its
+	// daily sweep can reap orphans (workspaces dirs whose siteID is no
+	// longer in the DB).
+	retentionMgr.SetDataDir(cfg.DataDir)
 	retentionMgr.Start(mgrCtx)
 
 	// Stitched cookie-analytics layer: DuckDB ATTACHes the live SQLite file

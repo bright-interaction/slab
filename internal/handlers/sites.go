@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -734,5 +736,22 @@ func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to delete site")
 		return
 	}
+
+	// Audit H8: clean up the workspace dir on disk after the row is gone.
+	// The DB cascades all child tables, but `{DataDir}/workspaces/{siteID}/`
+	// would otherwise live on as orphan disk usage. siteID went through
+	// isSafeSiteID at the route level, so RemoveAll can't escape the
+	// workspaces dir.
+	if isSafeSiteID(siteID) {
+		wsDir := filepath.Join(h.cfg.DataDir, "workspaces", siteID)
+		if err := os.RemoveAll(wsDir); err != nil {
+			slog.Warn("delete site: workspace cleanup failed",
+				"site_id", siteID, "ws_dir", wsDir, "err", err)
+			// Non-fatal: the DB delete succeeded so the site is gone
+			// from the user's POV; orphaned disk will be reaped by the
+			// nightly orphan sweep.
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
