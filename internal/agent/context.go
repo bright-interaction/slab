@@ -808,12 +808,23 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		return nil, err
 	}
 
+	// Audit H1: fetch every block for the site in one query, then group
+	// by page_id in Go. Was 51 round-trips for 50 pages (1 list +
+	// per-page ListBlocksByPage); now 2 round-trips total regardless of
+	// page count. The new ListBlocksBySite query joins blocks→pages so
+	// the site_id filter is enforced at the SQL layer.
+	allBlocks, err := b.queries.ListBlocksBySite(ctx, siteID)
+	if err != nil {
+		return nil, err
+	}
+	blocksByPage := make(map[string][]store.ListBlocksBySiteRow, len(pages))
+	for _, bl := range allBlocks {
+		blocksByPage[bl.PageID] = append(blocksByPage[bl.PageID], bl)
+	}
+
 	var pageInfos []PageInfo
 	for _, p := range pages {
-		blocks, err := b.queries.ListBlocksByPage(ctx, p.ID)
-		if err != nil {
-			return nil, err
-		}
+		blocks := blocksByPage[p.ID]
 		var blockInfos []BlockInfo
 		for _, bl := range blocks {
 			blockInfos = append(blockInfos, BlockInfo{
@@ -2417,7 +2428,10 @@ func (b *ContextBuilder) computePendingSetup(ctx context.Context, siteID string,
 
 	// --- Analytics + consent ---
 	atomicsiteTracking := boolFromSetting(settingMap["analytics.atomicsite_tracking_enabled"], true)
-	cookieproofOn := boolFromSetting(settingMap["analytics.cookieproof_enabled"], false)
+	// cookieproof_enabled defaults to true (auto-A on Privacy + GDPR by default
+	// for every fresh tenant, 2026-05-01). The setup task only fires when the
+	// row is explicitly 0 AND tracking is on AND no custom banner is present.
+	cookieproofOn := boolFromSetting(settingMap["analytics.cookieproof_enabled"], true)
 	customBanner := strings.TrimSpace(settingMap["analytics.cookie_banner_snippet"]) != ""
 	if atomicsiteTracking && !cookieproofOn && !customBanner {
 		push(SetupTask{

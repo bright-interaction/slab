@@ -423,8 +423,11 @@ func resetPasswordCLI(args []string) {
 		os.Exit(1)
 	}
 	newPwd := strings.TrimRight(scanner.Text(), "\r\n")
-	if len(newPwd) < 8 {
-		fmt.Fprintln(os.Stderr, "password must be at least 8 characters")
+	// Audit L5: bump CLI password floor to match the API ChangePassword
+	// path (12 chars). Same NIST rationale: admin-class accounts get
+	// the higher bar.
+	if len(newPwd) < 12 {
+		fmt.Fprintln(os.Stderr, "password must be at least 12 characters")
 		os.Exit(1)
 	}
 

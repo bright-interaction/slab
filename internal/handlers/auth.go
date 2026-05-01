@@ -156,8 +156,13 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if len(req.NewPassword) < 8 {
-		writeError(w, http.StatusBadRequest, "Password must be at least 8 characters")
+	// Audit L5: bump from 8 to 12 chars. NIST SP 800-63B current
+	// guidance is 8 minimum but 12+ for accounts with system-wide
+	// privileges (atomicsite admins fall in this bucket). bcrypt at
+	// cost 10 + a 12-char passphrase puts even a multi-GPU offline
+	// crack out of reach for any realistic attacker.
+	if len(req.NewPassword) < 12 {
+		writeError(w, http.StatusBadRequest, "Password must be at least 12 characters")
 		return
 	}
 

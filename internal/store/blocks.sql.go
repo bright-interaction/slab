@@ -115,6 +115,64 @@ func (q *Queries) ListBlocksByPage(ctx context.Context, pageID string) ([]Block,
 	return items, nil
 }
 
+const listBlocksBySite = `-- name: ListBlocksBySite :many
+SELECT b.id, b.page_id, b.block_type, b.sort_order, b.data_json,
+       b.style_json, b.is_visible, b.created_at, b.updated_at
+FROM blocks b
+JOIN pages p ON p.id = b.page_id
+WHERE p.site_id = ?
+ORDER BY b.page_id, b.sort_order ASC
+`
+
+type ListBlocksBySiteRow struct {
+	ID        string `json:"id"`
+	PageID    string `json:"page_id"`
+	BlockType string `json:"block_type"`
+	SortOrder int64  `json:"sort_order"`
+	DataJson  string `json:"data_json"`
+	StyleJson string `json:"style_json"`
+	IsVisible int64  `json:"is_visible"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// Audit H1: single-query alternative to "list pages, loop with
+// ListBlocksByPage". Returns every block for the site joined with its
+// page id; caller groups by page_id in Go. Removes the N+1 pattern in
+// agent context Build.
+func (q *Queries) ListBlocksBySite(ctx context.Context, siteID string) ([]ListBlocksBySiteRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBlocksBySite, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBlocksBySiteRow{}
+	for rows.Next() {
+		var i ListBlocksBySiteRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PageID,
+			&i.BlockType,
+			&i.SortOrder,
+			&i.DataJson,
+			&i.StyleJson,
+			&i.IsVisible,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateBlock = `-- name: UpdateBlock :exec
 UPDATE blocks SET
     block_type = ?,

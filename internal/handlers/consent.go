@@ -226,10 +226,150 @@ func (h *ConsentHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// StatsByCategory returns per-category opt-in / opt-out counts derived
+// from the categories JSON in each proof. Useful for the admin Cookies
+// page to answer "what % of visitors said yes to marketing?" without
+// post-processing the CSV. Computed in Go because SQLite has no first-
+// class JSON aggregation across columns; the volume is bounded by the
+// retention window so this is cheap.
+//
+// Response shape:
+//
+//	{
+//	  "from": <unix-ms>, "to": <unix-ms>, "total": N,
+//	  "categories": {
+//	    "analytics": {"granted": A, "denied": B, "rate": A/(A+B)},
+//	    "marketing": {...},
+//	    "preferences": {...},
+//	    "necessary": {...}
+//	  }
+//	}
+//
+// The `necessary` row is reported as fully granted for completeness;
+// the widget never asks consent for required categories so its denied
+// count is always 0.
+func (h *ConsentHandler) StatsByCategory(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid siteID")
+		return
+	}
+	from, to := parseTimeRange(r)
+	rows, err := h.queries.StreamConsentBySite(r.Context(), store.StreamConsentBySiteParams{
+		SiteID:      siteID,
+		CreatedAt:   from,
+		CreatedAt_2: to,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to fetch consent records")
+		return
+	}
+	type catCounts struct {
+		Granted int64   `json:"granted"`
+		Denied  int64   `json:"denied"`
+		Rate    float64 `json:"rate"`
+	}
+	categories := map[string]*catCounts{
+		"necessary":   {},
+		"analytics":   {},
+		"marketing":   {},
+		"preferences": {},
+	}
+	total := int64(0)
+	for _, row := range rows {
+		total++
+		cats := map[string]any{}
+		if row.CategoriesJson != "" {
+			_ = decodeJSON(row.CategoriesJson, &cats)
+		}
+		for name, cc := range categories {
+			v, ok := cats[name]
+			granted := false
+			switch x := v.(type) {
+			case bool:
+				granted = x
+			case float64:
+				granted = x != 0
+			case string:
+				lc := strings.ToLower(strings.TrimSpace(x))
+				granted = lc == "true" || lc == "1" || lc == "yes" || lc == "on"
+			}
+			// Necessary defaults to granted when missing.
+			if !ok && name == "necessary" {
+				granted = true
+			}
+			if granted {
+				cc.Granted++
+			} else {
+				cc.Denied++
+			}
+		}
+	}
+	for _, cc := range categories {
+		denom := cc.Granted + cc.Denied
+		if denom > 0 {
+			cc.Rate = float64(cc.Granted) / float64(denom)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":       from,
+		"to":         to,
+		"total":      total,
+		"categories": categories,
+	})
+}
+
+// Purge deletes consent_records for the site older than `days` days. Used
+// for GDPR right-to-be-forgotten / retention enforcement at the admin's
+// request, in addition to the daily retention manager.
+//
+// `days` is a query param; minimum 1 (we never let an admin nuke the
+// entire log in one call), default rejected to force the admin to think.
+//
+// Response: {deleted: N, days: X}.
+func (h *ConsentHandler) Purge(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid siteID")
+		return
+	}
+	daysStr := strings.TrimSpace(r.URL.Query().Get("days"))
+	if daysStr == "" {
+		writeError(w, http.StatusBadRequest, "Missing required query param: days")
+		return
+	}
+	days, err := strconv.Atoi(daysStr)
+	if err != nil || days < 1 || days > 36500 {
+		writeError(w, http.StatusBadRequest, "days must be an integer between 1 and 36500")
+		return
+	}
+	cutoff := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour).UnixMilli()
+	deleted, err := h.queries.DeleteConsentBySiteOlderThan(r.Context(), store.DeleteConsentBySiteOlderThanParams{
+		SiteID:    siteID,
+		CreatedAt: cutoff,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to purge consent records")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"deleted": deleted,
+		"days":    days,
+	})
+}
+
 // ExportCSV streams the full proof log for a date range as CSV. Designed
 // for compliance audits ("show me every consent record from Q1 2026") so it
 // uses StreamConsentBySite (no pagination) and writes directly to the
 // response.
+// MaxCSVExportRows caps a single ExportCSV response. Audit M5: without
+// the cap, an admin can pull the entire consent_records table for the
+// site (potentially millions of rows after years of traffic), pinning
+// memory + bandwidth. 100,000 covers a real audit window for the
+// largest plausible site; admins who need more can paginate by
+// narrowing ?from / ?to.
+const MaxCSVExportRows = 100_000
+
 func (h *ConsentHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
 	if !isSafeSiteID(siteID) {
@@ -246,6 +386,12 @@ func (h *ConsentHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to fetch consent records")
 		return
 	}
+	if len(rows) > MaxCSVExportRows {
+		writeError(w, http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("Export contains %d rows (max %d). Narrow the from/to window and try again.",
+				len(rows), MaxCSVExportRows))
+		return
+	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="consent-records-%s.csv"`, siteID))
 	cw := csv.NewWriter(w)
@@ -253,7 +399,7 @@ func (h *ConsentHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	_ = cw.Write([]string{
 		"id", "created_at_iso", "created_at_ms", "domain", "method", "version",
 		"categories_json", "gpc_active", "session_id", "page_url", "referrer",
-		"user_agent", "ip_hash",
+		"user_agent", "ip_hash_trunc",
 	})
 	for _, row := range rows {
 		_ = cw.Write([]string{
@@ -269,7 +415,11 @@ func (h *ConsentHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 			row.PageUrl,
 			row.Referrer,
 			row.UserAgent,
-			row.IpHash,
+			// Truncated to match the JSON list endpoint and the dashboard
+			// display. The full hash is never useful for compliance audits
+			// (the salt rotates daily; the hash isn't reversible) but does
+			// expose unnecessary fingerprintability if the CSV is shared.
+			truncateIPHash(row.IpHash),
 		})
 	}
 }

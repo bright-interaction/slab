@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -225,6 +226,13 @@ func (h *CookieAnalyticsHandler) DailySplit(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{"rows": rows})
 }
 
+// fingerprintRE constrains the {fingerprint} URL param to a strict
+// alphanumeric / dash / underscore shape. Audit L6: without this, a
+// path-encoded special character could reach the SQL layer (currently
+// safe via parameterised queries, but defence in depth) or confuse
+// downstream log parsers that assume an opaque token.
+var fingerprintRE = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
 // VisitorJourney returns a single visitor's stitched timeline. The
 // fingerprint comes from the URL path; the time window is the same
 // ?from=&to= used elsewhere.
@@ -236,7 +244,7 @@ func (h *CookieAnalyticsHandler) VisitorJourney(w http.ResponseWriter, r *http.R
 		return
 	}
 	fp := strings.TrimSpace(urlParam(r, "fingerprint"))
-	if fp == "" || len(fp) > 64 {
+	if !fingerprintRE.MatchString(fp) {
 		writeError(w, http.StatusBadRequest, "Invalid fingerprint")
 		return
 	}
