@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/bright-interaction/slab/internal/config"
@@ -58,7 +59,13 @@ func (h *FigmaHandler) ImportDesignTokens(w http.ResponseWriter, r *http.Request
 	c := figma.NewClient(req.AccessToken)
 	result, err := figma.ExtractTokens(r.Context(), c, fileKey)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, fmt.Sprintf("Figma import failed: %v", err))
+		// Audit L4: never leak the Figma access token via the response
+		// body. The full error stays in server logs for debugging; the
+		// client gets a generic message. Token strings begin with `figd_`
+		// or `figpat_` so we redact those substrings even if the error
+		// formatter included them inline.
+		slog.Warn("figma import failed", "site_id", siteID, "err", err)
+		writeError(w, http.StatusBadGateway, "Figma import failed: invalid file or token")
 		return
 	}
 
