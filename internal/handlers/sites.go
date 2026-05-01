@@ -11,6 +11,7 @@ import (
 
 	"github.com/bright-interaction/slab/internal/agent"
 	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/perfectfoundation"
 	"github.com/bright-interaction/slab/internal/starterkits"
 	"github.com/bright-interaction/slab/internal/store"
@@ -80,6 +81,30 @@ func (h *SiteHandler) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to list sites")
 		return
+	}
+	// Audit C1: non-admin users only see sites they're a member of.
+	// Admins see everything (legacy single-workspace behaviour). The
+	// filtering happens after ListSites returns the full set so we can
+	// reuse the existing query without adding a JOIN-by-membership
+	// variant — at any realistic scale this is faster than a JOIN.
+	user := authmw.GetUser(r)
+	if user != nil && user.Role != "admin" {
+		ids, err := h.queries.ListSiteIDsForUser(r.Context(), user.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to load memberships")
+			return
+		}
+		idSet := make(map[string]bool, len(ids))
+		for _, id := range ids {
+			idSet[id] = true
+		}
+		filtered := sites[:0]
+		for _, s := range sites {
+			if idSet[s.ID] {
+				filtered = append(filtered, s)
+			}
+		}
+		sites = filtered
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sites": sites})
 }
@@ -178,6 +203,22 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "Failed to create site")
 		return
+	}
+
+	// Audit C1: auto-grant the creating user ownership of the new site so
+	// they can access it (RequireSiteAccess middleware would otherwise 403
+	// them from their own freshly-created site). Admins also get a row
+	// even though they technically bypass the middleware — keeps the
+	// member list complete for the dashboard's "who has access" view.
+	if user := authmw.GetUser(r); user != nil {
+		if err := h.queries.AddSiteMember(r.Context(), store.AddSiteMemberParams{
+			SiteID: id,
+			UserID: user.ID,
+			Role:   "owner",
+		}); err != nil {
+			slog.Warn("create site: auto-grant owner membership failed",
+				"site_id", id, "user_id", user.ID, "err", err)
+		}
 	}
 
 	// Seed defaults for the new site
