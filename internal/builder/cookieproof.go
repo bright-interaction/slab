@@ -67,6 +67,28 @@ func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 	if cfg.SiteID == "" || cfg.Domain == "" {
 		return ""
 	}
+	// Single same-origin script tag. The per-site bundle (written by
+	// WriteCookieProofWidgetAsset) contains GCM default-denied +
+	// window.__CCB__ config + widget code, in that order. CSP
+	// script-src 'self' allows it; no inline-script hashes needed;
+	// no race between config-set and widget-read because they're in
+	// the same JS file. Verified bug 2026-05-01: emitting the config
+	// inline forced 'unsafe-inline' or per-build SHA-256 hashes; both
+	// were dead-end paths.
+	return fmt.Sprintf(`<script is:inline defer src="/%s"></script>`+"\n", CookieProofWidgetFilename())
+}
+
+// gcmDefaultDeniedStub is the GCM consent default that runs before any
+// trackers. Same content for every site (no per-site state). Prepended
+// to the per-site bundle by WriteCookieProofWidgetAsset.
+const gcmDefaultDeniedStub = `(function(){window.dataLayer=window.dataLayer||[];if(typeof window.gtag!=='function'){window.gtag=function(){window.dataLayer.push(arguments);};}window.gtag('consent','default',{ad_storage:'denied',analytics_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'denied',personalization_storage:'denied',security_storage:'granted',wait_for_update:2500});})();
+`
+
+// buildCookieProofEmbedConfig assembles the JSON shape the embed widget
+// expects on window.__CCB__. Pure data: no scripting concerns. Used
+// by both renderCookieProofConfigPrefix (build-time bundle prefix) and
+// any future debug surface that wants to inspect the per-site config.
+func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 	trackPath := cfg.TrackPath
 	if trackPath == "" {
 		trackPath = "/t"
@@ -74,22 +96,22 @@ func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 	proofEndpoint := strings.TrimRight(trackPath, "/") + "/consent"
 
 	type embedConfig struct {
-		SiteID            string                 `json:"siteId"`
-		Domain            string                 `json:"domain"`
-		ProofEndpoint     string                 `json:"proofEndpoint"`
-		Language          string                 `json:"language,omitempty"`
-		Position          string                 `json:"position,omitempty"`
-		Categories        []CookieCategory       `json:"categories,omitempty"`
-		PrivacyPolicyURL  string                 `json:"privacyPolicyUrl,omitempty"`
-		GcmEnabled        bool                   `json:"gcmEnabled"`
-		RespectGPC        bool                   `json:"respectGPC"`
-		FloatingTrigger   string                 `json:"floatingTrigger,omitempty"`
-		Theme             string                 `json:"theme,omitempty"`
-		CssVars           map[string]string      `json:"cssVars,omitempty"`
-		Copy              map[string]string      `json:"copy,omitempty"`
+		SiteID           string            `json:"siteId"`
+		Domain           string            `json:"domain"`
+		ProofEndpoint    string            `json:"proofEndpoint"`
+		Language         string            `json:"language,omitempty"`
+		Position         string            `json:"position,omitempty"`
+		Categories       []CookieCategory  `json:"categories,omitempty"`
+		PrivacyPolicyURL string            `json:"privacyPolicyUrl,omitempty"`
+		GcmEnabled       bool              `json:"gcmEnabled"`
+		RespectGPC       bool              `json:"respectGPC"`
+		FloatingTrigger  string            `json:"floatingTrigger,omitempty"`
+		Theme            string            `json:"theme,omitempty"`
+		CssVars          map[string]string `json:"cssVars,omitempty"`
+		Copy             map[string]string `json:"copy,omitempty"`
 	}
 
-	cfgJSON := embedConfig{
+	out := embedConfig{
 		SiteID:           cfg.SiteID,
 		Domain:           cfg.Domain,
 		ProofEndpoint:    proofEndpoint,
@@ -103,7 +125,6 @@ func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 		Theme:            "light",
 		CssVars:          cfg.CssVars,
 	}
-
 	copy := map[string]string{}
 	if cfg.Title != "" {
 		copy["title"] = cfg.Title
@@ -121,49 +142,42 @@ func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 		copy["customize"] = cfg.SettingsLabel
 	}
 	if len(copy) > 0 {
-		cfgJSON.Copy = copy
+		out.Copy = copy
 	}
+	return json.Marshal(out)
+}
 
-	cfgBytes, err := json.Marshal(cfgJSON)
+// renderCookieProofConfigPrefix builds the JS prefix that gets prepended
+// to the widget bundle: GCM default-denied stub + window.__CCB__ assignment.
+// Returns plain JS bytes — caller writes them ahead of the bundle.
+func renderCookieProofConfigPrefix(cfg CookieProofConfig) ([]byte, error) {
+	cfgBytes, err := buildCookieProofEmbedConfig(cfg)
 	if err != nil {
-		// Should never happen for a fixed struct; emit an empty snippet to
-		// avoid breaking the build.
-		return ""
+		return nil, err
 	}
-
-	var b strings.Builder
-	// Part 1: GCM default-denied (synchronous).
-	b.WriteString("<script>\n")
-	b.WriteString("(function(){\n")
-	b.WriteString("  window.dataLayer = window.dataLayer || [];\n")
-	b.WriteString("  if (typeof window.gtag !== 'function') { window.gtag = function(){ window.dataLayer.push(arguments); }; }\n")
-	b.WriteString("  window.gtag('consent','default',{ad_storage:'denied',analytics_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'denied',personalization_storage:'denied',security_storage:'granted',wait_for_update:2500});\n")
-	b.WriteString("})();\n")
-	b.WriteString("</script>\n")
-
-	// Part 2: Inline config blob.
-	b.WriteString("<script>window.__CCB__=")
-	b.Write(cfgBytes)
-	b.WriteString(";</script>\n")
-
-	// Part 3: Same-origin widget bundle. defer preserves <head> order without
-	// blocking parse.
-	b.WriteString(fmt.Sprintf(`<script defer src="/%s"></script>`+"\n", CookieProofWidgetFilename()))
-
-	return b.String()
+	var b []byte
+	b = append(b, gcmDefaultDeniedStub...)
+	b = append(b, []byte("window.__CCB__=")...)
+	b = append(b, cfgBytes...)
+	b = append(b, ';', '\n')
+	return b, nil
 }
 
 // WriteCookieProofWidgetAsset writes the embedded widget bundle into the
 // tenant workspace's public/ directory under the cache-busted filename
 // returned by CookieProofWidgetFilename. Idempotent: overwrites any
 // previous version on each build.
-func WriteCookieProofWidgetAsset(workspaceDir string) error {
+func WriteCookieProofWidgetAsset(workspaceDir string, cfg CookieProofConfig) error {
 	publicDir := filepath.Join(workspaceDir, "public")
 	if err := EnsureDir(publicDir); err != nil {
 		return fmt.Errorf("ensure public dir: %w", err)
 	}
+	prefix, err := renderCookieProofConfigPrefix(cfg)
+	if err != nil {
+		return fmt.Errorf("render config prefix: %w", err)
+	}
 	target := filepath.Join(publicDir, CookieProofWidgetFilename())
-	return WriteFile(target, string(CookieProofWidget))
+	return WriteFile(target, string(prefix)+string(CookieProofWidget))
 }
 
 

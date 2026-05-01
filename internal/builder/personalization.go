@@ -2,6 +2,7 @@ package builder
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -33,15 +34,14 @@ var DefaultAdminBaseURL = ""
 // fetch URL because built sites live on different subdomains and cannot
 // reach /t/visitor as a same-origin call. Empty falls back to relative
 // "/t/visitor" for local-dev where built sites are on the same origin.
-func RenderVisitorHydration(siteID, adminBaseURL, trackPath string) string {
+func VisitorHydrationScript(siteID, adminBaseURL, trackPath string) string {
 	tp := trackPath
 	if tp == "" {
 		tp = "/t"
 	}
 	tp = strings.TrimRight(tp, "/")
 	endpoint := fmt.Sprintf("%s%s/visitor", strings.TrimRight(adminBaseURL, "/"), tp)
-	return fmt.Sprintf(`  <script>
-(function(){
+	return fmt.Sprintf(`(function(){
   var SITE_ID=%q;var ENDPOINT=%q;
   function flat(v){var o={};if(!v||typeof v!=="object")return o;
     for(var k in v.anonymous||{})o[k]=v.anonymous[k];
@@ -79,6 +79,25 @@ func RenderVisitorHydration(siteID, adminBaseURL, trackPath string) string {
     .then(function(v){window.__ATOMICSITE_VISITOR__=v||{returning:false,anonymous:{},identified:{}};apply(flat(window.__ATOMICSITE_VISITOR__));})
     .catch(function(){window.__ATOMICSITE_VISITOR__={returning:false,anonymous:{},identified:{}};});
 })();
-  </script>
 `, siteID, endpoint)
+}
+
+// VisitorHydrationAssetName is the public/ filename. Stable per-site.
+const VisitorHydrationAssetName = "_atomic-visitor.js"
+
+// WriteVisitorHydrationAsset writes the per-site personalization-hydration
+// JS file to the workspace's public/ dir so the page can reference it
+// via a same-origin <script src>.
+func WriteVisitorHydrationAsset(workspaceDir, siteID, adminBaseURL, trackPath string) error {
+	publicDir := filepath.Join(workspaceDir, "public")
+	if err := EnsureDir(publicDir); err != nil {
+		return fmt.Errorf("ensure public dir: %w", err)
+	}
+	target := filepath.Join(publicDir, VisitorHydrationAssetName)
+	return WriteFile(target, VisitorHydrationScript(siteID, adminBaseURL, trackPath))
+}
+
+func RenderVisitorHydration(siteID, adminBaseURL, trackPath string) string {
+	return fmt.Sprintf(`  <script is:inline defer src="/%s"></script>
+`, VisitorHydrationAssetName)
 }
