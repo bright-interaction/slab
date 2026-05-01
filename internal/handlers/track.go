@@ -67,6 +67,11 @@ type TrackHandler struct {
 	// the primary + secondary HMAC values when Dockyard rotates the shared
 	// secret. Callers obtain it via InboundVerifier().
 	inboundVerifier *sharedsecret.Verifier
+	// consentLimiter throttles /t/consent per visitor IP to keep an attacker
+	// from drowning consent_records in fake proofs. Burst 20 + 20/min
+	// sustained covers any plausible legitimate flow (a real visitor changes
+	// consent at most a handful of times per session).
+	consentLimiter *consentRateLimiter
 }
 
 // NewTrackHandler builds a TrackHandler. The CRM sync client and throttler
@@ -80,6 +85,7 @@ func NewTrackHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *Tr
 		crmClient:       crmsync.NewClient(cfg.BrightCRMWebhookURL, cfg.BrightCRMWebhookSecret),
 		crmThrot:        crmsync.NewThrottler(cfg.CRMSyncMinInterval),
 		inboundVerifier: sharedsecret.NewVerifier(cfg.BrightCRMWebhookSecret, cfg.BrightCRMWebhookSecretPrevious),
+		consentLimiter:  newConsentRateLimiter(20, 20.0/60.0, 10*time.Minute),
 	}
 }
 
@@ -143,6 +149,15 @@ var validConsentMethods = map[string]bool{
 // logged but answered 204 .  the proof is best-effort and the visitor's
 // experience must not depend on our database.
 func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
+	// Per-IP rate limit. Public endpoint, no auth, so this is the only
+	// thing standing between us and a flood. 429 Too Many Requests with a
+	// short Retry-After lets a legitimate retry succeed once tokens refill.
+	if h.consentLimiter != nil && !h.consentLimiter.allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "5")
+		writeError(w, http.StatusTooManyRequests, "Too many consent posts; slow down")
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
 	defer r.Body.Close()
 
@@ -162,6 +177,20 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Unknown siteId")
 		return
+	}
+
+	// Domain integrity. The widget echoes its host back to us; if it
+	// doesn't match the site's known domain (or the cookieproof_domain
+	// override) we reject. Without this gate any third party that
+	// happens to know a tenant's siteID could log-poison the proof
+	// table from their own origin. Empty request domain is allowed
+	// because legitimate same-origin posts can omit it; we fall back
+	// to the site's configured domain a few lines down.
+	if reqDomain := strings.TrimSpace(req.Domain); reqDomain != "" {
+		if !consentDomainMatches(reqDomain, site.Domain, site.CookieproofDomain) {
+			writeError(w, http.StatusForbidden, "Domain mismatch")
+			return
+		}
 	}
 
 	// Validate consent.method against the widget's emit enum. Anything else
@@ -232,6 +261,7 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		ID:             newID(),
 		SiteID:         siteID,
 		SessionID:      truncateString(req.SessionID, 64),
+		Fingerprint:    fp,
 		Domain:         truncateString(auditDomain, 255),
 		PageUrl:        truncateString(req.Page, 2000),
 		Referrer:       truncateString(req.Referrer, 2000),
@@ -292,6 +322,64 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return string(r[:maxLen])
+}
+
+// consentDomainMatches reports whether the domain echoed by the widget
+// is one of the site's known domains. We accept an exact match, or a
+// match against the site.cookieproof_domain override, or any subdomain
+// of either (so `blog.example.com` is accepted when the site domain is
+// `example.com`). Apex with or without `www.` is treated as the same
+// domain. Comparison is case-insensitive and ignores any trailing dot.
+//
+// This is a domain-integrity check, not a security boundary on its own —
+// the rate limiter still gates volume. Goal: stop a third party who
+// happens to know a tenant's internal siteID from log-poisoning the
+// proof table from their own origin.
+func consentDomainMatches(reqDomain, siteDomain, cookieproofDomain string) bool {
+	target := normaliseDomain(reqDomain)
+	if target == "" {
+		return false
+	}
+	for _, candidate := range []string{siteDomain, cookieproofDomain} {
+		c := normaliseDomain(candidate)
+		if c == "" {
+			continue
+		}
+		if target == c {
+			return true
+		}
+		// strip leading www. on either side and compare
+		if strings.TrimPrefix(target, "www.") == strings.TrimPrefix(c, "www.") {
+			return true
+		}
+		// subdomain match: target ends with ".<candidate>"
+		if strings.HasSuffix(target, "."+strings.TrimPrefix(c, "www.")) {
+			return true
+		}
+	}
+	return false
+}
+
+// normaliseDomain lowercases the host and strips scheme, path, port, and
+// any trailing dot so equality comparison is straightforward.
+func normaliseDomain(s string) string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	if v == "" {
+		return ""
+	}
+	if i := strings.Index(v, "://"); i != -1 {
+		v = v[i+3:]
+	}
+	if i := strings.IndexAny(v, "/?#"); i != -1 {
+		v = v[:i]
+	}
+	if i := strings.LastIndex(v, ":"); i != -1 {
+		// strip port unless it's an IPv6 literal (would have ']' before)
+		if !strings.Contains(v, "]") {
+			v = v[:i]
+		}
+	}
+	return strings.TrimSuffix(v, ".")
 }
 
 // clientIP extracts the visitor's IP from the request. Prefers

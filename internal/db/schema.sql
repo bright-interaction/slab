@@ -541,6 +541,7 @@ CREATE TABLE IF NOT EXISTS consent_records (
     id                TEXT PRIMARY KEY,
     site_id           TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
     session_id        TEXT NOT NULL DEFAULT '',
+    fingerprint       TEXT NOT NULL DEFAULT '',
     domain            TEXT NOT NULL,
     page_url          TEXT NOT NULL DEFAULT '',
     referrer          TEXT NOT NULL DEFAULT '',
@@ -556,6 +557,7 @@ CREATE TABLE IF NOT EXISTS consent_records (
 CREATE INDEX IF NOT EXISTS idx_consent_records_site_created ON consent_records(site_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_consent_records_site_method ON consent_records(site_id, consent_method);
 CREATE INDEX IF NOT EXISTS idx_consent_records_session ON consent_records(session_id);
+CREATE INDEX IF NOT EXISTS idx_consent_records_site_fingerprint ON consent_records(site_id, fingerprint);
 
 -- consent_salts holds daily-rotated salts used to hash IPs in
 -- consent_records.ip_hash. One row per UTC day. Old rows are pruned by the

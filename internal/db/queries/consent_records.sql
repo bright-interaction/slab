@@ -1,9 +1,9 @@
 -- name: RecordConsent :exec
 INSERT INTO consent_records (
-    id, site_id, session_id, domain, page_url, referrer, user_agent,
+    id, site_id, session_id, fingerprint, domain, page_url, referrer, user_agent,
     ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 );
 
 -- name: ListConsentBySite :many
