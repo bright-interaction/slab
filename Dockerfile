@@ -68,12 +68,18 @@ RUN apt-get update -qq \
 ENV CHROMEDP_HEADLESS_FLAGS="" \
     CHROMEDP_NO_SANDBOX=1
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
-# Pin UID:GID to 100:101 to match the alpine system-user defaults the
-# existing atomicsite_atomicsite-data named volume was created with.
-# Without these flags useradd would assign a different debian-default
-# UID and the persisted SQLite file would be unreadable to the new
-# container.
-RUN groupadd -r -g 101 atomicsite && useradd -r -u 100 -g atomicsite -d /app atomicsite
+# Run as a stable non-root UID:GID 1000:1000. The existing
+# atomicsite_atomicsite-data named volume was originally written by an
+# alpine system user (100:101); operators upgrading from the alpine
+# image must one-shot chown the volume to 1000:1000 before the first
+# debian-image deploy:
+#   docker run --rm -v atomicsite_atomicsite-data:/data \
+#     debian:bookworm-slim chown -R 1000:1000 /data
+# 1000:1000 was picked to dodge the GID 101 collision (systemd-journal
+# in debian:bookworm-slim) without hardcoding a non-portable system
+# UID. New deployments don't need any chown; the entrypoint creates
+# /app/data with the right ownership.
+RUN groupadd -g 1000 atomicsite && useradd -u 1000 -g atomicsite -m -d /app atomicsite
 RUN mkdir -p /app/data && chown -R atomicsite:atomicsite /app
 COPY --from=backend /server /app/server
 WORKDIR /app
