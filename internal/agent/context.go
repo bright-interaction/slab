@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bright-interaction/slab/internal/blocks"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -1996,194 +1997,41 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 }
 
 // defaultBlockSchemas tells the agent which JSON keys each block type
-// recognises. Aligns with internal/builder/pages.go renderDataBlock plus
-// the canonical text key set that the Text Mode editor surfaces inline.
+// recognises. Derived from the single source of truth in
+// internal/blocks: the registry feeds both this agent surface and the
+// editor's auto-rendered forms, so adding a new block_type only
+// requires one Register() call. Returns the legacy BlockSchemaInfo
+// shape so the agent contract stays stable.
 func defaultBlockSchemas() []BlockSchemaInfo {
-	headingTextKeys := []BlockSchemaField{
-		{Key: "eyebrow", Label: "Eyebrow", Multiline: false},
-		{Key: "heading", Label: "Heading", Multiline: false},
-		{Key: "subheading", Label: "Subheading", Multiline: true},
-		{Key: "text", Label: "Text", Multiline: true},
-		{Key: "cta_text", Label: "CTA label", Multiline: false},
+	all := blocks.All()
+	out := make([]BlockSchemaInfo, 0, len(all))
+	for _, s := range all {
+		info := BlockSchemaInfo{
+			BlockType: s.Type,
+			Use:       s.Description,
+		}
+		for _, f := range s.Fields {
+			label := f.Label
+			if f.Help != "" {
+				label = label + " — " + f.Help
+			}
+			field := BlockSchemaField{
+				Key:       f.Key,
+				Label:     label,
+				Multiline: f.Kind == blocks.KindTextarea || f.Kind == blocks.KindRichtext,
+			}
+			switch f.Kind {
+			case blocks.KindText, blocks.KindTextarea, blocks.KindRichtext:
+				info.TextKeys = append(info.TextKeys, field)
+			default:
+				info.OtherKeys = append(info.OtherKeys, field)
+			}
+		}
+		out = append(out, info)
 	}
-	heroTextKeys := []BlockSchemaField{
-		{Key: "eyebrow", Label: "Eyebrow", Multiline: false},
-		{Key: "headline", Label: "Headline (wrap an inline accent fragment in [[double brackets]] to colour it with --color-primary)", Multiline: false},
-		{Key: "headline_accent", Label: "Optional accent line appended after the headline in --color-primary (alternative to [[brackets]])", Multiline: false},
-		{Key: "subheading", Label: "Subheading", Multiline: true},
-		{Key: "cta_text", Label: "Primary CTA label", Multiline: false},
-		{Key: "secondary_label", Label: "Secondary CTA label", Multiline: false},
-	}
-	imageTextKeys := []BlockSchemaField{
-		{Key: "alt", Label: "Image alt", Multiline: false},
-		{Key: "caption", Label: "Caption", Multiline: false},
-	}
-	quoteTextKeys := []BlockSchemaField{
-		{Key: "quote", Label: "Quote", Multiline: true},
-		{Key: "attribution", Label: "Attribution", Multiline: false},
-	}
-	return []BlockSchemaInfo{
-		{
-			BlockType: "hero",
-			Use:       "Above-the-fold attention-grab. One per page. Drives a primary CTA.",
-			TextKeys:  heroTextKeys,
-			OtherKeys: []BlockSchemaField{
-				{Key: "cta_url", Label: "Primary CTA URL"},
-				{Key: "secondary_url", Label: "Secondary CTA URL"},
-				{Key: "image_id", Label: "Background image media ID"},
-			},
-		},
-		{
-			BlockType: "text",
-			Use:       "Rich body copy block. Renders heading + text + optional CTA.",
-			TextKeys:  headingTextKeys,
-			OtherKeys: []BlockSchemaField{
-				{Key: "cta_url", Label: "CTA URL"},
-				{Key: "alignment", Label: "Alignment ('left' | 'center')"},
-			},
-		},
-		{
-			BlockType: "feature_grid",
-			Use:       "3-to-4-up grid of feature cards.",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {title, body, icon}"}},
-		},
-		{
-			BlockType: "cta",
-			Use:       "Standalone CTA section. Use heading + text to set up the action.",
-			TextKeys: []BlockSchemaField{
-				{Key: "heading", Label: "Heading"},
-				{Key: "text", Label: "Lead-in text", Multiline: true},
-				{Key: "cta_text", Label: "CTA label"},
-			},
-			OtherKeys: []BlockSchemaField{
-				{Key: "cta_url", Label: "CTA URL"},
-				{Key: "variant", Label: "Variant ('primary' | 'secondary')"},
-			},
-		},
-		{
-			BlockType: "image",
-			Use:       "Single image. Always include a descriptive alt; never 'image' or 'photo'.",
-			TextKeys:  imageTextKeys,
-			OtherKeys: []BlockSchemaField{
-				{Key: "image_id", Label: "Media ID"},
-				{Key: "width", Label: "Pixel width (required, prevents CLS)"},
-				{Key: "height", Label: "Pixel height (required, prevents CLS)"},
-			},
-		},
-		{
-			BlockType: "quote",
-			Use:       "Testimonial / pull quote.",
-			TextKeys:  quoteTextKeys,
-		},
-		{
-			BlockType: "raw",
-			Use:       "Escape hatch for custom HTML. Pass `html` directly. Last resort, every other block type is preferred.",
-			OtherKeys: []BlockSchemaField{{Key: "html", Label: "Raw HTML, no scripts."}},
-		},
-		{
-			BlockType: "component",
-			Use:       "Render a custom Astro component declared in the site's components catalogue.",
-			OtherKeys: []BlockSchemaField{
-				{Key: "component", Label: "Component name (kebab-case)"},
-				{Key: "props", Label: "Object of props the component accepts"},
-			},
-		},
-		{
-			BlockType: "split_hero",
-			Use:       "Side-by-side hero with text on the left + image on the right (collapses to stacked on mobile). Better for SaaS marketing pages than the centred hero.",
-			TextKeys:  heroTextKeys,
-			OtherKeys: []BlockSchemaField{
-				{Key: "cta_url", Label: "Primary CTA URL"},
-				{Key: "secondary_url", Label: "Secondary CTA URL"},
-				{Key: "image_id", Label: "Hero image media ID (right column)"},
-				{Key: "image_alt", Label: "Hero image alt text"},
-			},
-		},
-		{
-			BlockType: "stat_grid",
-			Use:       "Trust signals / social proof. Horizontal grid of large numbers + labels (+ optional context). Counts as list >= 3 items for the AI-Friendly Formatting eval check.",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {value, label, context?}. The optional context line appears below the label in muted small text and is the right place for industry-average comparisons or qualifiers."}},
-		},
-		{
-			BlockType: "accordion_faq",
-			Use:       "Q&A accordion using native <details>/<summary> (no JS needed). Auto-emits FAQPage JSON-LD so the FAQ Schema eval check passes.",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {question, answer}"}},
-		},
-		{
-			BlockType: "pricing",
-			Use:       "3-up pricing tier cards with feature bullets + per-tier CTA. Set tiers[i].featured=true on the recommended plan to give it a dark fill + accent border. Optional tiers[i].step shows a small mono uppercase 'STEP 01' eyebrow above the tier name.",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "tiers", Label: "Array of {step?, name, price, price_period, description, features[], cta_text, cta_url, featured?}"}},
-		},
-		{
-			BlockType: "logo_strip",
-			Use:       "Row of customer / partner logos. Use under the hero on a real production marketing site to anchor trust before the first feature.",
-			TextKeys:  []BlockSchemaField{{Key: "label", Label: "Label (e.g. 'Trusted by')"}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {image_id, alt, href?}"}},
-		},
-		{
-			BlockType: "code_block",
-			Use:       "Monospace code presentation with optional language label. Use for technical-blog and developer-docs sites; not for executable code (atomicsite is static).",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "code", Label: "Code body", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "language", Label: "Language label (e.g. 'go', 'typescript')"}},
-		},
-		{
-			BlockType: "form",
-			Use:       "Basic HTML form. Browser POSTs to the action URL. Operator wires the receiving endpoint (a worker, Formspree, n8n webhook, etc.). For simple contact + lead-capture flows.",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}, {Key: "submit_label", Label: "Submit button label"}},
-			OtherKeys: []BlockSchemaField{
-				{Key: "action", Label: "Form POST URL"},
-				{Key: "method", Label: "HTTP method ('post' default; 'get' for query-string forms)"},
-				{Key: "fields", Label: "Array of {name, type ('text'|'email'|'tel'|'url'|'textarea'|'select'), label, placeholder?, required?, options?}"},
-			},
-		},
-		{
-			BlockType: "embed",
-			Use:       "iframe wrapped in 16:9 aspect-ratio container. Use for cal.com bookings, YouTube videos, Stripe Checkout, Typeform. The src host MUST be in trusted_domains (kind=frame) — admin grants via /sites/{id}/settings/allowed-scripts.",
-			TextKeys:  []BlockSchemaField{{Key: "heading", Label: "Heading"}, {Key: "title", Label: "iframe title (a11y)"}},
-			OtherKeys: []BlockSchemaField{{Key: "src", Label: "iframe src URL"}, {Key: "aspect_ratio", Label: "Aspect ratio (default '16/9')"}},
-		},
-		{
-			BlockType: "logo_carousel",
-			Use:       "Horizontal infinite-scroll marquee of customer / partner logos. Pure CSS animation (no JS). Loop is seamless via duplicated track. Pauses on hover. Use under hero on a real production marketing site to anchor trust before the first feature section. Each item supports a media image OR a text mark when no logo image is available.",
-			TextKeys:  []BlockSchemaField{{Key: "label", Label: "Eyebrow label (e.g. 'Trusted by')"}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {image_id, alt, label?, href?} OR {label, href?} for text marks"}},
-		},
-		{
-			BlockType: "replacement_grid",
-			Use:       "Bento-style grid showing 'old → new' replacement cards. Each card has the SaaS being replaced with strikethrough on the 'from' name + arrow + bold replacement, plus a short description. Some items can span 2 columns via items[i].span='wide' to break up the grid rhythm. Used by SaaS-alternative / migration / before-after marketing pages.",
-			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}, {Key: "footer", Label: "Footer line under the grid"}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {from, to, description, span?} where span='wide' makes the card 2-col"}},
-		},
-		{
-			BlockType: "process_steps",
-			Use:       "4-up numbered grid for 'How it works' / 'Our process' / 'Get started in 4 steps' sections. Each step shows a big primary-coloured numeral + h3 title + body. Counts as a list (>=3 items) for the AI-Friendly Formatting eval check.",
-			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "subheading", Label: "Subheading", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "items", Label: "Array of {number, title, description}"}},
-		},
-		{
-			BlockType: "about_split",
-			Use:       "Side-by-side founder / about section: text left + photo right (stacks on mobile). Optional stats row + secondary text link CTA below the body. Use for founder bios, About pages, team intros — anywhere a personal photo paired with narrative is the right shape.",
-			TextKeys:  []BlockSchemaField{{Key: "eyebrow", Label: "Eyebrow"}, {Key: "heading", Label: "Heading"}, {Key: "cta_text", Label: "Secondary link text"}, {Key: "image_alt", Label: "Photo alt text"}},
-			OtherKeys: []BlockSchemaField{{Key: "paragraphs", Label: "Array of paragraph strings"}, {Key: "image_id", Label: "Photo media id"}, {Key: "image_position", Label: "'right' (default) | 'left'"}, {Key: "stats", Label: "Array of {value, label}"}, {Key: "cta_url", Label: "Secondary link URL"}},
-		},
-		{
-			BlockType: "custom",
-			Use:       "Agnostic escape-hatch block. The agent writes arbitrary markup (atomicsite design tokens + utility classes available); atomicsite emits it verbatim wrapped in a <section> with auto-id from the block's name. Use when a customer needs a layout that doesn't fit the typed templates. Atomicsite still applies eval guardrails (no inline scripts via CSP, no plaintext emails, alt-text required on images).",
-			TextKeys:  []BlockSchemaField{{Key: "name", Label: "Block name (also drives the auto-id)"}, {Key: "eyebrow", Label: "Optional eyebrow above the markup"}},
-			OtherKeys: []BlockSchemaField{{Key: "markup", Label: "Full HTML for the section body. Tailwind classes work once the site enables Tailwind in its build pipeline; for now, use atomicsite's CSS variables + utility classes (.btn-primary, .btn-secondary, .btn-accent, .actions, .container, .feature-grid, .stat-grid, etc.)"}, {Key: "props", Label: "Optional metadata object the agent reads at edit time"}},
-		},
-		{
-			BlockType: "raw_astro",
-			Use:       "RAW Astro/HTML/Tailwind code block. The escape hatch when typed primitives can't reach pixel parity (e.g. cloning a specific reference hero exactly, building a bespoke hero with custom layout, embedding a Svelte island with specific markup). Author writes the full markup; atomicsite emits it verbatim into the page Astro source — no auto-section-id, no alternating-bg, no eyebrow CSS, no accent-span helper. Author owns every pixel. Use sparingly — typed primitives carry render polish for free; raw_astro starts from zero. If the code has a syntax error, trigger_build returns the Astro error log so the agent can fix.",
-			TextKeys:  []BlockSchemaField{{Key: "code", Label: "Full Astro/HTML/Tailwind markup. Wrapped in a <section> only if the code doesn't already start with one. Tailwind utility classes work; atomicsite's design tokens (--color-text, --color-primary, --font-heading, etc.) are available; data-circuit-canvas activates the platform's animated bg. NO inline <script> (blocked by CSP); for JS use a registered Svelte island via the component block_type instead.", Multiline: true}},
-			OtherKeys: []BlockSchemaField{{Key: "class", Label: "Optional class added to the auto-section wrapper (only applies when the code doesn't already begin with a section/header/footer/nav/article/aside/main/div tag)"}},
-		},
-	}
+	return out
 }
+
 
 // defaultEditingModes documents the two authoring surfaces on the page
 // editor. The agent uses these to phrase its responses ("toggle to Text

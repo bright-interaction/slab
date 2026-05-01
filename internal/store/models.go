@@ -29,6 +29,7 @@ type Block struct {
 	ID              string `json:"id"`
 	PageID          string `json:"page_id"`
 	BlockType       string `json:"block_type"`
+	Name            string `json:"name"`
 	SortOrder       int64  `json:"sort_order"`
 	DataJson        string `json:"data_json"`
 	StyleJson       string `json:"style_json"`

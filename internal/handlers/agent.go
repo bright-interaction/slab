@@ -300,6 +300,7 @@ func (h *AgentHandler) CreateBlock(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		BlockType string `json:"block_type"`
+		Name      string `json:"name"`
 		Data      any    `json:"data"`
 		Style     any    `json:"style"`
 		SortOrder *int64 `json:"sort_order"`
@@ -338,6 +339,7 @@ func (h *AgentHandler) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		ID:        id,
 		PageID:    page.ID,
 		BlockType: req.BlockType,
+		Name:      req.Name,
 		DataJson:  dataStr,
 		StyleJson: styleStr,
 		SortOrder: sortOrder,
@@ -371,6 +373,7 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		BlockType *string `json:"block_type"`
+		Name      *string `json:"name"`
 		Data      any     `json:"data"`
 		Style     any     `json:"style"`
 		IsVisible *int64  `json:"is_visible"`
@@ -384,6 +387,10 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	blockType := existing.BlockType
 	if req.BlockType != nil {
 		blockType = *req.BlockType
+	}
+	name := existing.Name
+	if req.Name != nil {
+		name = *req.Name
 	}
 	dataStr := existing.DataJson
 	if req.Data != nil {
@@ -414,6 +421,7 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	err = h.queries.UpdateBlock(r.Context(), store.UpdateBlockParams{
 		ID:        blockID,
 		BlockType: blockType,
+		Name:      name,
 		SortOrder: sortOrder,
 		DataJson:  dataStr,
 		StyleJson: styleStr,

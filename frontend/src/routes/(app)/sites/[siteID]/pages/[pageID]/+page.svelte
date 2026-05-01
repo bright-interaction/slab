@@ -198,6 +198,7 @@
 			const payload = editorState.blocks.map((b, i) => ({
 				id: b.id || undefined,
 				block_type: b.block_type,
+				name: b.name || '',
 				sort_order: i,
 				data: safeParseJson(b.data_json),
 				style: safeParseJson(b.style_json),

@@ -79,6 +79,7 @@ export interface Block {
 	id: string;
 	page_id: string;
 	block_type: string;
+	name: string;
 	sort_order: number;
 	data_json: JsonText;
 	style_json: JsonText;
@@ -86,6 +87,46 @@ export interface Block {
 	template_version: number;
 	created_at: Timestamp;
 	updated_at: Timestamp;
+}
+
+export type BlockFieldKind =
+	| 'text'
+	| 'textarea'
+	| 'richtext'
+	| 'url'
+	| 'image_id'
+	| 'select'
+	| 'bool'
+	| 'number'
+	| 'array'
+	| 'object';
+
+export interface BlockSchemaField {
+	key: string;
+	label: string;
+	kind: BlockFieldKind;
+	placeholder?: string;
+	help?: string;
+	required?: boolean;
+	options?: { value: string; label: string }[];
+	item_schema?: BlockSchemaField[];
+	fields?: BlockSchemaField[];
+}
+
+export interface BlockSchema {
+	type: string;
+	label: string;
+	description: string;
+	category: string;
+	fields: BlockSchemaField[];
+}
+
+export interface BlockPreviewHTML {
+	block_id: string;
+	block_type: string;
+	html: string;
+	css: string;
+	font_face: string;
 }
 
 export interface HeroBlockData {

@@ -1,26 +1,30 @@
-<script lang="ts" module>
-	export type BlockTypeOption = {
-		type: string;
-		label: string;
-		description: string;
-	};
-
-	export const BLOCK_TYPE_OPTIONS: BlockTypeOption[] = [
-		{ type: 'hero', label: 'Hero', description: 'Top-of-page banner with headline and CTA.' },
-		{ type: 'text', label: 'Text', description: 'Rich paragraph or markdown body.' },
-		{ type: 'image', label: 'Image', description: 'Single image with alt and caption.' },
-		{ type: 'cta', label: 'Call to action', description: 'Headline, body, primary button.' },
-		{
-			type: 'feature_grid',
-			label: 'Feature grid',
-			description: 'Repeating cards with icon and copy.'
-		}
-	];
-</script>
-
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Popover } from 'bits-ui';
-	import { Plus, Sparkles, Type, Image as ImageIcon, MousePointerClick, LayoutGrid } from 'lucide-svelte';
+	import {
+		Plus,
+		Sparkles,
+		Type,
+		Image as ImageIcon,
+		MousePointerClick,
+		LayoutGrid,
+		BarChart3,
+		Quote,
+		HelpCircle,
+		Tag,
+		Code2,
+		ListOrdered,
+		Receipt,
+		Repeat,
+		ImagePlay,
+		User,
+		FormInput,
+		Frame,
+		FileCode2,
+		Wand2
+	} from 'lucide-svelte';
+	import * as blocksApi from '$lib/api/blocks';
+	import type { BlockSchema } from '$lib/api/types';
 
 	let {
 		onPick,
@@ -31,6 +35,27 @@
 	} = $props();
 
 	let open = $state(false);
+	let schemas = $state<BlockSchema[]>([]);
+	let loaded = $state(false);
+	let error = $state<string | null>(null);
+
+	onMount(() => {
+		blocksApi
+			.schemas()
+			.then((all) => {
+				schemas = all
+					.filter((s) => s.type !== 'header' && s.type !== 'footer')
+					.sort((a, b) => {
+						if (a.category === b.category) return a.label.localeCompare(b.label);
+						return a.category.localeCompare(b.category);
+					});
+				loaded = true;
+			})
+			.catch((err) => {
+				error = err instanceof Error ? err.message : 'Failed to load block types';
+				loaded = true;
+			});
+	});
 
 	function pick(type: string) {
 		open = false;
@@ -41,6 +66,8 @@
 		switch (type) {
 			case 'hero':
 				return Sparkles;
+			case 'split_hero':
+				return Wand2;
 			case 'text':
 				return Type;
 			case 'image':
@@ -49,10 +76,52 @@
 				return MousePointerClick;
 			case 'feature_grid':
 				return LayoutGrid;
+			case 'stat_grid':
+				return BarChart3;
+			case 'quote':
+				return Quote;
+			case 'accordion_faq':
+				return HelpCircle;
+			case 'pricing':
+				return Tag;
+			case 'code_block':
+				return Code2;
+			case 'process_steps':
+				return ListOrdered;
+			case 'replacement_grid':
+				return Repeat;
+			case 'logo_strip':
+				return Receipt;
+			case 'logo_carousel':
+				return ImagePlay;
+			case 'about_split':
+				return User;
+			case 'form':
+				return FormInput;
+			case 'embed':
+				return Frame;
+			case 'raw_astro':
+			case 'custom':
+				return FileCode2;
 			default:
 				return Plus;
 		}
 	}
+
+	type Group = { name: string; items: BlockSchema[] };
+
+	const grouped = $derived<Group[]>(
+		schemas.reduce<Group[]>((acc, s) => {
+			const cat = s.category || 'other';
+			let g = acc.find((x) => x.name === cat);
+			if (!g) {
+				g = { name: cat, items: [] };
+				acc.push(g);
+			}
+			g.items.push(s);
+			return acc;
+		}, [])
+	);
 </script>
 
 <Popover.Root bind:open>
@@ -67,32 +136,43 @@
 		<Popover.Content
 			sideOffset={8}
 			align="center"
-			class="z-[110] w-[28rem] rounded-xl border border-border bg-bg-surface p-3 shadow-xl focus:outline-none data-[state=open]:animate-fadeIn"
+			class="z-[110] max-h-[36rem] w-[34rem] overflow-y-auto rounded-xl border border-border bg-bg-surface p-3 shadow-xl focus:outline-none data-[state=open]:animate-fadeIn"
 		>
 			<p class="px-1 pb-2 text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 				Choose block type
 			</p>
-			<div class="grid grid-cols-2 gap-2">
-				{#each BLOCK_TYPE_OPTIONS as opt (opt.type)}
-					{@const Icon = iconFor(opt.type)}
-					<button
-						type="button"
-						aria-label={opt.label}
-						class="flex items-start gap-3 rounded-lg border border-border-light bg-bg p-3 text-left transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-						onclick={() => pick(opt.type)}
-					>
-						<span
-							class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-bg-elevated text-text-secondary"
-						>
-							<Icon class="h-3.5 w-3.5" />
-						</span>
-						<span class="flex min-w-0 flex-col gap-0.5">
-							<span class="text-[13px] font-medium text-text-primary">{opt.label}</span>
-							<span class="text-[11px] leading-snug text-text-muted">{opt.description}</span>
-						</span>
-					</button>
+			{#if !loaded}
+				<p class="px-1 py-3 text-[12px] text-text-muted">Loading…</p>
+			{:else if error}
+				<p class="px-1 py-3 text-[12px] text-danger">{error}</p>
+			{:else}
+				{#each grouped as group (group.name)}
+					<p class="mt-2 px-1 pb-1 text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-muted">
+						{group.name}
+					</p>
+					<div class="grid grid-cols-2 gap-2">
+						{#each group.items as opt (opt.type)}
+							{@const Icon = iconFor(opt.type)}
+							<button
+								type="button"
+								aria-label={opt.label}
+								class="flex items-start gap-3 rounded-lg border border-border-light bg-bg p-3 text-left transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+								onclick={() => pick(opt.type)}
+							>
+								<span
+									class="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-bg-elevated text-text-secondary"
+								>
+									<Icon class="h-3.5 w-3.5" />
+								</span>
+								<span class="flex min-w-0 flex-col gap-0.5">
+									<span class="text-[13px] font-medium text-text-primary">{opt.label}</span>
+									<span class="text-[11px] leading-snug text-text-muted">{opt.description}</span>
+								</span>
+							</button>
+						{/each}
+					</div>
 				{/each}
-			</div>
+			{/if}
 		</Popover.Content>
 	</Popover.Portal>
 </Popover.Root>

@@ -10,14 +10,15 @@ import (
 )
 
 const createBlock = `-- name: CreateBlock :exec
-INSERT INTO blocks (id, page_id, block_type, sort_order, data_json, style_json, is_visible)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO blocks (id, page_id, block_type, name, sort_order, data_json, style_json, is_visible)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateBlockParams struct {
 	ID        string `json:"id"`
 	PageID    string `json:"page_id"`
 	BlockType string `json:"block_type"`
+	Name      string `json:"name"`
 	SortOrder int64  `json:"sort_order"`
 	DataJson  string `json:"data_json"`
 	StyleJson string `json:"style_json"`
@@ -29,6 +30,7 @@ func (q *Queries) CreateBlock(ctx context.Context, arg CreateBlockParams) error 
 		arg.ID,
 		arg.PageID,
 		arg.BlockType,
+		arg.Name,
 		arg.SortOrder,
 		arg.DataJson,
 		arg.StyleJson,
@@ -56,7 +58,7 @@ func (q *Queries) DeleteBlocksByPage(ctx context.Context, pageID string) error {
 }
 
 const getBlockByID = `-- name: GetBlockByID :one
-SELECT id, page_id, block_type, sort_order, data_json, style_json, is_visible, template_version, created_at, updated_at FROM blocks WHERE id = ?
+SELECT id, page_id, block_type, name, sort_order, data_json, style_json, is_visible, template_version, created_at, updated_at FROM blocks WHERE id = ?
 `
 
 func (q *Queries) GetBlockByID(ctx context.Context, id string) (Block, error) {
@@ -66,6 +68,7 @@ func (q *Queries) GetBlockByID(ctx context.Context, id string) (Block, error) {
 		&i.ID,
 		&i.PageID,
 		&i.BlockType,
+		&i.Name,
 		&i.SortOrder,
 		&i.DataJson,
 		&i.StyleJson,
@@ -78,7 +81,7 @@ func (q *Queries) GetBlockByID(ctx context.Context, id string) (Block, error) {
 }
 
 const listBlocksByPage = `-- name: ListBlocksByPage :many
-SELECT id, page_id, block_type, sort_order, data_json, style_json, is_visible, template_version, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY sort_order ASC
+SELECT id, page_id, block_type, name, sort_order, data_json, style_json, is_visible, template_version, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY sort_order ASC
 `
 
 func (q *Queries) ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error) {
@@ -94,6 +97,7 @@ func (q *Queries) ListBlocksByPage(ctx context.Context, pageID string) ([]Block,
 			&i.ID,
 			&i.PageID,
 			&i.BlockType,
+			&i.Name,
 			&i.SortOrder,
 			&i.DataJson,
 			&i.StyleJson,
@@ -176,6 +180,7 @@ func (q *Queries) ListBlocksBySite(ctx context.Context, siteID string) ([]ListBl
 const updateBlock = `-- name: UpdateBlock :exec
 UPDATE blocks SET
     block_type = ?,
+    name = ?,
     sort_order = ?,
     data_json = ?,
     style_json = ?,
@@ -186,6 +191,7 @@ WHERE id = ?
 
 type UpdateBlockParams struct {
 	BlockType string `json:"block_type"`
+	Name      string `json:"name"`
 	SortOrder int64  `json:"sort_order"`
 	DataJson  string `json:"data_json"`
 	StyleJson string `json:"style_json"`
@@ -196,6 +202,7 @@ type UpdateBlockParams struct {
 func (q *Queries) UpdateBlock(ctx context.Context, arg UpdateBlockParams) error {
 	_, err := q.db.ExecContext(ctx, updateBlock,
 		arg.BlockType,
+		arg.Name,
 		arg.SortOrder,
 		arg.DataJson,
 		arg.StyleJson,

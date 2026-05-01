@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from './client';
-import type { Block } from './types';
+import type { Block, BlockPreviewHTML, BlockSchema } from './types';
 
 export interface BlocksListResponse {
 	blocks: Block[];
@@ -7,6 +7,7 @@ export interface BlocksListResponse {
 
 export interface CreateBlockInput {
 	block_type: string;
+	name?: string;
 	data?: unknown;
 	style?: unknown;
 	sort_order?: number;
@@ -14,6 +15,7 @@ export interface CreateBlockInput {
 
 export interface UpdateBlockPatch {
 	block_type?: string;
+	name?: string;
 	data?: unknown;
 	style?: unknown;
 	sort_order?: number;
@@ -23,6 +25,7 @@ export interface UpdateBlockPatch {
 export interface BulkSaveBlock {
 	id?: string;
 	block_type: string;
+	name?: string;
 	sort_order: number;
 	data?: unknown;
 	style?: unknown;
@@ -82,4 +85,25 @@ export function preview(
 	blockID: string
 ): Promise<BlockPreview> {
 	return apiGet<BlockPreview>(`/sites/${siteID}/pages/${pageID}/blocks/${blockID}/preview`);
+}
+
+export function previewHTML(
+	siteID: string,
+	pageID: string,
+	blockID: string,
+	draft: { block_type?: string; data?: unknown }
+): Promise<BlockPreviewHTML> {
+	return apiPost<BlockPreviewHTML>(
+		`/sites/${siteID}/pages/${pageID}/blocks/${blockID}/preview-html`,
+		draft
+	);
+}
+
+let schemasCache: Promise<BlockSchema[]> | null = null;
+
+export function schemas(): Promise<BlockSchema[]> {
+	if (!schemasCache) {
+		schemasCache = apiGet<{ schemas: BlockSchema[] }>(`/blocks/schemas`).then((r) => r.schemas);
+	}
+	return schemasCache;
 }

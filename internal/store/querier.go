@@ -161,6 +161,11 @@ type Querier interface {
 	// Allowed scripts
 	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
+	// Audit H1: single-query alternative to "list pages, loop with
+	// ListBlocksByPage". Returns every block for the site joined with its
+	// page id; caller groups by page_id in Go. Removes the N+1 pattern in
+	// agent context Build.
+	ListBlocksBySite(ctx context.Context, siteID string) ([]ListBlocksBySiteRow, error)
 	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
 	ListConsentBySite(ctx context.Context, arg ListConsentBySiteParams) ([]ConsentRecord, error)
