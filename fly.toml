@@ -1,0 +1,57 @@
+# Atomic Site: Fly.io reference deploy
+#
+# Replace `your-atomicsite-app` with your Fly app name. EU sovereign
+# default region (fra = Frankfurt); change to your closest region.
+#
+# Before first deploy, set the secrets:
+#   fly secrets set \
+#     JWT_SECRET=$(openssl rand -hex 32) \
+#     ANALYTICS_SALT=$(openssl rand -hex 32) \
+#     ATOMICSITE_PRIMARY_DOMAIN=example.com \
+#     BASE_URL=https://your-atomicsite-app.fly.dev \
+#     ADMIN_PASSWORD=$(openssl rand -hex 16)
+#
+# This config uses the repo's Dockerfile which expects the parent build
+# context (it pulls in the sibling CookieProof checkout for the embedded
+# widget). For a clean Fly deploy from a fork that only contains
+# atomicsite/, swap to a single-stage Dockerfile. See README.md.
+
+app = "your-atomicsite-app"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATA_DIR = "/data"
+  ATOMICSITE_DEPLOYMENT_MODE = "single"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 100
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[mounts]]
+  source = "atomicsite_data"
+  destination = "/data"
+  initial_size = "5gb"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"

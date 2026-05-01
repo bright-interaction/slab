@@ -1,0 +1,115 @@
+# Atomic Site: OSS CI
+#
+# Fast feedback loop on every PR: vet + tests on the OSS build,
+# vet + tests on the cloud (ee) build, and a frontend build.
+# The slower Playwright E2E suite lives in e2e.yml.
+#
+# Notes:
+# - The analyticsdb package uses marcboeker/go-duckdb/v2 which requires
+#   CGO and a C++ toolchain. ubuntu-latest already has build-essential.
+# - Tests run with -race -count=1 to catch data races and avoid stale
+#   cached results.
+
+name: Atomicsite OSS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'atomicsite/**'
+  pull_request:
+    paths:
+      - 'atomicsite/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: atomicsite
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        build_tags: ['', 'ee']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: atomicsite/go.mod
+          cache: true
+          cache-dependency-path: atomicsite/go.sum
+
+      - name: Install C++ toolchain (DuckDB CGO)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends build-essential
+
+      - name: go vet (tags=${{ matrix.build_tags }})
+        run: go vet -tags='${{ matrix.build_tags }}' ./...
+
+      - name: go test (tags=${{ matrix.build_tags }})
+        run: go test -tags='${{ matrix.build_tags }}' -race -count=1 ./...
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install frontend deps
+        working-directory: atomicsite/frontend
+        run: bun install --frozen-lockfile
+
+      - name: Build SvelteKit admin SPA
+        working-directory: atomicsite/frontend
+        run: bun run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomicsite-frontend-build
+          path: atomicsite/frontend/build/
+          retention-days: 7
+
+  go-build:
+    needs: [go-test, frontend-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: atomicsite/go.mod
+          cache: true
+          cache-dependency-path: atomicsite/go.sum
+
+      - name: Install C++ toolchain (DuckDB CGO)
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends build-essential
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: atomicsite-frontend-build
+          path: atomicsite/cmd/server/frontend/build/
+
+      - name: Build Go binary (OSS)
+        run: go build -o bin/atomicsite ./cmd/server
+
+      - name: Build Go binary (cloud, -tags ee)
+        run: go build -tags ee -o bin/atomicsite-cloud ./cmd/server
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: atomicsite-binaries
+          path: |
+            atomicsite/bin/atomicsite
+            atomicsite/bin/atomicsite-cloud
+          retention-days: 7

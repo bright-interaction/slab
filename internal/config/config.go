@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/brightinteraction/atomicsite/ee"
 )
 
 // Default sentinel values. The Validate() guard refuses to start in
@@ -17,6 +19,13 @@ const (
 	DefaultJWTSecret     = "change-me-in-production"
 	DefaultAnalyticsSalt = "atomicsite-default-fingerprint-salt-change-me"
 	DefaultAdminPassword = "changeme123"
+)
+
+// DeploymentMode values. The OSS distribution defaults to "single";
+// "cloud" requires a binary built with -tags ee.
+const (
+	DeploymentModeSingle = "single"
+	DeploymentModeCloud  = "cloud"
 )
 
 type Config struct {
@@ -54,12 +63,35 @@ type Config struct {
 	// engine can push a new pair without a container restart.
 	AdminReloadToken string
 
-	// Bidirectional CRM personalization (Phase 18). Built sites live on
-	// subdomains of BuiltSiteSuffix (default ".atomicsite.example.com")
-	// and need to reach /t/visitor + /t/inbound on the admin host. The CORS
-	// middleware (server.go isAllowedOrigin) widens to accept any origin
-	// whose hostname ends with this suffix.
+	// PrimaryDomain is the apex domain this Atomic Site instance serves
+	// (e.g. "example.com"). Empty for local dev or for deployments that
+	// host many unrelated tenants. When set, it surfaces in the agent
+	// context as the canonical "what domain am I building for?" answer
+	// and seeds defaults for fresh sites (cookieproof_domain, default
+	// canonical base, CORS allow-list). Read from the
+	// ATOMICSITE_PRIMARY_DOMAIN environment variable.
+	PrimaryDomain string
+
+	// BuiltSiteSuffix is set ONLY for multi-tenant deployments where
+	// each Atomic Site tenant gets a wildcard subdomain (the original
+	// Bright Interaction demo shape: every tenant lives at
+	// <slug>.atomicsite.example.com). The CORS middleware
+	// (server.go isAllowedOriginForPath) widens to accept any origin
+	// whose hostname ends with this suffix on public visitor paths.
+	//
+	// Empty by default. The typical single-deployment-per-customer
+	// shape leaves it unset; PrimaryDomain takes its place for any
+	// deployment that serves a single root domain. Read from the
+	// BUILT_SITE_SUFFIX environment variable.
 	BuiltSiteSuffix string
+
+	// DeploymentMode selects the operating shape: "single" (the OSS
+	// default, one Atomic Site instance for one root domain) or
+	// "cloud" (multi-tenant edge orchestration, requires a binary
+	// built with -tags ee). Read from ATOMICSITE_DEPLOYMENT_MODE.
+	// Validate() rejects unknown values and refuses to start in
+	// "cloud" mode when ee.IsAvailable() returns false.
+	DeploymentMode string
 }
 
 func Load() *Config {
@@ -84,7 +116,9 @@ func Load() *Config {
 		AdminReloadToken:               envOr("ADMIN_RELOAD_TOKEN", ""),
 		CRMSyncMinInterval:     time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
 
-		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ".atomicsite.example.com"),
+		PrimaryDomain:   envOr("ATOMICSITE_PRIMARY_DOMAIN", ""),
+		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ""),
+		DeploymentMode:  envOr("ATOMICSITE_DEPLOYMENT_MODE", DeploymentModeSingle),
 	}
 }
 
@@ -103,6 +137,25 @@ func Load() *Config {
 // permissive behaviour so contributors don't have to set five env vars
 // to run `go test` or `go run`.
 func (c *Config) Validate() error {
+	// Deployment-mode validation runs even on localhost: a misspelt mode
+	// or "cloud" on an OSS binary should fail loudly regardless of where
+	// the operator is running it. Localhost still bypasses the secret /
+	// HTTPS / domain guards below.
+	mode := strings.TrimSpace(c.DeploymentMode)
+	if mode == "" {
+		mode = DeploymentModeSingle
+	}
+	switch mode {
+	case DeploymentModeSingle:
+		// always fine
+	case DeploymentModeCloud:
+		if !ee.IsAvailable() {
+			return fmt.Errorf("ATOMICSITE_DEPLOYMENT_MODE=%s requires a binary built with -tags ee; this is the OSS build", mode)
+		}
+	default:
+		return fmt.Errorf("ATOMICSITE_DEPLOYMENT_MODE=%q is not a recognised value; use %q or %q", mode, DeploymentModeSingle, DeploymentModeCloud)
+	}
+
 	if c.IsLocalDev() {
 		return nil
 	}
@@ -125,6 +178,17 @@ func (c *Config) Validate() error {
 	// "doesn't stick". Fail fast with the right error message.
 	if !strings.HasPrefix(c.BaseURL, "https://") {
 		problems = append(problems, fmt.Sprintf("BASE_URL=%q is not HTTPS; production deployments must serve over TLS or sessions will not persist", c.BaseURL))
+	}
+
+	// Either ATOMICSITE_PRIMARY_DOMAIN (single-root-domain shape, the
+	// typical SaaS deploy) or BUILT_SITE_SUFFIX (legacy multi-tenant
+	// subdomain shape) must be set in production. Both unset means the
+	// operator hasn't told Atomic Site which domain it's responsible
+	// for, and any defaults we'd seed for fresh sites would be wrong.
+	// Allowing both is fine: PrimaryDomain seeds the canonical site,
+	// BuiltSiteSuffix widens CORS for legacy subdomain tenancy.
+	if strings.TrimSpace(c.PrimaryDomain) == "" && strings.TrimSpace(c.BuiltSiteSuffix) == "" {
+		problems = append(problems, "ATOMICSITE_PRIMARY_DOMAIN is unset; set it to the apex domain this Atomic Site instance serves (e.g. ATOMICSITE_PRIMARY_DOMAIN=example.com). Multi-tenant deployments that use wildcard subdomains may set BUILT_SITE_SUFFIX instead.")
 	}
 
 	if len(problems) > 0 {

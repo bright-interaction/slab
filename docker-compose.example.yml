@@ -1,0 +1,50 @@
+# Atomic Site: OSS reference Docker Compose
+#
+# This file is the OSS-friendly example. It expects you to run from the
+# atomicsite/ directory only (no parent-context coupling to a sibling
+# CookieProof checkout). The CookieProof widget is already embedded into
+# the binary at compile time, so no extra build context is needed.
+#
+# Bright Interaction's production deployment uses docker-compose.yml in
+# this same directory, which is wired for the BI multi-tenant edge with
+# host bind-mounts to /srv/atomicsite and /var/log/atomicsite. Don't
+# copy that file for self-host; copy this one.
+#
+# Quickstart:
+#   cp .env.example .env       # fill in JWT_SECRET, ANALYTICS_SALT,
+#                              # ATOMICSITE_PRIMARY_DOMAIN, ADMIN_PASSWORD
+#   docker compose -f docker-compose.example.yml up --build
+
+services:
+  atomicsite:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atomicsite
+    restart: unless-stopped
+    ports:
+      # Public on the host. Put a TLS-terminating proxy (Caddy, nginx,
+      # Traefik) in front for production.
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      PORT: "8080"
+      DATA_DIR: /data
+      ATOMICSITE_DEPLOYMENT_MODE: single
+    volumes:
+      # SQLite database, uploaded media, self-hosted woff2 fonts.
+      - atomicsite-data:/data
+      # Built-site dist output. Mount this to whatever path your edge
+      # serves from. Defaults to a named volume so first run "just works".
+      - atomicsite-dist:/srv/atomicsite
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  atomicsite-data:
+  atomicsite-dist:
