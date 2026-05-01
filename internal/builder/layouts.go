@@ -164,7 +164,9 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	// GA4 emit only when the operator explicitly opts in.
 	analytics := resolveAnalyticsConfig(site, settingsMap)
 	if analytics.UmamiEnabled && analytics.UmamiURL != "" && analytics.UmamiSiteID != "" {
-		b.WriteString(fmt.Sprintf("  <script defer src=\"%s/script.js\" data-website-id=\"%s\"></script>\n", analytics.UmamiURL, analytics.UmamiSiteID))
+		// is:inline keeps Astro from rewriting the tag into a module
+		// (which would defer it past CookieProof's expectations).
+		b.WriteString(fmt.Sprintf("  <script is:inline defer src=\"%s/script.js\" data-website-id=\"%s\"></script>\n", analytics.UmamiURL, analytics.UmamiSiteID))
 	}
 	if analytics.GA4Enabled && analytics.GA4ID != "" {
 		// gtag.js + GA4 config. Emitted as an honest static snippet (no consent
@@ -174,8 +176,8 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		// on every visit (legitimate-interest aligned with the always-on log
 		// tail). Operators who want hard consent gating should keep
 		// CookieProof on; that is the documented setup.
-		b.WriteString(fmt.Sprintf("  <script async src=\"https://www.googletagmanager.com/gtag/js?id=%s\"></script>\n", escapeAttr(analytics.GA4ID)))
-		b.WriteString("  <script>\n")
+		b.WriteString(fmt.Sprintf("  <script is:inline async src=\"https://www.googletagmanager.com/gtag/js?id=%s\"></script>\n", escapeAttr(analytics.GA4ID)))
+		b.WriteString("  <script is:inline>\n")
 		b.WriteString("    window.dataLayer = window.dataLayer || [];\n")
 		b.WriteString("    function gtag(){dataLayer.push(arguments);}\n")
 		b.WriteString("    gtag('js', new Date());\n")
@@ -206,7 +208,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		// Drop the same-origin widget bundle into public/. Failure here is
 		// fatal .  the snippet references the file, so a missing asset would
 		// 404 in production and the banner would never render.
-		if err := WriteCookieProofWidgetAsset(wsDir); err != nil {
+		if err := WriteCookieProofWidgetAsset(wsDir, cpCfg); err != nil {
 			return fmt.Errorf("write cookieproof widget asset: %w", err)
 		}
 	}
@@ -291,6 +293,11 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	// posture as the always-on nginx log tail).
 	if boolSetting(settingsMap["analytics.engagement_enabled"], true) {
 		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
+		// Write the per-site asset so the script tag below has a file
+		// to load. CSP `script-src 'self'` rejects the inline form.
+		if err := WriteEngagementBeaconAsset(wsDir, site.ID, trackPath, cookieProofEnabled); err != nil {
+			return fmt.Errorf("write engagement beacon asset: %w", err)
+		}
 		b.WriteString(RenderEngagementBeacon(site.ID, trackPath, cookieProofEnabled))
 	}
 
@@ -301,6 +308,12 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	if boolSetting(settingsMap["analytics.personalization_enabled"], false) {
 		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
 		adminBase := orDefault(settingsMap["analytics.admin_base_url"], DefaultAdminBaseURL)
+		// Same CSP-driven externalization pattern as the engagement
+		// beacon: write the per-site script to public/, reference via
+		// same-origin <script src>.
+		if err := WriteVisitorHydrationAsset(wsDir, site.ID, adminBase, trackPath); err != nil {
+			return fmt.Errorf("write visitor hydration asset: %w", err)
+		}
 		b.WriteString(RenderVisitorHydration(site.ID, adminBase, trackPath))
 	}
 
@@ -309,22 +322,18 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	return WriteFile(filepath.Join(wsDir, "src", "layouts", "Base.astro"), b.String())
 }
 
-// RenderEngagementBeacon emits a small inline <script> that records JS-only
-// engagement metrics and posts them via navigator.sendBeacon() to
-// /t/engagement on visibilitychange or pagehide. Pure vanilla JS, no deps,
-// ~1.5KB minified-ish. Site ID and track path are baked in at build time.
-//
-// When consentGated=true the script waits for a `consent:init` event from
-// the CookieProof relay with analytics=true before allowing sends. Without
-// CookieProof there's no banner to gate on, so the beacon fires by default
-// (matches the always-on nginx log tail posture).
-func RenderEngagementBeacon(siteID, trackPath string, consentGated bool) string {
+// EngagementBeaconScript returns the JS body that records JS-only
+// engagement metrics + posts via navigator.sendBeacon. Pure vanilla
+// JS, no deps. Site ID + track path are baked in at build time. The
+// content is written to a per-site asset by WriteEngagementBeaconAsset
+// so the page can reference it via `<script src>` instead of inline
+// (which CSP `script-src 'self'` blocks without a hash).
+func EngagementBeaconScript(siteID, trackPath string, consentGated bool) string {
 	defaultAllowed := "true"
 	if consentGated {
 		defaultAllowed = "false"
 	}
-	return fmt.Sprintf(`  <script>
-(function(){
+	return fmt.Sprintf(`(function(){
   var SITE_ID=%q;var TRACK_PATH=%q;var ALLOWED=%s;
   var t0=performance.now();var maxScroll=0;
   function pct(){var d=document.documentElement;var sh=Math.max(d.scrollHeight,d.clientHeight);if(sh<=0)return 0;var v=window.scrollY+d.clientHeight;var p=Math.round(v*100/sh);return p>100?100:(p<0?0:p);}
@@ -339,8 +348,32 @@ func RenderEngagementBeacon(siteID, trackPath string, consentGated bool) string 
   document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")send();});
   window.addEventListener("pagehide",send);
 })();
-  </script>
 `, siteID, trackPath, defaultAllowed)
+}
+
+// EngagementBeaconAssetName is the filename written to public/. Stable
+// across builds so cache-busting comes from query string when needed
+// (the script is small + per-site).
+const EngagementBeaconAssetName = "_atomic-engagement.js"
+
+// WriteEngagementBeaconAsset writes the per-site engagement-beacon JS
+// file to the workspace's public/ dir. Same-origin loadable, CSP
+// `script-src 'self'` allows it, no inline-hash gymnastics.
+func WriteEngagementBeaconAsset(workspaceDir, siteID, trackPath string, consentGated bool) error {
+	publicDir := filepath.Join(workspaceDir, "public")
+	if err := EnsureDir(publicDir); err != nil {
+		return fmt.Errorf("ensure public dir: %w", err)
+	}
+	target := filepath.Join(publicDir, EngagementBeaconAssetName)
+	return WriteFile(target, EngagementBeaconScript(siteID, trackPath, consentGated))
+}
+
+// RenderEngagementBeacon returns the <script> tag that loads the
+// per-site engagement asset. The asset itself is written by
+// WriteEngagementBeaconAsset during the layout build pass.
+func RenderEngagementBeacon(siteID, trackPath string, consentGated bool) string {
+	return fmt.Sprintf(`  <script is:inline defer src="/%s"></script>
+`, EngagementBeaconAssetName)
 }
 
 // buildOrganizationJSONLD emits a schema.org Organization JSON-LD blob from

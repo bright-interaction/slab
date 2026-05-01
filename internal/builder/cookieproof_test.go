@@ -7,13 +7,14 @@ import (
 	"github.com/bright-interaction/slab/internal/store"
 )
 
-// TestRenderCookieProofSnippet_HappyPath verifies the snippet emits an inline
-// config blob with the right siteId/domain/proofEndpoint, references the
-// content-addressed same-origin asset, and includes the synchronous GCM stub.
-// Crucially, it must NOT reference consent.example.com .  Atomic
-// Site is standalone for cookies after the fold-in.
+// TestRenderCookieProofSnippet_HappyPath verifies the snippet emits the
+// expected single same-origin script tag and that the per-site config
+// prefix carries siteId/domain/proofEndpoint/cssVars + GCM default-denied
+// stub. After 2026-05-01 the snippet became one tag; the config + GCM
+// stub moved into the per-site bundle so CSP `script-src 'self'` doesn't
+// have to allow inline.
 func TestRenderCookieProofSnippet_HappyPath(t *testing.T) {
-	out := RenderCookieProofSnippet(CookieProofConfig{
+	cfg := CookieProofConfig{
 		SiteID:    "abcdef0123456789abcdef01",
 		Domain:    "example.com",
 		Locale:    "sv",
@@ -22,57 +23,70 @@ func TestRenderCookieProofSnippet_HappyPath(t *testing.T) {
 			"--cc-bg":             "#FAFAFA",
 			"--cc-btn-primary-bg": "#0066CC",
 		},
-	})
-
-	if strings.Contains(out, "consent.example.com") {
-		t.Errorf("snippet must not reference consent.example.com: %s", out)
 	}
-	if !strings.Contains(out, `"siteId":"abcdef0123456789abcdef01"`) {
-		t.Errorf("missing siteId in inline config: %s", out)
-	}
-	if !strings.Contains(out, `"domain":"example.com"`) {
-		t.Errorf("missing domain in inline config: %s", out)
-	}
-	if !strings.Contains(out, `"proofEndpoint":"/t/consent"`) {
-		t.Errorf("missing proofEndpoint in inline config: %s", out)
-	}
-	if !strings.Contains(out, `"--cc-bg":"#FAFAFA"`) {
-		t.Errorf("missing cssVars in inline config: %s", out)
-	}
+	out := RenderCookieProofSnippet(cfg)
 	expectedAsset := "/" + CookieProofWidgetFilename()
 	if !strings.Contains(out, expectedAsset) {
 		t.Errorf("missing same-origin widget asset reference %q: %s", expectedAsset, out)
 	}
-	if !strings.Contains(out, "gtag('consent','default'") {
-		t.Errorf("missing GCM default-denied stub: %s", out)
+	if strings.Contains(out, "consent.example.com") {
+		t.Errorf("snippet must not reference consent.example.com: %s", out)
+	}
+	// Inline scripts moved to the per-site bundle. Validate the bundle
+	// prefix carries the config + GCM stub.
+	prefix, err := renderCookieProofConfigPrefix(cfg)
+	if err != nil {
+		t.Fatalf("config prefix: %v", err)
+	}
+	prefixStr := string(prefix)
+	if !strings.Contains(prefixStr, `"siteId":"abcdef0123456789abcdef01"`) {
+		t.Errorf("missing siteId in bundle prefix: %s", prefixStr)
+	}
+	if !strings.Contains(prefixStr, `"domain":"example.com"`) {
+		t.Errorf("missing domain in bundle prefix: %s", prefixStr)
+	}
+	if !strings.Contains(prefixStr, `"proofEndpoint":"/t/consent"`) {
+		t.Errorf("missing proofEndpoint in bundle prefix: %s", prefixStr)
+	}
+	if !strings.Contains(prefixStr, `"--cc-bg":"#FAFAFA"`) {
+		t.Errorf("missing cssVars in bundle prefix: %s", prefixStr)
+	}
+	if !strings.Contains(prefixStr, "gtag('consent','default'") {
+		t.Errorf("missing GCM default-denied stub in bundle prefix: %s", prefixStr)
 	}
 }
 
 // TestRenderCookieProofSnippet_DefaultsTrackPath confirms an empty trackPath
-// falls back to /t.
+// falls back to /t in the per-site bundle prefix.
 func TestRenderCookieProofSnippet_DefaultsTrackPath(t *testing.T) {
-	out := RenderCookieProofSnippet(CookieProofConfig{
+	prefix, err := renderCookieProofConfigPrefix(CookieProofConfig{
 		SiteID: "aaaaaaaaaaaaaaaaaaaaaaaa",
 		Domain: "example.com",
 	})
-	if !strings.Contains(out, `"proofEndpoint":"/t/consent"`) {
-		t.Errorf("expected default /t/consent: %s", out)
+	if err != nil {
+		t.Fatalf("config prefix: %v", err)
+	}
+	if !strings.Contains(string(prefix), `"proofEndpoint":"/t/consent"`) {
+		t.Errorf("expected default /t/consent: %s", string(prefix))
 	}
 }
 
 // TestRenderCookieProofSnippet_TrimsTrailingSlash ensures /t/ doesn't produce
 // /t//consent.
 func TestRenderCookieProofSnippet_TrimsTrailingSlash(t *testing.T) {
-	out := RenderCookieProofSnippet(CookieProofConfig{
+	prefix, err := renderCookieProofConfigPrefix(CookieProofConfig{
 		SiteID:    "aaaaaaaaaaaaaaaaaaaaaaaa",
 		Domain:    "example.com",
 		TrackPath: "/t/",
 	})
-	if strings.Contains(out, `"proofEndpoint":"/t//consent"`) {
-		t.Errorf("did not trim trailing slash: %s", out)
+	if err != nil {
+		t.Fatalf("config prefix: %v", err)
 	}
-	if !strings.Contains(out, `"proofEndpoint":"/t/consent"`) {
-		t.Errorf("expected /t/consent: %s", out)
+	if strings.Contains(string(prefix), `"proofEndpoint":"/t//consent"`) {
+		t.Errorf("did not trim trailing slash: %s", string(prefix))
+	}
+	if !strings.Contains(string(prefix), `"proofEndpoint":"/t/consent"`) {
+		t.Errorf("expected /t/consent: %s", string(prefix))
 	}
 }
 
@@ -87,11 +101,11 @@ func TestRenderCookieProofSnippet_EmptyArgs(t *testing.T) {
 	}
 }
 
-// TestRenderCookieProofSnippet_CopyOverrides confirms title/description/etc.
-// land in the inline config.copy object so the widget can use them as
-// translation overrides.
-func TestRenderCookieProofSnippet_CopyOverrides(t *testing.T) {
-	out := RenderCookieProofSnippet(CookieProofConfig{
+// TestCookieProofConfigPrefix_CopyOverrides confirms title/description/etc.
+// land in the bundle-prefix config.copy object so the widget uses them
+// as translation overrides.
+func TestCookieProofConfigPrefix_CopyOverrides(t *testing.T) {
+	prefix, err := renderCookieProofConfigPrefix(CookieProofConfig{
 		SiteID:        "aaaaaaaaaaaaaaaaaaaaaaaa",
 		Domain:        "example.com",
 		Title:         "Vi använder kakor",
@@ -99,6 +113,10 @@ func TestRenderCookieProofSnippet_CopyOverrides(t *testing.T) {
 		RejectLabel:   "Avvisa",
 		SettingsLabel: "Anpassa",
 	})
+	if err != nil {
+		t.Fatalf("config prefix: %v", err)
+	}
+	out := string(prefix)
 	if !strings.Contains(out, `"title":"Vi använder kakor"`) {
 		t.Errorf("missing title override: %s", out)
 	}
