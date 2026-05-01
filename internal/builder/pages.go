@@ -29,6 +29,29 @@ func RenderSingleBlock(ctx context.Context, queries *store.Queries, siteID, bloc
 	return renderBlock(block, componentNames, mediaByID), nil
 }
 
+// RenderBlockDraft renders a block using draft data (not the saved
+// data_json). Used by the live preview endpoint so the iframe reflects
+// in-progress edits before save. blockType + dataJSON come from the
+// editor; siteID resolves the component allowlist + media lookup.
+func RenderBlockDraft(ctx context.Context, queries *store.Queries, siteID, blockType, dataJSON string) (string, error) {
+	if dataJSON == "" {
+		dataJSON = "{}"
+	}
+	components, _ := queries.ListComponentsBySite(ctx, siteID)
+	componentNames := make(map[string]bool, len(components))
+	for _, c := range components {
+		componentNames[c.Name] = true
+	}
+	draft := store.Block{
+		BlockType: blockType,
+		DataJson:  dataJSON,
+		StyleJson: "{}",
+		IsVisible: 1,
+	}
+	mediaByID := loadBlockMedia(ctx, queries, []store.Block{draft})
+	return renderBlock(draft, componentNames, mediaByID), nil
+}
+
 // RenderPagePreview returns the rendered Astro source for a single page.
 // Same output renderPageWithContext produces during a build, but
 // materialised in-memory so the admin "View source" dialog can show the

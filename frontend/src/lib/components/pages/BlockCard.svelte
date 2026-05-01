@@ -2,7 +2,9 @@
 	import { untrack } from 'svelte';
 	import { GripVertical, ChevronDown, Trash2, Code, Copy, Check } from 'lucide-svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import BlockTypeForm from './BlockTypeForm.svelte';
+	import BlockPreview from '$lib/components/blocks/BlockPreview.svelte';
 	import * as blocksApi from '$lib/api/blocks';
 	import { toast } from '$lib/stores/toast.svelte';
 	import type { Block } from '$lib/api/types';
@@ -16,6 +18,7 @@
 		onToggleExpanded,
 		onToggleVisibility,
 		onDataChange,
+		onNameChange,
 		onDelete,
 		ondragstart,
 		ondragover,
@@ -30,6 +33,7 @@
 		onToggleExpanded: () => void;
 		onToggleVisibility: (visible: boolean) => void;
 		onDataChange: (nextDataJson: string) => void;
+		onNameChange: (nextName: string) => void;
 		onDelete: () => void;
 		ondragstart?: (e: DragEvent) => void;
 		ondragover?: (e: DragEvent) => void;
@@ -128,6 +132,12 @@
 	});
 
 	function summary(): string {
+		// User-set block name wins; falls through to the data_json text fields
+		// when name is blank so legacy blocks keep showing meaningful labels.
+		if (block.name && block.name.trim().length > 0) {
+			const clean = block.name.trim();
+			return clean.length > 60 ? `${clean.slice(0, 60)}.` : clean;
+		}
 		try {
 			const parsed = JSON.parse(block.data_json || '{}') as Record<string, unknown>;
 			// Try the most-distinctive text field for each block type. Order
@@ -239,11 +249,32 @@
 	</div>
 	{#if expanded}
 		<div class="border-t border-border-light px-4 py-4">
-			<BlockTypeForm
-				blockType={block.block_type}
-				dataJson={block.data_json || '{}'}
-				onChange={onDataChange}
-			/>
+			<div class="mb-4">
+				<Input
+					label="Block name"
+					hint="Shown in the editor card header. Independent of headings inside the block."
+					value={block.name || ''}
+					oninput={(e) => onNameChange((e.currentTarget as HTMLInputElement).value)}
+				/>
+			</div>
+			<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+				<div class="min-w-0">
+					<BlockTypeForm
+						blockType={block.block_type}
+						dataJson={block.data_json || '{}'}
+						onChange={onDataChange}
+					/>
+				</div>
+				<div class="min-w-0">
+					<BlockPreview
+						{siteID}
+						{pageID}
+						blockID={block.id}
+						blockType={block.block_type}
+						dataJson={block.data_json || '{}'}
+					/>
+				</div>
+			</div>
 		</div>
 	{/if}
 	{#if codeOpen}

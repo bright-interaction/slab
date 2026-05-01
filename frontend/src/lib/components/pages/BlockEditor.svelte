@@ -21,6 +21,7 @@
 	function clone(blocks: Block[]): EditableBlock[] {
 		return blocks.map((b, i) => ({
 			...b,
+			name: b.name || '',
 			data_json: b.data_json || '{}',
 			style_json: b.style_json || '{}',
 			sort_order: i,
@@ -50,6 +51,7 @@
 			list.map((b) => ({
 				id: b.id || '',
 				block_type: b.block_type,
+				name: b.name || '',
 				sort_order: b.sort_order,
 				data_json: b.data_json || '{}',
 				style_json: b.style_json || '{}',
@@ -65,6 +67,7 @@
 			id: b.id,
 			page_id: b.page_id,
 			block_type: b.block_type,
+			name: b.name || '',
 			sort_order: b.sort_order,
 			data_json: b.data_json,
 			style_json: b.style_json,
@@ -87,6 +90,7 @@
 			id: b.id,
 			page_id: b.page_id,
 			block_type: b.block_type,
+			name: b.name || '',
 			sort_order: b.sort_order,
 			data_json: b.data_json,
 			style_json: b.style_json,
@@ -157,6 +161,11 @@
 		blocks = next;
 	}
 
+	function setName(localId: string, name: string) {
+		const next = blocks.map((b) => (b._localId === localId ? { ...b, name } : b));
+		blocks = next;
+	}
+
 	function deleteBlock(localId: string) {
 		blocks = blocks
 			.filter((b) => b._localId !== localId)
@@ -170,6 +179,7 @@
 			id: '',
 			page_id: blocks[0]?.page_id ?? '',
 			block_type: type,
+			name: '',
 			sort_order: blocks.length,
 			data_json: '{}',
 			style_json: '{}',
@@ -207,6 +217,7 @@
 				onToggleExpanded={() => toggleExpanded(block._localId)}
 				onToggleVisibility={(v) => toggleVisibility(block._localId, v)}
 				onDataChange={(json) => setDataJson(block._localId, json)}
+				onNameChange={(name) => setName(block._localId, name)}
 				onDelete={() => deleteBlock(block._localId)}
 				ondragstart={(e) => handleDragStart(block._localId, e)}
 				ondragover={(e) => handleDragOver(block._localId, e)}

@@ -6,12 +6,14 @@
 		disabled = false,
 		id,
 		label,
+		onCheckedChange,
 		class: className = ''
 	}: {
 		checked?: boolean;
 		disabled?: boolean;
 		id?: string;
 		label?: string;
+		onCheckedChange?: (checked: boolean) => void;
 		class?: string;
 	} = $props();
 </script>
@@ -21,6 +23,10 @@
 		bind:checked
 		{disabled}
 		{id}
+		onCheckedChange={(c) => {
+			checked = c;
+			onCheckedChange?.(c);
+		}}
 		class="flex h-4 w-4 items-center justify-center rounded border-[1.5px] border-border bg-bg-elevated transition-colors data-[state=checked]:bg-accent data-[state=checked]:border-accent hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
 	>
 		{#snippet children({ checked: isChecked })}

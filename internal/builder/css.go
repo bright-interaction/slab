@@ -10,15 +10,29 @@ import (
 )
 
 // RenderCSS generates the global.css file from site branding and CSS classes.
+// Thin wrapper over BuildCSS — keeps file-write side effects out of the
+// string-builder so the per-block preview endpoint can serve the same
+// bytes without going through the workspace.
 func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir string) error {
+	css, err := BuildCSS(ctx, queries, siteID)
+	if err != nil {
+		return err
+	}
+	return WriteFile(filepath.Join(wsDir, "src", "styles", "global.css"), css)
+}
+
+// BuildCSS returns the global stylesheet for one site as a string. Same
+// bytes the build pipeline writes to disk via RenderCSS — used by the
+// per-block preview-html endpoint so the iframe matches production.
+func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (string, error) {
 	site, err := queries.GetSiteByID(ctx, siteID)
 	if err != nil {
-		return fmt.Errorf("get site: %w", err)
+		return "", fmt.Errorf("get site: %w", err)
 	}
 
 	classes, err := queries.ListCSSClassesBySite(ctx, siteID)
 	if err != nil {
-		return fmt.Errorf("list css classes: %w", err)
+		return "", fmt.Errorf("list css classes: %w", err)
 	}
 
 	settings, _ := queries.ListSettingsBySite(ctx, siteID)
@@ -483,5 +497,5 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 		}
 	}
 
-	return WriteFile(filepath.Join(wsDir, "src", "styles", "global.css"), b.String())
+	return b.String(), nil
 }

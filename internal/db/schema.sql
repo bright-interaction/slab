@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     id               TEXT PRIMARY KEY,
     page_id          TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
     block_type       TEXT NOT NULL,
+    name             TEXT NOT NULL DEFAULT '',
     sort_order       INTEGER NOT NULL DEFAULT 0,
     data_json        TEXT NOT NULL DEFAULT '{}',
     style_json       TEXT NOT NULL DEFAULT '{}',

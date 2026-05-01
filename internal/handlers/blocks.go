@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/brightinteraction/atomicsite/internal/blocks"
 	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -44,6 +45,7 @@ func (h *BlockHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		BlockType string          `json:"block_type"`
+		Name      string          `json:"name"`
 		Data      json.RawMessage `json:"data"`
 		Style     json.RawMessage `json:"style"`
 		SortOrder *int64          `json:"sort_order"`
@@ -76,6 +78,7 @@ func (h *BlockHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ID:        id,
 		PageID:    pageID,
 		BlockType: req.BlockType,
+		Name:      req.Name,
 		SortOrder: sortOrder,
 		DataJson:  dataJSON,
 		StyleJson: styleJSON,
@@ -99,6 +102,7 @@ func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		BlockType *string          `json:"block_type"`
+		Name      *string          `json:"name"`
 		Data      *json.RawMessage `json:"data"`
 		Style     *json.RawMessage `json:"style"`
 		SortOrder *int64           `json:"sort_order"`
@@ -111,6 +115,7 @@ func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	params := store.UpdateBlockParams{
 		BlockType: existing.BlockType,
+		Name:      existing.Name,
 		SortOrder: existing.SortOrder,
 		DataJson:  existing.DataJson,
 		StyleJson: existing.StyleJson,
@@ -120,6 +125,9 @@ func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if req.BlockType != nil {
 		params.BlockType = *req.BlockType
+	}
+	if req.Name != nil {
+		params.Name = *req.Name
 	}
 	if req.Data != nil {
 		params.DataJson = string(*req.Data)
@@ -216,6 +224,71 @@ func (h *BlockHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Schemas returns the field schema for every registered block_type. The
+// editor reads this once on page load and renders forms generically.
+// Cacheable indefinitely client-side; only changes between deploys.
+func (h *BlockHandler) Schemas(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"schemas": blocks.All()})
+}
+
+// PreviewHTML renders one block to standalone HTML using draft data
+// from the request body, plus the site's compiled CSS, so the editor
+// can show a live visual preview as the user types. The block must
+// belong to the requested site (defends against cross-site fetches).
+//
+// Body: { "block_type": "stat_grid", "data_json": "{...}" }. Either
+// field may be omitted to fall back to the saved values.
+func (h *BlockHandler) PreviewHTML(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	blockID := urlParam(r, "blockID")
+
+	block, err := h.queries.GetBlockByID(r.Context(), blockID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return
+	}
+	page, err := h.queries.GetPageByID(r.Context(), block.PageID)
+	if err != nil || page.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return
+	}
+
+	var req struct {
+		BlockType string          `json:"block_type"`
+		Data      json.RawMessage `json:"data"`
+	}
+	_ = parseJSON(r, &req)
+
+	blockType := block.BlockType
+	if req.BlockType != "" {
+		blockType = req.BlockType
+	}
+	dataJSON := block.DataJson
+	if len(req.Data) > 0 {
+		dataJSON = string(req.Data)
+	}
+
+	html, err := builder.RenderBlockDraft(r.Context(), h.queries, siteID, blockType, dataJSON)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to render block")
+		return
+	}
+	css, err := builder.BuildCSS(r.Context(), h.queries, siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to build CSS")
+		return
+	}
+	fontFace := builder.SiteFontsCSS(r.Context(), h.queries, siteID)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"block_id":   blockID,
+		"block_type": blockType,
+		"html":       html,
+		"css":        css,
+		"font_face":  fontFace,
+	})
+}
+
 // BulkSave atomically replaces all blocks on a page.
 func (h *BlockHandler) BulkSave(w http.ResponseWriter, r *http.Request) {
 	pageID := urlParam(r, "pageID")
@@ -224,6 +297,7 @@ func (h *BlockHandler) BulkSave(w http.ResponseWriter, r *http.Request) {
 		Blocks []struct {
 			ID        string          `json:"id"`
 			BlockType string          `json:"block_type"`
+			Name      string          `json:"name"`
 			SortOrder int64           `json:"sort_order"`
 			Data      json.RawMessage `json:"data"`
 			Style     json.RawMessage `json:"style"`
@@ -275,6 +349,7 @@ func (h *BlockHandler) BulkSave(w http.ResponseWriter, r *http.Request) {
 			ID:        id,
 			PageID:    pageID,
 			BlockType: b.BlockType,
+			Name:      b.Name,
 			SortOrder: b.SortOrder,
 			DataJson:  dataJSON,
 			StyleJson: styleJSON,
