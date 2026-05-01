@@ -75,10 +75,12 @@ Then converge on the perfect-score checklist below. Treat each item as a hard re
    - general.hreflang_strategy = "path" (default)
    - general.additional_langs = "en,sv,..." for every locale you'll publish
    - analytics.atomicsite_tracking_enabled = "1"
-   - analytics.cookieproof_enabled = "1" to ship the bundled, same-origin cookie banner; branding colors flow in automatically, banner copy and categories live in cookie_banner_title/_description/_position and cookie_cat_analytics/_marketing/_preferences
+   - analytics.cookieproof_enabled = "1" to ship the bundled, same-origin cookie banner; branding colors flow in automatically. Banner copy + categories live in cookie_banner_title/_description/_position, cookie_banner_accept/_reject/_customize, cookie_cat_analytics/_marketing/_preferences. Per-cookie metadata (Cookie/Provider/Purpose/Expiry table in the extended modal) lives in cookie_declarations as a JSON array; presets for enabled trackers (GA4, language) auto-populate, user entries override on (category, name) collision.
+   - Compliance + UX knobs (added 2026-05-01): cookie_expiry_days (0..365, default 365 — IMY caps at 12 months), cookie_revision (int — bump to invalidate prior consent on policy change), cookie_theme (light/dark/auto), cookie_floating_trigger (left/right/off), cookie_language_selector (0/1), ccpa_enabled (0/1) + ccpa_url (CCPA Do-Not-Sell link, required when ccpa_enabled=1).
+   - Reject button always shares Accept's color (IMY 2026 equal-prominence guardrail). The consent cookie name is fixed to "as_consent" — not configurable per site.
 
 == Structure ==
-4. URL convention: pick one. Either root = default lang (e.g. / + /sv/ matching brightinteraction.com) OR symmetric (/en/ + /sv/ + a noindex splash at /). Don't mix. Hreflang emission is path-based on actually-published page slugs.
+4. URL convention: pick one. Either root = default lang (e.g. / + /sv/, the typical Swedish-marketing pattern) OR symmetric (/en/ + /sv/ + a noindex splash at /). Don't mix. Hreflang emission is path-based on actually-published page slugs.
 5. For every page you publish, set BOTH meta_title and meta_description on the page row via update_page (don't rely on branding fallback alone — eval flags pages with empty per-page meta on title-length / description-length checks).
 6. Set no_index=0 on real content pages. The splash page should be no_index=1 + hide_global_blocks=1.
 7. Each locale needs a counterpart for hreflang to emit cleanly: /en/about ↔ /sv/about, /en/privacy ↔ /sv/privacy, /en/404 ↔ /sv/404. If a counterpart is missing, eval flags the multi-language pages.
@@ -98,7 +100,7 @@ Then converge on the perfect-score checklist below. Treat each item as a hard re
 14. PUT /api/agent/global/footer with name, block_type=footer, data.copyright + data.links pointing at /<lang>/privacy, /<lang>/terms, /<lang>/cookies, plus social URLs.
 
 == Build verb is publish verb ==
-15. trigger_build = "build static Astro output + run eval engine + auto-deploy to /srv/atomicsite/<slug>/dist where Caddy serves from". After it returns success, the live site reflects the new content.
+15. trigger_build = "build static Astro output + run eval engine + auto-deploy via the configured deploy target (Dockyard, rsync, local bind mount, Vercel, Fly, or any static host)". After it returns success, the live site reflects the new content.
 16. After every build, get_evaluation(build_id) returns 5 categories: accessibility (33pt), performance (12pt), privacy (14pt), security (26pt), seo (64pt). Walk failing checks, fix, re-build. Iterate until the categories you can write are above 95%.
 
 == Block-time guardrails ==

@@ -262,6 +262,12 @@ func applySchema(sqlDB *sql.DB) error {
 		// without going through visit_sessions.session_id (which doesn't
 		// match the client's atomicsite_sid for new visitors).
 		{"consent_records", "fingerprint", "TEXT NOT NULL DEFAULT ''"},
+		// Block label (schema-driven editor) added 2026-05-01. Surfaces
+		// the human-readable name shown in the editor card header
+		// without conflating it with data_json.heading. Empty default
+		// keeps existing rows valid; the editor falls back to the
+		// heading when name is blank.
+		{"blocks", "name", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {
@@ -383,7 +389,7 @@ func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 //
 // Usage:
 //
-//	docker exec -i atomicsite /app/server reset-password user@example.com
+//	docker exec -i atomicsite /app/server reset-password admin@example.com
 //	(then type the new password and press enter)
 func resetPasswordCLI(args []string) {
 	if len(args) < 1 {

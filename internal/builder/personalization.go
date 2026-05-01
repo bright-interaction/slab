@@ -30,7 +30,7 @@ var DefaultAdminBaseURL = ""
 // also keeps the eval engine's "tracker count" honest.
 //
 // adminBaseURL is the absolute origin of the admin host (e.g.
-// "https://app.atomicsite.example.com"). It is baked into the
+// "https://admin.example.com"). It is baked into the
 // fetch URL because built sites live on different subdomains and cannot
 // reach /t/visitor as a same-origin call. Empty falls back to relative
 // "/t/visitor" for local-dev where built sites are on the same origin.

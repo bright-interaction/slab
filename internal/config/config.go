@@ -73,9 +73,8 @@ type Config struct {
 	PrimaryDomain string
 
 	// BuiltSiteSuffix is set ONLY for multi-tenant deployments where
-	// each Atomic Site tenant gets a wildcard subdomain (the original
-	// Bright Interaction demo shape: every tenant lives at
-	// <slug>.atomicsite.example.com). The CORS middleware
+	// each Atomic Site tenant gets a wildcard subdomain (e.g. every
+	// tenant lives at <slug>.tenants.example.com). The CORS middleware
 	// (server.go isAllowedOriginForPath) widens to accept any origin
 	// whose hostname ends with this suffix on public visitor paths.
 	//

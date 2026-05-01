@@ -242,9 +242,11 @@ func (s *Server) Router() http.Handler {
 
 		// Blocks
 		bh := handlers.NewBlockHandler(s.cfg, s.queries, s.db)
+		r.Get("/api/blocks/schemas", bh.Schemas)
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}/blocks", bh.List)
 		siteR.Post("/api/sites/{siteID}/pages/{pageID}/blocks", bh.Create)
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}/preview", bh.Preview)
+		siteR.Post("/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}/preview-html", bh.PreviewHTML)
 		siteR.Patch("/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}", bh.Update)
 		siteR.Delete("/api/sites/{siteID}/pages/{pageID}/blocks/{blockID}", bh.Delete)
 		siteR.Post("/api/sites/{siteID}/pages/{pageID}/blocks/reorder", bh.Reorder)
@@ -459,7 +461,7 @@ func (s *Server) Router() http.Handler {
 		// Screenshot. Closes the visual-feedback loop: agent edits blocks,
 		// triggers build, calls /api/agent/screenshot to get a base64 PNG of
 		// the rendered page, and can iterate against pixels in the same turn.
-		// SSRF-locked to atomicsite tenant subdomains + brightinteraction.com.
+		// SSRF-locked to the configured tenant subdomains and primary domain.
 		screenshotH := handlers.NewScreenshotHandler()
 		r.Post("/api/agent/screenshot", screenshotH.Screenshot)
 

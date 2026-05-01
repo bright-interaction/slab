@@ -335,7 +335,7 @@ Authorization: Bearer atomic_<hex>`}</pre>
 			<pre
 				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
 			>{`curl -H "X-Agent-Key: $ATOMICSITE_KEY" \\
-  https://app.atomicsite.example.com/api/agent/context | jq .`}</pre>
+  https://admin.example.com/api/agent/context | jq .`}</pre>
 		</Card>
 
 		<Card padding="md">

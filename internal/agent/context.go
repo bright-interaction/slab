@@ -1028,7 +1028,7 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 	return EvalPlaybookInfo{
 		Goal: "Atomicsite is a website builder where designers / agents pick blocks and content freely; the platform guardrails the technical side so the site ends up correctly architected. You handle: design (block sequence, copy, imagery), brand (palette, fonts, logo), structure (pages, slugs, locales). Atomicsite handles automatically: SEO meta + JSON-LD, hreflang emission, sitemap, robots.txt, llms.txt, security.txt, security headers (HSTS, CSP, X-Frame-Options, COOP/CORP/COEP, Permissions-Policy), <picture> + WebP variants + width/height, lazy loading, mobile breakpoints, focus indicators, semantic landmarks, FAQPage / Organization JSON-LD, h1/h2 hierarchy enforcement at block-render time. Drive the site to 95%+ on agent-writable eval categories. Custom interactive widgets (calculators, scanners, custom visualisations) are bespoke — build them as Astro components in the site's component catalog (see component block_type) when a customer needs one; atomicsite ships the generic primitives (form, feature_grid, replacement_grid, embed, logo_carousel, etc.) the agent composes from.",
 		PageTemplate: PageTemplate{
-			Description: "Canonical block sequence for a marketing-grade homepage modeled after brightinteraction.com. Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
+			Description: "Canonical block sequence for a marketing-grade homepage modeled after world-class marketing sites (Linear, Stripe, Vercel, Resend). Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
 			Blocks: []TemplateBlock{
 				{BlockType: "split_hero", Required: true, Notes: "Sort 0. Side-by-side hero (text left, image right) for SaaS marketing. headline -> h1 (REQUIRED for eval Has H1 + Single H1). eyebrow + subheading + cta_text + cta_url + secondary_label + secondary_url + image_id. Use 'hero' (centered) instead when the page sells a single product or service with one big CTA."},
 				{BlockType: "logo_carousel", Required: false, Notes: "Sort 1. Rolling marquee of customer / partner logos directly under hero. Pure CSS animation, no JS, pauses on hover. Skip when you don't have actual logos to show — empty marquee feels worse than no marquee."},
@@ -1270,9 +1270,10 @@ func defaultEndpoints() EndpointsInfo {
 }
 
 // defaultDesignPlaybook is the platform-level design DNA every agent
-// reads on first /api/agent/context call. Curated against
-// brightinteraction.com + onwidget/astrowind + a year of marketing-site
-// audits. Keep punchy and actionable; agents skim, they don't study.
+// reads on first /api/agent/context call. Curated against world-class
+// marketing sites (Linear, Stripe, Vercel, Resend), onwidget/astrowind,
+// and a year of marketing-site audits. Keep punchy and actionable;
+// agents skim, they don't study.
 func defaultDesignPlaybook() DesignPlaybookInfo {
 	return DesignPlaybookInfo{
 		Stack: "Atomicsite renders agent input into static Astro 5 sites styled with Tailwind 4 utilities + a per-site CSS pipeline (internal/builder/css.go). Block content is authored as JSON via the agent API; the renderer turns it into semantic HTML. TypeScript is reserved for built-in interactive widgets (CookieProof, hydration script, circuit canvas) — agents do not write Astro/TS by hand. Every visual decision flows through block_type + data fields + settings + the eight CSS custom properties (--color-primary, --color-text, --color-bg, --color-surface-elevated, --font-heading, --font-body, --font-mono, --container-width).",
@@ -1292,7 +1293,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			{
 				Name:         "White space is a feature, not a bug",
 				Rule:         "Section padding-block ≥ 5rem on desktop, ≥ 3rem on mobile. Subheading max-width ≤ 50ch. Don't fill empty space with extra cards.",
-				WhyItMatters: "Density signals downmarket. The most expensive sites in a category have the most whitespace. AstroWind, brightinteraction.com, Resend all use 5-7rem section gutters.",
+				WhyItMatters: "Density signals downmarket. The most expensive sites in a category have the most whitespace. AstroWind, Linear, Resend all use 5-7rem section gutters.",
 				HowToApply:   "Atomicsite's renderer ships these defaults — don't override them with style_json overrides unless you have a specific reason. If a section feels cramped, REMOVE content (drop one feature card), don't reduce padding.",
 			},
 			{
@@ -1814,7 +1815,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 					GoodFor:     []string{"Display headlines on tech/SaaS marketing sites", "Soft Structuralism vibe archetype", "Pairs well with Inter body + Space Mono eyebrow"},
 					License:     "SIL OFL 1.1",
 					DownloadFrom: "https://github.com/floriankarsten/space-grotesk (Variable woff2). Or @fontsource-variable/space-grotesk.",
-					Notes:       "Wide geometric grotesk with character. Works at heading + display sizes. Used by brightinteraction.com.",
+					Notes:       "Wide geometric grotesk with character. Works at heading + display sizes. Used widely on premium marketing sites.",
 				},
 				{
 					Name:        "Space Mono",
@@ -1958,7 +1959,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 		},
 
 		CopyVoice: VoiceRules{
-			Tone: "Confident, specific, restrained. Like an expert who doesn't need to convince you — they're just stating what's true. Examples to match: Linear's docs, Stripe's marketing, Vercel's announcements, brightinteraction.com. Voices to AVOID: HubSpot's enthusiasm, Salesforce's corporate speak, generic SaaS template copy.",
+			Tone: "Confident, specific, restrained. Like an expert who doesn't need to convince you — they're just stating what's true. Examples to match: Linear's docs, Stripe's marketing, Vercel's announcements, Resend's voice. Voices to AVOID: HubSpot's enthusiasm, Salesforce's corporate speak, generic SaaS template copy.",
 			Eyebrow: []string{
 				"3-4 words max. Mono font, uppercase, brand colour.",
 				"Names the category the visitor is shopping for: 'OPEN SOURCE INFRASTRUCTURE', 'GDPR COMPLIANCE', 'EU HOSTING'.",
@@ -2177,7 +2178,7 @@ func defaultBlockSchemas() []BlockSchemaInfo {
 		},
 		{
 			BlockType: "raw_astro",
-			Use:       "RAW Astro/HTML/Tailwind code block. The escape hatch when typed primitives can't reach pixel parity (e.g. cloning brightinteraction.com's hero exactly, building a bespoke hero with custom layout, embedding a Svelte island with specific markup). Author writes the full markup; atomicsite emits it verbatim into the page Astro source — no auto-section-id, no alternating-bg, no eyebrow CSS, no accent-span helper. Author owns every pixel. Use sparingly — typed primitives carry render polish for free; raw_astro starts from zero. If the code has a syntax error, trigger_build returns the Astro error log so the agent can fix.",
+			Use:       "RAW Astro/HTML/Tailwind code block. The escape hatch when typed primitives can't reach pixel parity (e.g. cloning a specific reference hero exactly, building a bespoke hero with custom layout, embedding a Svelte island with specific markup). Author writes the full markup; atomicsite emits it verbatim into the page Astro source — no auto-section-id, no alternating-bg, no eyebrow CSS, no accent-span helper. Author owns every pixel. Use sparingly — typed primitives carry render polish for free; raw_astro starts from zero. If the code has a syntax error, trigger_build returns the Astro error log so the agent can fix.",
 			TextKeys:  []BlockSchemaField{{Key: "code", Label: "Full Astro/HTML/Tailwind markup. Wrapped in a <section> only if the code doesn't already start with one. Tailwind utility classes work; atomicsite's design tokens (--color-text, --color-primary, --font-heading, etc.) are available; data-circuit-canvas activates the platform's animated bg. NO inline <script> (blocked by CSP); for JS use a registered Svelte island via the component block_type instead.", Multiline: true}},
 			OtherKeys: []BlockSchemaField{{Key: "class", Label: "Optional class added to the auto-section wrapper (only applies when the code doesn't already begin with a section/header/footer/nav/article/aside/main/div tag)"}},
 		},

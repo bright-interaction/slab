@@ -9,7 +9,7 @@ import (
 )
 
 // Apply seeds the perfect-foundation defaults on a new site: reference KB
-// (brightinteraction.com-derived guidance) and any extra built-in guardrails
+// (curated reference-site guidance) and any extra built-in guardrails
 // not covered by the in-engine ValidateBlock / ValidatePageSlug paths.
 //
 // Callers pass a tx-bound *store.Queries (queries.WithTx(tx)) so a failure

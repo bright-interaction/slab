@@ -25,7 +25,11 @@ test.describe('build-pipeline: cookieproof snippet injection', () => {
 		const onResult = await triggerBuildAndWait(adminApi, siteOn.id, 180_000);
 		expect(onResult.status, `build_log:\n${onResult.build_log}`).toBe('success');
 		const htmlOn = readDist(siteOn.id, 'index.html');
-		expect(htmlOn).toContain('consent.example.com/loader.js');
+		// The embedded CookieProof widget is served from the tenant's own
+		// origin via /_ccb.{hash}.js (see builder/cookieproof.go). No
+		// third-party fetch.
+		expect(htmlOn).toMatch(/\/_ccb\.[a-f0-9]+\.js/);
+		expect(htmlOn).not.toContain('consent.example.com');
 
 		// Site B: cookieproof disabled (default)
 		const siteOff = await createSite(adminApi);
@@ -37,6 +41,7 @@ test.describe('build-pipeline: cookieproof snippet injection', () => {
 		const offResult = await triggerBuildAndWait(adminApi, siteOff.id, 180_000);
 		expect(offResult.status, `build_log:\n${offResult.build_log}`).toBe('success');
 		const htmlOff = readDist(siteOff.id, 'index.html');
-		expect(htmlOff).not.toContain('consent.example.com/loader.js');
+		expect(htmlOff).not.toMatch(/\/_ccb\.[a-f0-9]+\.js/);
+		expect(htmlOff).not.toContain('consent.example.com');
 	});
 });

@@ -1,7 +1,7 @@
 // Package perfectfoundation maps every Site Inspector eval check to one of
 // three enforcement strategies (bake / block / teach) and provides the
-// auto-seeding entry point that turns brightinteraction.com (140/140) into
-// the canonical reference for every AI-built site.
+// auto-seeding entry point that turns a 140/140 reference site into
+// the canonical baseline for every AI-built site.
 //
 // Owner taxonomy:
 //

@@ -141,7 +141,7 @@ cd ~/Desktop/my-atomicsite-project`;
 	const fetchClaudeMd = `curl -sH "X-Agent-Key: $ATOMICSITE_KEY" \\
   "$ATOMICSITE_API/api/agent/bootstrap" -o CLAUDE.md`;
 
-	const manualEnv = `export ATOMICSITE_API="https://app.atomicsite.example.com"
+	const manualEnv = `export ATOMICSITE_API="https://admin.example.com"
 export ATOMICSITE_KEY="atomic_<your key>"`;
 
 	// MCP card. Default tab is Claude Desktop because that is the most
@@ -151,7 +151,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 	const baseURL = $derived(
 		typeof window !== 'undefined'
 			? window.location.origin
-			: 'https://app.atomicsite.example.com'
+			: 'https://admin.example.com'
 	);
 	const mcpURL = $derived(`${baseURL}/mcp`);
 	const mcpKey = $derived(bootstrap?.key ?? 'atomic_<your key>');
