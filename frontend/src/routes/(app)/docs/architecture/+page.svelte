@@ -105,7 +105,7 @@
 				<li>
 					<span class="text-text-primary">Deploy target</span> ships the dist folder. Local bind
 					mount, rsync over SSH, or Dockyard route. Built sites land at
-					<span class="font-mono text-[12px]">&lt;slug&gt;.slab.example.com</span> by
+					<span class="font-mono text-[12px]">&lt;slug&gt;.tenants.example.com</span> by
 					default.
 				</li>
 			</ol>
@@ -113,36 +113,36 @@
 
 		<Card padding="md">
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-				Production topology
+				Deployment topology
 			</h2>
 			<dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<div>
 					<dt class="text-[12px] text-text-muted">Admin app</dt>
 					<dd class="mt-1 font-mono text-[12px] text-text-primary">
-						app.slab.example.com
+						admin.example.com
 					</dd>
 					<p class="mt-1 text-[12px] text-text-secondary">
-						Host nginx routes 443 to 127.0.0.1:8091 to the atomicsite container. Deploy via the
-						<span class="font-mono">deploy-atomicsite.yml</span> Forgejo workflow.
+						A reverse proxy (nginx, Caddy, Traefik) terminates TLS and forwards to the
+						atomicsite container on its internal port (default :8080).
 					</p>
 				</div>
 				<div>
 					<dt class="text-[12px] text-text-muted">Built sites</dt>
 					<dd class="mt-1 font-mono text-[12px] text-text-primary">
-						&lt;slug&gt;.slab.example.com
+						example.com (or any host)
 					</dd>
 					<p class="mt-1 text-[12px] text-text-secondary">
-						Caddy on :8080 with a wildcard route serves
-						<span class="font-mono">/srv/atomicsite/&lt;slug&gt;/dist</span>. Wildcard DNS A record
-						and wildcard TLS cert cover any slug. Local-kind deploy targets land here directly
-						because <span class="font-mono">/srv/atomicsite</span> is bind-mounted into the
-						atomicsite container.
+						The build step produces a static <span class="font-mono">dist/</span>
+						directory you serve from any host: Vercel, Netlify, Cloudflare Pages,
+						S3 + CDN, or your own nginx. Multi-tenant deployments can serve
+						<span class="font-mono">&lt;slug&gt;.tenants.example.com</span> off a wildcard via Caddy.
 					</p>
 				</div>
 			</dl>
 			<pre
 				class="mt-4 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[11px] text-text-primary"
-			>{`http://*.slab.example.com {
+			>{`# example wildcard Caddy block for multi-tenant deployments
+http://*.tenants.example.com {
   root * /srv/atomicsite/{labels.3}/dist
   file_server
 }`}</pre>

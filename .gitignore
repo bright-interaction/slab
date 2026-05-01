@@ -56,3 +56,11 @@ tests/e2e/test-results/
 tests/e2e/playwright-report/
 tests/e2e/node_modules/
 tests/e2e/.tmp/
+
+# Compiled deploy artifact (tracked historically; OSS distributions should
+# not ship a binary). Run `make build` to produce bin/atomicsite locally.
+/server
+
+# Forgejo CI rebuild marker. Edit + push to force a deploy in this repo.
+# Not relevant for OSS users / GitHub mirror.
+.deploy-trigger

@@ -7,9 +7,10 @@ import (
 )
 
 // referenceKnowledgebase is the canonical knowledgebase derived from
-// brightinteraction.com (140/140 across 5 Site Inspector categories). Every
-// new site auto-seeds this on creation so any AI agent has the patterns
-// needed to keep that score, regardless of which starter kit they chose.
+// a curated reference site (140/140 across 5 Site Inspector categories).
+// Every new site auto-seeds this on creation so any AI agent has the
+// patterns needed to keep that score, regardless of which starter kit
+// they chose.
 //
 // One entry per "teach" check in CheckOwnership, plus a few cross-cutting
 // pattern entries (when the same advice covers multiple checks).
@@ -21,7 +22,7 @@ var referenceKnowledgebase = []KBEntry{
 - title: 30 to 60 characters, page-specific (NOT just the site name).
 - meta_description: 120 to 160 characters, includes a verb / call to action.
 
-Format the title as "Specific value | Brand". Example from brightinteraction.com: "Replace SaaS with Open Source You Own | Bright Interaction" (58 chars).
+Format the title as "Specific value | Brand". Example: "Replace SaaS with Open Source You Own | Brand Name" (~58 chars).
 
 Atomicsite's guardrails will refuse a Page create/update with title or description outside these ranges.`,
 	},
@@ -355,8 +356,8 @@ Empty tokens collapse with adjacent " | " runs so a missing site_name doesn't le
 	},
 }
 
-// SeedReferenceKnowledgebase seeds the brightinteraction.com-derived
-// reference KB on every new site. Replaces the old 5-entry default seed.
+// SeedReferenceKnowledgebase seeds the curated reference KB on every
+// new site. Replaces the old 5-entry default seed.
 func SeedReferenceKnowledgebase(ctx context.Context, q *store.Queries, siteID string) error {
 	for i, e := range referenceKnowledgebase {
 		if err := q.CreateKnowledgebaseEntry(ctx, store.CreateKnowledgebaseEntryParams{

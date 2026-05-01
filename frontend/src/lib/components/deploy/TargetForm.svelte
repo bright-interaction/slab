@@ -226,7 +226,7 @@
 		/>
 		<Input
 			label="Domain"
-			placeholder="mysite.slab.example.com"
+			placeholder="mysite.example.com"
 			bind:value={dyDomain}
 			error={errors['config.domain']}
 			required

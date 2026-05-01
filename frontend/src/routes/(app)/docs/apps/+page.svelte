@@ -356,10 +356,10 @@
 					'Platform-level mechanics that run under the hood. Not user-toggleable; documented so the agent and the human admin know what is in play.',
 				apps: [
 					{
-						name: 'Cloudflare DNS',
+						name: 'DNS provider (any)',
 						status: 'shipped',
 						body:
-							'Wildcard record *.slab.example.com -> 203.0.113.10 covers any built-site slug. Wildcard TLS cert covers the same. No per-site DNS or cert work needed for slugs on the default domain. Custom domains route via Dockyard or your own DNS provider.',
+							'For multi-tenant deployments, point a wildcard record (e.g. *.tenants.example.com) at the host running atomicsite. Wildcard TLS works the same way. Single-root deployments only need an A/AAAA record for ATOMICSITE_PRIMARY_DOMAIN. Custom domains route via the deploy target you configure (Dockyard, Fly, Vercel, plain VPS).',
 						setup: 'Automatic. Inspect at /docs/architecture for the topology.',
 						linkLabel: 'Architecture',
 						linkHref: '/docs/architecture'
@@ -383,20 +383,20 @@
 						linkHref: site('build')
 					},
 					{
-						name: 'Caddy wildcard host',
+						name: 'Wildcard static host (Caddy / nginx)',
 						status: 'shipped',
 						body:
-							'Built sites land at /srv/atomicsite/<slug>/dist via a Caddy bind mount. The wildcard route http://*.slab.example.com serves any slug straight from disk. Local-kind deploy targets land here directly.',
-						setup: 'Automatic. Operated by the Dockyard control plane.',
+							'For multi-tenant deployments, a wildcard route on Caddy or nginx serves built sites straight from a dist/ directory on disk (e.g. /srv/atomicsite/<slug>/dist). Local-kind deploy targets land here. Single-root deployments push the dist/ output to any static host instead.',
+						setup: 'Operator-configured. See /docs/architecture for an example Caddy block.',
 						linkLabel: null,
 						linkHref: null
 					},
 					{
-						name: 'Forgejo CI deploy pipeline',
+						name: 'CI deploy pipeline (any)',
 						status: 'shipped',
 						body:
-							'Push to main triggers .forgejo/workflows/deploy-atomicsite.yml: Bun build, Docker build with frontend embedded via go:embed, container push, container restart. End-to-end ~2-3 minutes from push to live.',
-						setup: 'Automatic. CI status visible at code.example.com.',
+							'Push to main triggers your CI workflow: Bun build, Docker build with frontend embedded via go:embed, container push, container restart. End-to-end ~2-3 minutes from push to live. Reference workflow lives at .github/workflows/oss-ci.yml; a Forgejo equivalent ships in this repo for self-hosted Forgejo deployments.',
+						setup: 'Operator-configured. Forgejo, GitHub Actions, GitLab CI all work.',
 						linkLabel: null,
 						linkHref: null
 					},

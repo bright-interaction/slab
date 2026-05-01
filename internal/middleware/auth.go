@@ -50,7 +50,7 @@ func SignToken(cfg *config.Config, user *AuthUser) (string, error) {
 // cookie. Strict (not Lax) is correct here: every legitimate dashboard
 // navigation originates from the admin SPA on the same origin as the
 // API. Lax would allow a cross-site POST from a malicious built-site
-// subdomain (`*.slab.example.com`) to land authenticated
+// subdomain (e.g. `*.tenants.example.com`) to land authenticated
 // on the admin host's `/api/sites/...` routes; Strict blocks that
 // entirely. The audit's H2 finding.
 //

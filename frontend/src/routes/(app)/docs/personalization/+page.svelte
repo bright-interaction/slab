@@ -32,7 +32,7 @@
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">The loop</h2>
 			<pre
 				class="mt-4 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
-			>{`1. Visitor lands on built site (e.g. <slug>.slab.example.com)
+			>{`1. Visitor lands on built site (e.g. example.com or a slug subdomain)
 2. CookieProof banner -> visitor accepts -> POST /t/consent
 3. Atomicsite emits identified event -> CRM webhook
 4. CRM looks up the visitor by visitor_id, finds history

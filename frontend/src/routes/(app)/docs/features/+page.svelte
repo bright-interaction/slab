@@ -120,7 +120,7 @@
 
 		{@render feature(
 			'Knowledgebase',
-			'Reference entries the AI agent reads on every context fetch. Seeded from the brightinteraction.com 140/140 reference site.',
+			'Reference entries the AI agent reads on every context fetch. Seeded from a curated reference site that scored 140/140 across Site Inspector categories.',
 			[
 				'24 default entries cover security, SEO, accessibility, brand voice',
 				'Add your own entries to encode domain rules',

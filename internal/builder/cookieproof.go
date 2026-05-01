@@ -9,6 +9,17 @@ import (
 	"github.com/bright-interaction/slab/internal/store"
 )
 
+// AtomicSiteConsentCookieName is the first-party cookie + localStorage key
+// every Atomic Site banner uses for the consent record. We deliberately
+// override the CookieProof default ("ce_consent") so tenants see an
+// Atomic-Site-branded cookie in their DevTools / consent table, and so
+// downstream tooling can recognize "this banner is on Atomic Site" by the
+// cookie name alone.
+//
+// The widget's storage layer accepts any name matching /^[a-zA-Z0-9_-]+$/
+// and rejects anything else — keep this constant in that shape.
+const AtomicSiteConsentCookieName = "as_consent"
+
 // CookieProofConfig captures the per-tenant inputs the snippet generator
 // needs. Most fields are optional and default to widget defaults if empty.
 type CookieProofConfig struct {
@@ -29,6 +40,29 @@ type CookieProofConfig struct {
 	// Banner position: "bottom" (default), "top", or "center".
 	Position string
 
+	// Theme: "light", "dark", or "auto" (follow OS prefers-color-scheme).
+	// Empty falls back to "light".
+	Theme string
+
+	// FloatingTrigger: "left", "right", or "off". Empty defaults to "left".
+	FloatingTrigger string
+
+	// LanguageSelector enables the in-banner language dropdown when true.
+	LanguageSelector bool
+
+	// CookieExpiryDays bounds how long the visitor's stored consent
+	// record stays valid before the banner re-prompts. 0 = widget default.
+	CookieExpiryDays int
+
+	// Revision is the consent policy version. Bump when categories or
+	// privacy policy materially change to invalidate prior consent.
+	Revision int
+
+	// CcpaEnabled toggles the "Do Not Sell" link in the banner footer.
+	CcpaEnabled bool
+	// CcpaURL is the disclosure target. Required when CcpaEnabled.
+	CcpaURL string
+
 	// Categories to enable. Empty = use widget defaults (necessary, analytics,
 	// marketing, preferences with necessary required, others off).
 	Categories []CookieCategory
@@ -40,10 +74,38 @@ type CookieProofConfig struct {
 // CookieCategory mirrors the relevant subset of the widget's CategoryConfig.
 // Atomicsite stores category preferences flat per site; we render them out as
 // a list when emitting the inline config.
+//
+// Declarations is the per-category cookie list the widget renders as a
+// table in its preferences modal. The widget shape excludes the category
+// field (it's already nested under the category), so we use widgetCookieDecl.
 type CookieCategory struct {
-	ID       string `json:"id"`
-	Required bool   `json:"required,omitempty"`
-	Enabled  bool   `json:"enabled,omitempty"`
+	ID           string             `json:"id"`
+	Required     bool               `json:"required,omitempty"`
+	Enabled      bool               `json:"enabled,omitempty"`
+	Declarations []widgetCookieDecl `json:"declarations,omitempty"`
+}
+
+// CookieDeclaration is atomicsite's storage + admin-API shape for a single
+// cookie row. It carries the routing Category field; we strip it when
+// emitting to the widget (see widgetCookieDecl).
+//
+// Mirrors the widget's CookieDeclaration interface
+// (CookieProof/src/core/types.ts:20) field-for-field except for Category.
+type CookieDeclaration struct {
+	Category string `json:"category,omitempty"`
+	Name     string `json:"name"`
+	Provider string `json:"provider,omitempty"`
+	Purpose  string `json:"purpose,omitempty"`
+	Expiry   string `json:"expiry,omitempty"`
+}
+
+// widgetCookieDecl is the shape the embed widget actually reads. Identical
+// to CookieDeclaration minus the routing Category field.
+type widgetCookieDecl struct {
+	Name     string `json:"name"`
+	Provider string `json:"provider,omitempty"`
+	Purpose  string `json:"purpose,omitempty"`
+	Expiry   string `json:"expiry,omitempty"`
 }
 
 // RenderCookieProofSnippet returns the HTML snippet that the build pipeline
@@ -59,10 +121,10 @@ type CookieCategory struct {
 //     the tenant's own origin. Hash comes from CookieProofWidgetHash() so
 //     the file is content-addressed and immutably cacheable.
 //
-// Replaces the previous snippet that loaded
-// https://consent.example.com/loader.js as a third-party script
-// and POSTed proofs back to that origin. Atomic Site is now standalone for
-// cookies: tenant pages have zero third-party connections for the banner.
+// Replaces the previous snippet that loaded the CookieProof loader as a
+// third-party script and POSTed proofs back to a remote origin. Atomic
+// Site is now standalone for cookies: tenant pages have zero third-party
+// connections for the banner.
 func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 	if cfg.SiteID == "" || cfg.Domain == "" {
 		return ""
@@ -96,19 +158,45 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 	proofEndpoint := strings.TrimRight(trackPath, "/") + "/consent"
 
 	type embedConfig struct {
-		SiteID           string            `json:"siteId"`
-		Domain           string            `json:"domain"`
-		ProofEndpoint    string            `json:"proofEndpoint"`
-		Language         string            `json:"language,omitempty"`
-		Position         string            `json:"position,omitempty"`
-		Categories       []CookieCategory  `json:"categories,omitempty"`
-		PrivacyPolicyURL string            `json:"privacyPolicyUrl,omitempty"`
-		GcmEnabled       bool              `json:"gcmEnabled"`
-		RespectGPC       bool              `json:"respectGPC"`
-		FloatingTrigger  string            `json:"floatingTrigger,omitempty"`
-		Theme            string            `json:"theme,omitempty"`
-		CssVars          map[string]string `json:"cssVars,omitempty"`
-		Copy             map[string]string `json:"copy,omitempty"`
+		SiteID            string            `json:"siteId"`
+		Domain            string            `json:"domain"`
+		ProofEndpoint     string            `json:"proofEndpoint"`
+		Language          string            `json:"language,omitempty"`
+		Position          string            `json:"position,omitempty"`
+		Categories        []CookieCategory  `json:"categories,omitempty"`
+		PrivacyPolicyURL  string            `json:"privacyPolicyUrl,omitempty"`
+		GcmEnabled        bool              `json:"gcmEnabled"`
+		RespectGPC        bool              `json:"respectGPC"`
+		FloatingTrigger   any               `json:"floatingTrigger,omitempty"`
+		Theme             string            `json:"theme,omitempty"`
+		CookieName        string            `json:"cookieName,omitempty"`
+		CookieExpiry      int               `json:"cookieExpiry,omitempty"`
+		Revision          int               `json:"revision,omitempty"`
+		LanguageSelector  bool              `json:"languageSelector,omitempty"`
+		CcpaEnabled       bool              `json:"ccpaEnabled,omitempty"`
+		CcpaURL           string            `json:"ccpaUrl,omitempty"`
+		CssVars           map[string]string `json:"cssVars,omitempty"`
+		Copy              map[string]string `json:"copy,omitempty"`
+	}
+
+	theme := strings.ToLower(strings.TrimSpace(cfg.Theme))
+	switch theme {
+	case "light", "dark", "auto":
+		// ok
+	default:
+		theme = "light"
+	}
+
+	// floatingTrigger: widget accepts boolean false or 'left'/'right'.
+	// "off" maps to false; empty maps to "left" (legacy default).
+	var floatingTrigger any
+	switch strings.ToLower(strings.TrimSpace(cfg.FloatingTrigger)) {
+	case "off":
+		floatingTrigger = false
+	case "right":
+		floatingTrigger = "right"
+	default:
+		floatingTrigger = "left"
 	}
 
 	out := embedConfig{
@@ -121,8 +209,14 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		PrivacyPolicyURL: cfg.PrivacyPolicyURL,
 		GcmEnabled:       true,
 		RespectGPC:       true,
-		FloatingTrigger:  "left",
-		Theme:            "light",
+		FloatingTrigger:  floatingTrigger,
+		Theme:            theme,
+		CookieName:       AtomicSiteConsentCookieName,
+		CookieExpiry:     cfg.CookieExpiryDays,
+		Revision:         cfg.Revision,
+		LanguageSelector: cfg.LanguageSelector,
+		CcpaEnabled:      cfg.CcpaEnabled,
+		CcpaURL:          cfg.CcpaURL,
 		CssVars:          cfg.CssVars,
 	}
 	copy := map[string]string{}
@@ -207,6 +301,14 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 	cfg.SettingsLabel = settingsMap["analytics.cookie_banner_customize"]
 	cfg.PrivacyPolicyURL = settingsMap["seo.privacy_policy_url"]
 
+	cfg.Theme = settingsMap["analytics.cookie_theme"]
+	cfg.FloatingTrigger = settingsMap["analytics.cookie_floating_trigger"]
+	cfg.LanguageSelector = boolSetting(settingsMap["analytics.cookie_language_selector"], false)
+	cfg.CookieExpiryDays = intSetting(settingsMap["analytics.cookie_expiry_days"], 365, 0, 365)
+	cfg.Revision = intSetting(settingsMap["analytics.cookie_revision"], 0, 0, 9999)
+	cfg.CcpaEnabled = boolSetting(settingsMap["analytics.ccpa_enabled"], false)
+	cfg.CcpaURL = strings.TrimSpace(settingsMap["analytics.ccpa_url"])
+
 	cfg.Categories = []CookieCategory{
 		{ID: "necessary", Required: true, Enabled: true},
 		{ID: "analytics", Enabled: boolSetting(settingsMap["analytics.cookie_cat_analytics"], true)},
@@ -214,7 +316,45 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 		{ID: "preferences", Enabled: boolSetting(settingsMap["analytics.cookie_cat_preferences"], true)},
 	}
 
+	// Merge presets (auto-derived from enabled trackers) with the user's
+	// edited list (from analytics.cookie_declarations) and assign each row
+	// to its category. User entries win on (category, name) collision so
+	// tenants can translate strings or override providers.
+	merged := mergeDeclarations(
+		PresetCookieDeclarations(site, settingsMap),
+		parseUserCookieDeclarations(settingsMap["analytics.cookie_declarations"]),
+	)
+	assignDeclarationsToCategories(cfg.Categories, merged)
+
 	return cfg
+}
+
+// assignDeclarationsToCategories groups merged declarations by Category and
+// writes them onto the matching CookieCategory.Declarations slice. Rows
+// with an unknown category are dropped silently — atomicsite's UI gates
+// the input to the four built-in categories, so this is defensive only.
+func assignDeclarationsToCategories(cats []CookieCategory, decls []CookieDeclaration) {
+	idx := make(map[string]int, len(cats))
+	for i, c := range cats {
+		idx[c.ID] = i
+	}
+	for _, d := range decls {
+		i, ok := idx[d.Category]
+		if !ok {
+			continue
+		}
+		cats[i].Declarations = append(cats[i].Declarations, widgetCookieDecl{
+			Name:     d.Name,
+			Provider: d.Provider,
+			Purpose:  d.Purpose,
+			Expiry:   d.Expiry,
+		})
+	}
+	// reflect back via index since Go doesn't write through the range
+	// variable; assigning .Declarations above already does the job because
+	// CookieCategory is a struct held by index in the slice. Nothing more
+	// to do here.
+	_ = idx
 }
 
 // normalisePosition clamps the position string to the widget's accepted
