@@ -84,6 +84,24 @@ func main() {
 	// Seed admin user if none exists
 	seedAdminUser(cfg, queries, sqlDB)
 
+	// Audit C1 bootstrap: grant the seed admin ownership of every existing
+	// site that has no member rows yet. Runs every boot but is idempotent
+	// (the SQL guards with NOT EXISTS), so it's free after the first
+	// successful migration. Without this, an existing deployment upgrading
+	// across the C1 fix would lose admin access to all its sites because
+	// non-admin role users (added later via /api/admin/invites) would 403
+	// on every site-scoped route.
+	if users, _ := queries.ListUsers(context.Background()); len(users) > 0 {
+		for _, u := range users {
+			if u.Role == "admin" {
+				if err := queries.BackfillSiteMembersForAdmin(context.Background(), u.ID); err != nil {
+					slog.Warn("backfill site_members for admin failed", "user_id", u.ID, "err", err)
+				}
+				break // Only the first admin needs the backfill row.
+			}
+		}
+	}
+
 	// Set embedded frontend FS
 	sub, err := fs.Sub(frontendFiles, "frontend/build")
 	if err != nil {

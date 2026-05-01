@@ -322,6 +322,13 @@ type SiteFont struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+type SiteMember struct {
+	SiteID    string `json:"site_id"`
+	UserID    string `json:"user_id"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"created_at"`
+}
+
 type SiteProfile struct {
 	ID             string `json:"id"`
 	SiteID         string `json:"site_id"`

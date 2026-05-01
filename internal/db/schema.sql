@@ -28,6 +28,28 @@ CREATE TABLE IF NOT EXISTS invites (
 CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token);
 CREATE INDEX IF NOT EXISTS idx_invites_email ON invites(email);
 
+-- site_members links users to sites for multi-tenant authorization. Without
+-- this table every authenticated user could read, update, delete any site
+-- by enumerating site IDs (audit finding C1, fixed 2026-05-01). The
+-- RequireSiteAccess middleware checks membership on every /api/sites/{id}/*
+-- route. Users with role='admin' bypass the check (preserves the legacy
+-- single-workspace-admin behaviour).
+--
+-- Roles inside a site: owner can do anything (including delete the site +
+-- manage members), editor can change content but not the membership list.
+-- The seed admin path auto-grants ownership on every existing site at the
+-- migration boundary so single-admin deployments keep working without a
+-- manual data migration.
+CREATE TABLE IF NOT EXISTS site_members (
+    site_id    TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL DEFAULT 'editor',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (site_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_site_members_user ON site_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_site_members_site ON site_members(site_id);
+
 CREATE TABLE IF NOT EXISTS sites (
     id               TEXT PRIMARY KEY,
     name             TEXT NOT NULL,

@@ -9,12 +9,19 @@ import (
 )
 
 type Querier interface {
+	AddSiteMember(ctx context.Context, arg AddSiteMemberParams) error
 	// Per-path engagement so the dashboard can show "users spend 2m12s on
 	// /pricing but bounce at /blog/x in 8s". Capped at the busiest 10 paths.
 	AvgEngagementByPath(ctx context.Context, arg AvgEngagementByPathParams) ([]AvgEngagementByPathRow, error)
 	// Aggregate metrics across all engagement beacons in a window. NULL-safe
 	// via COALESCE so an empty window returns zeros instead of NaN.
 	AvgEngagementSince(ctx context.Context, arg AvgEngagementSinceParams) (AvgEngagementSinceRow, error)
+	// One-shot bootstrap: grant the admin ownership of every existing site
+	// that currently has zero member rows. Idempotent: once a site has any
+	// member, this becomes a no-op for that site. Preserves the legacy
+	// single-workspace behaviour through the C1 migration without a
+	// separate data migration script.
+	BackfillSiteMembersForAdmin(ctx context.Context, userID string) error
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
 	ConsentDailyBySite(ctx context.Context, arg ConsentDailyBySiteParams) ([]ConsentDailyBySiteRow, error)
@@ -139,6 +146,7 @@ type Querier interface {
 	GetSiteByID(ctx context.Context, id string) (Site, error)
 	GetSiteBySlug(ctx context.Context, slug string) (Site, error)
 	GetSiteFont(ctx context.Context, arg GetSiteFontParams) (SiteFont, error)
+	GetSiteMembership(ctx context.Context, arg GetSiteMembershipParams) (SiteMember, error)
 	// Site profiles
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -187,6 +195,8 @@ type Querier interface {
 	// Silos
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont, error)
+	ListSiteIDsForUser(ctx context.Context, userID string) ([]string, error)
+	ListSiteMembers(ctx context.Context, siteID string) ([]ListSiteMembersRow, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
 	ListUsers(ctx context.Context) ([]User, error)
@@ -200,6 +210,7 @@ type Querier interface {
 	RecordConsent(ctx context.Context, arg RecordConsentParams) error
 	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
+	RemoveSiteMember(ctx context.Context, arg RemoveSiteMemberParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
