@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -47,9 +46,19 @@ func SignToken(cfg *config.Config, user *AuthUser) (string, error) {
 	return token.SignedString([]byte(cfg.JWTSecret))
 }
 
-// SetTokenCookie writes the JWT token as an HTTP-only cookie.
+// SetTokenCookie writes the JWT token as an HTTP-only, SameSite=Strict
+// cookie. Strict (not Lax) is correct here: every legitimate dashboard
+// navigation originates from the admin SPA on the same origin as the
+// API. Lax would allow a cross-site POST from a malicious built-site
+// subdomain (`*.atomicsite.example.com`) to land authenticated
+// on the admin host's `/api/sites/...` routes; Strict blocks that
+// entirely. The audit's H2 finding.
+//
+// Secure is set whenever the deployment is not local-dev. The previous
+// "not localhost" check missed proxied http://prod deployments; the
+// IsLocalDev helper covers 127.0.0.1 and 0.0.0.0 too.
 func SetTokenCookie(w http.ResponseWriter, cfg *config.Config, tokenStr string) {
-	secure := !strings.HasPrefix(cfg.BaseURL, "http://localhost")
+	secure := !cfg.IsLocalDev()
 	http.SetCookie(w, &http.Cookie{
 		Name:     "atomicsite_token",
 		Value:    tokenStr,
@@ -57,7 +66,7 @@ func SetTokenCookie(w http.ResponseWriter, cfg *config.Config, tokenStr string) 
 		MaxAge:   7 * 24 * 60 * 60,
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 }
 

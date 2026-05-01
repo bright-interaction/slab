@@ -2,11 +2,21 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+)
+
+// Default sentinel values. The Validate() guard refuses to start in
+// production-like deployments when any one of these is still in place.
+const (
+	DefaultJWTSecret     = "change-me-in-production"
+	DefaultAnalyticsSalt = "atomicsite-default-fingerprint-salt-change-me"
+	DefaultAdminPassword = "changeme123"
 )
 
 type Config struct {
@@ -76,6 +86,80 @@ func Load() *Config {
 
 		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ".atomicsite.example.com"),
 	}
+}
+
+// Validate returns nil when the loaded config is safe for the deployment
+// shape implied by BaseURL. Production-like deployments (BaseURL != localhost)
+// must override every secret and operational toggle that has a known default;
+// any one still at its sentinel value is treated as a misconfiguration and
+// the server refuses to start.
+//
+// Why a refuse-to-start guard rather than a warning: every previous
+// "warning-only" approach in the codebase has been ignored at least once
+// in production. The boot-time hard fail is the only mechanism that
+// guarantees the operator notices.
+//
+// Local development (BaseURL starts with http://localhost) keeps the
+// permissive behaviour so contributors don't have to set five env vars
+// to run `go test` or `go run`.
+func (c *Config) Validate() error {
+	if c.IsLocalDev() {
+		return nil
+	}
+
+	var problems []string
+
+	if c.JWTSecret == "" || c.JWTSecret == DefaultJWTSecret {
+		problems = append(problems, "JWT_SECRET is unset or equal to the documented default; set a 32+ byte random value")
+	} else if len(c.JWTSecret) < 32 {
+		problems = append(problems, fmt.Sprintf("JWT_SECRET is %d bytes; require at least 32 for HS256 collision resistance", len(c.JWTSecret)))
+	}
+
+	if c.AnalyticsSalt == "" || c.AnalyticsSalt == DefaultAnalyticsSalt {
+		problems = append(problems, "ANALYTICS_SALT is unset or equal to the documented default; set a random value (visitor fingerprints become predictable otherwise)")
+	}
+
+	// HTTPS scheme guard. The auth cookie's Secure attribute is gated on
+	// "not localhost"; without HTTPS in production, the cookie still gets
+	// set Secure=true and never travels, which manifests as login that
+	// "doesn't stick". Fail fast with the right error message.
+	if !strings.HasPrefix(c.BaseURL, "https://") {
+		problems = append(problems, fmt.Sprintf("BASE_URL=%q is not HTTPS; production deployments must serve over TLS or sessions will not persist", c.BaseURL))
+	}
+
+	if len(problems) > 0 {
+		return errors.New("config validation failed:\n  - " + strings.Join(problems, "\n  - "))
+	}
+	return nil
+}
+
+// ValidateAdminPassword is called at admin-seed time only. It enforces the
+// same "no defaults in production" guard as Validate but reports the password
+// problem separately so the caller can fail with a useful message even when
+// the rest of the config is fine. Empty password in production is a hard
+// fail; the seed path must abort rather than silently use the documented
+// default.
+func (c *Config) ValidateAdminPassword(adminPassword string) error {
+	if c.IsLocalDev() {
+		return nil
+	}
+	if adminPassword == "" || adminPassword == DefaultAdminPassword {
+		return errors.New("ADMIN_PASSWORD is unset or equal to the documented default; production deployments must set ADMIN_PASSWORD to a strong unique value before first boot")
+	}
+	if len(adminPassword) < 12 {
+		return fmt.Errorf("ADMIN_PASSWORD is only %d characters; require at least 12 (use a passphrase generator)", len(adminPassword))
+	}
+	return nil
+}
+
+// IsLocalDev reports whether the BaseURL points at localhost. Local dev
+// keeps the lenient defaults (no secrets, no HTTPS) so contributors can
+// run the server with a single command. The Validate guards bypass on
+// this branch.
+func (c *Config) IsLocalDev() bool {
+	return strings.HasPrefix(c.BaseURL, "http://localhost") ||
+		strings.HasPrefix(c.BaseURL, "http://127.0.0.1") ||
+		strings.HasPrefix(c.BaseURL, "http://0.0.0.0")
 }
 
 func envOr(key, fallback string) string {
