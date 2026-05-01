@@ -429,7 +429,12 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".block--form .form-field { display: flex; flex-direction: column; gap: 0.375rem; margin-block-end: 1rem; }\n")
 	b.WriteString(".block--form label { font-size: 0.875rem; font-weight: 500; }\n")
 	b.WriteString(".block--form input, .block--form textarea, .block--form select { padding: 0.75rem 1rem; border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent); border-radius: 0.5rem; font-size: 1rem; background: var(--color-bg); color: var(--color-text); transition: border-color 150ms ease-out; }\n")
-	b.WriteString(".block--form input:focus, .block--form textarea:focus, .block--form select:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 18%, transparent); }\n")
+	// Mouse-focus: brand-tinted box-shadow only (outline suppressed).
+	// Keyboard-focus (`:focus-visible`): browser default outline preserved
+	// so keyboard users always see a focus ring (WCAG 2.1 SC 2.4.7).
+	b.WriteString(".block--form input:focus, .block--form textarea:focus, .block--form select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 18%, transparent); }\n")
+	b.WriteString(".block--form input:focus:not(:focus-visible), .block--form textarea:focus:not(:focus-visible), .block--form select:focus:not(:focus-visible) { outline: none; }\n")
+	b.WriteString(".block--form input:focus-visible, .block--form textarea:focus-visible, .block--form select:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }\n")
 	b.WriteString(".block--form textarea { resize: vertical; min-height: 6rem; }\n")
 	b.WriteString(".block--form button[type=submit] { padding: 0.75rem 1.5rem; background: var(--color-primary); color: white; border: 0; border-radius: 0.5rem; font-weight: 500; cursor: pointer; transition: background-color 150ms ease-out; }\n")
 	b.WriteString(".block--form button[type=submit]:hover { background: color-mix(in oklab, var(--color-primary) 85%, black); }\n\n")
