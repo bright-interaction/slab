@@ -518,15 +518,42 @@ func (s *Server) mountFrontend(r chi.Router) {
 	})
 }
 
+// corsMiddleware returns a path-aware CORS handler. The audit's C2
+// finding: the previous unified policy granted Access-Control-Allow-
+// Credentials: true to every `*.<BuiltSiteSuffix>` origin on every
+// route, including `/api/sites/...`. Combined with the missing
+// per-site authorization (audit C1), a tenant who controls their own
+// built-site origin could pivot a single line of injected JS into a
+// cross-tenant takeover.
+//
+// Two policies now:
+//
+//  1. Admin routes (`/api/*` and the SPA fallback): credentialed CORS
+//     allowed ONLY from `cfg.BaseURL` exact origin (and localhost in
+//     dev). Built-site subdomains do not need to call admin routes;
+//     all dashboard traffic is same-origin.
+//
+//  2. Public visitor endpoints (`/t/*`): credentialed CORS allowed
+//     from `cfg.BaseURL` AND any host suffix-matching
+//     `cfg.BuiltSiteSuffix`. Built sites legitimately need to reach
+//     `/t/consent`, `/t/visitor`, `/t/inbound` cross-origin to lift
+//     anonymous visits to identified.
+//
+// Preflight OPTIONS uses the same path-based policy so the browser
+// reflects the correct Access-Control-Allow-Origin during the
+// preflight handshake.
 func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			if origin != "" && isAllowedOrigin(cfg, origin) {
+			if origin != "" && isAllowedOriginForPath(cfg, origin, r.URL.Path) {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Agent-Key")
+				// Vary: Origin keeps cache layers from serving the wrong
+				// allow-origin to a different visitor.
+				w.Header().Add("Vary", "Origin")
 			}
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
@@ -537,39 +564,53 @@ func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 }
 
-func isAllowedOrigin(cfg *config.Config, origin string) bool {
-	// In development, allow localhost origins
-	if strings.HasPrefix(cfg.BaseURL, "http://localhost") {
-		if strings.HasPrefix(origin, "http://localhost") {
+// isPublicVisitorPath reports whether the path is one of the public
+// `/t/*` endpoints that built tenant sites legitimately call cross-origin.
+func isPublicVisitorPath(p string) bool {
+	return strings.HasPrefix(p, "/t/")
+}
+
+// isAllowedOriginForPath is the path-aware CORS decision. Admin routes
+// only accept the configured BaseURL (plus localhost in dev). Public
+// `/t/*` routes additionally accept any built-site subdomain.
+func isAllowedOriginForPath(cfg *config.Config, origin, path string) bool {
+	// Always allow the configured base URL exactly.
+	if origin == cfg.BaseURL || strings.HasPrefix(origin, cfg.BaseURL+"/") {
+		return true
+	}
+	// Local dev: any localhost origin (admin + built-site preview both
+	// run on localhost during `go run`).
+	if cfg.IsLocalDev() {
+		if strings.HasPrefix(origin, "http://localhost") ||
+			strings.HasPrefix(origin, "http://127.0.0.1") {
 			return true
 		}
 	}
-	// Allow the configured base URL origin
-	if strings.HasPrefix(origin, cfg.BaseURL) {
-		return true
-	}
-	// Phase 18: built sites live at <slug>.atomicsite.example.com
-	// (or whatever the BUILT_SITE_SUFFIX env points at) and need to reach
-	// the admin host's /t/visitor + /t/inbound + /t/consent endpoints
-	// cross-origin. Match by hostname suffix to cover any slug.
-	if cfg.BuiltSiteSuffix != "" {
-		// Strip protocol and port to compare just the host.
-		host := origin
-		if i := strings.Index(host, "://"); i >= 0 {
-			host = host[i+3:]
-		}
-		if i := strings.IndexByte(host, '/'); i >= 0 {
-			host = host[:i]
-		}
-		if i := strings.IndexByte(host, ':'); i >= 0 {
-			host = host[:i]
-		}
+	// Built-site subdomains: ONLY for the public visitor endpoints.
+	// Admin routes (`/api/*`, `/admin/*`, SPA) do not need this and
+	// granting it widens the attack surface without benefit (C2).
+	if isPublicVisitorPath(path) && cfg.BuiltSiteSuffix != "" {
+		host := stripScheme(origin)
 		if strings.HasSuffix(host, cfg.BuiltSiteSuffix) {
 			return true
 		}
 	}
-	// Agent API requests use API keys, not cookies, so CORS is less critical.
-	// But we still restrict to known origins for cookie-based admin endpoints.
 	return false
+}
+
+// stripScheme reduces an Origin header value (e.g. https://foo.example:443)
+// to bare host for suffix comparison. Returns "" when the input is malformed.
+func stripScheme(origin string) string {
+	host := origin
+	if i := strings.Index(host, "://"); i >= 0 {
+		host = host[i+3:]
+	}
+	if i := strings.IndexByte(host, '/'); i >= 0 {
+		host = host[:i]
+	}
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	return host
 }
 

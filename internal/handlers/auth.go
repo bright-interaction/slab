@@ -2,6 +2,9 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -13,10 +16,26 @@ import (
 type AuthHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
+	// loginLimiter throttles failed logins per (email, ip). Closes audit
+	// finding H3. Configured at NewAuthHandler with 5 failures / 15min
+	// lockout — defeats both single-account brute force and credential
+	// spray from one host.
+	loginLimiter *loginRateLimiter
 }
 
 func NewAuthHandler(cfg *config.Config, queries *store.Queries) *AuthHandler {
-	return &AuthHandler{cfg: cfg, queries: queries}
+	return &AuthHandler{
+		cfg:          cfg,
+		queries:      queries,
+		loginLimiter: newLoginRateLimiter(5, 15*time.Minute, time.Hour),
+	}
+}
+
+// loginKey returns the per-email throttle key. We lowercase + trim because
+// "Admin@Example.com" and "admin@example.com" should share a counter (an
+// attacker won't get extra attempts by varying case).
+func loginKey(prefix, value string) string {
+	return prefix + ":" + strings.ToLower(strings.TrimSpace(value))
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -33,16 +52,41 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Two-axis rate limit: per-email AND per-IP. Either hitting the
+	// threshold blocks the request with 429 + Retry-After. The check
+	// happens BEFORE the bcrypt compare so a locked-out attacker wastes
+	// no server CPU; bcrypt is the most expensive operation in this
+	// handler at ~10ms per call.
+	emailKey := loginKey("e", req.Email)
+	ipKey := loginKey("i", clientIP(r))
+	for _, key := range []string{emailKey, ipKey} {
+		if allowed, retry := h.loginLimiter.allow(key); !allowed {
+			w.Header().Set("Retry-After", strconv.Itoa(retry))
+			writeError(w, http.StatusTooManyRequests, "Too many failed login attempts; try again later")
+			return
+		}
+	}
+
 	user, err := h.queries.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
+		// Record failure on both axes so the limiter can lock either.
+		h.loginLimiter.recordFailure(emailKey)
+		h.loginLimiter.recordFailure(ipKey)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		h.loginLimiter.recordFailure(emailKey)
+		h.loginLimiter.recordFailure(ipKey)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
+
+	// Successful login: reset both counters so an honest user who
+	// mistyped doesn't get punished after typing it right.
+	h.loginLimiter.recordSuccess(emailKey)
+	h.loginLimiter.recordSuccess(ipKey)
 
 	authUser := &authmw.AuthUser{
 		ID:           user.ID,
