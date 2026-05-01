@@ -88,7 +88,9 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 	slog.Info("build: generated files", "pages", pageCount, "workspace", wsDir)
 
 	// 7. Compile
-	result := Compile(wsDir)
+	// Pass the build context through so cancellation (admin click,
+	// graceful shutdown, BuildTimeout) reaches the bun child processes.
+	result := Compile(ctx, wsDir)
 
 	return &BuildResult{
 		DistDir:    result.DistDir,

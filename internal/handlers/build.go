@@ -32,6 +32,15 @@ type BuildHandler struct {
 
 	mu     sync.Mutex
 	builds map[string]*buildState // deploymentID -> state
+
+	// siteMu guards per-site build serialization. The audit's C4 finding:
+	// two simultaneous builds for the same site_id share the workspace
+	// directory (`{DataDir}/workspaces/{siteID}/`); InitWorkspace removes
+	// it unconditionally, so build A can wipe build B's files mid-write.
+	// The siteLock map gives every active build its own mutex; only one
+	// build per site_id runs at a time.
+	siteMu   sync.Mutex
+	siteLock map[string]*sync.Mutex
 }
 
 type buildState struct {
@@ -45,10 +54,25 @@ type buildState struct {
 
 func NewBuildHandler(cfg *config.Config, queries *store.Queries) *BuildHandler {
 	return &BuildHandler{
-		cfg:     cfg,
-		queries: queries,
-		builds:  make(map[string]*buildState),
+		cfg:      cfg,
+		queries:  queries,
+		builds:   make(map[string]*buildState),
+		siteLock: make(map[string]*sync.Mutex),
 	}
+}
+
+// lockForSite returns the per-site build mutex, creating it on first
+// use. Callers Lock + Unlock around the entire builder.Build pipeline.
+// Closes audit C4.
+func (h *BuildHandler) lockForSite(siteID string) *sync.Mutex {
+	h.siteMu.Lock()
+	defer h.siteMu.Unlock()
+	mu, ok := h.siteLock[siteID]
+	if !ok {
+		mu = &sync.Mutex{}
+		h.siteLock[siteID] = mu
+	}
+	return mu
 }
 
 // provisionCookieProof was removed 2026-04-30 when atomicsite became
@@ -86,7 +110,17 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 	// Run build async (use background context -- request context cancels when client disconnects)
 	siteID := a.SiteID
 	go func() {
-		bgCtx := context.Background()
+		// Audit C4: serialize per site_id so two simultaneous builds for
+		// the same site don't fight over the workspace directory. Other
+		// sites build in parallel without contention.
+		lock := h.lockForSite(siteID)
+		lock.Lock()
+		defer lock.Unlock()
+		// Audit H4: cap the entire build pipeline at BuildTimeout via
+		// the goroutine's own derived context. The bun child processes
+		// inside Compile honour ctx via exec.CommandContext.
+		bgCtx, cancel := context.WithTimeout(context.Background(), builder.BuildTimeout)
+		defer cancel()
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 
 		// Run evaluation against the built dist/ if compile succeeded.
@@ -116,20 +150,24 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 		if !result.Success {
 			status = "failed"
 		}
-		_ = h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
+		if err := h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
 			ID:         deployID,
 			Status:     status,
 			BuildLog:   result.BuildLog,
 			PagesBuilt: int64(result.PagesBuilt),
 			DurationMs: result.DurationMs,
 			Error:      result.Error,
-		})
+		}); err != nil {
+			slog.Warn("build: persist deployment status failed", "deploy_id", deployID, "err", err)
+		}
 
-		_ = h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
+		if err := h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
 			ID:              siteID,
 			LastBuildStatus: status,
 			LastBuildError:  result.Error,
-		})
+		}); err != nil {
+			slog.Warn("build: persist site build status failed", "site_id", siteID, "err", err)
+		}
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]string{
@@ -160,7 +198,11 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 	h.mu.Unlock()
 
 	go func() {
-		bgCtx := context.Background()
+		lock := h.lockForSite(siteID)
+		lock.Lock()
+		defer lock.Unlock()
+		bgCtx, cancel := context.WithTimeout(context.Background(), builder.BuildTimeout)
+		defer cancel()
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
@@ -172,9 +214,11 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 				result.BuildLog += "\n=== deploy ===\nfailed: " + deployErr.Error() + "\n"
 			} else if targetID != "" {
 				result.BuildLog += "\n=== deploy ===\npublished to " + deployURL + "\n"
-				_ = h.queries.UpdateDeploymentDeployed(bgCtx, store.UpdateDeploymentDeployedParams{
+				if err := h.queries.UpdateDeploymentDeployed(bgCtx, store.UpdateDeploymentDeployedParams{
 					TargetID: targetID, DeployUrl: deployURL, ID: deployID,
-				})
+				}); err != nil {
+					slog.Warn("build: persist deployment deploy_url failed", "deploy_id", deployID, "err", err)
+				}
 			}
 		}
 		h.mu.Lock()
@@ -195,13 +239,17 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 		if !result.Success {
 			status = "failed"
 		}
-		_ = h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
+		if err := h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
 			ID: deployID, Status: status, BuildLog: result.BuildLog,
 			PagesBuilt: int64(result.PagesBuilt), DurationMs: result.DurationMs, Error: result.Error,
-		})
-		_ = h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
+		}); err != nil {
+			slog.Warn("build: persist deployment status failed", "deploy_id", deployID, "err", err)
+		}
+		if err := h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
 			ID: siteID, LastBuildStatus: status, LastBuildError: result.Error,
-		})
+		}); err != nil {
+			slog.Warn("build: persist site build status failed", "site_id", siteID, "err", err)
+		}
 	}()
 
 	return deployID, nil
@@ -520,7 +568,11 @@ func (h *BuildHandler) TriggerBuildAdmin(w http.ResponseWriter, r *http.Request)
 
 	adminSiteID := siteID
 	go func() {
-		bgCtx := context.Background()
+		lock := h.lockForSite(adminSiteID)
+		lock.Lock()
+		defer lock.Unlock()
+		bgCtx, cancel := context.WithTimeout(context.Background(), builder.BuildTimeout)
+		defer cancel()
 		result := builder.Build(bgCtx, h.queries, adminSiteID, h.cfg.DataDir)
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, adminSiteID, deployID, result.DistDir); err != nil {
@@ -546,19 +598,23 @@ func (h *BuildHandler) TriggerBuildAdmin(w http.ResponseWriter, r *http.Request)
 		if !result.Success {
 			status = "failed"
 		}
-		_ = h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
+		if err := h.queries.UpdateDeploymentStatus(bgCtx, store.UpdateDeploymentStatusParams{
 			ID:         deployID,
 			Status:     status,
 			BuildLog:   result.BuildLog,
 			PagesBuilt: int64(result.PagesBuilt),
 			DurationMs: result.DurationMs,
 			Error:      result.Error,
-		})
-		_ = h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
+		}); err != nil {
+			slog.Warn("build: persist deployment status failed", "deploy_id", deployID, "err", err)
+		}
+		if err := h.queries.UpdateSiteBuildStatus(bgCtx, store.UpdateSiteBuildStatusParams{
 			ID:              adminSiteID,
 			LastBuildStatus: status,
 			LastBuildError:  result.Error,
-		})
+		}); err != nil {
+			slog.Warn("build: persist site build status failed", "site_id", adminSiteID, "err", err)
+		}
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]string{

@@ -30,6 +30,9 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -84,6 +87,10 @@ type Manager struct {
 	mu         sync.Mutex
 	lastSweep  time.Time
 	lastResult SweepResult
+	// dataDir is the workspace root used by the orphan-workspace sweep
+	// (audit H8). Empty means the sweep is disabled (e.g. in tests). Set
+	// via SetDataDir before Start.
+	dataDir string
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -122,11 +129,24 @@ type PerSiteSweepResult struct {
 // HTTP server uses; the manager runs scoped DELETEs against the shared
 // connection (SQLite WAL mode handles concurrent readers + the single
 // writer just fine).
+//
+// dataDir is the root that contains the workspaces/ subdir. If non-empty,
+// the daily sweep also reaps orphan workspace directories (audit H8): a
+// workspaces/{siteID}/ dir whose siteID is not in the sites table gets
+// removed. Pass "" to disable the orphan sweep (e.g. in tests).
 func NewManager(queries *store.Queries, db *sql.DB) *Manager {
 	return &Manager{
 		queries: queries,
 		db:      db,
 	}
+}
+
+// SetDataDir configures the data directory root. Call before Start. When
+// set, the daily sweep also reaps orphan workspace directories (audit H8).
+func (m *Manager) SetDataDir(dir string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dataDir = dir
 }
 
 // Start launches the sweep loop in a goroutine. The first sweep fires
@@ -222,6 +242,17 @@ func (m *Manager) runOnce(ctx context.Context) (SweepResult, error) {
 	// Salt purge is process-level, not per-site. Salts older than 30 days
 	// are unreferenced once the consent purge runs (which uses >= 30d
 	// retention) and there's no per-tenant story for them.
+	// Audit H8: orphan workspace sweep. Looks at every directory under
+	// {dataDir}/workspaces/ and removes any whose name is no longer in
+	// the sites table. Disabled when dataDir is unset (tests).
+	if dir := m.getDataDir(); dir != "" {
+		if n, err := m.sweepOrphanWorkspaces(ctx, dir); err != nil {
+			res.Errors = append(res.Errors, "orphan workspace sweep: "+err.Error())
+		} else if n > 0 {
+			slog.Info("retention: orphan workspaces removed", "count", n)
+		}
+	}
+
 	saltCutoff := time.Now().UTC().AddDate(0, 0, -SaltRetentionDays).Format("2006-01-02")
 	if err := m.queries.DeleteConsentSaltsOlderThan(ctx, saltCutoff); err != nil {
 		res.Errors = append(res.Errors, "delete consent salts: "+err.Error())
@@ -342,3 +373,71 @@ func readDays(m map[string]string, key string, fallbackDays int) int {
 // for future use; current implementation is permissive and runs even
 // without Start since the manager is otherwise idempotent.
 var ErrNotStarted = errors.New("retention: manager not started")
+
+// getDataDir returns the configured data dir under the manager mutex.
+func (m *Manager) getDataDir() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.dataDir
+}
+
+// sweepOrphanWorkspaces removes any directory under {dataDir}/workspaces/
+// whose name is no longer in the sites table (audit H8). Returns the
+// count of removed dirs. Errors do not abort the sweep — every reapable
+// dir is given a chance.
+//
+// Safety: only paths matching the 24-hex siteID shape are considered. Any
+// other directory name (e.g. user-created scratch dir) is left alone.
+// The directory traversal stays inside `{dataDir}/workspaces/` so a
+// symlink doesn't escape the workspaces root.
+func (m *Manager) sweepOrphanWorkspaces(ctx context.Context, dataDir string) (int, error) {
+	wsRoot := filepath.Join(dataDir, "workspaces")
+	entries, err := os.ReadDir(wsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil // No workspaces dir yet; nothing to do.
+		}
+		return 0, err
+	}
+
+	// Build the set of live site IDs.
+	sites, err := m.queries.ListSites(ctx)
+	if err != nil {
+		return 0, err
+	}
+	live := make(map[string]bool, len(sites))
+	for _, s := range sites {
+		live[s.ID] = true
+	}
+
+	removed := 0
+	for _, entry := range entries {
+		if ctx.Err() != nil {
+			return removed, ctx.Err()
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !workspaceNamePattern.MatchString(name) {
+			// Doesn't look like a siteID; leave it alone (defensive).
+			continue
+		}
+		if live[name] {
+			continue
+		}
+		path := filepath.Join(wsRoot, name)
+		if err := os.RemoveAll(path); err != nil {
+			slog.Warn("retention: orphan workspace remove failed",
+				"path", path, "err", err)
+			continue
+		}
+		removed++
+	}
+	return removed, nil
+}
+
+// workspaceNamePattern matches the 24-char hex shape that newID() produces
+// for siteIDs. Anything else under workspaces/ is left untouched by the
+// orphan sweep so a stray scratch dir doesn't get nuked.
+var workspaceNamePattern = regexp.MustCompile(`^[a-fA-F0-9]{24}$`)

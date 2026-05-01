@@ -3,6 +3,7 @@ package retention
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -304,5 +305,69 @@ func TestStartAndStop(t *testing.T) {
 	mgr.Stop(stopCtx)
 	if stopCtx.Err() != nil {
 		t.Errorf("Stop did not return before deadline: %v", stopCtx.Err())
+	}
+}
+
+// TestOrphanWorkspaceSweep is the audit H8 regression guard: a workspace
+// directory whose siteID is no longer in the sites table must be removed
+// by the daily sweep, but a directory belonging to a live site must
+// survive untouched.
+func TestOrphanWorkspaceSweep(t *testing.T) {
+	sqlDB, queries := openTestDB(t)
+	ctx := context.Background()
+
+	dataDir := t.TempDir()
+	wsRoot := filepath.Join(dataDir, "workspaces")
+	if err := os.MkdirAll(wsRoot, 0o755); err != nil {
+		t.Fatalf("mkdir workspaces: %v", err)
+	}
+
+	// Two siteID-shaped dirs: one with a live row, one orphan.
+	live := "abcdef0123456789abcdef01"
+	orphan := "ffffffffffffffffffffffff"
+	if _, err := sqlDB.Exec(`INSERT INTO sites (id, name, slug) VALUES (?, ?, ?)`, live, "Live", "live"); err != nil {
+		t.Fatalf("seed live site: %v", err)
+	}
+	for _, dir := range []string{live, orphan} {
+		if err := os.MkdirAll(filepath.Join(wsRoot, dir), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	// Plus a non-siteID-shaped dir that must be left alone (defensive).
+	if err := os.MkdirAll(filepath.Join(wsRoot, "scratch"), 0o755); err != nil {
+		t.Fatalf("mkdir scratch: %v", err)
+	}
+
+	mgr := NewManager(queries, sqlDB)
+	mgr.SetDataDir(dataDir)
+
+	removed, err := mgr.sweepOrphanWorkspaces(ctx, dataDir)
+	if err != nil {
+		t.Fatalf("sweepOrphanWorkspaces: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("removed = %d, want 1 (only the orphan)", removed)
+	}
+
+	// Live dir survives.
+	if _, err := os.Stat(filepath.Join(wsRoot, live)); err != nil {
+		t.Errorf("live workspace must survive sweep: %v", err)
+	}
+	// Orphan is gone.
+	if _, err := os.Stat(filepath.Join(wsRoot, orphan)); !os.IsNotExist(err) {
+		t.Errorf("orphan workspace must be removed; stat err = %v", err)
+	}
+	// Scratch dir untouched (not siteID-shaped).
+	if _, err := os.Stat(filepath.Join(wsRoot, "scratch")); err != nil {
+		t.Errorf("non-siteID 'scratch' dir must NOT be touched: %v", err)
+	}
+}
+
+func TestOrphanWorkspaceSweep_NoWorkspacesDir(t *testing.T) {
+	sqlDB, queries := openTestDB(t)
+	mgr := NewManager(queries, sqlDB)
+	dataDir := t.TempDir() // empty dir; no workspaces/ subdir
+	if n, err := mgr.sweepOrphanWorkspaces(context.Background(), dataDir); err != nil || n != 0 {
+		t.Errorf("missing workspaces dir should be a no-op; got n=%d err=%v", n, err)
 	}
 }
