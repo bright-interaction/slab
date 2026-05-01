@@ -47,8 +47,14 @@ type CookieProofConfig struct {
 	// FloatingTrigger: "left", "right", or "off". Empty defaults to "left".
 	FloatingTrigger string
 
-	// LanguageSelector enables the in-banner language dropdown when true.
-	LanguageSelector bool
+	// LanguageSelector controls the in-banner language dropdown:
+	//   - false:        dropdown hidden (single language)
+	//   - true:         dropdown shown with all 14 widget-bundled locales
+	//                   (da, de, en, es, fi, fr, it, ja, nl, no, pl, pt, sv)
+	//   - non-empty []: dropdown shown limited to the listed ISO codes,
+	//                   e.g. ["en", "sv"] for an EN+SV-only site
+	LanguageSelector    bool
+	LanguageSelectorSet []string
 
 	// CookieExpiryDays bounds how long the visitor's stored consent
 	// record stays valid before the banner re-prompts. 0 = widget default.
@@ -172,7 +178,9 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		CookieName        string            `json:"cookieName,omitempty"`
 		CookieExpiry      int               `json:"cookieExpiry,omitempty"`
 		Revision          int               `json:"revision,omitempty"`
-		LanguageSelector  bool              `json:"languageSelector,omitempty"`
+		// LanguageSelector accepts the same shape the widget does:
+		// bool (true = all built-in, false = none) or []string of ISO codes.
+		LanguageSelector  any               `json:"languageSelector,omitempty"`
 		CcpaEnabled       bool              `json:"ccpaEnabled,omitempty"`
 		CcpaURL           string            `json:"ccpaUrl,omitempty"`
 		CssVars           map[string]string `json:"cssVars,omitempty"`
@@ -199,6 +207,17 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		floatingTrigger = "left"
 	}
 
+	// LanguageSelector serialisation: prefer the explicit list when the
+	// operator has narrowed the set; otherwise fall through to the on/off
+	// boolean. Empty list AND false -> omit entirely so the widget falls
+	// back to its built-in default (no dropdown).
+	var langSel any
+	if cfg.LanguageSelector && len(cfg.LanguageSelectorSet) > 0 {
+		langSel = cfg.LanguageSelectorSet
+	} else if cfg.LanguageSelector {
+		langSel = true
+	}
+
 	out := embedConfig{
 		SiteID:           cfg.SiteID,
 		Domain:           cfg.Domain,
@@ -214,7 +233,7 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		CookieName:       AtomicSiteConsentCookieName,
 		CookieExpiry:     cfg.CookieExpiryDays,
 		Revision:         cfg.Revision,
-		LanguageSelector: cfg.LanguageSelector,
+		LanguageSelector: langSel,
 		CcpaEnabled:      cfg.CcpaEnabled,
 		CcpaURL:          cfg.CcpaURL,
 		CssVars:          cfg.CssVars,
@@ -303,11 +322,39 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 	cfg.AcceptLabel = settingsMap["analytics.cookie_banner_accept"]
 	cfg.RejectLabel = settingsMap["analytics.cookie_banner_reject"]
 	cfg.SettingsLabel = settingsMap["analytics.cookie_banner_customize"]
-	cfg.PrivacyPolicyURL = settingsMap["seo.privacy_policy_url"]
+
+	// Privacy policy URL: explicit setting wins; otherwise auto-derive a
+	// locale-prefixed /<lang>/privacy URL. Starter kits seed a /privacy
+	// page in every language so this default works out of the box.
+	// Operators can still override via seo.privacy_policy_url.
+	cfg.PrivacyPolicyURL = strings.TrimSpace(settingsMap["seo.privacy_policy_url"])
+	if cfg.PrivacyPolicyURL == "" {
+		lang := strings.TrimSpace(site.Lang)
+		if lang == "" {
+			cfg.PrivacyPolicyURL = "/privacy"
+		} else {
+			cfg.PrivacyPolicyURL = "/" + lang + "/privacy"
+		}
+	}
 
 	cfg.Theme = settingsMap["analytics.cookie_theme"]
 	cfg.FloatingTrigger = settingsMap["analytics.cookie_floating_trigger"]
 	cfg.LanguageSelector = boolSetting(settingsMap["analytics.cookie_language_selector"], false)
+	// cookie_languages: comma-separated list of ISO codes (e.g. "en,sv,de").
+	// Empty + LanguageSelector=true -> show ALL widget-bundled locales.
+	// Non-empty + LanguageSelector=true -> dropdown limited to listed codes.
+	// LanguageSelector=false -> dropdown hidden regardless.
+	if raw := strings.TrimSpace(settingsMap["analytics.cookie_languages"]); raw != "" {
+		seen := map[string]bool{}
+		for _, code := range strings.Split(raw, ",") {
+			c := strings.ToLower(strings.TrimSpace(code))
+			if c == "" || seen[c] {
+				continue
+			}
+			seen[c] = true
+			cfg.LanguageSelectorSet = append(cfg.LanguageSelectorSet, c)
+		}
+	}
 	cfg.CookieExpiryDays = intSetting(settingsMap["analytics.cookie_expiry_days"], 365, 0, 365)
 	cfg.Revision = intSetting(settingsMap["analytics.cookie_revision"], 0, 0, 9999)
 	cfg.CcpaEnabled = boolSetting(settingsMap["analytics.ccpa_enabled"], false)
