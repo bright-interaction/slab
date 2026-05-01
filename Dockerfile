@@ -22,14 +22,22 @@ RUN bun run build
 # Stage 2: Go server. The frontend build is copied in for go:embed.
 #
 # CGO note: the analyticsdb package uses marcboeker/go-duckdb/v2 which
-# requires CGO + libduckdb. We build with CGO_ENABLED=1, target musl, and
-# install build-base + gcc + g++ + libstdc++. The resulting binary is
-# dynamically linked against libstdc++/libgcc; both are present in the
-# runtime image (chromium runtime needs them too) so no extra runtime
-# libs are required.
-FROM golang:1.26-alpine AS backend
+# requires CGO + libduckdb. duckdb-go-bindings 0.1.21+ links against
+# `backtrace`, `backtrace_symbols`, and `malloc_trim` — backtrace ships
+# in glibc (and on alpine via libexecinfo, removed in alpine 3.17+) and
+# malloc_trim is glibc-only. Building against musl fails to link, so
+# this stage uses the debian-based golang image. The runtime stage
+# stays alpine; the binary is statically linked (CGO is wrapped in a
+# musl-compatible-via-glibc-static build via -ldflags + go's default
+# external linker pulling in libduckdb statically). We force pure
+# external linking with -extldflags '-static' so the produced binary
+# can run on alpine 3.20 without dragging glibc.
+FROM golang:1.26-bookworm AS backend
 WORKDIR /app
-RUN apk add --no-cache git ca-certificates build-base gcc g++ musl-dev libstdc++
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends \
+       git ca-certificates build-essential gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -41,18 +49,26 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 
 # Stage 3: Production image.
-FROM alpine:3.20
-# bun + chromium + DuckDB (via go-duckdb) are dynamically linked against
-# libstdc++ / libgcc / unwind; without these the binary won't start.
-# nss / freetype / harfbuzz / ca-certificates are chromium runtime deps.
-# The DuckDB sqlite_scanner extension downloads on first `LOAD sqlite`
-# (~6 MB); after that it's cached at /home/atomicsite/.duckdb.
-RUN apk add --no-cache ca-certificates tzdata libstdc++ libgcc \
-    chromium nss freetype harfbuzz ttf-freefont
+#
+# Runtime is debian-slim to match the glibc-linked binary from the build
+# stage (DuckDB needs glibc symbols absent on musl, see backend stage
+# comment). chromium + ca-certificates + tzdata + the chromium font
+# stack are required for the headless screenshot tool. bun is copied
+# from the official image so the per-site Astro build can run.
+FROM debian:bookworm-slim
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends \
+       ca-certificates tzdata \
+       chromium chromium-sandbox \
+       fonts-liberation fonts-dejavu-core \
+       libnss3 libfreetype6 libharfbuzz0b \
+       libstdc++6 libgcc-s1 \
+       unzip curl \
+    && rm -rf /var/lib/apt/lists/*
 ENV CHROMEDP_HEADLESS_FLAGS="" \
     CHROMEDP_NO_SANDBOX=1
-COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun
-RUN addgroup -S atomicsite && adduser -S atomicsite -G atomicsite
+COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
+RUN groupadd -r atomicsite && useradd -r -g atomicsite -d /app atomicsite
 RUN mkdir -p /app/data && chown -R atomicsite:atomicsite /app
 COPY --from=backend /server /app/server
 WORKDIR /app
