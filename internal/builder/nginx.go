@@ -20,16 +20,20 @@ func nginxLogDir() string {
 	return "/var/log/atomicsite"
 }
 
-// nginxLogPath returns the canonical JSON access log path for a site.
-// Centralised so the builder + analytics parser stay in sync.
-func nginxLogPath(siteID string) string {
-	return filepath.Join(nginxLogDir(), siteID+".json.log")
+// nginxLogPath returns the canonical JSON access log path for a site, keyed by
+// slug because that's what the host nginx can derive from $host (the leftmost
+// label of *.atomicsite.example.com). The parser tails this file and
+// writes visit_events rows scoped to the matching site_id.
+func nginxLogPath(slug string) string {
+	return filepath.Join(nginxLogDir(), slug+".json.log")
 }
 
 // NginxLogPath is the exported version of nginxLogPath for use by the analytics
 // parser/manager which needs to know where Nginx will be writing log lines.
-func NginxLogPath(siteID string) string {
-	return nginxLogPath(siteID)
+// Takes slug, not site_id, because nginx writes the file via $host without
+// knowing the internal site_id.
+func NginxLogPath(slug string) string {
+	return nginxLogPath(slug)
 }
 
 // NginxLogDir is the exported log directory for callers that need to ensure
@@ -49,6 +53,11 @@ func RenderNginxConfig(ctx context.Context, queries *store.Queries, siteID strin
 	sm := make(map[string]string)
 	for _, s := range settings {
 		sm[s.Category+"."+s.Key] = s.Value
+	}
+
+	site, err := queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return fmt.Errorf("get site for nginx config: %w", err)
 	}
 
 	headers, err := BuildSecurityHeaders(ctx, queries, siteID)
@@ -134,7 +143,7 @@ func RenderNginxConfig(ctx context.Context, queries *store.Queries, siteID strin
 		// rather than poisoning the country breakdown.
 		b.WriteString("  '\"country\":\"$http_cf_ipcountry\"'\n")
 		b.WriteString("'}';\n")
-		b.WriteString(fmt.Sprintf("access_log %s atomicsite_json;\n\n", nginxLogPath(siteID)))
+		b.WriteString(fmt.Sprintf("access_log %s atomicsite_json;\n\n", nginxLogPath(site.Slug)))
 	}
 
 	// Hashed assets: long-cache immutable

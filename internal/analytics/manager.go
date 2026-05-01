@@ -19,8 +19,15 @@ type Manager struct {
 	baseSalt string
 
 	mu      sync.Mutex
-	parsers map[string]*runningParser
+	parsers map[string]*runningParser // key = site_id
 	wg      sync.WaitGroup
+}
+
+// trackedSite is one row in the desired-set returned by desiredSites:
+// site_id stays the FK on visit_events, slug drives the log file path.
+type trackedSite struct {
+	ID   string
+	Slug string
 }
 
 type runningParser struct {
@@ -48,7 +55,7 @@ func (m *Manager) Start(ctx context.Context) error {
 // Reload rescans site_settings and starts/stops parsers to match the new
 // desired set. Sites that turn analytics off are stopped; new ones are started.
 func (m *Manager) Reload(ctx context.Context) error {
-	desired, err := m.desiredSiteIDs(ctx)
+	desired, err := m.desiredSites(ctx)
 	if err != nil {
 		return err
 	}
@@ -67,11 +74,11 @@ func (m *Manager) Reload(ctx context.Context) error {
 	}
 
 	// Start parsers newly desired
-	for siteID := range desired {
+	for siteID, ts := range desired {
 		if _, running := m.parsers[siteID]; running {
 			continue
 		}
-		m.spawn(ctx, siteID)
+		m.spawn(ctx, ts)
 	}
 	return nil
 }
@@ -98,28 +105,29 @@ func (m *Manager) Stop(ctx context.Context) {
 }
 
 // spawn must be called with m.mu held.
-func (m *Manager) spawn(ctx context.Context, siteID string) {
-	salt := m.siteSalt(ctx, siteID)
-	p := NewParser(siteID, builder.NginxLogPath(siteID), salt, m.queries)
+func (m *Manager) spawn(ctx context.Context, ts trackedSite) {
+	salt := m.siteSalt(ctx, ts.ID)
+	p := NewParser(ts.ID, builder.NginxLogPath(ts.Slug), salt, m.queries)
 	pCtx, cancel := context.WithCancel(ctx)
-	m.parsers[siteID] = &runningParser{parser: p, cancel: cancel}
+	m.parsers[ts.ID] = &runningParser{parser: p, cancel: cancel}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
 		p.Run(pCtx)
 	}()
-	slog.Info("analytics: started parser", "site_id", siteID)
+	slog.Info("analytics: started parser", "site_id", ts.ID, "slug", ts.Slug)
 }
 
-// desiredSiteIDs returns the set of sites where analytics tracking is enabled.
-// We only spawn parsers when atomicsite_tracking_enabled=true (cookieproof
-// alone doesn't write to our log; it lives client-side).
-func (m *Manager) desiredSiteIDs(ctx context.Context) (map[string]struct{}, error) {
+// desiredSites returns the set of sites where analytics tracking is enabled,
+// keyed by site_id with the slug attached so the parser can derive the right
+// log path. We only spawn parsers when atomicsite_tracking_enabled=true
+// (cookieproof alone doesn't write to our log; it lives client-side).
+func (m *Manager) desiredSites(ctx context.Context) (map[string]trackedSite, error) {
 	sites, err := m.queries.ListSites(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]struct{})
+	out := make(map[string]trackedSite)
 	for _, s := range sites {
 		settings, err := m.queries.ListSettingsByCategory(ctx, store.ListSettingsByCategoryParams{
 			SiteID:   s.ID,
@@ -130,7 +138,7 @@ func (m *Manager) desiredSiteIDs(ctx context.Context) (map[string]struct{}, erro
 		}
 		for _, kv := range settings {
 			if kv.Key == "atomicsite_tracking_enabled" && isTrue(kv.Value) {
-				out[s.ID] = struct{}{}
+				out[s.ID] = trackedSite{ID: s.ID, Slug: s.Slug}
 				break
 			}
 		}
