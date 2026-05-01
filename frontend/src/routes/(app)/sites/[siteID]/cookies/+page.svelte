@@ -10,6 +10,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { categoryMap } from '$lib/settings/nginxPreview';
 	import type { Site } from '$lib/api/types';
+	import type { CookieDeclaration } from '$lib/api/settings';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -21,6 +22,23 @@
 		return s === '1' || s === 'true' || s === 'yes' || s === 'on';
 	}
 
+	function clampInt(v: string | undefined, fallback: number, min: number, max: number): number {
+		if (v === undefined || v === '') return fallback;
+		const n = Number.parseInt(v, 10);
+		if (!Number.isFinite(n)) return fallback;
+		if (n < min || n > max) return fallback;
+		return n;
+	}
+
+	type CategoryID = 'necessary' | 'analytics' | 'marketing' | 'preferences';
+	const CATEGORY_ORDER: CategoryID[] = ['necessary', 'analytics', 'marketing', 'preferences'];
+	const CATEGORY_LABELS: Record<CategoryID, string> = {
+		necessary: 'Necessary',
+		analytics: 'Analytics',
+		marketing: 'Marketing',
+		preferences: 'Preferences'
+	};
+
 	let loading = $state(true);
 	let saving = $state(false);
 
@@ -28,18 +46,44 @@
 	let position = $state<'bottom' | 'top' | 'center'>('bottom');
 	let title = $state('');
 	let description = $state('');
+	let acceptLabel = $state('');
+	let rejectLabel = $state('');
+	let customizeLabel = $state('');
 	let catAnalytics = $state(true);
 	let catMarketing = $state(true);
 	let catPreferences = $state(true);
+
+	// Compliance & UX (added 2026-05-01).
+	let cookieExpiryDays = $state(365);
+	let cookieRevision = $state(0);
+	let cookieTheme = $state<'light' | 'dark' | 'auto'>('light');
+	let floatingTrigger = $state<'left' | 'right' | 'off'>('left');
+	let languageSelector = $state(false);
+	let ccpaEnabled = $state(false);
+	let ccpaUrl = $state('');
+
+	let userDeclarations = $state<CookieDeclaration[]>([]);
+	let presets = $state<CookieDeclaration[]>([]);
 
 	type State = {
 		enabled: boolean;
 		position: 'bottom' | 'top' | 'center';
 		title: string;
 		description: string;
+		acceptLabel: string;
+		rejectLabel: string;
+		customizeLabel: string;
 		catAnalytics: boolean;
 		catMarketing: boolean;
 		catPreferences: boolean;
+		declarationsJSON: string;
+		cookieExpiryDays: number;
+		cookieRevision: number;
+		cookieTheme: 'light' | 'dark' | 'auto';
+		floatingTrigger: 'left' | 'right' | 'off';
+		languageSelector: boolean;
+		ccpaEnabled: boolean;
+		ccpaUrl: string;
 	};
 
 	let initial: State = $state({
@@ -47,15 +91,56 @@
 		position: 'bottom',
 		title: '',
 		description: '',
+		acceptLabel: '',
+		rejectLabel: '',
+		customizeLabel: '',
 		catAnalytics: true,
 		catMarketing: true,
-		catPreferences: true
+		catPreferences: true,
+		declarationsJSON: '[]',
+		cookieExpiryDays: 365,
+		cookieRevision: 0,
+		cookieTheme: 'light',
+		floatingTrigger: 'left',
+		languageSelector: false,
+		ccpaEnabled: false,
+		ccpaUrl: ''
 	});
+
+	function serializeDeclarations(rows: CookieDeclaration[]): string {
+		const cleaned = rows
+			.filter((r) => r.name.trim() !== '')
+			.map((r) => ({
+				category: r.category,
+				name: r.name.trim(),
+				provider: (r.provider ?? '').trim() || undefined,
+				purpose: (r.purpose ?? '').trim() || undefined,
+				expiry: (r.expiry ?? '').trim() || undefined
+			}));
+		return cleaned.length === 0 ? '' : JSON.stringify(cleaned);
+	}
+
+	function parseDeclarations(raw: string): CookieDeclaration[] {
+		const v = (raw ?? '').trim();
+		if (v === '') return [];
+		try {
+			const parsed = JSON.parse(v);
+			if (!Array.isArray(parsed)) return [];
+			return parsed.filter(
+				(r) => r && typeof r.name === 'string' && CATEGORY_ORDER.includes(r.category)
+			);
+		} catch {
+			return [];
+		}
+	}
 
 	async function load() {
 		loading = true;
 		try {
-			const rows = await settingsApi.listByCategory(siteID, 'analytics');
+			const [rows, presetsResp] = await Promise.all([
+				settingsApi.listByCategory(siteID, 'analytics'),
+				settingsApi.getCookiePresets(siteID).catch(() => [] as CookieDeclaration[])
+			]);
 			const m = categoryMap(rows);
 
 			enabled = toBool(m.cookieproof_enabled);
@@ -63,11 +148,46 @@
 			position = pos === 'top' || pos === 'center' ? pos : 'bottom';
 			title = m.cookie_banner_title || '';
 			description = m.cookie_banner_description || '';
+			acceptLabel = m.cookie_banner_accept || '';
+			rejectLabel = m.cookie_banner_reject || '';
+			customizeLabel = m.cookie_banner_customize || '';
 			catAnalytics = toBool(m.cookie_cat_analytics, true);
 			catMarketing = toBool(m.cookie_cat_marketing, true);
 			catPreferences = toBool(m.cookie_cat_preferences, true);
 
-			initial = { enabled, position, title, description, catAnalytics, catMarketing, catPreferences };
+			cookieExpiryDays = clampInt(m.cookie_expiry_days, 365, 0, 365);
+			cookieRevision = clampInt(m.cookie_revision, 0, 0, 9999);
+			const t = (m.cookie_theme || 'light').toLowerCase();
+			cookieTheme = t === 'dark' || t === 'auto' ? (t as 'dark' | 'auto') : 'light';
+			const ft = (m.cookie_floating_trigger || 'left').toLowerCase();
+			floatingTrigger = ft === 'right' || ft === 'off' ? (ft as 'right' | 'off') : 'left';
+			languageSelector = toBool(m.cookie_language_selector, false);
+			ccpaEnabled = toBool(m.ccpa_enabled, false);
+			ccpaUrl = m.ccpa_url || '';
+
+			userDeclarations = parseDeclarations(m.cookie_declarations || '');
+			presets = presetsResp;
+
+			initial = {
+				enabled,
+				position,
+				title,
+				description,
+				acceptLabel,
+				rejectLabel,
+				customizeLabel,
+				catAnalytics,
+				catMarketing,
+				catPreferences,
+				declarationsJSON: serializeDeclarations(userDeclarations),
+				cookieExpiryDays,
+				cookieRevision,
+				cookieTheme,
+				floatingTrigger,
+				languageSelector,
+				ccpaEnabled,
+				ccpaUrl
+			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load cookie settings.');
 		} finally {
@@ -79,14 +199,27 @@
 		void load();
 	});
 
+	const declarationsJSONNow = $derived(serializeDeclarations(userDeclarations));
+
 	const dirty = $derived(
 		enabled !== initial.enabled ||
 			position !== initial.position ||
 			title !== initial.title ||
 			description !== initial.description ||
+			acceptLabel !== initial.acceptLabel ||
+			rejectLabel !== initial.rejectLabel ||
+			customizeLabel !== initial.customizeLabel ||
 			catAnalytics !== initial.catAnalytics ||
 			catMarketing !== initial.catMarketing ||
-			catPreferences !== initial.catPreferences
+			catPreferences !== initial.catPreferences ||
+			declarationsJSONNow !== initial.declarationsJSON ||
+			cookieExpiryDays !== initial.cookieExpiryDays ||
+			cookieRevision !== initial.cookieRevision ||
+			cookieTheme !== initial.cookieTheme ||
+			floatingTrigger !== initial.floatingTrigger ||
+			languageSelector !== initial.languageSelector ||
+			ccpaEnabled !== initial.ccpaEnabled ||
+			ccpaUrl !== initial.ccpaUrl
 	);
 
 	function discard() {
@@ -94,13 +227,58 @@
 		position = initial.position;
 		title = initial.title;
 		description = initial.description;
+		acceptLabel = initial.acceptLabel;
+		rejectLabel = initial.rejectLabel;
+		customizeLabel = initial.customizeLabel;
 		catAnalytics = initial.catAnalytics;
 		catMarketing = initial.catMarketing;
 		catPreferences = initial.catPreferences;
+		userDeclarations = parseDeclarations(initial.declarationsJSON);
+		cookieExpiryDays = initial.cookieExpiryDays;
+		cookieRevision = initial.cookieRevision;
+		cookieTheme = initial.cookieTheme;
+		floatingTrigger = initial.floatingTrigger;
+		languageSelector = initial.languageSelector;
+		ccpaEnabled = initial.ccpaEnabled;
+		ccpaUrl = initial.ccpaUrl;
 	}
 
 	function b(v: boolean): string {
 		return v ? '1' : '0';
+	}
+
+	function addDeclaration(category: CategoryID) {
+		userDeclarations = [
+			...userDeclarations,
+			{ category, name: '', provider: '', purpose: '', expiry: '' }
+		];
+	}
+
+	function removeDeclaration(idx: number) {
+		userDeclarations = userDeclarations.filter((_, i) => i !== idx);
+	}
+
+	function overridePreset(p: CookieDeclaration) {
+		// Copy the preset into the user list so the strings become editable.
+		// Same (category, name) collision: backend merge gives the user row
+		// precedence and the preset row drops out of the rendered table.
+		userDeclarations = [...userDeclarations, { ...p }];
+	}
+
+	function userRowsFor(category: CategoryID): { row: CookieDeclaration; idx: number }[] {
+		return userDeclarations
+			.map((row, idx) => ({ row, idx }))
+			.filter(({ row }) => row.category === category);
+	}
+
+	function presetRowsFor(category: CategoryID): CookieDeclaration[] {
+		return presets.filter((p) => p.category === category);
+	}
+
+	function isOverridden(p: CookieDeclaration): boolean {
+		return userDeclarations.some(
+			(u) => u.category === p.category && u.name.trim() === p.name.trim()
+		);
 	}
 
 	async function save() {
@@ -112,12 +290,42 @@
 				{ category: 'analytics', key: 'cookie_banner_position', value: position },
 				{ category: 'analytics', key: 'cookie_banner_title', value: title },
 				{ category: 'analytics', key: 'cookie_banner_description', value: description },
+				{ category: 'analytics', key: 'cookie_expiry_days', value: String(cookieExpiryDays) },
+				{ category: 'analytics', key: 'cookie_revision', value: String(cookieRevision) },
+				{ category: 'analytics', key: 'cookie_theme', value: cookieTheme },
+				{ category: 'analytics', key: 'cookie_floating_trigger', value: floatingTrigger },
+				{ category: 'analytics', key: 'cookie_language_selector', value: b(languageSelector) },
+				{ category: 'analytics', key: 'ccpa_enabled', value: b(ccpaEnabled) },
+				{ category: 'analytics', key: 'ccpa_url', value: ccpaUrl },
+				{ category: 'analytics', key: 'cookie_banner_accept', value: acceptLabel },
+				{ category: 'analytics', key: 'cookie_banner_reject', value: rejectLabel },
+				{ category: 'analytics', key: 'cookie_banner_customize', value: customizeLabel },
 				{ category: 'analytics', key: 'cookie_cat_analytics', value: b(catAnalytics) },
 				{ category: 'analytics', key: 'cookie_cat_marketing', value: b(catMarketing) },
-				{ category: 'analytics', key: 'cookie_cat_preferences', value: b(catPreferences) }
+				{ category: 'analytics', key: 'cookie_cat_preferences', value: b(catPreferences) },
+				{ category: 'analytics', key: 'cookie_declarations', value: declarationsJSONNow }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
-			initial = { enabled, position, title, description, catAnalytics, catMarketing, catPreferences };
+			initial = {
+				enabled,
+				position,
+				title,
+				description,
+				acceptLabel,
+				rejectLabel,
+				customizeLabel,
+				catAnalytics,
+				catMarketing,
+				catPreferences,
+				declarationsJSON: declarationsJSONNow,
+				cookieExpiryDays,
+				cookieRevision,
+				cookieTheme,
+				floatingTrigger,
+				languageSelector,
+				ccpaEnabled,
+				ccpaUrl
+			};
 			toast.success('Cookie banner settings saved. Rebuild to publish.');
 		} catch (err) {
 			const msg = err instanceof ApiError ? err.message : 'Failed to save settings.';
@@ -126,6 +334,67 @@
 			saving = false;
 		}
 	}
+
+	// Live preview iframe URL. Pulls in unsaved form state via query
+	// params so editors see the real CookieProof widget update as they
+	// type. Reload is debounced via the keyed reactive expression.
+	let previewBust = $state(0);
+	const previewSrc = $derived.by(() => {
+		void previewBust; // bust dep
+		const params = new URLSearchParams();
+		const set = (k: string, v: string | undefined | null) => {
+			if (v !== undefined && v !== null && v !== '') params.set(k, v);
+		};
+		set('title', title);
+		set('description', description);
+		set('accept_label', acceptLabel);
+		set('reject_label', rejectLabel);
+		set('customize_label', customizeLabel);
+		set('language_selector', languageSelector ? '1' : '0');
+		set('theme', cookieTheme);
+		set('floating_trigger', floatingTrigger);
+		set('position', position);
+		set('ccpa_enabled', ccpaEnabled ? '1' : '0');
+		set('ccpa_url', ccpaUrl);
+		// Branding pulled live from the site row (the Branding page edits
+		// data.site directly via the Save button there; we forward the
+		// current values regardless so the preview always matches).
+		set('primary_color', data.site.primary_color);
+		set('secondary_color', data.site.secondary_color);
+		set('on_primary_color', data.site.on_primary_color);
+		set('text_color', data.site.text_color);
+		set('bg_color', data.site.bg_color);
+		set('surface_color', data.site.surface_color);
+		set('muted_color', data.site.muted_color);
+		set('border_color', data.site.border_color);
+		set('font_body', data.site.font_body);
+		return `/api/sites/${siteID}/cookies/preview?${params.toString()}&_=${previewBust}`;
+	});
+
+	// Debounce preview iframe reload by 350ms after the last edit.
+	let previewTimer: ReturnType<typeof setTimeout> | null = null;
+	function bumpPreview() {
+		if (previewTimer) clearTimeout(previewTimer);
+		previewTimer = setTimeout(() => {
+			previewBust++;
+			previewTimer = null;
+		}, 350);
+	}
+	$effect(() => {
+		// Track the fields that should trigger a reload.
+		void title;
+		void description;
+		void acceptLabel;
+		void rejectLabel;
+		void customizeLabel;
+		void languageSelector;
+		void cookieTheme;
+		void floatingTrigger;
+		void position;
+		void ccpaEnabled;
+		void ccpaUrl;
+		bumpPreview();
+	});
 </script>
 
 <div class="mx-auto max-w-7xl px-6 py-8">
@@ -176,6 +445,21 @@
 
 				<Card padding="md">
 					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Button labels
+					</h2>
+					<p class="mt-2 text-[12px] text-text-muted">
+						Optional overrides. Leave any field empty to use the translated default for the site
+						language.
+					</p>
+					<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+						<Input label="Accept" placeholder="Godkänn alla" bind:value={acceptLabel} />
+						<Input label="Reject" placeholder="Avvisa alla" bind:value={rejectLabel} />
+						<Input label="Save preferences" placeholder="Spara inställningar" bind:value={customizeLabel} />
+					</div>
+				</Card>
+
+				<Card padding="md">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 						Position
 					</h2>
 					<div class="mt-3 flex gap-2">
@@ -212,6 +496,230 @@
 					</div>
 				</Card>
 
+				<Card padding="md">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Compliance &amp; UX
+					</h2>
+					<p class="mt-2 text-[12px] text-text-muted">
+						Settings that affect IMY / GDPR / CCPA compliance and the visitor experience. Defaults
+						are safe; touch these only when policy changes or the visitor reports a problem.
+					</p>
+
+					<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+						<div>
+							<label class="text-[12px] text-text-primary" for="cookie-expiry-days">
+								Consent expiry (days)
+							</label>
+							<input
+								id="cookie-expiry-days"
+								type="number"
+								min="0"
+								max="365"
+								class="mt-1 w-full rounded border border-border-light bg-transparent px-2 py-1.5 text-[13px] text-text-primary"
+								bind:value={cookieExpiryDays}
+							/>
+							<p class="mt-1 text-[11px] text-text-muted">
+								IMY caps consent at 12 months. Default 365. Set 0 to use the widget default.
+							</p>
+						</div>
+
+						<div>
+							<label class="text-[12px] text-text-primary" for="cookie-revision">
+								Policy revision
+							</label>
+							<input
+								id="cookie-revision"
+								type="number"
+								min="0"
+								max="9999"
+								class="mt-1 w-full rounded border border-border-light bg-transparent px-2 py-1.5 text-[13px] text-text-primary"
+								bind:value={cookieRevision}
+							/>
+							<p class="mt-1 text-[11px] text-text-muted">
+								Increment when your privacy policy or category list changes. Forces every visitor
+								to re-consent.
+							</p>
+						</div>
+
+						<div>
+							<label class="text-[12px] text-text-primary" for="cookie-theme">Theme</label>
+							<select
+								id="cookie-theme"
+								class="mt-1 w-full rounded border border-border-light bg-transparent px-2 py-1.5 text-[13px] text-text-primary"
+								bind:value={cookieTheme}
+							>
+								<option value="light">Light</option>
+								<option value="dark">Dark</option>
+								<option value="auto">Auto (follow OS)</option>
+							</select>
+							<p class="mt-1 text-[11px] text-text-muted">
+								Brand colors still apply on top of the theme.
+							</p>
+						</div>
+
+						<div>
+							<label class="text-[12px] text-text-primary" for="floating-trigger">
+								Floating reopen trigger
+							</label>
+							<select
+								id="floating-trigger"
+								class="mt-1 w-full rounded border border-border-light bg-transparent px-2 py-1.5 text-[13px] text-text-primary"
+								bind:value={floatingTrigger}
+							>
+								<option value="left">Bottom-left</option>
+								<option value="right">Bottom-right</option>
+								<option value="off">Off (only manual link)</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="mt-4 flex items-center justify-between gap-4">
+						<div class="flex flex-col">
+							<span class="text-[13px] text-text-primary">Show language selector</span>
+							<span class="text-[12px] text-text-muted">
+								In-banner dropdown so visitors on the wrong locale can switch the modal language.
+							</span>
+						</div>
+						<Switch bind:checked={languageSelector} ariaLabel="Show language selector in banner" />
+					</div>
+
+					<div class="mt-4 flex items-center justify-between gap-4">
+						<div class="flex flex-col">
+							<span class="text-[13px] text-text-primary">CCPA "Do Not Sell" link</span>
+							<span class="text-[12px] text-text-muted">
+								Surfaces a link in the banner footer. Required if you serve California visitors
+								and use third-party trackers.
+							</span>
+						</div>
+						<Switch bind:checked={ccpaEnabled} ariaLabel="Enable CCPA Do Not Sell link" />
+					</div>
+
+					{#if ccpaEnabled}
+						<div class="mt-3">
+							<Input
+								label="CCPA disclosure URL"
+								placeholder="/privacy#ccpa or https://example.com/do-not-sell"
+								hint="Absolute URL or root-relative path to your disclosure page."
+								bind:value={ccpaUrl}
+							/>
+						</div>
+					{/if}
+				</Card>
+
+				<Card padding="md">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Cookies declared
+					</h2>
+					<p class="mt-2 text-[12px] text-text-muted">
+						Per-cookie metadata for the extended-settings table inside the consent modal. Rows
+						labeled <span class="rounded bg-bg-surface px-1.5 py-0.5 text-[11px] text-text-secondary">Auto</span>
+						come from your enabled trackers and language settings; they always apply unless you
+						override them. Click <span class="text-text-primary">Override</span> on any auto row to
+						edit the strings (handy when translating to Swedish).
+					</p>
+
+					<div class="mt-4 flex flex-col gap-5">
+						{#each CATEGORY_ORDER as cat}
+							{@const presetRows = presetRowsFor(cat)}
+							{@const userRows = userRowsFor(cat)}
+							<div class="rounded-lg border border-border-light p-3">
+								<div class="flex items-center justify-between">
+									<h3 class="text-[12px] font-medium text-text-primary">{CATEGORY_LABELS[cat]}</h3>
+									<Button variant="ghost" onclick={() => addDeclaration(cat)}>+ Add cookie</Button>
+								</div>
+
+								{#if presetRows.length > 0 || userRows.length > 0}
+									<div class="mt-3 overflow-x-auto">
+										<table class="w-full text-[12px]">
+											<thead>
+												<tr class="text-left text-text-muted">
+													<th class="pb-1.5 pr-3 font-normal">Cookie</th>
+													<th class="pb-1.5 pr-3 font-normal">Provider</th>
+													<th class="pb-1.5 pr-3 font-normal">Purpose</th>
+													<th class="pb-1.5 pr-3 font-normal">Expiry</th>
+													<th class="pb-1.5 font-normal w-16"></th>
+												</tr>
+											</thead>
+											<tbody class="align-top">
+												{#each presetRows as p}
+													{@const overridden = isOverridden(p)}
+													<tr class="border-t border-border-light/60 {overridden ? 'opacity-40' : ''}">
+														<td class="py-2 pr-3">
+															<div class="flex items-center gap-2">
+																<code class="font-mono text-[11px] text-text-primary">{p.name}</code>
+																<span class="rounded bg-bg-surface px-1.5 py-0.5 text-[10px] text-text-secondary">Auto</span>
+															</div>
+														</td>
+														<td class="py-2 pr-3 text-text-secondary">{p.provider ?? '-'}</td>
+														<td class="py-2 pr-3 text-text-secondary">{p.purpose ?? '-'}</td>
+														<td class="py-2 pr-3 text-text-secondary">{p.expiry ?? '-'}</td>
+														<td class="py-2">
+															{#if !overridden}
+																<button type="button" class="text-[11px] text-accent hover:underline" onclick={() => overridePreset(p)}>Override</button>
+															{:else}
+																<span class="text-[11px] text-text-muted">overridden</span>
+															{/if}
+														</td>
+													</tr>
+												{/each}
+												{#each userRows as { row, idx } (idx)}
+													<tr class="border-t border-border-light/60">
+														<td class="py-2 pr-3">
+															<input
+																type="text"
+																class="w-full rounded border border-border-light bg-transparent px-2 py-1 font-mono text-[11px] text-text-primary"
+																placeholder="_ga"
+																bind:value={row.name}
+															/>
+														</td>
+														<td class="py-2 pr-3">
+															<input
+																type="text"
+																class="w-full rounded border border-border-light bg-transparent px-2 py-1 text-[12px] text-text-primary"
+																placeholder="Google"
+																bind:value={row.provider}
+															/>
+														</td>
+														<td class="py-2 pr-3">
+															<input
+																type="text"
+																class="w-full rounded border border-border-light bg-transparent px-2 py-1 text-[12px] text-text-primary"
+																placeholder="Distinguishes unique users"
+																bind:value={row.purpose}
+															/>
+														</td>
+														<td class="py-2 pr-3">
+															<input
+																type="text"
+																class="w-full rounded border border-border-light bg-transparent px-2 py-1 text-[12px] text-text-primary"
+																placeholder="2 years"
+																bind:value={row.expiry}
+															/>
+														</td>
+														<td class="py-2">
+															<button
+																type="button"
+																class="text-[11px] text-text-muted hover:text-red-500"
+																aria-label="Remove cookie"
+																onclick={() => removeDeclaration(idx)}
+															>×</button>
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
+									</div>
+								{:else}
+									<p class="mt-3 text-[11px] italic text-text-muted">
+										No cookies declared. Add one to populate the extended-settings table for this
+										category.
+									</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</Card>
+
 				<div
 					class="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t border-border-light bg-bg-surface/85 px-6 py-3 backdrop-blur"
 				>
@@ -230,33 +738,22 @@
 					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
 						Live preview
 					</h2>
-					<div
-						class="mt-3 rounded-lg border border-border-light p-4"
-						style:background-color={data.site.bg_color || '#FAFAFA'}
-						style:color={data.site.text_color || '#1A1A1A'}
-					>
-						<div class="text-[15px] font-medium" style:font-family={data.site.font_body}>
-							{title || 'Vi använder kakor'}
-						</div>
-						<p class="mt-1.5 text-[12px] leading-relaxed opacity-80">
-							{description || 'Vi använder kakor för att förbättra din upplevelse, mäta trafik och anpassa innehåll. Du kan när som helst ändra dina inställningar.'}
-						</p>
-						<div class="mt-3 flex gap-2">
-							<button
-								type="button"
-								class="flex-1 rounded px-3 py-2 text-[12px] font-medium"
-								style:background-color={data.site.primary_color || '#0066CC'}
-								style:color={data.site.on_primary_color || '#FFFFFF'}
-							>Acceptera</button>
-							<button
-								type="button"
-								class="flex-1 rounded border px-3 py-2 text-[12px]"
-								style:border-color={data.site.border_color || '#E5E7EB'}
-							>Avvisa</button>
-						</div>
+					<p class="mt-1 text-[11px] text-text-muted">
+						The actual CookieProof widget rendered with this site's branding, copy,
+						and cookie tables. Updates as you edit (debounced ~350ms).
+					</p>
+					<div class="mt-3 overflow-hidden rounded-lg border border-border-light">
+						<iframe
+							src={previewSrc}
+							title="Cookie banner preview"
+							class="block h-[640px] w-full bg-bg-elevated"
+							sandbox="allow-scripts allow-same-origin"
+						></iframe>
 					</div>
 					<p class="mt-3 text-[11px] text-text-muted">
-						The real banner uses your full brand palette. Rebuild the site to publish changes.
+						Reject + Accept share the primary color (IMY 2026 equal prominence). Save preferences
+						uses the secondary brand color. Language selector and privacy policy link wire
+						automatically when configured. Rebuild the site to publish.
 					</p>
 				</Card>
 

@@ -371,6 +371,15 @@ func (s *Server) Router() http.Handler {
 		// file. Returns 503 from each endpoint when the DuckDB layer
 		// failed to open at boot (e.g. a CGO-disabled build), so the
 		// dashboard can fall back gracefully.
+		// Cookie banner live preview: returns an HTML page with the real
+		// CookieProof widget mounted in previewMode and the preferences
+		// modal auto-opened. The admin SPA loads this as a same-origin
+		// iframe on the Settings -> Cookies page so editors see the
+		// exact production banner (cookie tables, language toggle,
+		// privacy policy link, branding colors) instead of a mockup.
+		cpH := handlers.NewCookiesPreviewHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/cookies/preview", cpH.Render)
+
 		caH := handlers.NewCookieAnalyticsHandler(s.cfg, s.queries, s.AnalyticsDB)
 		siteR.Get("/api/sites/{siteID}/cookies/analytics/funnel", caH.Funnel)
 		siteR.Get("/api/sites/{siteID}/cookies/analytics/pre-consent", caH.PreConsent)
