@@ -32,7 +32,10 @@ test.describe('analytics: nginx log tail', () => {
 		// Make sure the dir + file exist before we append. Parser tolerates ENOENT
 		// but seeks to end-of-file on first open, so any line written before it
 		// could open would be missed.
-		const logPath = path.join(E2E_CONSTANTS.NGINX_LOG_DIR, `${site.id}.json.log`);
+		// File is keyed by slug, not site_id, because the production host nginx
+		// derives slug from $host and can't see internal site_ids. The parser
+		// keys visit_events rows by site_id at write time.
+		const logPath = path.join(E2E_CONSTANTS.NGINX_LOG_DIR, `${site.slug}.json.log`);
 		await fs.mkdir(path.dirname(logPath), { recursive: true });
 		await fs.writeFile(logPath, '', { flag: 'a' });
 
