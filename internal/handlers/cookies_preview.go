@@ -60,6 +60,7 @@ func (h *CookiesPreviewHandler) Render(w http.ResponseWriter, r *http.Request) {
 	override("analytics.cookie_banner_customize", "customize_label")
 	override("analytics.cookie_language_selector", "language_selector")
 	override("analytics.cookie_languages", "languages")
+	override("analytics.cookie_translations", "translations")
 	override("analytics.cookie_theme", "theme")
 	override("analytics.cookie_floating_trigger", "floating_trigger")
 	override("analytics.cookie_banner_position", "position")

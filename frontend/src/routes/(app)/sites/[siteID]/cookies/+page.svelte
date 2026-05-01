@@ -270,6 +270,8 @@
 
 			userDeclarations = parseDeclarations(m.cookie_declarations || '');
 			presets = presetsResp;
+			translations = parseTranslations(m.cookie_translations || '');
+			editingLang = '';
 
 			initial = {
 				enabled,
@@ -289,6 +291,7 @@
 				floatingTrigger,
 				languageSelector,
 				languages: selectedLanguages.join(','),
+				translationsJSON: serializeTranslations(translations),
 				ccpaEnabled,
 				ccpaUrl
 			};
@@ -304,6 +307,7 @@
 	});
 
 	const declarationsJSONNow = $derived(serializeDeclarations(userDeclarations));
+	const translationsJSONNow = $derived(serializeTranslations(translations));
 
 	const dirty = $derived(
 		enabled !== initial.enabled ||
@@ -323,6 +327,7 @@
 			floatingTrigger !== initial.floatingTrigger ||
 			languageSelector !== initial.languageSelector ||
 			selectedLanguages.join(',') !== initial.languages ||
+			translationsJSONNow !== initial.translationsJSON ||
 			ccpaEnabled !== initial.ccpaEnabled ||
 			ccpaUrl !== initial.ccpaUrl
 	);
@@ -347,6 +352,8 @@
 		selectedLanguages = initial.languages
 			? initial.languages.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
 			: [];
+		translations = parseTranslations(initial.translationsJSON);
+		editingLang = '';
 		ccpaEnabled = initial.ccpaEnabled;
 		ccpaUrl = initial.ccpaUrl;
 	}
@@ -412,7 +419,8 @@
 				{ category: 'analytics', key: 'cookie_cat_analytics', value: b(catAnalytics) },
 				{ category: 'analytics', key: 'cookie_cat_marketing', value: b(catMarketing) },
 				{ category: 'analytics', key: 'cookie_cat_preferences', value: b(catPreferences) },
-				{ category: 'analytics', key: 'cookie_declarations', value: declarationsJSONNow }
+				{ category: 'analytics', key: 'cookie_declarations', value: declarationsJSONNow },
+				{ category: 'analytics', key: 'cookie_translations', value: translationsJSONNow }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 			initial = {
@@ -432,6 +440,8 @@
 				cookieTheme,
 				floatingTrigger,
 				languageSelector,
+				languages: selectedLanguages.join(','),
+				translationsJSON: translationsJSONNow,
 				ccpaEnabled,
 				ccpaUrl
 			};
@@ -461,6 +471,7 @@
 		set('customize_label', customizeLabel);
 		set('language_selector', languageSelector ? '1' : '0');
 		set('languages', selectedLanguages.join(','));
+		set('translations', translationsJSONNow);
 		set('theme', cookieTheme);
 		set('floating_trigger', floatingTrigger);
 		set('position', position);
@@ -499,6 +510,7 @@
 		void customizeLabel;
 		void languageSelector;
 		void selectedLanguages;
+		void translationsJSONNow;
 		void cookieTheme;
 		void floatingTrigger;
 		void position;
@@ -735,6 +747,97 @@
 									</label>
 								{/each}
 							</div>
+						</div>
+					{/if}
+
+					{#if languageSelector}
+						<div class="mt-6 border-t border-border-light pt-4">
+							<div class="flex items-baseline justify-between gap-4">
+								<span class="text-[13px] text-text-primary">Per-language overrides</span>
+								<span class="text-[11px] text-text-muted">
+									{Object.keys(translations).length === 0
+										? 'Built-in translations'
+										: `${Object.keys(translations).length} customised`}
+								</span>
+							</div>
+							<p class="mt-1 text-[12px] text-text-muted">
+								Override the banner copy for a specific language. Empty fields fall back to the
+								widget's built-in translation, so you only need to fill in what you want to change.
+							</p>
+
+							<div class="mt-3 flex flex-wrap gap-1.5">
+								{#each (selectedLanguages.length > 0 ? selectedLanguages : SUPPORTED_LANGUAGES.map((l) => l.code)) as code}
+									{@const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === code)}
+									{@const isOpen = editingLang === code}
+									{@const hasOverrides = !!translations[code] && Object.values(translations[code]).some((v) => v)}
+									<button
+										type="button"
+										class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer transition-colors {isOpen
+											? 'border-text-primary bg-text-primary text-bg-base'
+											: hasOverrides
+											? 'border-text-primary bg-bg-elevated text-text-primary'
+											: 'border-border-light bg-bg-elevated text-text-secondary hover:border-text-muted'}"
+										onclick={() => (editingLang = isOpen ? '' : code)}
+									>
+										<span class="font-mono text-[10px] uppercase opacity-70">{code}</span>
+										<span>{langInfo?.label ?? code}</span>
+										{#if hasOverrides && !isOpen}
+											<span class="h-1.5 w-1.5 rounded-full bg-text-primary"></span>
+										{/if}
+									</button>
+								{/each}
+							</div>
+
+							{#if editingLang}
+								{@const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === editingLang)}
+								<div class="mt-4 rounded-lg border border-border-light bg-bg-elevated p-4">
+									<div class="mb-3 flex items-center justify-between gap-4">
+										<div class="flex flex-col">
+											<span class="text-[13px] text-text-primary">{langInfo?.label ?? editingLang}</span>
+											<span class="text-[11px] text-text-muted font-mono uppercase">{editingLang}</span>
+										</div>
+										<button
+											type="button"
+											class="text-[11px] text-text-muted hover:text-red-500"
+											onclick={() => clearLang(editingLang)}
+										>
+											Clear all
+										</button>
+									</div>
+									<div class="flex flex-col gap-3">
+										<Input
+											label="Title"
+											placeholder="Banner heading in {langInfo?.label ?? editingLang}"
+											value={tField(editingLang, 'title')}
+											oninput={(e) => setTField(editingLang, 'title', (e.currentTarget as HTMLInputElement).value)}
+										/>
+										<Textarea
+											label="Description"
+											rows={3}
+											placeholder="Banner body text"
+											value={tField(editingLang, 'description')}
+											oninput={(e) => setTField(editingLang, 'description', (e.currentTarget as HTMLTextAreaElement).value)}
+										/>
+										<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+											<Input
+												label="Accept"
+												value={tField(editingLang, 'accept')}
+												oninput={(e) => setTField(editingLang, 'accept', (e.currentTarget as HTMLInputElement).value)}
+											/>
+											<Input
+												label="Reject"
+												value={tField(editingLang, 'reject')}
+												oninput={(e) => setTField(editingLang, 'reject', (e.currentTarget as HTMLInputElement).value)}
+											/>
+											<Input
+												label="Save preferences"
+												value={tField(editingLang, 'customize')}
+												oninput={(e) => setTField(editingLang, 'customize', (e.currentTarget as HTMLInputElement).value)}
+											/>
+										</div>
+									</div>
+								</div>
+							{/if}
 						</div>
 					{/if}
 
