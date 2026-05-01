@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"github.com/bright-interaction/slab/internal/handlers"
 	"github.com/bright-interaction/slab/internal/mcp"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/retention"
 	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -41,6 +43,9 @@ type Server struct {
 	// Optional: nil when DuckDB couldn't open at boot. Handlers that
 	// depend on it return 503 in that case rather than crashing.
 	AnalyticsDB *analyticsdb.Manager
+	// RetentionMgr exposes the last sweep result via /api/admin/metrics
+	// (audit I2). Optional; nil disables the retention metrics field.
+	RetentionMgr *retention.Manager
 	// OnAnalyticsSettingsChange, when set, is invoked after settings writes that
 	// touch the analytics category so the analytics Manager can rescan parsers.
 	OnAnalyticsSettingsChange func(context.Context)
@@ -73,10 +78,49 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware(s.cfg))
 
-	// Health (public)
-	r.Get("/api/health", func(w http.ResponseWriter, _ *http.Request) {
+	// Health (public). Audit M4: probes real component status instead of
+	// returning a fixed `{status:ok}`. Kubernetes / Dockyard / external
+	// monitors that hit this endpoint now see actionable green/yellow/red.
+	//
+	// Components probed (each is "ok" / "fail" / "unconfigured"):
+	//   - sqlite: SELECT 1 against the OLTP DB (fails only when the file
+	//     handle is broken; WAL contention surfaces here as slowness, not
+	//     a false fail).
+	//   - duckdb: only when AnalyticsDB is non-nil; `analyticsdb.Healthy`
+	//     does a trivial query against the ATTACHed schema.
+	//
+	// The endpoint returns 200 when sqlite is ok regardless of duckdb so
+	// load balancers don't take the whole service out for a degraded
+	// analytics layer.
+	r.Get("/api/health", func(w http.ResponseWriter, req *http.Request) {
+		ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
+		defer cancel()
+		dbOK := func() bool {
+			row := s.db.QueryRowContext(ctx, "SELECT 1")
+			var n int
+			return row.Scan(&n) == nil
+		}()
+		analyticsOK := "unconfigured"
+		if s.AnalyticsDB != nil {
+			if s.AnalyticsDB.Healthy(ctx) {
+				analyticsOK = "ok"
+			} else {
+				analyticsOK = "fail"
+			}
+		}
+		status := "ok"
+		httpStatus := http.StatusOK
+		if !dbOK {
+			status = "fail"
+			httpStatus = http.StatusServiceUnavailable
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(httpStatus)
+		body := `{"status":"` + status +
+			`","sqlite":"` + boolToOKFail(dbOK) +
+			`","analyticsdb":"` + analyticsOK + `"}`
+		_, _ = w.Write([]byte(body))
 	})
 
 	// Public analytics receiver (/t/*). Mounted high in the router so it
@@ -144,6 +188,29 @@ func (s *Server) Router() http.Handler {
 			r.Get("/api/admin/invites", invH.List)
 			r.Post("/api/admin/invites", invH.Create)
 			r.Delete("/api/admin/invites/{inviteID}", invH.Delete)
+
+			// Admin observability surface (audit I1 + I2). Returns the
+			// last retention sweep result, DB stats, and DuckDB
+			// availability so the operator has one URL to check from
+			// the browser when something feels off. Behind RequireAdmin
+			// because it exposes per-site row counts.
+			r.Get("/api/admin/metrics", func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Cache-Control", "no-store")
+				out := map[string]any{
+					"sqlite_open_conns": s.db.Stats().OpenConnections,
+					"sqlite_in_use":     s.db.Stats().InUse,
+					"sqlite_idle":       s.db.Stats().Idle,
+					"analyticsdb":       s.AnalyticsDB != nil,
+				}
+				if s.AnalyticsDB != nil {
+					out["analyticsdb_healthy"] = s.AnalyticsDB.Healthy(req.Context())
+				}
+				if s.RetentionMgr != nil {
+					out["retention_last"] = s.RetentionMgr.LastResult()
+				}
+				_ = json.NewEncoder(w).Encode(out)
+			})
 		})
 
 		// Audit C1: every /api/sites/{siteID}/* route below must verify
@@ -604,6 +671,15 @@ func isAllowedOriginForPath(cfg *config.Config, origin, path string) bool {
 		}
 	}
 	return false
+}
+
+// boolToOKFail maps a healthcheck bool to the "ok" / "fail" string the
+// /api/health JSON response uses.
+func boolToOKFail(ok bool) string {
+	if ok {
+		return "ok"
+	}
+	return "fail"
 }
 
 // stripScheme reduces an Origin header value (e.g. https://foo.example:443)

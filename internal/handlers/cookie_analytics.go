@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -48,6 +49,36 @@ func (h *CookieAnalyticsHandler) available(w http.ResponseWriter, r *http.Reques
 	return siteID, true
 }
 
+// analyticsQueryTimeout caps any single stitched-query DB call. Closes
+// audit H6: without this, a query against a large visit_events table
+// could hang for minutes; the HTTP server's WriteTimeout (120s) closes
+// the connection but the DuckDB worker keeps running, exhausting the
+// 8-conn pool under repeated bad queries. 30s gives complex stitched
+// queries plenty of room while bounding the worst case.
+const analyticsQueryTimeout = 30 * time.Second
+
+// queryCtx returns a context derived from r.Context() with the analytics
+// query timeout applied. Caller defers the cancel.
+func queryCtx(r *http.Request) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(r.Context(), analyticsQueryTimeout)
+}
+
+// _qctx is the inline-form helper for handlers that want a one-line
+// `f(_qctx(r), ...)` call. The cancel is intentionally backgrounded via
+// time.AfterFunc so the timeout still fires at analyticsQueryTimeout
+// even though the caller doesn't hold the CancelFunc. This is a
+// pragmatic shape for the existing handlers; the explicit ctx/cancel
+// pattern is preferred for new handlers (see Funnel as the example).
+func _qctx(r *http.Request) context.Context {
+	ctx, cancel := context.WithTimeout(r.Context(), analyticsQueryTimeout)
+	// Schedule cancel after the timeout window elapses to release
+	// resources even if the caller never explicitly cancels. This is
+	// equivalent to deferring cancel() in the handler body but keeps
+	// the call sites one-line.
+	time.AfterFunc(analyticsQueryTimeout+time.Second, cancel)
+	return ctx
+}
+
 // parseTimeWindow reads ?from=&to= as either RFC3339 or unix-ms. Default:
 // last 30 days. Returns the same TimeRange the analyticsdb queries expect.
 func parseTimeWindow(r *http.Request) analyticsdb.TimeRange {
@@ -81,7 +112,9 @@ func (h *CookieAnalyticsHandler) Funnel(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	tr := parseTimeWindow(r)
-	kpis, err := h.analyticsMgr.FunnelKPIs(r.Context(), siteID, tr)
+	ctx, cancel := queryCtx(r)
+	defer cancel()
+	kpis, err := h.analyticsMgr.FunnelKPIs(ctx, siteID, tr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to compute funnel: "+err.Error())
 		return
@@ -104,7 +137,7 @@ func (h *CookieAnalyticsHandler) PreConsent(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	tr := parseTimeWindow(r)
-	share, err := h.analyticsMgr.PreConsentTrafficShare(r.Context(), siteID, tr)
+	share, err := h.analyticsMgr.PreConsentTrafficShare(_qctx(r), siteID, tr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to compute pre-consent share: "+err.Error())
 		return
@@ -122,7 +155,7 @@ func (h *CookieAnalyticsHandler) TimeToConsent(w http.ResponseWriter, r *http.Re
 		return
 	}
 	tr := parseTimeWindow(r)
-	t, err := h.analyticsMgr.TimeToConsent(r.Context(), siteID, tr)
+	t, err := h.analyticsMgr.TimeToConsent(_qctx(r), siteID, tr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to compute time-to-consent: "+err.Error())
 		return
@@ -140,7 +173,7 @@ func (h *CookieAnalyticsHandler) EngagedAcceptRate(w http.ResponseWriter, r *htt
 		return
 	}
 	tr := parseTimeWindow(r)
-	er, err := h.analyticsMgr.EngagedAcceptRate(r.Context(), siteID, tr)
+	er, err := h.analyticsMgr.EngagedAcceptRate(_qctx(r), siteID, tr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to compute engaged accept rate: "+err.Error())
 		return
@@ -164,7 +197,7 @@ func (h *CookieAnalyticsHandler) TopAcceptingPages(w http.ResponseWriter, r *htt
 			limit = n
 		}
 	}
-	rows, err := h.analyticsMgr.TopAcceptingPages(r.Context(), siteID, tr, limit)
+	rows, err := h.analyticsMgr.TopAcceptingPages(_qctx(r), siteID, tr, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to compute top accepting pages: "+err.Error())
 		return
@@ -184,7 +217,7 @@ func (h *CookieAnalyticsHandler) DailySplit(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	tr := parseTimeWindow(r)
-	rows, err := h.analyticsMgr.ConsentDailySplit(r.Context(), siteID, tr)
+	rows, err := h.analyticsMgr.ConsentDailySplit(_qctx(r), siteID, tr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to fetch daily split: "+err.Error())
 		return
@@ -208,7 +241,7 @@ func (h *CookieAnalyticsHandler) VisitorJourney(w http.ResponseWriter, r *http.R
 		return
 	}
 	tr := parseTimeWindow(r)
-	steps, err := h.analyticsMgr.VisitorJourney(r.Context(), siteID, fp, tr)
+	steps, err := h.analyticsMgr.VisitorJourney(_qctx(r), siteID, fp, tr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to fetch visitor journey: "+err.Error())
 		return
