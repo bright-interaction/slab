@@ -148,7 +148,7 @@ const gcmDefaultDeniedStub = `(function(){window.dataLayer=window.dataLayer||[];
 
 // buildCookieProofEmbedConfig assembles the JSON shape the embed widget
 // expects on window.__CCB__. Pure data: no scripting concerns. Used
-// by both renderCookieProofConfigPrefix (build-time bundle prefix) and
+// by both RenderCookieProofConfigPrefix (build-time bundle prefix) and
 // any future debug surface that wants to inspect the per-site config.
 func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 	trackPath := cfg.TrackPath
@@ -241,10 +241,14 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// renderCookieProofConfigPrefix builds the JS prefix that gets prepended
+// RenderCookieProofConfigPrefix builds the JS prefix that gets prepended
 // to the widget bundle: GCM default-denied stub + window.__CCB__ assignment.
 // Returns plain JS bytes — caller writes them ahead of the bundle.
-func renderCookieProofConfigPrefix(cfg CookieProofConfig) ([]byte, error) {
+//
+// Exported so the admin preview handler can stream "config + widget bundle"
+// bytes directly into the iframe response without going through the
+// per-tenant workspace asset writer.
+func RenderCookieProofConfigPrefix(cfg CookieProofConfig) ([]byte, error) {
 	cfgBytes, err := buildCookieProofEmbedConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -266,7 +270,7 @@ func WriteCookieProofWidgetAsset(workspaceDir string, cfg CookieProofConfig) err
 	if err := EnsureDir(publicDir); err != nil {
 		return fmt.Errorf("ensure public dir: %w", err)
 	}
-	prefix, err := renderCookieProofConfigPrefix(cfg)
+	prefix, err := RenderCookieProofConfigPrefix(cfg)
 	if err != nil {
 		return fmt.Errorf("render config prefix: %w", err)
 	}
