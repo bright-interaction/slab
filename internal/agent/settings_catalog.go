@@ -497,6 +497,22 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 			AgentWritable: false,
 		},
 		{
+			Category: "security", Key: "x_xss_protection",
+			Label:       "X-XSS-Protection",
+			Description: "Modern browsers ignore this header (the buggy reflective filter was removed). Default 1; mode=block is purely Site Inspector / securityheaders.com grading parity. OWASP's modern recommendation is 0 (turn the legacy filter off) but it trips graders. Real XSS protection comes from the CSP.",
+			ValueType:   "enum",
+			EnumValues:  []string{"0", "1", "1; mode=block"},
+			AgentWritable: false,
+		},
+		{
+			Category: "security", Key: "x_permitted_cross_domain_policies",
+			Label:       "X-Permitted-Cross-Domain-Policies",
+			Description: "Locks down the legacy Adobe Flash / Silverlight cross-domain policy file lookup. Default none is a Site Inspector A+ win and has zero downside on modern stacks.",
+			ValueType:   "enum",
+			EnumValues:  []string{"none", "master-only", "by-content-type", "all"},
+			AgentWritable: false,
+		},
+		{
 			Category: "security", Key: "https_redirect",
 			Label:       "HTTPS redirect",
 			Description: "When 1 (default), the deploy target's reverse proxy enforces HTTPS via 301. Atomicsite Deploys terminate TLS at Caddy / Dockyard so this is implicit; the row is kept so self-hosters can read the intent.",
@@ -560,6 +576,8 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		"security.coop":                     "same-origin",
 		"security.corp":                     "same-origin",
 		"security.coep":                     "",
+		"security.x_xss_protection":         "1; mode=block",
+		"security.x_permitted_cross_domain_policies": "none",
 		"security.https_redirect":           "1",
 	}
 
