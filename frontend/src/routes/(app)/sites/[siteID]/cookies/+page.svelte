@@ -10,7 +10,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { categoryMap } from '$lib/settings/nginxPreview';
 	import type { Site } from '$lib/api/types';
-	import type { CookieDeclaration, CookieTranslation } from '$lib/api/settings';
+	import { COOKIE_BUILTIN_TRANSLATIONS, type CookieDeclaration, type CookieTranslation } from '$lib/api/settings';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -87,6 +87,49 @@
 
 	let userDeclarations = $state<CookieDeclaration[]>([]);
 	let presets = $state<CookieDeclaration[]>([]);
+
+	// Tracker IDs that drive the auto-generated cookie disclosure rows.
+	// Each ID maps to a setting in the analytics category. Setting any of
+	// these auto-adds the matching cookies to the declarations table on
+	// the next reload (handler reads them via PresetCookieDeclarations).
+	type TrackerKey =
+		| 'ga4_id'
+		| 'gtm_id'
+		| 'google_ads_id'
+		| 'meta_pixel_id'
+		| 'linkedin_insight_id'
+		| 'tiktok_pixel_id'
+		| 'hubspot_id'
+		| 'hotjar_id'
+		| 'clarity_id'
+		| 'matomo_id'
+		| 'intercom_app_id';
+	const TRACKER_KEYS: TrackerKey[] = [
+		'ga4_id',
+		'gtm_id',
+		'google_ads_id',
+		'meta_pixel_id',
+		'linkedin_insight_id',
+		'tiktok_pixel_id',
+		'hubspot_id',
+		'hotjar_id',
+		'clarity_id',
+		'matomo_id',
+		'intercom_app_id'
+	];
+	let trackerIds = $state<Record<TrackerKey, string>>({
+		ga4_id: '',
+		gtm_id: '',
+		google_ads_id: '',
+		meta_pixel_id: '',
+		linkedin_insight_id: '',
+		tiktok_pixel_id: '',
+		hubspot_id: '',
+		hotjar_id: '',
+		clarity_id: '',
+		matomo_id: '',
+		intercom_app_id: ''
+	});
 
 	// Per-language string overrides. Mirrors CookieProof's customTranslations
 	// shape: { sv: { title, description, accept, reject, customize }, ... }.
@@ -181,6 +224,7 @@
 		translationsJSON: string;
 		ccpaEnabled: boolean;
 		ccpaUrl: string;
+		trackersJSON: string;
 	};
 
 	let initial: State = $state({
@@ -203,7 +247,8 @@
 		languages: '',
 		translationsJSON: '{}',
 		ccpaEnabled: false,
-		ccpaUrl: ''
+		ccpaUrl: '',
+		trackersJSON: '{}'
 	});
 
 	function serializeDeclarations(rows: CookieDeclaration[]): string {
@@ -273,6 +318,10 @@
 			translations = parseTranslations(m.cookie_translations || '');
 			editingLang = '';
 
+			for (const k of TRACKER_KEYS) {
+				trackerIds[k] = (m[k] ?? '').trim();
+			}
+
 			initial = {
 				enabled,
 				position,
@@ -293,7 +342,8 @@
 				languages: selectedLanguages.join(','),
 				translationsJSON: serializeTranslations(translations),
 				ccpaEnabled,
-				ccpaUrl
+				ccpaUrl,
+				trackersJSON: JSON.stringify(trackerIds)
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load cookie settings.');
@@ -308,6 +358,7 @@
 
 	const declarationsJSONNow = $derived(serializeDeclarations(userDeclarations));
 	const translationsJSONNow = $derived(serializeTranslations(translations));
+	const trackersJSONNow = $derived(JSON.stringify(trackerIds));
 
 	const dirty = $derived(
 		enabled !== initial.enabled ||
@@ -329,7 +380,8 @@
 			selectedLanguages.join(',') !== initial.languages ||
 			translationsJSONNow !== initial.translationsJSON ||
 			ccpaEnabled !== initial.ccpaEnabled ||
-			ccpaUrl !== initial.ccpaUrl
+			ccpaUrl !== initial.ccpaUrl ||
+			trackersJSONNow !== initial.trackersJSON
 	);
 
 	function discard() {
@@ -356,6 +408,12 @@
 		editingLang = '';
 		ccpaEnabled = initial.ccpaEnabled;
 		ccpaUrl = initial.ccpaUrl;
+		try {
+			const parsed = JSON.parse(initial.trackersJSON || '{}') as Partial<Record<TrackerKey, string>>;
+			for (const k of TRACKER_KEYS) trackerIds[k] = parsed[k] ?? '';
+		} catch {
+			for (const k of TRACKER_KEYS) trackerIds[k] = '';
+		}
 	}
 
 	function b(v: boolean): string {
@@ -422,6 +480,9 @@
 				{ category: 'analytics', key: 'cookie_declarations', value: declarationsJSONNow },
 				{ category: 'analytics', key: 'cookie_translations', value: translationsJSONNow }
 			];
+			for (const k of TRACKER_KEYS) {
+				items.push({ category: 'analytics', key: k, value: trackerIds[k].trim() });
+			}
 			await settingsApi.bulkUpsert(siteID, items);
 			initial = {
 				enabled,
@@ -443,8 +504,15 @@
 				languages: selectedLanguages.join(','),
 				translationsJSON: translationsJSONNow,
 				ccpaEnabled,
-				ccpaUrl
+				ccpaUrl,
+				trackersJSON: trackersJSONNow
 			};
+			// Refresh presets after save: setting tracker IDs auto-adds rows.
+			try {
+				presets = await settingsApi.getCookiePresets(siteID);
+			} catch {
+				/* keep stale presets; error toasts below would mask the save success */
+			}
 			toast.success('Cookie banner settings saved. Rebuild to publish.');
 		} catch (err) {
 			const msg = err instanceof ApiError ? err.message : 'Failed to save settings.';
@@ -458,6 +526,7 @@
 	// params so editors see the real CookieProof widget update as they
 	// type. Reload is debounced via the keyed reactive expression.
 	let previewBust = $state(0);
+	let bannerPreviewOpen = $state(false);
 	const previewSrc = $derived.by(() => {
 		void previewBust; // bust dep
 		const params = new URLSearchParams();
@@ -726,7 +795,7 @@
 									{@const checked = selectedLanguages.includes(code)}
 									<label
 										class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer select-none transition-colors {checked
-											? 'border-text-primary bg-text-primary text-bg-base'
+											? 'border-accent bg-accent text-accent-fg'
 											: 'border-border-light bg-bg-elevated text-text-secondary hover:border-text-muted'}"
 									>
 										<input
@@ -751,38 +820,42 @@
 					{/if}
 
 					{#if languageSelector}
+						{@const activeLanguageCodes = selectedLanguages.length > 0
+							? selectedLanguages
+							: SUPPORTED_LANGUAGES.map((l) => l.code)}
 						<div class="mt-6 border-t border-border-light pt-4">
 							<div class="flex items-baseline justify-between gap-4">
-								<span class="text-[13px] text-text-primary">Per-language overrides</span>
+								<span class="text-[13px] text-text-primary">Per-language banner copy</span>
 								<span class="text-[11px] text-text-muted">
 									{Object.keys(translations).length === 0
-										? 'Built-in translations'
+										? 'Using built-in translations'
 										: `${Object.keys(translations).length} customised`}
 								</span>
 							</div>
 							<p class="mt-1 text-[12px] text-text-muted">
-								Override the banner copy for a specific language. Empty fields fall back to the
-								widget's built-in translation, so you only need to fill in what you want to change.
+								Each language ships with a built-in translation (shown as faint placeholder text).
+								Type to override; clear the field to fall back to the built-in. Pick a language tab
+								to expand its editor.
 							</p>
 
 							<div class="mt-3 flex flex-wrap gap-1.5">
-								{#each (selectedLanguages.length > 0 ? selectedLanguages : SUPPORTED_LANGUAGES.map((l) => l.code)) as code}
+								{#each activeLanguageCodes as code}
 									{@const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === code)}
 									{@const isOpen = editingLang === code}
 									{@const hasOverrides = !!translations[code] && Object.values(translations[code]).some((v) => v)}
 									<button
 										type="button"
 										class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] cursor-pointer transition-colors {isOpen
-											? 'border-text-primary bg-text-primary text-bg-base'
+											? 'border-accent bg-accent text-accent-fg'
 											: hasOverrides
-											? 'border-text-primary bg-bg-elevated text-text-primary'
+											? 'border-accent bg-bg-elevated text-text-primary'
 											: 'border-border-light bg-bg-elevated text-text-secondary hover:border-text-muted'}"
 										onclick={() => (editingLang = isOpen ? '' : code)}
 									>
 										<span class="font-mono text-[10px] uppercase opacity-70">{code}</span>
 										<span>{langInfo?.label ?? code}</span>
 										{#if hasOverrides && !isOpen}
-											<span class="h-1.5 w-1.5 rounded-full bg-text-primary"></span>
+											<span class="h-1.5 w-1.5 rounded-full bg-accent"></span>
 										{/if}
 									</button>
 								{/each}
@@ -790,47 +863,54 @@
 
 							{#if editingLang}
 								{@const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === editingLang)}
+								{@const builtIn = COOKIE_BUILTIN_TRANSLATIONS[editingLang]}
+								{@const usingBuiltIn = !translations[editingLang] || Object.values(translations[editingLang] ?? {}).every((v) => !v)}
 								<div class="mt-4 rounded-lg border border-border-light bg-bg-elevated p-4">
 									<div class="mb-3 flex items-center justify-between gap-4">
 										<div class="flex flex-col">
 											<span class="text-[13px] text-text-primary">{langInfo?.label ?? editingLang}</span>
-											<span class="text-[11px] text-text-muted font-mono uppercase">{editingLang}</span>
+											<span class="text-[11px] text-text-muted font-mono uppercase">{editingLang} {usingBuiltIn ? '· built-in' : '· custom'}</span>
 										</div>
-										<button
-											type="button"
-											class="text-[11px] text-text-muted hover:text-red-500"
-											onclick={() => clearLang(editingLang)}
-										>
-											Clear all
-										</button>
+										{#if !usingBuiltIn}
+											<button
+												type="button"
+												class="text-[11px] text-text-muted hover:text-text-primary underline-offset-2 hover:underline"
+												onclick={() => clearLang(editingLang)}
+											>
+												Reset to built-in
+											</button>
+										{/if}
 									</div>
 									<div class="flex flex-col gap-3">
 										<Input
 											label="Title"
-											placeholder="Banner heading in {langInfo?.label ?? editingLang}"
+											placeholder={builtIn?.title ?? `Banner heading in ${langInfo?.label ?? editingLang}`}
 											value={tField(editingLang, 'title')}
 											oninput={(e) => setTField(editingLang, 'title', (e.currentTarget as HTMLInputElement).value)}
 										/>
 										<Textarea
 											label="Description"
 											rows={3}
-											placeholder="Banner body text"
+											placeholder={builtIn?.description ?? 'Banner body text'}
 											value={tField(editingLang, 'description')}
 											oninput={(e) => setTField(editingLang, 'description', (e.currentTarget as HTMLTextAreaElement).value)}
 										/>
 										<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 											<Input
 												label="Accept"
+												placeholder={builtIn?.accept ?? 'Accept'}
 												value={tField(editingLang, 'accept')}
 												oninput={(e) => setTField(editingLang, 'accept', (e.currentTarget as HTMLInputElement).value)}
 											/>
 											<Input
 												label="Reject"
+												placeholder={builtIn?.reject ?? 'Reject'}
 												value={tField(editingLang, 'reject')}
 												oninput={(e) => setTField(editingLang, 'reject', (e.currentTarget as HTMLInputElement).value)}
 											/>
 											<Input
 												label="Save preferences"
+												placeholder={builtIn?.customize ?? 'Save preferences'}
 												value={tField(editingLang, 'customize')}
 												oninput={(e) => setTField(editingLang, 'customize', (e.currentTarget as HTMLInputElement).value)}
 											/>
@@ -862,6 +942,85 @@
 							/>
 						</div>
 					{/if}
+				</Card>
+
+				<Card padding="md">
+					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Connected trackers
+					</h2>
+					<p class="mt-2 text-[12px] text-text-muted">
+						Paste the ID of any tracker you load on the site. Atomicsite auto-populates the
+						matching cookies in the disclosure table below, no manual entry needed. Leave blank
+						to skip.
+					</p>
+					<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<Input
+							label="Google Analytics 4"
+							placeholder="G-XXXXXXX"
+							hint="Adds _ga, _ga_*, _gid, _gac_* (analytics)."
+							bind:value={trackerIds.ga4_id}
+						/>
+						<Input
+							label="Google Tag Manager"
+							placeholder="GTM-XXXXXXX"
+							hint="Adds _ga when GA4 isn't already set (analytics)."
+							bind:value={trackerIds.gtm_id}
+						/>
+						<Input
+							label="Google Ads"
+							placeholder="AW-XXXXXXXXX"
+							hint="Adds _gcl_au, _gcl_aw (marketing)."
+							bind:value={trackerIds.google_ads_id}
+						/>
+						<Input
+							label="Meta Pixel"
+							placeholder="123456789012345"
+							hint="Adds _fbp, _fbc (marketing)."
+							bind:value={trackerIds.meta_pixel_id}
+						/>
+						<Input
+							label="LinkedIn Insight Tag"
+							placeholder="123456"
+							hint="Adds li_sugr, UserMatchHistory, li_fat_id (marketing)."
+							bind:value={trackerIds.linkedin_insight_id}
+						/>
+						<Input
+							label="TikTok Pixel"
+							placeholder="C4XXXXXXXXXXXXXXX"
+							hint="Adds _ttp (marketing)."
+							bind:value={trackerIds.tiktok_pixel_id}
+						/>
+						<Input
+							label="HubSpot Hub ID"
+							placeholder="12345678"
+							hint="Adds hubspotutk, __hstc, __hssc, __hssrc (marketing)."
+							bind:value={trackerIds.hubspot_id}
+						/>
+						<Input
+							label="Hotjar Site ID"
+							placeholder="1234567"
+							hint="Adds _hj* (analytics)."
+							bind:value={trackerIds.hotjar_id}
+						/>
+						<Input
+							label="Microsoft Clarity"
+							placeholder="abcdefghij"
+							hint="Adds _clck, _clsk (analytics)."
+							bind:value={trackerIds.clarity_id}
+						/>
+						<Input
+							label="Matomo Site ID"
+							placeholder="1"
+							hint="Adds _pk_id.*, _pk_ses.* (analytics)."
+							bind:value={trackerIds.matomo_id}
+						/>
+						<Input
+							label="Intercom App ID"
+							placeholder="abc12345"
+							hint="Adds intercom-id-*, intercom-session-* (preferences)."
+							bind:value={trackerIds.intercom_app_id}
+						/>
+					</div>
 				</Card>
 
 				<Card padding="md">
@@ -994,19 +1153,28 @@
 			<div class="flex flex-col gap-5">
 				<Card padding="md">
 					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-						Live preview
+						Settings preview
 					</h2>
 					<p class="mt-1 text-[11px] text-text-muted">
-						The actual CookieProof widget rendered with this site's branding, copy,
-						and cookie tables. Updates as you edit (debounced ~350ms).
+						The cookie preferences modal opened: handy for scanning every category and table at
+						once. Updates as you edit (debounced ~350ms).
 					</p>
 					<div class="mt-3 overflow-hidden rounded-lg border border-border-light">
 						<iframe
-							src={previewSrc}
-							title="Cookie banner preview"
-							class="block h-[640px] w-full bg-bg-elevated"
+							src={previewSrc + '&mode=preferences'}
+							title="Cookie preferences preview"
+							class="block h-[560px] w-full bg-bg-elevated"
 							sandbox="allow-scripts allow-same-origin"
 						></iframe>
+					</div>
+					<div class="mt-4 flex flex-col gap-2">
+						<Button variant="primary" onclick={() => (bannerPreviewOpen = true)}>
+							Preview live banner
+						</Button>
+						<p class="text-[11px] text-text-muted">
+							Opens a full-screen overlay showing the banner exactly as a first-time visitor sees
+							it on the published site, with Accept / Reject / Settings buttons live.
+						</p>
 					</div>
 					<p class="mt-3 text-[11px] text-text-muted">
 						Reject + Accept share the primary color (IMY 2026 equal prominence). Save preferences
@@ -1043,3 +1211,38 @@
 		</div>
 	{/if}
 </div>
+
+{#if bannerPreviewOpen}
+	<!-- Banner-as-visitor preview. Full-screen overlay covering the admin so the
+	     site behind matches what a real visitor's first page-load looks like:
+	     blank surface, banner pops in from configured position, Accept/Reject/
+	     Settings buttons live and clickable. Esc or the close button dismisses. -->
+	<div
+		class="fixed inset-0 z-[200] flex flex-col bg-bg/95 backdrop-blur-sm"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Banner preview"
+		onkeydown={(e) => {
+			if (e.key === 'Escape') bannerPreviewOpen = false;
+		}}
+		tabindex="-1"
+	>
+		<div class="flex items-center justify-between gap-4 border-b border-border bg-bg-surface px-6 py-3">
+			<div class="flex flex-col">
+				<span class="text-[13px] text-text-primary">Banner as a visitor sees it</span>
+				<span class="text-[11px] text-text-muted">
+					Position: {position}. Buttons live. Press Esc or click Close to return.
+				</span>
+			</div>
+			<Button variant="secondary" onclick={() => (bannerPreviewOpen = false)}>Close preview</Button>
+		</div>
+		<div class="relative flex-1 overflow-hidden">
+			<iframe
+				src={previewSrc + '&mode=banner'}
+				title="Banner preview"
+				class="block h-full w-full"
+				sandbox="allow-scripts allow-same-origin"
+			></iframe>
+		</div>
+	</div>
+{/if}

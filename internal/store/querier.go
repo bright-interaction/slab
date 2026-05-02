@@ -30,6 +30,7 @@ type Querier interface {
 	// The handler groups by session_id / fingerprint to assemble the journey.
 	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
 	CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error)
+	CountConsentBySiteByMethod(ctx context.Context, arg CountConsentBySiteByMethodParams) (int64, error)
 	// Distinct fingerprints in the last N minutes (caller passes the cutoff
 	// timestamp). Used for the "live now" widget.
 	CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error)
@@ -168,7 +169,12 @@ type Querier interface {
 	ListBlocksBySite(ctx context.Context, siteID string) ([]ListBlocksBySiteRow, error)
 	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
+	// No method filter. Caller passes method='' or omits filtering. Splitting
+	// this from ListConsentBySiteByMethod avoids sqlc generating positional
+	// ?6 references when sqlc.arg(method) is reused, which the go-sqlite3
+	// driver mis-binds (caused HTTP 500 on the Proofs admin page).
 	ListConsentBySite(ctx context.Context, arg ListConsentBySiteParams) ([]ConsentRecord, error)
+	ListConsentBySiteByMethod(ctx context.Context, arg ListConsentBySiteByMethodParams) ([]ConsentRecord, error)
 	ListDeployTargetsBySite(ctx context.Context, siteID string) ([]DeployTarget, error)
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
 	ListDesignReferences(ctx context.Context, siteID string) ([]DesignReference, error)
