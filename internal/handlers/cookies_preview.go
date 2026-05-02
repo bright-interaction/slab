@@ -130,13 +130,23 @@ func (h *CookiesPreviewHandler) Render(w http.ResponseWriter, r *http.Request) {
 			"frame-ancestors 'self'")
 	w.Header().Set("Cache-Control", "no-store")
 
+	// mode=banner shows the inline banner exactly as a real visitor sees
+	// it (no preferences modal forced open). mode=preferences (default for
+	// backwards compatibility) opens the full preferences modal so the
+	// editor can scan every category + cookie row at once.
+	mode := q.Get("mode")
+	if mode != "banner" && mode != "preferences" {
+		mode = "preferences"
+	}
+
 	tpl := template.Must(template.New("preview").Parse(previewHTMLTemplate))
 	_ = tpl.Execute(w, map[string]any{
-		"BgColor":   bgColor,
-		"TextColor": textColor,
-		"FontBody":  fontBody,
-		"Prefix":    template.JS(prefix),
-		"WidgetJS":  template.JS(builder.CookieProofWidget),
+		"BgColor":      bgColor,
+		"TextColor":    textColor,
+		"FontBody":     fontBody,
+		"Prefix":       template.JS(prefix),
+		"WidgetJS":     template.JS(builder.CookieProofWidget),
+		"OpenSettings": mode == "preferences",
 	})
 }
 
@@ -166,9 +176,11 @@ customElements.whenDefined('cookie-consent').then(function () {
     }
     clearInterval(iv);
     el.previewMode = true;
+    {{ if .OpenSettings }}
     if (typeof el.showPreferences === 'function') {
       el.showPreferences();
     }
+    {{ end }}
   }, 30);
 });
 </script>

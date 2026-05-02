@@ -105,22 +105,42 @@ SELECT COUNT(*) AS total FROM consent_records
 WHERE site_id = ?
   AND created_at >= ?
   AND created_at <= ?
-  AND (?4 = '' OR consent_method = ?4)
 `
 
 type CountConsentBySiteParams struct {
-	SiteID      string      `json:"site_id"`
-	CreatedAt   int64       `json:"created_at"`
-	CreatedAt_2 int64       `json:"created_at_2"`
-	Method      interface{} `json:"method"`
+	SiteID      string `json:"site_id"`
+	CreatedAt   int64  `json:"created_at"`
+	CreatedAt_2 int64  `json:"created_at_2"`
 }
 
 func (q *Queries) CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countConsentBySite,
+	row := q.db.QueryRowContext(ctx, countConsentBySite, arg.SiteID, arg.CreatedAt, arg.CreatedAt_2)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countConsentBySiteByMethod = `-- name: CountConsentBySiteByMethod :one
+SELECT COUNT(*) AS total FROM consent_records
+WHERE site_id = ?
+  AND created_at >= ?
+  AND created_at <= ?
+  AND consent_method = ?
+`
+
+type CountConsentBySiteByMethodParams struct {
+	SiteID        string `json:"site_id"`
+	CreatedAt     int64  `json:"created_at"`
+	CreatedAt_2   int64  `json:"created_at_2"`
+	ConsentMethod string `json:"consent_method"`
+}
+
+func (q *Queries) CountConsentBySiteByMethod(ctx context.Context, arg CountConsentBySiteByMethodParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countConsentBySiteByMethod,
 		arg.SiteID,
 		arg.CreatedAt,
 		arg.CreatedAt_2,
-		arg.Method,
+		arg.ConsentMethod,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -213,26 +233,92 @@ SELECT id, site_id, session_id, fingerprint, domain, page_url, referrer, user_ag
 WHERE site_id = ?
   AND created_at >= ?
   AND created_at <= ?
-  AND (?6 = '' OR consent_method = ?6)
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
 `
 
 type ListConsentBySiteParams struct {
-	SiteID      string      `json:"site_id"`
-	CreatedAt   int64       `json:"created_at"`
-	CreatedAt_2 int64       `json:"created_at_2"`
-	Method      interface{} `json:"method"`
-	Limit       int64       `json:"limit"`
-	Offset      int64       `json:"offset"`
+	SiteID      string `json:"site_id"`
+	CreatedAt   int64  `json:"created_at"`
+	CreatedAt_2 int64  `json:"created_at_2"`
+	Limit       int64  `json:"limit"`
+	Offset      int64  `json:"offset"`
 }
 
+// No method filter. Caller passes method=” or omits filtering. Splitting
+// this from ListConsentBySiteByMethod avoids sqlc generating positional
+// ?6 references when sqlc.arg(method) is reused, which the go-sqlite3
+// driver mis-binds (caused HTTP 500 on the Proofs admin page).
 func (q *Queries) ListConsentBySite(ctx context.Context, arg ListConsentBySiteParams) ([]ConsentRecord, error) {
 	rows, err := q.db.QueryContext(ctx, listConsentBySite,
 		arg.SiteID,
 		arg.CreatedAt,
 		arg.CreatedAt_2,
-		arg.Method,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsentRecord{}
+	for rows.Next() {
+		var i ConsentRecord
+		if err := rows.Scan(
+			&i.ID,
+			&i.SiteID,
+			&i.SessionID,
+			&i.Fingerprint,
+			&i.Domain,
+			&i.PageUrl,
+			&i.Referrer,
+			&i.UserAgent,
+			&i.IpHash,
+			&i.ConsentMethod,
+			&i.ConsentVersion,
+			&i.CategoriesJson,
+			&i.GpcActive,
+			&i.CreatedAt,
+			&i.CreatedAtIso,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConsentBySiteByMethod = `-- name: ListConsentBySiteByMethod :many
+SELECT id, site_id, session_id, fingerprint, domain, page_url, referrer, user_agent, ip_hash, consent_method, consent_version, categories_json, gpc_active, created_at, created_at_iso FROM consent_records
+WHERE site_id = ?
+  AND created_at >= ?
+  AND created_at <= ?
+  AND consent_method = ?
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListConsentBySiteByMethodParams struct {
+	SiteID        string `json:"site_id"`
+	CreatedAt     int64  `json:"created_at"`
+	CreatedAt_2   int64  `json:"created_at_2"`
+	ConsentMethod string `json:"consent_method"`
+	Limit         int64  `json:"limit"`
+	Offset        int64  `json:"offset"`
+}
+
+func (q *Queries) ListConsentBySiteByMethod(ctx context.Context, arg ListConsentBySiteByMethodParams) ([]ConsentRecord, error) {
+	rows, err := q.db.QueryContext(ctx, listConsentBySiteByMethod,
+		arg.SiteID,
+		arg.CreatedAt,
+		arg.CreatedAt_2,
+		arg.ConsentMethod,
 		arg.Limit,
 		arg.Offset,
 	)

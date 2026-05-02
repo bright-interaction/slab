@@ -127,27 +127,58 @@ func (h *ConsentHandler) List(w http.ResponseWriter, r *http.Request) {
 			offset = n
 		}
 	}
-	rows, err := h.queries.ListConsentBySite(r.Context(), store.ListConsentBySiteParams{
-		SiteID:      siteID,
-		CreatedAt:   from,
-		CreatedAt_2: to,
-		Method:      method,
-		Limit:       limit,
-		Offset:      offset,
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list consent records")
-		return
-	}
-	total, err := h.queries.CountConsentBySite(r.Context(), store.CountConsentBySiteParams{
-		SiteID:      siteID,
-		CreatedAt:   from,
-		CreatedAt_2: to,
-		Method:      method,
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to count consent records")
-		return
+	// Two query variants: with or without method filter. Splitting them
+	// avoids sqlc generating positional ?6 references when sqlc.arg(method)
+	// is reused in the same SQL, which the go-sqlite3 driver mis-binds and
+	// returned datatype-mismatch 500s for every Proofs page load.
+	var rows []store.ConsentRecord
+	var total int64
+	if method == "" {
+		var qErr error
+		rows, qErr = h.queries.ListConsentBySite(r.Context(), store.ListConsentBySiteParams{
+			SiteID:      siteID,
+			CreatedAt:   from,
+			CreatedAt_2: to,
+			Limit:       limit,
+			Offset:      offset,
+		})
+		if qErr != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to list consent records")
+			return
+		}
+		total, qErr = h.queries.CountConsentBySite(r.Context(), store.CountConsentBySiteParams{
+			SiteID:      siteID,
+			CreatedAt:   from,
+			CreatedAt_2: to,
+		})
+		if qErr != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to count consent records")
+			return
+		}
+	} else {
+		var qErr error
+		rows, qErr = h.queries.ListConsentBySiteByMethod(r.Context(), store.ListConsentBySiteByMethodParams{
+			SiteID:        siteID,
+			CreatedAt:     from,
+			CreatedAt_2:   to,
+			ConsentMethod: method,
+			Limit:         limit,
+			Offset:        offset,
+		})
+		if qErr != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to list consent records")
+			return
+		}
+		total, qErr = h.queries.CountConsentBySiteByMethod(r.Context(), store.CountConsentBySiteByMethodParams{
+			SiteID:        siteID,
+			CreatedAt:     from,
+			CreatedAt_2:   to,
+			ConsentMethod: method,
+		})
+		if qErr != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to count consent records")
+			return
+		}
 	}
 	out := make([]proofRow, 0, len(rows))
 	for _, row := range rows {

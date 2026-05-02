@@ -7,11 +7,23 @@ INSERT INTO consent_records (
 );
 
 -- name: ListConsentBySite :many
+-- No method filter. Caller passes method='' or omits filtering. Splitting
+-- this from ListConsentBySiteByMethod avoids sqlc generating positional
+-- ?6 references when sqlc.arg(method) is reused, which the go-sqlite3
+-- driver mis-binds (caused HTTP 500 on the Proofs admin page).
 SELECT * FROM consent_records
 WHERE site_id = ?
   AND created_at >= ?
   AND created_at <= ?
-  AND (sqlc.arg(method) = '' OR consent_method = sqlc.arg(method))
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: ListConsentBySiteByMethod :many
+SELECT * FROM consent_records
+WHERE site_id = ?
+  AND created_at >= ?
+  AND created_at <= ?
+  AND consent_method = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?;
 
@@ -19,8 +31,14 @@ LIMIT ? OFFSET ?;
 SELECT COUNT(*) AS total FROM consent_records
 WHERE site_id = ?
   AND created_at >= ?
+  AND created_at <= ?;
+
+-- name: CountConsentBySiteByMethod :one
+SELECT COUNT(*) AS total FROM consent_records
+WHERE site_id = ?
+  AND created_at >= ?
   AND created_at <= ?
-  AND (sqlc.arg(method) = '' OR consent_method = sqlc.arg(method));
+  AND consent_method = ?;
 
 -- name: GetConsentByID :one
 SELECT * FROM consent_records WHERE id = ? AND site_id = ?;

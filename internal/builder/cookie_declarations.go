@@ -32,6 +32,11 @@ func PresetCookieDeclarations(site store.Site, settingsMap map[string]string) []
 		},
 	}
 
+	// Tracker presets. Each block fires when the operator has either
+	// flipped the corresponding *_enabled boolean or pasted a tracker
+	// ID. Mirrors CookieProof's KNOWN_COOKIES catalogue
+	// (CookieProof/src/scanner/cookie-database.ts) so atomicsite tenants
+	// who connect a tracker get the right disclosure rows automatically.
 	if boolSetting(settingsMap["analytics.ga4_enabled"], false) ||
 		strings.TrimSpace(settingsMap["analytics.ga4_id"]) != "" {
 		out = append(out,
@@ -41,8 +46,69 @@ func PresetCookieDeclarations(site store.Site, settingsMap map[string]string) []
 			CookieDeclaration{Category: "analytics", Name: "_gac_*", Provider: "Google", Purpose: "Campaign information", Expiry: "90 days"},
 		)
 	}
-
-	// Umami is cookieless by default — no analytics declarations to add.
+	if strings.TrimSpace(settingsMap["analytics.gtm_id"]) != "" &&
+		strings.TrimSpace(settingsMap["analytics.ga4_id"]) == "" {
+		// GTM with no GA4 still loads GA via cookies under the same _ga name.
+		out = append(out,
+			CookieDeclaration{Category: "analytics", Name: "_ga", Provider: "Google", Purpose: "Distinguishes unique users (loaded via Google Tag Manager)", Expiry: "2 years"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.google_ads_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "marketing", Name: "_gcl_au", Provider: "Google", Purpose: "Stores and tracks conversions", Expiry: "90 days"},
+			CookieDeclaration{Category: "marketing", Name: "_gcl_aw", Provider: "Google", Purpose: "Conversion linker for Google Ads click tracking", Expiry: "90 days"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.meta_pixel_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "marketing", Name: "_fbp", Provider: "Meta", Purpose: "Used to deliver, measure, and improve advertising relevance", Expiry: "3 months"},
+			CookieDeclaration{Category: "marketing", Name: "_fbc", Provider: "Meta", Purpose: "Stores click identifier from Facebook ad clicks", Expiry: "3 months"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.linkedin_insight_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "marketing", Name: "li_sugr", Provider: "LinkedIn", Purpose: "Used for LinkedIn conversion tracking", Expiry: "3 months"},
+			CookieDeclaration{Category: "marketing", Name: "UserMatchHistory", Provider: "LinkedIn", Purpose: "LinkedIn Ads ID syncing", Expiry: "30 days"},
+			CookieDeclaration{Category: "marketing", Name: "li_fat_id", Provider: "LinkedIn", Purpose: "LinkedIn member identifier for conversion tracking", Expiry: "30 days"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.tiktok_pixel_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "marketing", Name: "_ttp", Provider: "TikTok", Purpose: "Used by TikTok to track visits and attribute conversions", Expiry: "13 months"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.hubspot_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "marketing", Name: "hubspotutk", Provider: "HubSpot", Purpose: "Tracks visitor identity for HubSpot CRM", Expiry: "13 months"},
+			CookieDeclaration{Category: "marketing", Name: "__hstc", Provider: "HubSpot", Purpose: "Main tracking cookie (visitor, timestamp, session)", Expiry: "13 months"},
+			CookieDeclaration{Category: "marketing", Name: "__hssc", Provider: "HubSpot", Purpose: "Tracks sessions", Expiry: "30 minutes"},
+			CookieDeclaration{Category: "marketing", Name: "__hssrc", Provider: "HubSpot", Purpose: "Detects browser restart", Expiry: "Session"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.hotjar_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "analytics", Name: "_hj*", Provider: "Hotjar", Purpose: "Hotjar analytics and user feedback tools", Expiry: "1 year"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.clarity_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "analytics", Name: "_clck", Provider: "Microsoft", Purpose: "Persists the Clarity user ID", Expiry: "1 year"},
+			CookieDeclaration{Category: "analytics", Name: "_clsk", Provider: "Microsoft", Purpose: "Combines pageviews into a session recording", Expiry: "1 day"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.matomo_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "analytics", Name: "_pk_id.*", Provider: "Matomo", Purpose: "Stores unique visitor ID", Expiry: "13 months"},
+			CookieDeclaration{Category: "analytics", Name: "_pk_ses.*", Provider: "Matomo", Purpose: "Stores temporary session data", Expiry: "30 minutes"},
+		)
+	}
+	if strings.TrimSpace(settingsMap["analytics.intercom_app_id"]) != "" {
+		out = append(out,
+			CookieDeclaration{Category: "preferences", Name: "intercom-id-*", Provider: "Intercom", Purpose: "Identifies anonymous visitors for live chat", Expiry: "9 months"},
+			CookieDeclaration{Category: "preferences", Name: "intercom-session-*", Provider: "Intercom", Purpose: "Maintains live chat session", Expiry: "1 week"},
+		)
+	}
+	// Umami / Plausible: cookieless by default, no declarations.
 
 	if strings.TrimSpace(site.Lang) != "" ||
 		strings.TrimSpace(settingsMap["general.additional_langs"]) != "" {
