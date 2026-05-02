@@ -32,6 +32,19 @@
 		{ value: 'unsafe-url', label: 'unsafe-url' }
 	];
 
+	const xXssOptions = [
+		{ value: '0', label: '0 (off, OWASP recommendation)' },
+		{ value: '1', label: '1' },
+		{ value: '1; mode=block', label: '1; mode=block (default; scanner parity)' }
+	];
+
+	const xPermittedOptions = [
+		{ value: 'none', label: 'none (default)' },
+		{ value: 'master-only', label: 'master-only' },
+		{ value: 'by-content-type', label: 'by-content-type' },
+		{ value: 'all', label: 'all' }
+	];
+
 	function toBool(v: string | undefined): boolean {
 		if (!v) return false;
 		const s = v.toLowerCase();
@@ -54,6 +67,8 @@
 	let coop = $state('same-origin');
 	let corp = $state('same-origin');
 	let coep = $state('');
+	let xXssProtection = $state('1; mode=block');
+	let xPermittedCrossDomain = $state('none');
 	let httpsRedirect = $state(true);
 
 	type State = {
@@ -70,6 +85,8 @@
 		coop: string;
 		corp: string;
 		coep: string;
+		xXssProtection: string;
+		xPermittedCrossDomain: string;
 		httpsRedirect: boolean;
 	};
 
@@ -87,6 +104,8 @@
 		coop: 'same-origin',
 		corp: 'same-origin',
 		coep: '',
+		xXssProtection: '1; mode=block',
+		xPermittedCrossDomain: 'none',
 		httpsRedirect: true
 	});
 
@@ -109,6 +128,8 @@
 			coop = m.coop || 'same-origin';
 			corp = m.corp || 'same-origin';
 			coep = m.coep || '';
+			xXssProtection = m.x_xss_protection || '1; mode=block';
+			xPermittedCrossDomain = m.x_permitted_cross_domain_policies || 'none';
 			httpsRedirect = m.https_redirect ? toBool(m.https_redirect) : true;
 
 			initial = {
@@ -125,6 +146,8 @@
 				coop,
 				corp,
 				coep,
+				xXssProtection,
+				xPermittedCrossDomain,
 				httpsRedirect
 			};
 		} catch (err) {
@@ -152,6 +175,8 @@
 			coop !== initial.coop ||
 			corp !== initial.corp ||
 			coep !== initial.coep ||
+			xXssProtection !== initial.xXssProtection ||
+			xPermittedCrossDomain !== initial.xPermittedCrossDomain ||
 			httpsRedirect !== initial.httpsRedirect
 	);
 
@@ -169,6 +194,8 @@
 		coop = initial.coop;
 		corp = initial.corp;
 		coep = initial.coep;
+		xXssProtection = initial.xXssProtection;
+		xPermittedCrossDomain = initial.xPermittedCrossDomain;
 		httpsRedirect = initial.httpsRedirect;
 	}
 
@@ -198,6 +225,12 @@
 				{ category: 'security', key: 'coop', value: coop },
 				{ category: 'security', key: 'corp', value: corp },
 				{ category: 'security', key: 'coep', value: coep },
+				{ category: 'security', key: 'x_xss_protection', value: xXssProtection },
+				{
+					category: 'security',
+					key: 'x_permitted_cross_domain_policies',
+					value: xPermittedCrossDomain
+				},
 				{ category: 'security', key: 'https_redirect', value: b(httpsRedirect) }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
@@ -216,6 +249,8 @@
 				coop,
 				corp,
 				coep,
+				xXssProtection,
+				xPermittedCrossDomain,
 				httpsRedirect
 			};
 			toast.success('Security settings saved.');
@@ -408,6 +443,39 @@
 						<p class="text-[11px] text-text-muted">
 							require-corp blocks iframes without Cross-Origin-Resource-Policy.
 							Use only if you need SharedArrayBuffer / cross-origin isolation.
+						</p>
+					</div>
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Legacy headers (scanner parity)
+				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Modern browsers ignore both of these but Site Inspector and
+					securityheaders.com still grade for them. Defaults score A+; flip
+					only if you have a specific reason.
+				</p>
+				<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<div class="flex flex-col gap-1.5">
+						<span class="text-[12px] font-medium text-text-secondary">
+							X-XSS-Protection
+						</span>
+						<Select options={xXssOptions} bind:value={xXssProtection} />
+						<p class="text-[11px] text-text-muted">
+							Real XSS protection comes from the CSP. OWASP recommends 0; scanners
+							expect 1; mode=block.
+						</p>
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<span class="text-[12px] font-medium text-text-secondary">
+							X-Permitted-Cross-Domain-Policies
+						</span>
+						<Select options={xPermittedOptions} bind:value={xPermittedCrossDomain} />
+						<p class="text-[11px] text-text-muted">
+							Locks down legacy Adobe Flash / Silverlight crossdomain.xml lookup.
+							none has zero downside on modern stacks.
 						</p>
 					</div>
 				</div>
