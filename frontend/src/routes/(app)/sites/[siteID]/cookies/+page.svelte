@@ -602,8 +602,7 @@
 			<Spinner />
 		</div>
 	{:else}
-		<div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-[2fr_1fr]">
-			<div class="flex flex-col gap-5">
+		<div class="mt-8 flex flex-col gap-5">
 				<Card padding="md">
 					<div class="flex items-center justify-between gap-4">
 						<div class="flex flex-col">
@@ -1137,110 +1136,74 @@
 					</div>
 				</Card>
 
-				<div
-					class="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t border-border-light bg-bg-surface/85 px-6 py-3 backdrop-blur"
-				>
-					<span class="text-[12px] text-text-muted">
-						{dirty ? 'Unsaved changes.' : 'Up to date.'}
-					</span>
-					<div class="flex items-center gap-2">
-						<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>Discard</Button>
-						<Button variant="primary" onclick={save} loading={saving} disabled={!dirty}>Save</Button>
-					</div>
+			<div
+				class="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t border-border-light bg-bg-surface/85 px-6 py-3 backdrop-blur"
+			>
+				<span class="text-[12px] text-text-muted">
+					{dirty ? 'Unsaved changes.' : 'Up to date.'}
+				</span>
+				<div class="flex items-center gap-2">
+					<Button variant="ghost" onclick={() => (bannerPreviewOpen = true)}>
+						Preview banner
+					</Button>
+					<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>Discard</Button>
+					<Button variant="primary" onclick={save} loading={saving} disabled={!dirty}>Save</Button>
 				</div>
-			</div>
-
-			<div class="flex flex-col gap-5">
-				<Card padding="md">
-					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-						Settings preview
-					</h2>
-					<p class="mt-1 text-[11px] text-text-muted">
-						The cookie preferences modal opened: handy for scanning every category and table at
-						once. Updates as you edit (debounced ~350ms).
-					</p>
-					<div class="mt-3 overflow-hidden rounded-lg border border-border-light">
-						<iframe
-							src={previewSrc + '&mode=preferences'}
-							title="Cookie preferences preview"
-							class="block h-[560px] w-full bg-bg-elevated"
-							sandbox="allow-scripts allow-same-origin"
-						></iframe>
-					</div>
-					<div class="mt-4 flex flex-col gap-2">
-						<Button variant="primary" onclick={() => (bannerPreviewOpen = true)}>
-							Preview live banner
-						</Button>
-						<p class="text-[11px] text-text-muted">
-							Opens a full-screen overlay showing the banner exactly as a first-time visitor sees
-							it on the published site, with Accept / Reject / Settings buttons live.
-						</p>
-					</div>
-					<p class="mt-3 text-[11px] text-text-muted">
-						Reject + Accept share the primary color (IMY 2026 equal prominence). Save preferences
-						uses the secondary brand color. Language selector and privacy policy link wire
-						automatically when configured. Rebuild the site to publish.
-					</p>
-				</Card>
-
-				<Card padding="md">
-					<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-						How it works
-					</h2>
-					<ul class="mt-3 flex flex-col gap-2 text-[12px] text-text-muted">
-						<li>
-							<span class="text-text-primary">Same-origin asset.</span> Widget served from
-							<code class="font-mono text-[11px]">/_ccb.&lt;hash&gt;.js</code> on your domain.
-						</li>
-						<li>
-							<span class="text-text-primary">Inline config.</span> Branding colors flow into
-							CSS vars at build time. No remote fetch.
-						</li>
-						<li>
-							<span class="text-text-primary">Proofs in your DB.</span> Consent records POST to
-							<code class="font-mono text-[11px]">/t/consent</code> and land in
-							<code class="font-mono text-[11px]">consent_records</code>.
-						</li>
-						<li>
-							<span class="text-text-primary">GPC respected.</span> Visitors with Global Privacy
-							Control set are auto-rejected and the banner is suppressed.
-						</li>
-					</ul>
-				</Card>
 			</div>
 		</div>
 	{/if}
 </div>
 
 {#if bannerPreviewOpen}
-	<!-- Banner-as-visitor preview. Full-screen overlay covering the admin so the
-	     site behind matches what a real visitor's first page-load looks like:
-	     blank surface, banner pops in from configured position, Accept/Reject/
-	     Settings buttons live and clickable. Esc or the close button dismisses. -->
+	<!-- Centered popup over the settings page. The settings stay visible
+	     behind the dimmed backdrop so the editor can see how the banner
+	     reads against real form content. The iframe carries the actual
+	     widget bundle in mode=banner: Accept / Reject / Settings buttons
+	     are live and clicking Settings opens the preferences modal inside
+	     the iframe (the real visitor flow). Esc, click on backdrop, or
+	     close button dismisses. -->
 	<div
-		class="fixed inset-0 z-[200] flex flex-col bg-bg/95 backdrop-blur-sm"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Banner preview"
+		class="fixed inset-0 z-[200] flex items-center justify-center p-6"
+		role="presentation"
 		onkeydown={(e) => {
 			if (e.key === 'Escape') bannerPreviewOpen = false;
 		}}
 		tabindex="-1"
 	>
-		<div class="flex items-center justify-between gap-4 border-b border-border bg-bg-surface px-6 py-3">
-			<div class="flex flex-col">
-				<span class="text-[13px] text-text-primary">Banner as a visitor sees it</span>
-				<span class="text-[11px] text-text-muted">
-					Position: {position}. Buttons live. Press Esc or click Close to return.
-				</span>
+		<!-- Dimmed backdrop. Captures click-outside-to-close. backdrop-blur-sm
+		     keeps the settings recognisable but pushes them visually behind. -->
+		<button
+			type="button"
+			class="absolute inset-0 cursor-default bg-black/45 backdrop-blur-[2px]"
+			aria-label="Close preview"
+			onclick={() => (bannerPreviewOpen = false)}
+		></button>
+		<!-- Dialog frame. Capped width so the settings underneath are visible
+		     in the gutters; tall enough that the bottom-pinned banner has
+		     room above it for the "fake page" feel. -->
+		<div
+			class="relative flex h-[min(80vh,720px)] w-[min(960px,calc(100vw-3rem))] flex-col overflow-hidden rounded-2xl border border-border-light bg-bg-elevated shadow-2xl"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Banner preview"
+		>
+			<div class="flex items-center justify-between gap-4 border-b border-border-light bg-bg-surface/95 px-5 py-3">
+				<div class="flex flex-col">
+					<span class="text-[13px] text-text-primary">Banner as a visitor sees it</span>
+					<span class="text-[11px] text-text-muted">
+						Position: {position}. Buttons live. Click Settings inside the banner to
+						open preferences. Esc to close.
+					</span>
+				</div>
+				<Button variant="ghost" onclick={() => (bannerPreviewOpen = false)}>Close</Button>
 			</div>
-			<Button variant="secondary" onclick={() => (bannerPreviewOpen = false)}>Close preview</Button>
-		</div>
-		<div class="relative flex-1 overflow-hidden">
+			<!-- The iframe is the real CookieProof widget. Sandbox keeps the
+			     scripts running same-origin (so the widget can talk to its own
+			     /t/consent endpoint) while preventing top-navigation escape. -->
 			<iframe
 				src={previewSrc + '&mode=banner'}
 				title="Banner preview"
-				class="block h-full w-full"
+				class="block h-full w-full bg-bg-elevated"
 				sandbox="allow-scripts allow-same-origin"
 			></iframe>
 		</div>
