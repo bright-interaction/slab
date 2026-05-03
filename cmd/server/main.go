@@ -24,6 +24,7 @@ import (
 	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/domains"
 	"github.com/bright-interaction/slab/internal/retention"
 	"github.com/bright-interaction/slab/internal/server"
 	"github.com/bright-interaction/slab/internal/storage"
@@ -165,6 +166,52 @@ func main() {
 			slog.Warn("analytics: reload after settings change failed", "error", err)
 		}
 	}
+
+	// Custom-domain reconciler. Wires together: edge writer (nginx
+	// fragments), certbot HTTP-01 issuance, optional Cloudflare A-record
+	// helper, and the verify/live probes. All collaborators are config-
+	// gated so a dev box without root simply records rows without
+	// touching the host. The reconciler is wired BEFORE Router() builds
+	// so the domain handlers can call Signal().
+	domainEdge := &domains.EdgeWriter{
+		NginxConfDir:   cfg.NginxConfDir,
+		NginxSitesDir:  cfg.NginxSitesDir,
+		AcmeWebrootDir: cfg.AcmeWebrootDir,
+		SlugSuffix:     ifEmpty(cfg.BuiltSiteSuffix, ".slab.example.com"),
+		HeadersSnippet: "/etc/nginx/snippets/atomicsite-headers.conf",
+		CaddyUpstream:  "127.0.0.1:8080",
+	}
+	domainCertbot := &domains.CertbotRunner{
+		BinaryPath:     cfg.CertbotPath,
+		WebrootDir:     cfg.AcmeWebrootDir,
+		AdminEmail:     os.Getenv("ATOMICSITE_LE_EMAIL"),
+		NonInteractive: true,
+	}
+	cfZones := parseZoneMap(os.Getenv("ATOMICSITE_CLOUDFLARE_ZONES"))
+	domainCF := &domains.CloudflareClient{
+		APIToken: os.Getenv("ATOMICSITE_CLOUDFLARE_TOKEN"),
+		Zones:    cfZones,
+	}
+	domains.SetReloadCommand(cfg.NginxReloadCommand)
+	appUpstream := fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
+	reconciler := domains.NewReconciler(domains.Config{
+		Queries:     queries,
+		Edge:        domainEdge,
+		Certbot:     domainCertbot,
+		Cloudflare:  domainCF,
+		EdgeIP:      cfg.EdgeIP,
+		AppUpstream: appUpstream,
+	})
+	if cfg.NginxConfDir != "" {
+		slog.Info("domain reconciler enabled",
+			"nginx_conf_dir", cfg.NginxConfDir,
+			"certbot", domainCertbot.Enabled(),
+			"cloudflare_zones", len(cfZones))
+	} else {
+		slog.Info("domain reconciler running in record-only mode (no host integration configured)")
+	}
+	srv.DomainReconciler = reconciler
+	go reconciler.Run(mgrCtx)
 	httpSrv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      srv.Router(),
@@ -450,4 +497,43 @@ func resetPasswordCLI(args []string) {
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stderr, "password reset for %s (active sessions invalidated)\n", email)
+}
+
+// ifEmpty returns fallback when s is the empty string. Used at boot to
+// pick deployment-friendly defaults when an env var is unset.
+func ifEmpty(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+// parseZoneMap reads ATOMICSITE_CLOUDFLARE_ZONES, formatted as
+// "apex1=zoneID1,apex2=zoneID2,...". Returns nil for empty input so
+// the Cloudflare helper stays disabled by default.
+func parseZoneMap(s string) map[string]string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	out := map[string]string{}
+	for _, pair := range strings.Split(s, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		apex := strings.ToLower(strings.TrimSpace(parts[0]))
+		zoneID := strings.TrimSpace(parts[1])
+		if apex != "" && zoneID != "" {
+			out[apex] = zoneID
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

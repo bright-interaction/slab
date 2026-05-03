@@ -20,6 +20,7 @@ import (
 
 	"github.com/bright-interaction/slab/internal/analyticsdb"
 	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/domains"
 	"github.com/bright-interaction/slab/internal/handlers"
 	"github.com/bright-interaction/slab/internal/mcp"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
@@ -49,6 +50,11 @@ type Server struct {
 	// OnAnalyticsSettingsChange, when set, is invoked after settings writes that
 	// touch the analytics category so the analytics Manager can rescan parsers.
 	OnAnalyticsSettingsChange func(context.Context)
+	// DomainReconciler drives custom-hostname provisioning (DNS verify
+	// → certbot → nginx vhost → live probe). Optional: nil keeps the
+	// admin endpoints functional but no edge changes occur. Wired in
+	// cmd/server/main.go after Server is constructed.
+	DomainReconciler *domains.Reconciler
 }
 
 // New creates a Server.
@@ -151,6 +157,14 @@ func (s *Server) Router() http.Handler {
 	adminReloadH := handlers.NewAdminReloadHandler(s.cfg, trackH)
 	r.Post("/admin/reload-secrets", adminReloadH.ReloadSecrets)
 
+	// Public domain-verify endpoint. The host nginx atomicsite-acme.conf
+	// block proxies /.well-known/atomic-verify/* here. No auth: the
+	// token is the credential. We expose it BEFORE the auth middleware
+	// group so a freshly-pointed custom domain can prove ownership
+	// before TLS / login exists.
+	publicDomH := handlers.NewDomainHandler(s.queries, nil, "")
+	r.Get("/.well-known/atomic-verify/{token}", publicDomH.VerifyToken)
+
 	// Auth (public)
 	ah := handlers.NewAuthHandler(s.cfg, s.queries)
 	r.Post("/api/auth/login", ah.Login)
@@ -229,6 +243,26 @@ func (s *Server) Router() http.Handler {
 		siteR.Patch("/api/sites/{siteID}", sh.Update)
 		siteR.Delete("/api/sites/{siteID}", sh.Delete)
 		siteR.Get("/api/sites/{siteID}/silos", sh.ListSilos)
+
+		// Custom domains. The reconciler may be nil (no host integration);
+		// the handler still records rows + serves the verify endpoint.
+		var reconcileSignal func()
+		if s.DomainReconciler != nil {
+			reconcileSignal = s.DomainReconciler.Signal
+		}
+		reservedSuffix := s.cfg.BuiltSiteSuffix
+		if reservedSuffix == "" {
+			// Match the default in cmd/server/main.go so
+			// *.slab.example.com stays reserved
+			// even when BUILT_SITE_SUFFIX is unset.
+			reservedSuffix = ".slab.example.com"
+		}
+		domH := handlers.NewDomainHandler(s.queries, reconcileSignal, reservedSuffix)
+		siteR.Get("/api/sites/{siteID}/domains", domH.List)
+		siteR.Post("/api/sites/{siteID}/domains", domH.Create)
+		siteR.Post("/api/sites/{siteID}/domains/{domainID}/canonical", domH.SetCanonical)
+		siteR.Post("/api/sites/{siteID}/domains/{domainID}/refresh", domH.Refresh)
+		siteR.Delete("/api/sites/{siteID}/domains/{domainID}", domH.Delete)
 
 		// Pages
 		ph := handlers.NewPageHandler(s.cfg, s.queries)

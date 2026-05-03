@@ -52,6 +52,7 @@ type Querier interface {
 	CreateDeployTarget(ctx context.Context, arg CreateDeployTargetParams) error
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
 	CreateDesignReference(ctx context.Context, arg CreateDesignReferenceParams) error
+	CreateDomain(ctx context.Context, arg CreateDomainParams) error
 	CreateEvaluation(ctx context.Context, arg CreateEvaluationParams) error
 	CreateForm(ctx context.Context, arg CreateFormParams) error
 	CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) error
@@ -83,6 +84,7 @@ type Querier interface {
 	DeleteDeployTarget(ctx context.Context, id string) error
 	DeleteDeployment(ctx context.Context, id string) error
 	DeleteDesignReference(ctx context.Context, arg DeleteDesignReferenceParams) error
+	DeleteDomain(ctx context.Context, id string) error
 	DeleteEvaluationsByBuild(ctx context.Context, buildID string) error
 	DeleteForm(ctx context.Context, id string) error
 	DeleteFormSubmission(ctx context.Context, id string) error
@@ -129,6 +131,9 @@ type Querier interface {
 	GetDeployTarget(ctx context.Context, id string) (DeployTarget, error)
 	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
 	GetDesignReference(ctx context.Context, arg GetDesignReferenceParams) (DesignReference, error)
+	GetDomainByHostname(ctx context.Context, hostname string) (SiteDomain, error)
+	GetDomainByID(ctx context.Context, id string) (SiteDomain, error)
+	GetDomainByVerifyToken(ctx context.Context, verifyToken string) (SiteDomain, error)
 	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
 	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
@@ -159,6 +164,7 @@ type Querier interface {
 	ListActiveGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
 	ListActiveKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
+	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
 	// Allowed scripts
 	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
@@ -179,6 +185,8 @@ type Querier interface {
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
 	ListDesignReferences(ctx context.Context, siteID string) ([]DesignReference, error)
 	ListDistinctFontFamilies(ctx context.Context, siteID string) ([]string, error)
+	ListDomainsBySite(ctx context.Context, siteID string) ([]SiteDomain, error)
+	ListDomainsByStatus(ctx context.Context, status string) ([]SiteDomain, error)
 	// Evaluations
 	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
 	ListEvaluationsBySite(ctx context.Context, arg ListEvaluationsBySiteParams) ([]Evaluation, error)
@@ -223,6 +231,9 @@ type Querier interface {
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	RemoveSiteMember(ctx context.Context, arg RemoveSiteMemberParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
+	// Flips this row to is_canonical=1 and clears the flag on every other
+	// domain row for the same site so exactly one canonical exists.
+	SetDomainCanonical(ctx context.Context, arg SetDomainCanonicalParams) error
 	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
 	TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error)
@@ -246,6 +257,8 @@ type Querier interface {
 	UpdateDeploymentDeployed(ctx context.Context, arg UpdateDeploymentDeployedParams) error
 	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error
 	UpdateDesignReferenceFetched(ctx context.Context, arg UpdateDesignReferenceFetchedParams) error
+	UpdateDomainCertPath(ctx context.Context, arg UpdateDomainCertPathParams) error
+	UpdateDomainStatus(ctx context.Context, arg UpdateDomainStatusParams) error
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error
 	UpdateGuardrail(ctx context.Context, arg UpdateGuardrailParams) error

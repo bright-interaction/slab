@@ -9,6 +9,7 @@
 		Building2,
 		Server,
 		Cloud,
+		Globe,
 		FileCode,
 		FileText,
 		Bot,
@@ -83,6 +84,12 @@
 			'General',
 			'Site name, domain, language, defaults.',
 			SettingsIcon
+		)}
+		{@render sectionCard(
+			`/sites/${siteID}/settings/domains`,
+			'Domains',
+			'Custom hostnames, verification, TLS, canonical URL.',
+			Globe
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/security`,

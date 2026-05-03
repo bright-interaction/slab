@@ -91,6 +91,20 @@ type Config struct {
 	// Validate() rejects unknown values and refuses to start in
 	// "cloud" mode when ee.IsAvailable() returns false.
 	DeploymentMode string
+
+	// Custom-domain provisioning paths. The reconciler writes nginx
+	// fragments + invokes certbot at these locations on the host.
+	// Empty values disable the reconciler (local dev / OSS deploys
+	// without root); the admin still records the rows but no edge
+	// changes happen. When operating Atomic Site as a SaaS, point
+	// these at the host nginx + certbot tree and run with sudoer
+	// rights for the reload script.
+	NginxConfDir       string // /etc/nginx/conf.d (auto-included by http{})
+	NginxSitesDir      string // /etc/nginx/sites-enabled (vhost includes)
+	AcmeWebrootDir     string // /var/www/acme — webroot for certbot HTTP-01
+	CertbotPath        string // path to the certbot binary, or empty
+	NginxReloadCommand string // shell command, e.g. "sudo /usr/local/bin/atomicsite-nginx-reload"
+	EdgeIP             string // public A-record target shown to admins
 }
 
 func Load() *Config {
@@ -118,6 +132,13 @@ func Load() *Config {
 		PrimaryDomain:   envOr("ATOMICSITE_PRIMARY_DOMAIN", ""),
 		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ""),
 		DeploymentMode:  envOr("ATOMICSITE_DEPLOYMENT_MODE", DeploymentModeSingle),
+
+		NginxConfDir:       envOr("ATOMICSITE_NGINX_CONF_DIR", ""),
+		NginxSitesDir:      envOr("ATOMICSITE_NGINX_SITES_DIR", ""),
+		AcmeWebrootDir:     envOr("ATOMICSITE_ACME_WEBROOT", ""),
+		CertbotPath:        envOr("ATOMICSITE_CERTBOT_PATH", ""),
+		NginxReloadCommand: envOr("ATOMICSITE_NGINX_RELOAD_CMD", ""),
+		EdgeIP:             envOr("ATOMICSITE_EDGE_IP", ""),
 	}
 }
 

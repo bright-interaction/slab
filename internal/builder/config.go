@@ -24,7 +24,7 @@ func RenderConfig(ctx context.Context, queries *store.Queries, siteID string, ws
 
 	redirects, _ := queries.ListRedirectsBySite(ctx, siteID)
 
-	domain := site.Domain
+	domain := CanonicalHostname(ctx, queries, site)
 	if domain == "" {
 		domain = "localhost"
 	}

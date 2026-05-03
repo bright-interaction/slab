@@ -311,6 +311,20 @@ type SiteArchitecture struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+type SiteDomain struct {
+	ID          string `json:"id"`
+	SiteID      string `json:"site_id"`
+	Hostname    string `json:"hostname"`
+	Status      string `json:"status"`
+	VerifyToken string `json:"verify_token"`
+	CertPath    string `json:"cert_path"`
+	LastCheckAt string `json:"last_check_at"`
+	LastError   string `json:"last_error"`
+	IsCanonical int64  `json:"is_canonical"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
 type SiteFont struct {
 	ID           string `json:"id"`
 	SiteID       string `json:"site_id"`
