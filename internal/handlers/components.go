@@ -28,9 +28,10 @@ func (h *ComponentHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ComponentHandler) Get(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "componentID")
 	comp, err := h.queries.GetComponentByID(r.Context(), id)
-	if err != nil {
+	if err != nil || comp.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Component not found")
 		return
 	}
@@ -80,9 +81,10 @@ func (h *ComponentHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ComponentHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "componentID")
 	existing, err := h.queries.GetComponentByID(r.Context(), id)
-	if err != nil {
+	if err != nil || existing.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Component not found")
 		return
 	}
@@ -144,7 +146,13 @@ func (h *ComponentHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ComponentHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "componentID")
+	existing, err := h.queries.GetComponentByID(r.Context(), id)
+	if err != nil || existing.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Component not found")
+		return
+	}
 	if err := h.queries.DeleteComponent(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete component")
 		return

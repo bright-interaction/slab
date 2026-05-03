@@ -187,7 +187,23 @@ func (h *AllowedScriptHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AllowedScriptHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "scriptID")
+	// Defence against cross-tenant deletes: scan the site's own list
+	// before deleting so a member of site A can't pass a scriptID
+	// belonging to site B and get it removed.
+	rows, _ := h.queries.ListAllowedScriptsBySite(r.Context(), siteID)
+	owns := false
+	for _, s := range rows {
+		if s.ID == id {
+			owns = true
+			break
+		}
+	}
+	if !owns {
+		writeError(w, http.StatusNotFound, "Allowed script not found")
+		return
+	}
 	if err := h.queries.DeleteAllowedScript(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete allowed script")
 		return

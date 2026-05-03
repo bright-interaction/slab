@@ -22,7 +22,11 @@ func NewBlockHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *Bl
 }
 
 func (h *BlockHandler) List(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	pageID := urlParam(r, "pageID")
+	if _, ok := pageInSite(r.Context(), h.queries, w, pageID, siteID); !ok {
+		return
+	}
 	blocks, err := h.queries.ListBlocksByPage(r.Context(), pageID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to list blocks")
@@ -32,16 +36,20 @@ func (h *BlockHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BlockHandler) Get(w http.ResponseWriter, r *http.Request) {
-	block, err := h.queries.GetBlockByID(r.Context(), urlParam(r, "blockID"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Block not found")
+	siteID := urlParam(r, "siteID")
+	block, ok := blockInSite(r.Context(), h.queries, w, urlParam(r, "blockID"), siteID)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, block)
 }
 
 func (h *BlockHandler) Create(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	pageID := urlParam(r, "pageID")
+	if _, ok := pageInSite(r.Context(), h.queries, w, pageID, siteID); !ok {
+		return
+	}
 
 	var req struct {
 		BlockType string          `json:"block_type"`
@@ -93,10 +101,10 @@ func (h *BlockHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	blockID := urlParam(r, "blockID")
-	existing, err := h.queries.GetBlockByID(r.Context(), blockID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Block not found")
+	existing, ok := blockInSite(r.Context(), h.queries, w, blockID, siteID)
+	if !ok {
 		return
 	}
 
@@ -156,9 +164,9 @@ func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BlockHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	blockID := urlParam(r, "blockID")
-	if _, err := h.queries.GetBlockByID(r.Context(), blockID); err != nil {
-		writeError(w, http.StatusNotFound, "Block not found")
+	if _, ok := blockInSite(r.Context(), h.queries, w, blockID, siteID); !ok {
 		return
 	}
 
@@ -170,6 +178,12 @@ func (h *BlockHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BlockHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	pageID := urlParam(r, "pageID")
+	if _, ok := pageInSite(r.Context(), h.queries, w, pageID, siteID); !ok {
+		return
+	}
+
 	var req struct {
 		Order []struct {
 			ID        string `json:"id"`
@@ -181,7 +195,15 @@ func (h *BlockHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only reorder blocks that actually belong to this page. Otherwise a
+	// member of site A could pass blockIDs from site B and silently
+	// scramble their sort_order even though the parent page check above
+	// blocks the broader path.
 	for _, item := range req.Order {
+		blk, err := h.queries.GetBlockByID(r.Context(), item.ID)
+		if err != nil || blk.PageID != pageID {
+			continue
+		}
 		_ = h.queries.UpdateBlockOrder(r.Context(), store.UpdateBlockOrderParams{
 			SortOrder: item.SortOrder,
 			ID:        item.ID,
@@ -291,7 +313,11 @@ func (h *BlockHandler) PreviewHTML(w http.ResponseWriter, r *http.Request) {
 
 // BulkSave atomically replaces all blocks on a page.
 func (h *BlockHandler) BulkSave(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	pageID := urlParam(r, "pageID")
+	if _, ok := pageInSite(r.Context(), h.queries, w, pageID, siteID); !ok {
+		return
+	}
 
 	var req struct {
 		Blocks []struct {

@@ -112,21 +112,65 @@ func (h *AgentHandler) BulkUpsertSettings(w http.ResponseWriter, r *http.Request
 	}
 
 	rejected := []string{}
-	for _, s := range req {
-		if s.Category == "" || s.Key == "" {
-			continue
+
+	// Apply the writable batch in a single transaction so a mid-batch
+	// failure (DB hiccup, FK constraint we didn't anticipate) doesn't
+	// leave half the values landed and the rest dropped silently. The
+	// caller already pre-validated above so the only remaining failure
+	// modes are infrastructure-level. Falls back to a non-tx loop when
+	// the handler was constructed without a *sql.DB (legacy callers).
+	if h.db != nil {
+		tx, err := h.db.BeginTx(r.Context(), nil)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to start transaction")
+			return
 		}
-		if !agentWritableSettingsCategories[s.Category] {
-			rejected = append(rejected, s.Category+"."+s.Key)
-			continue
+		qtx := h.queries.WithTx(tx)
+		commit := true
+		for _, s := range req {
+			if s.Category == "" || s.Key == "" {
+				continue
+			}
+			if !agentWritableSettingsCategories[s.Category] {
+				rejected = append(rejected, s.Category+"."+s.Key)
+				continue
+			}
+			if err := qtx.UpsertSetting(r.Context(), store.UpsertSettingParams{
+				ID:       newID(),
+				SiteID:   a.SiteID,
+				Category: s.Category,
+				Key:      s.Key,
+				Value:    s.Value,
+			}); err != nil {
+				_ = tx.Rollback()
+				commit = false
+				writeError(w, http.StatusInternalServerError, "Failed to apply settings batch")
+				return
+			}
 		}
-		_ = h.queries.UpsertSetting(r.Context(), store.UpsertSettingParams{
-			ID:       newID(),
-			SiteID:   a.SiteID,
-			Category: s.Category,
-			Key:      s.Key,
-			Value:    s.Value,
-		})
+		if commit {
+			if err := tx.Commit(); err != nil {
+				writeError(w, http.StatusInternalServerError, "Failed to commit settings batch")
+				return
+			}
+		}
+	} else {
+		for _, s := range req {
+			if s.Category == "" || s.Key == "" {
+				continue
+			}
+			if !agentWritableSettingsCategories[s.Category] {
+				rejected = append(rejected, s.Category+"."+s.Key)
+				continue
+			}
+			_ = h.queries.UpsertSetting(r.Context(), store.UpsertSettingParams{
+				ID:       newID(),
+				SiteID:   a.SiteID,
+				Category: s.Category,
+				Key:      s.Key,
+				Value:    s.Value,
+			})
+		}
 	}
 
 	rows, _ := h.queries.ListSettingsBySite(r.Context(), a.SiteID)

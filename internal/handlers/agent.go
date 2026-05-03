@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"net/http"
 	"strings"
@@ -16,14 +17,20 @@ import (
 type AgentHandler struct {
 	cfg        *config.Config
 	queries    *store.Queries
+	db         *sql.DB
 	context    *agent.ContextBuilder
 	guardrails *agent.GuardrailEngine
 }
 
-func NewAgentHandler(cfg *config.Config, queries *store.Queries) *AgentHandler {
+// NewAgentHandler builds an AgentHandler. The db handle is optional; pass
+// nil to keep legacy single-row write paths working. BulkUpsertSettings
+// uses it to wrap the batch in a transaction so a failure midway doesn't
+// half-apply the agent's settings.
+func NewAgentHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *AgentHandler {
 	return &AgentHandler{
 		cfg:        cfg,
 		queries:    queries,
+		db:         db,
 		context:    agent.NewContextBuilder(queries),
 		guardrails: agent.NewGuardrailEngine(queries),
 	}

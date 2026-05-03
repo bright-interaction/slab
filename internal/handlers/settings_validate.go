@@ -158,6 +158,13 @@ func validateCookieDeclarationsJSON(value string) error {
 }
 
 func validateSecuritySetting(key, value string) error {
+	// Every security setting eventually lands in an HTTP response header
+	// (or nginx add_header line). A CR/LF in any of these values would
+	// inject a separate header into the live site, so reject up front
+	// before the catalog-specific rules below.
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("security.%s contains CR/LF; control characters are not allowed in security settings", key)
+	}
 	switch key {
 	case "hsts_enabled",
 		"hsts_preload",
@@ -180,6 +187,15 @@ func validateSecuritySetting(key, value string) error {
 		return enumIn("security.corp", value, "same-origin", "same-site", "cross-origin")
 	case "coep":
 		return enumIn("security.coep", value, "require-corp", "credentialless")
+	case "x_permitted_cross_domain_policies":
+		return enumIn("security.x_permitted_cross_domain_policies", value,
+			"none", "master-only", "by-content-type", "all")
+	case "x_xss_protection":
+		// Modern browsers ignore this header; we still emit a value for
+		// scanner parity. Allow the two values that grade well; reject
+		// anything else so admins can't smuggle arbitrary text into the
+		// header.
+		return enumIn("security.x_xss_protection", value, "0", "1", "1; mode=block")
 	}
 	return nil
 }

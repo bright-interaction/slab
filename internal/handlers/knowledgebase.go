@@ -28,9 +28,10 @@ func (h *KnowledgebaseHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *KnowledgebaseHandler) Get(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "entryID")
 	entry, err := h.queries.GetKnowledgebaseByID(r.Context(), id)
-	if err != nil {
+	if err != nil || entry.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Entry not found")
 		return
 	}
@@ -73,9 +74,10 @@ func (h *KnowledgebaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *KnowledgebaseHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "entryID")
 	existing, err := h.queries.GetKnowledgebaseByID(r.Context(), id)
-	if err != nil {
+	if err != nil || existing.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Entry not found")
 		return
 	}
@@ -131,7 +133,13 @@ func (h *KnowledgebaseHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *KnowledgebaseHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "entryID")
+	existing, err := h.queries.GetKnowledgebaseByID(r.Context(), id)
+	if err != nil || existing.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Entry not found")
+		return
+	}
 	if err := h.queries.DeleteKnowledgebaseEntry(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete entry")
 		return

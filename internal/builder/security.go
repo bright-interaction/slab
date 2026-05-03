@@ -39,7 +39,12 @@ func BuildSecurityHeaders(ctx context.Context, queries *store.Queries, siteID st
 	settings, _ := queries.ListSettingsBySite(ctx, siteID)
 	sm := make(map[string]string)
 	for _, s := range settings {
-		sm[s.Category+"."+s.Key] = s.Value
+		// Defence-in-depth: strip CR/LF/control chars from every settings
+		// value before it can flow into an HTTP response header. Without
+		// this, a settings_validate.go gap that lets a CRLF-carrying value
+		// through (or any future setting we forget to validate) would let
+		// an admin smuggle extra headers into the live site config.
+		sm[s.Category+"."+s.Key] = stripCtl(s.Value)
 	}
 
 	// Group active trusted domains by kind so each kind feeds the right CSP

@@ -8,6 +8,7 @@
 	import * as authApi from '$lib/api/auth';
 	import * as sitesApi from '$lib/api/sites';
 	import { auth, setUser } from '$lib/stores/auth.svelte';
+	import { currentSite, clearSite } from '$lib/stores/currentSite.svelte';
 	import { confirm } from '$lib/stores/confirm.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { theme, toggleTheme } from '$lib/stores/theme.svelte';
@@ -74,6 +75,12 @@
 			await sitesApi.remove(deleteTarget.id);
 			toast.success(`Site "${deleteTarget.name}" deleted.`);
 			sites = sites.filter((s) => s.id !== deleteTarget!.id);
+			// If the deleted site was the active one, drop it from the
+			// store + localStorage so the dashboard doesn't try to load
+			// a now-404 site on next navigation.
+			if (currentSite.value?.id === deleteTarget!.id) {
+				clearSite();
+			}
 			deleteDialogOpen = false;
 			deleteTarget = null;
 		} catch (err) {

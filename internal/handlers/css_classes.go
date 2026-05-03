@@ -28,9 +28,10 @@ func (h *CSSClassHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CSSClassHandler) Get(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "classID")
 	cc, err := h.queries.GetCSSClassByID(r.Context(), id)
-	if err != nil {
+	if err != nil || cc.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "CSS class not found")
 		return
 	}
@@ -78,9 +79,10 @@ func (h *CSSClassHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CSSClassHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "classID")
 	existing, err := h.queries.GetCSSClassByID(r.Context(), id)
-	if err != nil {
+	if err != nil || existing.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "CSS class not found")
 		return
 	}
@@ -136,7 +138,13 @@ func (h *CSSClassHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CSSClassHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "classID")
+	existing, err := h.queries.GetCSSClassByID(r.Context(), id)
+	if err != nil || existing.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "CSS class not found")
+		return
+	}
 	if err := h.queries.DeleteCSSClass(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete CSS class")
 		return

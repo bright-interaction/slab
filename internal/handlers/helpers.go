@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // writeJSON writes a JSON response.
@@ -41,4 +44,38 @@ func newID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// pageInSite verifies the page exists and belongs to the given site. Returns
+// the page on success. On miss it writes a 404 to w and returns ok=false so
+// the caller can return without leaking which IDs exist in other tenants.
+//
+// Cross-tenant defence: SiteAccessMiddleware gates the URL's siteID, but a
+// member of site A who knows a pageID belonging to site B can still hit
+// /api/sites/{siteA}/pages/{siteB_pageID} unless every handler verifies the
+// page actually belongs to the URL's siteID.
+func pageInSite(ctx context.Context, queries *store.Queries, w http.ResponseWriter, pageID, siteID string) (store.Page, bool) {
+	page, err := queries.GetPageByID(ctx, pageID)
+	if err != nil || page.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Page not found")
+		return store.Page{}, false
+	}
+	return page, true
+}
+
+// blockInSite verifies the block exists and its parent page belongs to the
+// given site. Mirrors pageInSite for the /api/sites/{siteID}/.../blocks/{blockID}
+// surface. On miss it writes 404 and returns ok=false.
+func blockInSite(ctx context.Context, queries *store.Queries, w http.ResponseWriter, blockID, siteID string) (store.Block, bool) {
+	block, err := queries.GetBlockByID(ctx, blockID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return store.Block{}, false
+	}
+	page, err := queries.GetPageByID(ctx, block.PageID)
+	if err != nil || page.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Block not found")
+		return store.Block{}, false
+	}
+	return block, true
 }
