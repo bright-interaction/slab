@@ -390,7 +390,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/cookies/analytics/journey/{fingerprint}", caH.VisitorJourney)
 
 		// Agent keys (admin management)
-		agh := handlers.NewAgentHandler(s.cfg, s.queries)
+		agh := handlers.NewAgentHandler(s.cfg, s.queries, s.db)
 		siteR.Get("/api/sites/{siteID}/agent-keys", agh.ListAgentKeys)
 		siteR.Post("/api/sites/{siteID}/agent-keys", agh.GenerateAgentKey)
 		siteR.Delete("/api/sites/{siteID}/agent-keys/{keyID}", agh.RevokeAgentKey)
@@ -426,7 +426,7 @@ func (s *Server) Router() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.agentMW.Middleware)
 
-		agentH := handlers.NewAgentHandler(s.cfg, s.queries)
+		agentH := handlers.NewAgentHandler(s.cfg, s.queries, s.db)
 
 		// Context
 		r.Get("/api/agent/context", agentH.Context)

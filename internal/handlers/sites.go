@@ -616,7 +616,12 @@ func (h *SiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.Name = *req.Name
 	}
 	if req.Slug != nil {
-		params.Slug = *req.Slug
+		newSlug := strings.ToLower(strings.TrimSpace(*req.Slug))
+		if newSlug == "" || len(newSlug) > 50 || !slugPattern.MatchString(newSlug) {
+			writeError(w, http.StatusBadRequest, "slug must match ^[a-z0-9-]+$ (1-50 chars)")
+			return
+		}
+		params.Slug = newSlug
 	}
 	if req.Domain != nil {
 		params.Domain = *req.Domain
@@ -726,6 +731,14 @@ func (h *SiteHandler) ListStarterKits(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	// Owner-or-admin gate. SiteAccessMiddleware already verified the user
+	// has membership of this site, but a non-owner editor must not be able
+	// to nuke a site they were merely invited to. Workspace admins still
+	// pass through (legacy single-tenant behaviour).
+	if !authmw.RequireOwnerOrAdmin(w, r, h.queries) {
+		return
+	}
+
 	siteID := urlParam(r, "siteID")
 	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
 		writeError(w, http.StatusNotFound, "Site not found")

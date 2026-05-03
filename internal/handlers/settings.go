@@ -147,7 +147,24 @@ func (h *SettingsHandler) BulkUpsert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SettingsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "settingID")
+	// No GetSettingByID query; scan the site's own list to verify the
+	// setting belongs here before letting Delete fire. Without this
+	// scope check, any member of any site could pass a settingID for
+	// another tenant and have it removed.
+	rows, _ := h.queries.ListSettingsBySite(r.Context(), siteID)
+	owns := false
+	for _, s := range rows {
+		if s.ID == id {
+			owns = true
+			break
+		}
+	}
+	if !owns {
+		writeError(w, http.StatusNotFound, "Setting not found")
+		return
+	}
 	if err := h.queries.DeleteSetting(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete setting")
 		return

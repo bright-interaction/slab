@@ -247,9 +247,10 @@ func (h *MediaHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // Get returns one media row.
 func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "mediaID")
 	m, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
+	if err != nil || m.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Media not found")
 		return
 	}
@@ -260,9 +261,10 @@ func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
 // the request body; presence is detected via pointer types so a caller can
 // patch only one without clobbering the other.
 func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "mediaID")
 	m, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
+	if err != nil || m.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Media not found")
 		return
 	}
@@ -321,9 +323,10 @@ func (h *MediaHandler) applyFolderChange(ctx context.Context, siteID, mediaID, f
 
 // Delete removes media from DB and disk.
 func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "mediaID")
 	m, err := h.queries.GetMediaByID(r.Context(), id)
-	if err != nil {
+	if err != nil || m.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Media not found")
 		return
 	}

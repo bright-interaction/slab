@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
@@ -14,6 +16,41 @@ import (
 func encodeWarnings(vs []agent.Violation) string {
 	b, _ := json.Marshal(vs)
 	return string(b)
+}
+
+// pageSlugSegment matches one URL segment of a page slug. Pages can be
+// nested ("blog/post"), so the full slug is segments joined by "/". Each
+// segment must be lowercase alnum + dashes/underscores; ".." is rejected
+// outright. Empty slug ("" -> index page) is allowed and validated as a
+// special case before the regex runs.
+var pageSlugSegment = regexp.MustCompile(`^[a-z0-9][-a-z0-9_]{0,79}$`)
+
+// validatePageSlug rejects path traversal and chars that would corrupt the
+// builder's slugToFilePath. Allowed: empty (root index), "blog/post-name",
+// "level-1/level-2/level-3". Rejected: "..", "../etc/passwd", trailing
+// slashes, double slashes, control chars, anything not [a-z0-9-_].
+func validatePageSlug(s string) error {
+	if s == "" {
+		return nil
+	}
+	if len(s) > 250 {
+		return fmt.Errorf("page slug too long (max 250 chars)")
+	}
+	if strings.ContainsAny(s, "\r\n\t") {
+		return fmt.Errorf("page slug contains control characters")
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == "" {
+			return fmt.Errorf("page slug has empty segment (leading/trailing/double slash)")
+		}
+		if seg == "." || seg == ".." {
+			return fmt.Errorf("page slug segment %q is not allowed", seg)
+		}
+		if !pageSlugSegment.MatchString(seg) {
+			return fmt.Errorf("page slug segment %q must match ^[a-z0-9][-a-z0-9_]{0,79}$", seg)
+		}
+	}
+	return nil
 }
 
 type PageHandler struct {
@@ -36,9 +73,9 @@ func (h *PageHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
-	page, err := h.queries.GetPageByID(r.Context(), urlParam(r, "pageID"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Page not found")
+	siteID := urlParam(r, "siteID")
+	page, ok := pageInSite(r.Context(), h.queries, w, urlParam(r, "pageID"), siteID)
+	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
@@ -69,6 +106,11 @@ func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Slug == "" {
 		req.Slug = strings.ToLower(strings.ReplaceAll(req.Title, " ", "-"))
+	}
+	req.Slug = strings.Trim(strings.ToLower(req.Slug), "/")
+	if err := validatePageSlug(req.Slug); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if req.Layout == "" {
 		req.Layout = "default"
@@ -105,10 +147,10 @@ func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	pageID := urlParam(r, "pageID")
-	existing, err := h.queries.GetPageByID(r.Context(), pageID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Page not found")
+	existing, ok := pageInSite(r.Context(), h.queries, w, pageID, siteID)
+	if !ok {
 		return
 	}
 
@@ -153,7 +195,12 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.Title = *req.Title
 	}
 	if req.Slug != nil {
-		params.Slug = *req.Slug
+		slug := strings.Trim(strings.ToLower(*req.Slug), "/")
+		if err := validatePageSlug(slug); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		params.Slug = slug
 	}
 	if req.Status != nil {
 		params.Status = *req.Status
@@ -228,9 +275,9 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	pageID := urlParam(r, "pageID")
-	if _, err := h.queries.GetPageByID(r.Context(), pageID); err != nil {
-		writeError(w, http.StatusNotFound, "Page not found")
+	if _, ok := pageInSite(r.Context(), h.queries, w, pageID, siteID); !ok {
 		return
 	}
 

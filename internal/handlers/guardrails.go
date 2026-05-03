@@ -28,9 +28,10 @@ func (h *GuardrailHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GuardrailHandler) Get(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "ruleID")
 	rule, err := h.queries.GetGuardrailByID(r.Context(), id)
-	if err != nil {
+	if err != nil || rule.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Rule not found")
 		return
 	}
@@ -76,9 +77,10 @@ func (h *GuardrailHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GuardrailHandler) Update(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "ruleID")
 	existing, err := h.queries.GetGuardrailByID(r.Context(), id)
-	if err != nil {
+	if err != nil || existing.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Rule not found")
 		return
 	}
@@ -134,7 +136,13 @@ func (h *GuardrailHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GuardrailHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "ruleID")
+	existing, err := h.queries.GetGuardrailByID(r.Context(), id)
+	if err != nil || existing.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Rule not found")
+		return
+	}
 	if err := h.queries.DeleteGuardrail(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete rule")
 		return
