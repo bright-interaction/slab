@@ -274,9 +274,14 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:      createdAtMs,
 	}); err != nil {
 		slog.Error("track: record consent proof", "site_id", siteID, "err", err)
-		// Continue .  the visit-session lift below is independently useful,
-		// and we don't want the dashboard's read path to be the only thing
-		// that breaks if SQLite blips.
+		// Refuse the request so the widget's proof queue retries
+		// later. Previous behaviour was to swallow the error and
+		// reply 204, leaving the GDPR proof permanently lost on any
+		// SQLite blip; the widget already has a localStorage-backed
+		// retry queue (see CookieProof/src/core/consent-manager.ts
+		// enqueueProof) so 503 is recoverable from the visitor side.
+		writeError(w, http.StatusServiceUnavailable, "Could not record consent; please retry")
+		return
 	}
 
 	// If the consent payload grants analytics, lift the session to identified.

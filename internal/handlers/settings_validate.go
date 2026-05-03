@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -70,7 +71,9 @@ func validateAnalyticsSetting(key, value string) error {
 		"atomicsite_tracking_enabled",
 		"ga4_enabled",
 		"umami_enabled",
-		"personalization_enabled":
+		"personalization_enabled",
+		"cookie_language_selector",
+		"ccpa_enabled":
 		return boolValue("analytics."+key, value)
 	case "ga4_id":
 		// G-XXXXXXX. Permissive: accept any G- prefix followed by alnum.
@@ -81,6 +84,75 @@ func validateAnalyticsSetting(key, value string) error {
 		return mustBeAbsoluteURL("analytics."+key, value)
 	case "identity_max_age_days":
 		return intInRange("analytics.identity_max_age_days", value, 1, 3650)
+	case "cookie_banner_position":
+		return enumIn("analytics.cookie_banner_position", value, "top", "bottom", "center")
+	case "cookie_theme":
+		return enumIn("analytics.cookie_theme", value, "light", "dark", "auto")
+	case "cookie_floating_trigger":
+		return enumIn("analytics.cookie_floating_trigger", value, "left", "right", "off")
+	case "cookie_expiry_days":
+		// IMY caps consent records at 12 months; 0 means widget default (365).
+		return intInRange("analytics.cookie_expiry_days", value, 0, 365)
+	case "cookie_revision":
+		return intInRange("analytics.cookie_revision", value, 0, 9999)
+	case "ccpa_url":
+		// Either an absolute https URL or an in-site path starting with /.
+		if strings.HasPrefix(value, "/") {
+			return nil
+		}
+		return mustBeAbsoluteURL("analytics.ccpa_url", value)
+	case "track_path":
+		// Must be a same-origin rooted path (e.g. "/t"). Reject absolute
+		// URLs, protocol-relative URLs, and unrooted strings to keep
+		// proofs same-origin (the widget POSTs to <currentOrigin>+trackPath).
+		if !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") {
+			return fmt.Errorf("analytics.track_path must start with a single \"/\" (e.g. /t)")
+		}
+		if strings.Contains(value, "://") {
+			return fmt.Errorf("analytics.track_path must be a relative path, not an absolute URL")
+		}
+	case "cookie_declarations":
+		return validateCookieDeclarationsJSON(value)
+	}
+	return nil
+}
+
+// validateCookieDeclarationsJSON parses analytics.cookie_declarations and
+// gates it against the per-row constraints the build pipeline + admin UI
+// rely on. Empty/blank passes (clears the row). Malformed JSON, unknown
+// categories, empty names, oversized fields, and overflowing row counts
+// all fail. Mirrors the shape in builder/cookie_declarations.go.
+func validateCookieDeclarationsJSON(value string) error {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return nil
+	}
+	var rows []struct {
+		Category string `json:"category"`
+		Name     string `json:"name"`
+		Provider string `json:"provider"`
+		Purpose  string `json:"purpose"`
+		Expiry   string `json:"expiry"`
+	}
+	if err := json.Unmarshal([]byte(v), &rows); err != nil {
+		return fmt.Errorf("analytics.cookie_declarations: invalid JSON: %v", err)
+	}
+	if len(rows) > 100 {
+		return fmt.Errorf("analytics.cookie_declarations: at most 100 rows (got %d)", len(rows))
+	}
+	allowedCategory := map[string]bool{
+		"necessary": true, "analytics": true, "marketing": true, "preferences": true,
+	}
+	for i, r := range rows {
+		if !allowedCategory[r.Category] {
+			return fmt.Errorf("analytics.cookie_declarations[%d]: category %q is not one of necessary/analytics/marketing/preferences", i, r.Category)
+		}
+		if strings.TrimSpace(r.Name) == "" {
+			return fmt.Errorf("analytics.cookie_declarations[%d]: name is required", i)
+		}
+		if len(r.Name) > 200 || len(r.Provider) > 200 || len(r.Purpose) > 500 || len(r.Expiry) > 80 {
+			return fmt.Errorf("analytics.cookie_declarations[%d]: field exceeds size limit (name/provider 200, purpose 500, expiry 80)", i)
+		}
 	}
 	return nil
 }

@@ -152,7 +152,19 @@ func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 	// the same JS file. Verified bug 2026-05-01: emitting the config
 	// inline forced 'unsafe-inline' or per-build SHA-256 hashes; both
 	// were dead-end paths.
-	return fmt.Sprintf(`<script is:inline defer src="/%s"></script>`+"\n", CookieProofWidgetFilename())
+	//
+	// The filename hash incorporates the prefix bytes (per-site
+	// siteID + revision + branding) so a `cookie_revision` bump
+	// produces a new filename and visitors with the old `_ccb.*.js`
+	// cached pick up the fresh config on next page load.
+	prefix, err := RenderCookieProofConfigPrefix(cfg)
+	if err != nil {
+		// If we can't render the prefix here, fall back to the
+		// content-only filename so the script tag still resolves
+		// to whatever WriteCookieProofWidgetAsset wrote.
+		return fmt.Sprintf(`<script is:inline defer src="/%s"></script>`+"\n", CookieProofWidgetFilename(nil))
+	}
+	return fmt.Sprintf(`<script is:inline defer src="/%s"></script>`+"\n", CookieProofWidgetFilename(prefix))
 }
 
 // gcmDefaultDeniedStub is the GCM consent default that runs before any
@@ -330,7 +342,7 @@ func WriteCookieProofWidgetAsset(workspaceDir string, cfg CookieProofConfig) err
 	if err != nil {
 		return fmt.Errorf("render config prefix: %w", err)
 	}
-	target := filepath.Join(publicDir, CookieProofWidgetFilename())
+	target := filepath.Join(publicDir, CookieProofWidgetFilename(prefix))
 	return WriteFile(target, string(prefix)+string(CookieProofWidget))
 }
 
@@ -382,6 +394,13 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 	// Non-empty + LanguageSelector=true -> dropdown limited to listed codes.
 	// LanguageSelector=false -> dropdown hidden regardless.
 	if raw := strings.TrimSpace(settingsMap["analytics.cookie_languages"]); raw != "" {
+		// Bound the input so a pathological setting value (e.g.
+		// "en," repeated 10k times) can't expand the parser slice
+		// indefinitely. 1024 chars covers all 13 supported codes
+		// with whitespace and then some.
+		if len(raw) > 1024 {
+			raw = raw[:1024]
+		}
 		seen := map[string]bool{}
 		for _, code := range strings.Split(raw, ",") {
 			c := strings.ToLower(strings.TrimSpace(code))
@@ -390,6 +409,12 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 			}
 			seen[c] = true
 			cfg.LanguageSelectorSet = append(cfg.LanguageSelectorSet, c)
+			// Hard cap at the bundled-locale count. Anything above
+			// is a typo or attack; widget would silently drop the
+			// excess anyway.
+			if len(cfg.LanguageSelectorSet) >= 32 {
+				break
+			}
 		}
 	}
 	cfg.CookieExpiryDays = intSetting(settingsMap["analytics.cookie_expiry_days"], 365, 0, 365)

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import * as settingsApi from '$lib/api/settings';
 	import { ApiError } from '$lib/api/client';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -59,10 +60,8 @@
 	let cookieTheme = $state<'light' | 'dark' | 'auto'>('light');
 	let floatingTrigger = $state<'left' | 'right' | 'off'>('left');
 	let languageSelector = $state(false);
-	// 14 ISO codes the embedded CookieProof bundle ships translations for.
-	// Order them with the site's own language first (resolved at load time)
-	// so the form puts the most-relevant choice on the left.
-	const SUPPORTED_LANGUAGES: { code: string; label: string }[] = [
+	// 13 ISO codes the embedded CookieProof bundle ships translations for.
+	const SUPPORTED_LANGUAGES_BASE: { code: string; label: string }[] = [
 		{ code: 'en', label: 'English' },
 		{ code: 'sv', label: 'Svenska' },
 		{ code: 'da', label: 'Dansk' },
@@ -77,6 +76,15 @@
 		{ code: 'pl', label: 'Polski' },
 		{ code: 'pt', label: 'Português' }
 	];
+	// Display order: site.lang first (most relevant), then the rest in
+	// their original order. Falls back gracefully when site.lang isn't
+	// in the bundled set.
+	const SUPPORTED_LANGUAGES = $derived.by(() => {
+		const siteLang = (data.site.lang || '').toLowerCase();
+		const own = SUPPORTED_LANGUAGES_BASE.find((l) => l.code === siteLang);
+		if (!own) return SUPPORTED_LANGUAGES_BASE;
+		return [own, ...SUPPORTED_LANGUAGES_BASE.filter((l) => l.code !== siteLang)];
+	});
 	// Selected ISO codes (persisted as comma-separated in
 	// analytics.cookie_languages). Empty list + languageSelector=true
 	// means "all built-in languages"; empty list + languageSelector=false
@@ -454,8 +462,26 @@
 		);
 	}
 
+	// Inflight guard separate from `saving` so a rapid double-click after a
+	// network hiccup (which clears `saving` in the finally block) cannot
+	// fire a second upsert before the first one has actually settled at
+	// the network layer. saveInflight stays true through the full request
+	// cycle and only clears in the same finally as `saving`.
+	let saveInflight = false;
 	async function save() {
-		if (saving || !dirty) return;
+		if (saving || saveInflight || !dirty) return;
+		// Pre-flight validation. The server rejects these too via the
+		// settings_validate gate, but catching them here gives the editor
+		// an actionable message instead of a generic 400.
+		if (ccpaEnabled && !ccpaUrl.trim()) {
+			toast.error('CCPA disclosure URL is required when CCPA is enabled.');
+			return;
+		}
+		if (userDeclarations.some((r) => !r.name.trim())) {
+			toast.error('Every cookie declaration needs a name. Fill or delete the blank rows before saving.');
+			return;
+		}
+		saveInflight = true;
 		saving = true;
 		try {
 			const items: settingsApi.SettingUpsertInput[] = [
@@ -519,6 +545,7 @@
 			toast.error(msg);
 		} finally {
 			saving = false;
+			saveInflight = false;
 		}
 	}
 
@@ -586,6 +613,20 @@
 		void ccpaEnabled;
 		void ccpaUrl;
 		bumpPreview();
+	});
+
+	// When the language selector is turned off, reset the per-language
+	// editor so it doesn't quietly resume editing the last-used locale
+	// when the operator flips the toggle back on.
+	$effect(() => {
+		if (!languageSelector) editingLang = '';
+	});
+
+	// Cancel a pending preview-iframe debounce on unmount so it can't fire
+	// against an already-destroyed component.
+	onDestroy(() => {
+		if (previewTimer) clearTimeout(previewTimer);
+		previewTimer = null;
 	});
 </script>
 
@@ -1204,7 +1245,7 @@
 				src={previewSrc + '&mode=banner'}
 				title="Banner preview"
 				class="block h-full w-full bg-bg-elevated"
-				sandbox="allow-scripts allow-same-origin"
+				sandbox="allow-scripts allow-same-origin allow-forms"
 			></iframe>
 		</div>
 	</div>
