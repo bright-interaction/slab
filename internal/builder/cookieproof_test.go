@@ -25,7 +25,11 @@ func TestRenderCookieProofSnippet_HappyPath(t *testing.T) {
 		},
 	}
 	out := RenderCookieProofSnippet(cfg)
-	expectedAsset := "/" + CookieProofWidgetFilename()
+	prefix0, err := RenderCookieProofConfigPrefix(cfg)
+	if err != nil {
+		t.Fatalf("prefix: %v", err)
+	}
+	expectedAsset := "/" + CookieProofWidgetFilename(prefix0)
 	if !strings.Contains(out, expectedAsset) {
 		t.Errorf("missing same-origin widget asset reference %q: %s", expectedAsset, out)
 	}

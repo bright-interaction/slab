@@ -29,11 +29,26 @@ func CookieProofWidgetHash() string {
 }
 
 // CookieProofWidgetFilename returns the filename used for the per-tenant
-// widget asset. Same hash for every tenant on a given build, but the asset
-// is written into each workspace separately so each tenant serves it
-// same-origin.
-func CookieProofWidgetFilename() string {
-	return "_ccb." + CookieProofWidgetHash() + ".js"
+// widget asset. Hashes over BOTH the widget bytes AND the per-site config
+// prefix that gets prepended at write time. The reason: the same widget
+// bytes are shipped to every tenant, but the prefix carries siteID,
+// revision, branding cssVars, copy overrides, etc. Without the prefix
+// in the hash, bumping `cookie_revision` would write a different file
+// body under the SAME filename and browsers would serve cached stale
+// config indefinitely. Prefix in the hash means revision bumps (and any
+// other per-site config change) produce a fresh filename, so caches
+// miss correctly.
+//
+// Pass the same `prefix` bytes you'll write to disk via
+// WriteCookieProofWidgetAsset / RenderCookieProofConfigPrefix.
+func CookieProofWidgetFilename(prefix []byte) string {
+	if len(prefix) == 0 {
+		return "_ccb." + CookieProofWidgetHash() + ".js"
+	}
+	h := sha256.New()
+	h.Write(prefix)
+	h.Write(CookieProofWidget)
+	return "_ccb." + hex.EncodeToString(h.Sum(nil))[:12] + ".js"
 }
 
 // CircuitBgScript is the animated circuit-board background JS, embedded so

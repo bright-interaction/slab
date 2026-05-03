@@ -161,6 +161,17 @@ func RenderNginxConfig(ctx context.Context, queries *store.Queries, siteID strin
 	b.WriteString("    add_header X-Content-Type-Options \"nosniff\" always;\n")
 	b.WriteString("}\n\n")
 
+	// CookieProof widget bundle. Filename is content-addressed (hash
+	// covers widget bytes + per-site config prefix), so revisions and
+	// branding/copy edits produce a fresh filename. Long-cache + must-
+	// revalidate so visitors still pick up the next file when the
+	// site rebuilds.
+	b.WriteString("location ~* ^/_ccb\\.[a-f0-9]+\\.js$ {\n")
+	b.WriteString(fmt.Sprintf("    expires %ss;\n", staticTTL))
+	b.WriteString("    add_header Cache-Control \"public, immutable\" always;\n")
+	b.WriteString("    add_header X-Content-Type-Options \"nosniff\" always;\n")
+	b.WriteString("}\n\n")
+
 	// HTML: short cache (allow quick content updates)
 	b.WriteString("location ~* \\.html$ {\n")
 	b.WriteString(fmt.Sprintf("    expires %ss;\n", htmlTTL))

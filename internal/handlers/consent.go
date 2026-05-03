@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/csv"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,7 +48,9 @@ type proofRow struct {
 func toProofRow(r store.ConsentRecord) proofRow {
 	cats := map[string]any{}
 	if r.CategoriesJson != "" {
-		_ = decodeJSON(r.CategoriesJson, &cats)
+		if err := decodeJSON(r.CategoriesJson, &cats); err != nil {
+			slog.Warn("consent: invalid categories_json", "id", r.ID, "err", err.Error())
+		}
 	}
 	return proofRow{
 		ID:          r.ID,
@@ -93,6 +96,12 @@ func parseTimeRange(r *http.Request) (int64, int64) {
 		} else if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			to = n
 		}
+	}
+	// Guard inverted ranges: callers that pass from=tomorrow&to=yesterday
+	// (or any swap) silently get empty SQL results otherwise. Swap rather
+	// than reject so the dashboard renders a sane window for fat-fingers.
+	if from > to {
+		from, to = to, from
 	}
 	return from, to
 }

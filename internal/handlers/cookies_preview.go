@@ -3,12 +3,28 @@ package handlers
 import (
 	"html/template"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
+
+// safeCSSColorRe accepts the realistic shapes for a CSS color: hex
+// (#RGB, #RRGGBB, #RRGGBBAA), the CSS color() / rgb() / rgba() / hsl() /
+// hsla() functions with bounded payloads, or a bare keyword (red, blue,
+// transparent, currentColor, ...). Rejects anything that could break out
+// of the CSS context. Used by the preview handler to validate
+// query-string overrides before they flow into the inline <style> tag
+// or the cssVars JSON blob.
+var safeCSSColorRe = regexp.MustCompile(`^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\([0-9a-zA-Z,\s%./\-]{1,80}\)|[a-zA-Z]{2,30})$`)
+
+// safeFontFamilyRe accepts a comma-separated list of font names with
+// optional quoting. Rejects characters that would let an attacker break
+// out of the inline `font-family: ...` declaration in the preview
+// stylesheet (semicolons, braces, parens, angle brackets, backslashes).
+var safeFontFamilyRe = regexp.MustCompile(`^[a-zA-Z0-9 ,'"\-]{1,200}$`)
 
 // CookiesPreviewHandler renders an authenticated HTML page that mounts the
 // real CookieProof widget configured for a given site, immediately opens
@@ -71,31 +87,32 @@ func (h *CookiesPreviewHandler) Render(w http.ResponseWriter, r *http.Request) {
 	// Branding overrides on the site row itself (e.g. when the user is
 	// editing colors on the Branding page; the admin can pass them
 	// through to see the cookie banner respond live).
-	if v := q.Get("primary_color"); v != "" {
-		site.PrimaryColor = v
+	//
+	// Color overrides are regex-validated before assignment because they
+	// flow into the page's inline <style> via {{.BgColor}} / {{.TextColor}}
+	// AND into the JSON cssVars blob the widget reads. Without validation
+	// `?primary_color=red);background:url(javascript:alert(1));//` would
+	// break out of the CSS context. Admin-auth-only endpoint so blast
+	// radius is small but the validator is cheap.
+	setColor := func(target *string, qparam string) {
+		v := strings.TrimSpace(q.Get(qparam))
+		if v == "" {
+			return
+		}
+		if !safeCSSColorRe.MatchString(v) {
+			return
+		}
+		*target = v
 	}
-	if v := q.Get("secondary_color"); v != "" {
-		site.SecondaryColor = v
-	}
-	if v := q.Get("on_primary_color"); v != "" {
-		site.OnPrimaryColor = v
-	}
-	if v := q.Get("text_color"); v != "" {
-		site.TextColor = v
-	}
-	if v := q.Get("bg_color"); v != "" {
-		site.BgColor = v
-	}
-	if v := q.Get("surface_color"); v != "" {
-		site.SurfaceColor = v
-	}
-	if v := q.Get("muted_color"); v != "" {
-		site.MutedColor = v
-	}
-	if v := q.Get("border_color"); v != "" {
-		site.BorderColor = v
-	}
-	if v := q.Get("font_body"); v != "" {
+	setColor(&site.PrimaryColor, "primary_color")
+	setColor(&site.SecondaryColor, "secondary_color")
+	setColor(&site.OnPrimaryColor, "on_primary_color")
+	setColor(&site.TextColor, "text_color")
+	setColor(&site.BgColor, "bg_color")
+	setColor(&site.SurfaceColor, "surface_color")
+	setColor(&site.MutedColor, "muted_color")
+	setColor(&site.BorderColor, "border_color")
+	if v := strings.TrimSpace(q.Get("font_body")); v != "" && safeFontFamilyRe.MatchString(v) {
 		site.FontBody = v
 	}
 
