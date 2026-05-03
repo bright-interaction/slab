@@ -591,3 +591,40 @@ CREATE TABLE IF NOT EXISTS consent_salts (
     salt       TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- site_domains holds custom hostnames pointing at an atomicsite tenant.
+-- One row per (siteID, hostname). Status drives the live-domain pipeline:
+--
+--   pending     - row created, no DNS check has succeeded yet.
+--   verified    - HTTP-01-style verification at /.well-known/atomic-verify
+--                 returned the expected token, proving the domain points
+--                 at our edge.
+--   cert_ready  - certbot HTTP-01 issued a Let's Encrypt cert and the
+--                 nginx vhost has been written and reloaded.
+--   live        - the most recent verification poll succeeded against
+--                 the TLS endpoint. This is the steady-state status.
+--   error       - last attempt failed; last_error carries the message
+--                 surfaced in the admin UI.
+--
+-- The verify_token is a single-use random string the admin posts as the
+-- value at /.well-known/atomic-verify/{token}. Cert path points at the
+-- letsencrypt live dir; rotated by the host's certbot timer. The
+-- canonical flag marks the host the build pipeline should treat as the
+-- site's primary URL (canonical / OG / sitemap base) when site.domain
+-- isn't set explicitly.
+CREATE TABLE IF NOT EXISTS site_domains (
+    id              TEXT PRIMARY KEY,
+    site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    hostname        TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    verify_token    TEXT NOT NULL,
+    cert_path       TEXT NOT NULL DEFAULT '',
+    last_check_at   TEXT NOT NULL DEFAULT '',
+    last_error      TEXT NOT NULL DEFAULT '',
+    is_canonical    INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_site_domains_hostname ON site_domains(hostname);
+CREATE INDEX IF NOT EXISTS idx_site_domains_site ON site_domains(site_id);
+CREATE INDEX IF NOT EXISTS idx_site_domains_status ON site_domains(status);
