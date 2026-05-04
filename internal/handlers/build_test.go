@@ -108,7 +108,7 @@ func TestBuildHandler_Deploy_LocalTarget_Success(t *testing.T) {
 	targetID, _ := resp["id"].(string)
 
 	// Build handler with primed in-memory state so Deploy can find the dist.
-	bh := NewBuildHandler(&config.Config{}, q)
+	bh := NewBuildHandler(&config.Config{}, q, nil)
 	bh.builds[buildID] = &buildState{
 		Status:     "success",
 		DistDir:    distDir,
@@ -185,7 +185,7 @@ func TestBuildHandler_Deploy_RejectsCrossSiteBuild(t *testing.T) {
 	}
 	targetID, _ := resp["id"].(string)
 
-	bh := NewBuildHandler(&config.Config{}, q)
+	bh := NewBuildHandler(&config.Config{}, q, nil)
 	br := buildRouter(bh)
 	// POST under testSiteID with otherSiteID's build ID.
 	code, _ = postJSON(t, br, "/api/sites/"+testSiteID+"/deploy", map[string]any{
@@ -222,7 +222,7 @@ func TestBuildHandler_Deploy_RejectsMissingDistDir(t *testing.T) {
 	targetID, _ := resp["id"].(string)
 
 	// No build state in memory -> handler should refuse.
-	bh := NewBuildHandler(&config.Config{}, q)
+	bh := NewBuildHandler(&config.Config{}, q, nil)
 	br := buildRouter(bh)
 	code, body := postJSON(t, br, "/api/sites/"+testSiteID+"/deploy", map[string]any{
 		"build_id":  buildID,
@@ -235,7 +235,7 @@ func TestBuildHandler_Deploy_RejectsMissingDistDir(t *testing.T) {
 
 func TestBuildHandler_Deploy_RejectsBadSiteID(t *testing.T) {
 	_, q := setupDeployTestDB(t)
-	bh := NewBuildHandler(&config.Config{}, q)
+	bh := NewBuildHandler(&config.Config{}, q, nil)
 	r := buildRouter(bh)
 	code, _ := postJSON(t, r, "/api/sites/not-hex/deploy", map[string]any{
 		"build_id":  "x",

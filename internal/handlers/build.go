@@ -29,6 +29,9 @@ func isSafeSiteID(s string) bool { return safeSiteIDPattern.MatchString(s) }
 type BuildHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
+	// quota gates TriggerBuild + TriggerBuildAdmin against the
+	// site's monthly build-minutes ceiling. Sprint 3 (2026-05-04).
+	quota *QuotaHandler
 
 	mu     sync.Mutex
 	builds map[string]*buildState // deploymentID -> state
@@ -57,10 +60,11 @@ type buildState struct {
 	DistDir    string `json:"dist_dir"`
 }
 
-func NewBuildHandler(cfg *config.Config, queries *store.Queries) *BuildHandler {
+func NewBuildHandler(cfg *config.Config, queries *store.Queries, quota *QuotaHandler) *BuildHandler {
 	return &BuildHandler{
 		cfg:      cfg,
 		queries:  queries,
+		quota:    quota,
 		builds:   make(map[string]*buildState),
 		cancels:  make(map[string]context.CancelFunc),
 		siteLock: make(map[string]*sync.Mutex),
@@ -147,6 +151,13 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 	a := authmw.GetAgent(r)
 	if a == nil {
 		writeError(w, http.StatusUnauthorized, "Agent not authenticated")
+		return
+	}
+
+	// Sprint 3 quota gate: short-circuit before we create a
+	// deployment row so the over-quota site doesn't accumulate
+	// orphan "queued" rows that never run.
+	if h.quota != nil && h.quota.EnforceBuildMinutesQuota(w, r, a.SiteID) {
 		return
 	}
 
@@ -614,6 +625,10 @@ func (h *BuildHandler) TriggerBuildAdmin(w http.ResponseWriter, r *http.Request)
 	siteID := urlParam(r, "siteID")
 	if !isSafeSiteID(siteID) {
 		writeError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	if h.quota != nil && h.quota.EnforceBuildMinutesQuota(w, r, siteID) {
 		return
 	}
 

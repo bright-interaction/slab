@@ -324,6 +324,21 @@ func applySchema(sqlDB *sql.DB) error {
 		// keeps existing rows valid; the editor falls back to the
 		// heading when name is blank.
 		{"blocks", "name", "TEXT NOT NULL DEFAULT ''"},
+		// TOTP MFA columns on users (Sprint 3, 2026-05-04). Empty
+		// secret means "not enrolled"; non-empty + enrolled_at set
+		// means the login flow must accept a code. recovery_json
+		// holds the bcrypt-hashed single-use recovery codes.
+		{"users", "totp_secret", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "totp_enrolled_at", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "totp_recovery_json", "TEXT NOT NULL DEFAULT '[]'"},
+		// Per-tenant quotas (Sprint 3, 2026-05-04). storage_quota_bytes
+		// caps total media bytes per site; build_minutes_quota caps the
+		// rolling 30-day sum of deployments.duration_ms (in minutes).
+		// quota_overage_blocked = 1 makes overage hard-fail with 429;
+		// 0 means warn-only (X-Quota-Warning header).
+		{"sites", "storage_quota_bytes", "INTEGER NOT NULL DEFAULT 1073741824"},
+		{"sites", "build_minutes_quota", "INTEGER NOT NULL DEFAULT 600"},
+		{"sites", "quota_overage_blocked", "INTEGER NOT NULL DEFAULT 1"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

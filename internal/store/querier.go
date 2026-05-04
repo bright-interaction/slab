@@ -24,6 +24,13 @@ type Querier interface {
 	BackfillSiteMembersForAdmin(ctx context.Context, userID string) error
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
+	// Disables MFA and bumps token_version so any session that thought
+	// it had MFA is invalidated. Only callable by the user themselves
+	// (after re-confirming current password) or by a workspace admin.
+	ClearUserTOTP(ctx context.Context, id string) error
+	// Run after a successful first-code verify. Sets enrolled_at and
+	// writes the bcrypt-hashed recovery codes JSON.
+	ConfirmUserTOTPEnrollment(ctx context.Context, arg ConfirmUserTOTPEnrollmentParams) error
 	ConsentDailyBySite(ctx context.Context, arg ConsentDailyBySiteParams) ([]ConsentDailyBySiteRow, error)
 	ConsentStatsBySite(ctx context.Context, arg ConsentStatsBySiteParams) (ConsentStatsBySiteRow, error)
 	// For every identified session, return its full path history ordered by ts.
@@ -158,6 +165,7 @@ type Querier interface {
 	GetSiteMembership(ctx context.Context, arg GetSiteMembershipParams) (SiteMember, error)
 	// Site profiles
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
+	GetSiteQuota(ctx context.Context, id string) (GetSiteQuotaRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
@@ -227,6 +235,7 @@ type Querier interface {
 	ListSiteIDsForUser(ctx context.Context, userID string) ([]string, error)
 	ListSiteMembers(ctx context.Context, siteID string) ([]ListSiteMembersRow, error)
 	ListSites(ctx context.Context) ([]Site, error)
+	ListSitesForQuotaAudit(ctx context.Context) ([]ListSitesForQuotaAuditRow, error)
 	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
@@ -247,7 +256,12 @@ type Querier interface {
 	// Flips this row to is_canonical=1 and clears the flag on every other
 	// domain row for the same site so exactly one canonical exists.
 	SetDomainCanonical(ctx context.Context, arg SetDomainCanonicalParams) error
+	// Stages a fresh secret without flipping enrolled_at, so the user
+	// can scan the QR + try a code before the secret is locked in.
+	SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error
 	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
+	SumBuildMinutesBySiteSinceCutoff(ctx context.Context, arg SumBuildMinutesBySiteSinceCutoffParams) (interface{}, error)
+	SumStorageBytesBySite(ctx context.Context, siteID string) (interface{}, error)
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
 	TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error)
 	TopDevices(ctx context.Context, arg TopDevicesParams) ([]TopDevicesRow, error)
@@ -286,9 +300,13 @@ type Querier interface {
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) error
 	UpdateSiteBuildStatus(ctx context.Context, arg UpdateSiteBuildStatusParams) error
 	UpdateSiteDeployAt(ctx context.Context, arg UpdateSiteDeployAtParams) error
+	UpdateSiteQuota(ctx context.Context, arg UpdateSiteQuotaParams) error
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
+	// Rewrites the recovery code list (e.g. after a single-use code is
+	// consumed during a recovery login).
+	UpdateUserTOTPRecovery(ctx context.Context, arg UpdateUserTOTPRecoveryParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error

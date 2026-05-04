@@ -1,17 +1,20 @@
 export interface ApiErrorBody {
 	error?: string;
+	error_code?: string;
 	message?: string;
 	fields?: Record<string, string>;
 }
 
 export class ApiError extends Error {
 	status: number;
+	code?: string;
 	fields?: Record<string, string>;
 
-	constructor(status: number, message: string, fields?: Record<string, string>) {
+	constructor(status: number, message: string, code?: string, fields?: Record<string, string>) {
 		super(message);
 		this.name = 'ApiError';
 		this.status = status;
+		this.code = code;
 		this.fields = fields;
 	}
 }
@@ -44,16 +47,19 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 	});
 
 	if (res.status === 401) {
-		if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+		const body = await parseBody<ApiErrorBody>(res).catch(() => ({}) as ApiErrorBody);
+		const message = body?.error || body?.message || 'Not authenticated';
+		const isOnLogin = typeof window !== 'undefined' && window.location.pathname.startsWith('/login');
+		if (!isOnLogin && !path.startsWith('/auth/login') && typeof window !== 'undefined') {
 			window.location.assign('/login');
 		}
-		throw new ApiError(401, 'Not authenticated');
+		throw new ApiError(401, message, body?.error_code, body?.fields);
 	}
 
 	if (!res.ok) {
 		const body = await parseBody<ApiErrorBody>(res).catch(() => ({}) as ApiErrorBody);
 		const message = body?.error || body?.message || `Request failed with status ${res.status}`;
-		throw new ApiError(res.status, message, body?.fields);
+		throw new ApiError(res.status, message, body?.error_code, body?.fields);
 	}
 
 	if (res.status === 204) {

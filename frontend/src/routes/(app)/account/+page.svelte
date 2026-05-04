@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ArrowLeft, Check, Copy, Sun, Moon, AlertTriangle } from 'lucide-svelte';
+	import { ArrowLeft, Check, Copy, Sun, Moon, AlertTriangle, ShieldCheck, ShieldOff } from 'lucide-svelte';
+	import QRCode from 'qrcode';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -27,6 +28,98 @@
 
 	let signingOutAll = $state(false);
 	let copiedId = $state(false);
+
+	let mfaEnrolled = $state(false);
+	let mfaLoading = $state(true);
+	let mfaSecret = $state('');
+	let mfaQrSvg = $state('');
+	let mfaCode = $state('');
+	let mfaEnrolling = $state(false);
+	let mfaVerifying = $state(false);
+	let mfaRecoveryCodes = $state<string[]>([]);
+	let mfaCopiedRecovery = $state(false);
+	let mfaDisablePassword = $state('');
+	let mfaDisabling = $state(false);
+
+	async function loadMfa() {
+		mfaLoading = true;
+		try {
+			const res = await authApi.totpStatus();
+			mfaEnrolled = res.enrolled;
+		} catch {
+			mfaEnrolled = false;
+		} finally {
+			mfaLoading = false;
+		}
+	}
+
+	$effect(() => {
+		void loadMfa();
+	});
+
+	async function startMfaEnroll() {
+		if (mfaEnrolling) return;
+		mfaEnrolling = true;
+		try {
+			const res = await authApi.totpSetup();
+			mfaSecret = res.secret;
+			mfaQrSvg = await QRCode.toString(res.otpauth_uri, { type: 'svg', margin: 1, width: 192 });
+			mfaCode = '';
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : 'Failed to start MFA setup.');
+			mfaSecret = '';
+			mfaQrSvg = '';
+		} finally {
+			mfaEnrolling = false;
+		}
+	}
+
+	async function verifyMfaEnroll(e: SubmitEvent) {
+		e.preventDefault();
+		if (mfaVerifying) return;
+		mfaVerifying = true;
+		try {
+			const res = await authApi.totpVerify(mfaCode.trim());
+			mfaRecoveryCodes = res.recovery_codes;
+			mfaSecret = '';
+			mfaQrSvg = '';
+			mfaCode = '';
+			mfaEnrolled = true;
+			toast.success('Two-factor authentication enabled.');
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : 'Invalid code.');
+		} finally {
+			mfaVerifying = false;
+		}
+	}
+
+	async function copyRecoveryCodes() {
+		if (mfaRecoveryCodes.length === 0) return;
+		try {
+			await navigator.clipboard.writeText(mfaRecoveryCodes.join('\n'));
+			mfaCopiedRecovery = true;
+			setTimeout(() => (mfaCopiedRecovery = false), 1500);
+		} catch {
+			toast.error('Could not copy. Select the codes and copy manually.');
+		}
+	}
+
+	async function disableMfa(e: SubmitEvent) {
+		e.preventDefault();
+		if (mfaDisabling) return;
+		mfaDisabling = true;
+		try {
+			await authApi.totpDisable(mfaDisablePassword);
+			mfaDisablePassword = '';
+			mfaEnrolled = false;
+			mfaRecoveryCodes = [];
+			toast.success('Two-factor authentication disabled.');
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : 'Failed to disable MFA.');
+		} finally {
+			mfaDisabling = false;
+		}
+	}
 
 	// Danger zone (moved here from per-site Settings tree). Lists every site
 	// the account has access to and gates each delete behind a slug-typing
@@ -284,6 +377,104 @@
 					Changing your password signs out every other session. You'll stay signed in here.
 				</p>
 			</form>
+		</Card>
+
+		<Card padding="md">
+			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Two-factor authentication</h2>
+			{#if mfaLoading}
+				<p class="mt-4 text-[12px] text-text-muted">Loading...</p>
+			{:else if mfaRecoveryCodes.length > 0}
+				<div class="mt-4 flex flex-col gap-3">
+					<div class="flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2.5">
+						<ShieldCheck size={16} strokeWidth={1.75} class="mt-0.5 shrink-0 text-accent" />
+						<div class="flex-1">
+							<p class="text-[13px] font-medium text-text-primary">Save these recovery codes now.</p>
+							<p class="mt-0.5 text-[12px] text-text-muted">
+								Each code works once if you lose access to your authenticator. They cannot be retrieved later.
+							</p>
+						</div>
+					</div>
+					<div class="rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px]">
+						<div class="grid grid-cols-2 gap-x-6 gap-y-1.5">
+							{#each mfaRecoveryCodes as code (code)}
+								<span class="text-text-primary">{code}</span>
+							{/each}
+						</div>
+					</div>
+					<div class="flex items-center justify-end gap-2">
+						<Button variant="secondary" onclick={copyRecoveryCodes}>
+							{#if mfaCopiedRecovery}<Check size={14} strokeWidth={2} />Copied{:else}<Copy size={14} strokeWidth={1.75} />Copy codes{/if}
+						</Button>
+						<Button variant="primary" onclick={() => (mfaRecoveryCodes = [])}>I've saved them</Button>
+					</div>
+				</div>
+			{:else if mfaEnrolled}
+				<div class="mt-4 flex flex-col gap-4">
+					<div class="flex items-start gap-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2.5">
+						<ShieldCheck size={16} strokeWidth={1.75} class="mt-0.5 shrink-0 text-accent" />
+						<div class="flex-1">
+							<p class="text-[13px] font-medium text-text-primary">Two-factor authentication is on.</p>
+							<p class="mt-0.5 text-[12px] text-text-muted">
+								You'll be asked for a 6-digit code from your authenticator app every time you sign in.
+							</p>
+						</div>
+					</div>
+					<form class="flex flex-col gap-3" onsubmit={disableMfa}>
+						<Input
+							label="Confirm with current password to disable"
+							type="password"
+							autocomplete="current-password"
+							required
+							bind:value={mfaDisablePassword}
+						/>
+						<div class="flex items-center justify-end">
+							<Button type="submit" variant="danger" loading={mfaDisabling} disabled={mfaDisabling}>
+								<ShieldOff size={14} strokeWidth={1.75} />Disable two-factor
+							</Button>
+						</div>
+					</form>
+				</div>
+			{:else if mfaSecret}
+				<form class="mt-4 flex flex-col gap-4" onsubmit={verifyMfaEnroll}>
+					<p class="text-[13px] text-text-secondary">
+						Scan the QR code with your authenticator app, or enter the secret manually. Then enter the 6-digit code to lock it in.
+					</p>
+					<div class="flex flex-col items-start gap-4 sm:flex-row">
+						<div class="rounded-lg border border-border-light bg-white p-3">{@html mfaQrSvg}</div>
+						<div class="flex-1 space-y-2">
+							<span class="text-[12px] font-medium text-text-secondary">Manual entry secret</span>
+							<code class="block break-all rounded-lg border border-border-light bg-bg-elevated px-3 py-2 font-mono text-[11px] text-text-primary">{mfaSecret}</code>
+							<p class="text-[11px] text-text-muted">Issuer: Atomic Site. Account: {user?.email ?? ''}</p>
+						</div>
+					</div>
+					<Input
+						label="6-digit code from authenticator"
+						type="text"
+						inputmode="numeric"
+						pattern="[0-9 ]*"
+						autocomplete="one-time-code"
+						required
+						bind:value={mfaCode}
+						placeholder="000000"
+					/>
+					<div class="flex items-center justify-end gap-2">
+						<Button variant="secondary" onclick={() => { mfaSecret = ''; mfaQrSvg = ''; mfaCode = ''; }}>Cancel</Button>
+						<Button type="submit" variant="primary" loading={mfaVerifying} disabled={mfaVerifying}>Verify and enable</Button>
+					</div>
+				</form>
+			{:else}
+				<div class="mt-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+					<div class="flex-1">
+						<p class="text-[13px] text-text-primary">Add a second factor to your sign-in.</p>
+						<p class="mt-0.5 text-[12px] text-text-muted">
+							You'll be prompted for a 6-digit code from an authenticator app on every login. Recommended for admin accounts.
+						</p>
+					</div>
+					<Button variant="secondary" onclick={startMfaEnroll} loading={mfaEnrolling} disabled={mfaEnrolling}>
+						<ShieldCheck size={14} strokeWidth={1.75} />Enable two-factor
+					</Button>
+				</div>
+			{/if}
 		</Card>
 
 		<Card padding="md">

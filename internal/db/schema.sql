@@ -7,6 +7,15 @@ CREATE TABLE IF NOT EXISTS users (
     name           TEXT NOT NULL DEFAULT '',
     role           TEXT NOT NULL DEFAULT 'admin',
     token_version  INTEGER NOT NULL DEFAULT 1,
+    -- TOTP MFA (Sprint 3, 2026-05-04). totp_secret is the base32-
+    -- encoded 20-byte random shared with the authenticator app;
+    -- empty means not enrolled. totp_enrolled_at is set when the
+    -- user verifies their first code (locks in enrollment).
+    -- totp_recovery_json is a JSON array of bcrypt-hashed single-
+    -- use recovery codes shown ONCE at enrollment.
+    totp_secret         TEXT NOT NULL DEFAULT '',
+    totp_enrolled_at    TEXT NOT NULL DEFAULT '',
+    totp_recovery_json  TEXT NOT NULL DEFAULT '[]',
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -90,6 +99,15 @@ CREATE TABLE IF NOT EXISTS sites (
     last_build_status TEXT NOT NULL DEFAULT 'none',
     last_build_error TEXT NOT NULL DEFAULT '',
     last_deploy_at   TEXT NOT NULL DEFAULT '',
+    -- Per-tenant quotas (Sprint 3, 2026-05-04). Defaults give every
+    -- site 1 GiB of media storage and 600 build minutes / 30-day window
+    -- without any operator action; admin can raise per-site via
+    -- PATCH /api/admin/sites/{id}/quota. quota_overage_blocked = 1
+    -- means QuotaMiddleware short-circuits 429 on overage; 0 = warn
+    -- via X-Quota-Warning header but allow the request.
+    storage_quota_bytes   INTEGER NOT NULL DEFAULT 1073741824,
+    build_minutes_quota   INTEGER NOT NULL DEFAULT 600,
+    quota_overage_blocked INTEGER NOT NULL DEFAULT 1,
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );

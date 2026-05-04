@@ -9,8 +9,10 @@ export interface StatusResponse {
 	status: string;
 }
 
-export function login(email: string, password: string): Promise<AuthResponse> {
-	return apiPost<AuthResponse>('/auth/login', { email, password });
+export function login(email: string, password: string, totpCode?: string): Promise<AuthResponse> {
+	const body: Record<string, string> = { email, password };
+	if (totpCode) body.totp_code = totpCode;
+	return apiPost<AuthResponse>('/auth/login', body);
 }
 
 export function logout(): Promise<StatusResponse> {
@@ -71,4 +73,38 @@ export function resetPasswordInfo(token: string): Promise<ResetTokenInfo> {
 
 export function resetPassword(token: string, password: string): Promise<StatusResponse> {
 	return apiPost<StatusResponse>(`/auth/reset-password/${token}`, { password });
+}
+
+export interface TotpStatus {
+	enrolled: boolean;
+	enrolled_at: string;
+	has_staged: boolean;
+}
+
+export interface TotpSetupResponse {
+	secret: string;
+	otpauth_uri: string;
+	hint: string;
+}
+
+export interface TotpVerifyResponse {
+	status: string;
+	recovery_codes: string[];
+	hint: string;
+}
+
+export function totpStatus(): Promise<TotpStatus> {
+	return apiGet<TotpStatus>('/auth/totp/status');
+}
+
+export function totpSetup(): Promise<TotpSetupResponse> {
+	return apiPost<TotpSetupResponse>('/auth/totp/setup');
+}
+
+export function totpVerify(code: string): Promise<TotpVerifyResponse> {
+	return apiPost<TotpVerifyResponse>('/auth/totp/verify', { code });
+}
+
+export function totpDisable(currentPassword: string): Promise<StatusResponse> {
+	return apiPost<StatusResponse>('/auth/totp/disable', { current_password: currentPassword });
 }
