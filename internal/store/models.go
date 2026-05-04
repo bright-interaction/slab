@@ -265,6 +265,16 @@ type Page struct {
 	UpdatedAt        string `json:"updated_at"`
 }
 
+type PasswordReset struct {
+	ID          string `json:"id"`
+	UserID      string `json:"user_id"`
+	TokenHash   string `json:"token_hash"`
+	ExpiresAt   string `json:"expires_at"`
+	UsedAt      string `json:"used_at"`
+	RequesterIp string `json:"requester_ip"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type Redirect struct {
 	ID         string `json:"id"`
 	SiteID     string `json:"site_id"`
@@ -273,6 +283,12 @@ type Redirect struct {
 	StatusCode int64  `json:"status_code"`
 	IsAuto     int64  `json:"is_auto"`
 	CreatedAt  string `json:"created_at"`
+}
+
+type SchemaVersion struct {
+	Version   int64  `json:"version"`
+	AppliedAt string `json:"applied_at"`
+	Note      string `json:"note"`
 }
 
 type Setting struct {

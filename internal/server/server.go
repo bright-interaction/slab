@@ -177,6 +177,11 @@ func (s *Server) Router() http.Handler {
 	ah := handlers.NewAuthHandler(s.cfg, s.queries)
 	r.Post("/api/auth/login", ah.Login)
 	r.Post("/api/auth/logout", ah.Logout)
+	// Forgot-password flow. All three endpoints unauthenticated by
+	// design , the random token in the URL is the credential.
+	r.Post("/api/auth/forgot-password", ah.ForgotPassword)
+	r.Get("/api/auth/reset-password/{token}", ah.ResetPasswordInfo)
+	r.Post("/api/auth/reset-password/{token}", ah.ResetPassword)
 
 	// Public invite redemption (no auth - token in path is the credential).
 	invH := handlers.NewInvitesHandler(s.cfg, s.queries)
@@ -230,6 +235,9 @@ func (s *Server) Router() http.Handler {
 				}
 				if s.RetentionMgr != nil {
 					out["retention_last"] = s.RetentionMgr.LastResult()
+				}
+				if v, err := s.queries.GetMaxSchemaVersion(req.Context()); err == nil {
+					out["schema_version"] = v
 				}
 				_ = json.NewEncoder(w).Encode(out)
 			})
@@ -418,7 +426,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/consent/export.csv", coH.ExportCSV)
 		siteR.Delete("/api/sites/{siteID}/consent/purge", coH.Purge)
 
-		// Stitched cookie analytics — DuckDB ATTACH layer over the SQLite
+		// Stitched cookie analytics , DuckDB ATTACH layer over the SQLite
 		// file. Returns 503 from each endpoint when the DuckDB layer
 		// failed to open at boot (e.g. a CGO-disabled build), so the
 		// dashboard can fall back gracefully.

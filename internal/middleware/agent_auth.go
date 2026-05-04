@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -33,13 +36,107 @@ func HashAgentKey(rawKey string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// agentBucket is a single token-bucket entry per agent key. Refills
+// at rate tokens/second up to capacity.
+type agentBucket struct {
+	tokens     float64
+	capacity   float64
+	rate       float64 // tokens per second
+	lastMs     int64
+	lastSeenMs int64
+}
+
+// agentRateLimiter throttles per-agent-key request volume. Same
+// shape as the consentRateLimiter used for /t/* but keyed on the
+// agent KeyID instead of an IP. We pick conservative values:
+// burst 60, refill 60/min sustained , covers any realistic agent
+// workload (a build cycle is a handful of writes plus a build) and
+// blocks runaway loops that wedge the server.
+type agentRateLimiter struct {
+	mu        sync.Mutex
+	buckets   map[string]*agentBucket
+	capacity  float64
+	rate      float64
+	idleAfter time.Duration
+}
+
+func newAgentRateLimiter(capacity int, ratePerSec float64, idleAfter time.Duration) *agentRateLimiter {
+	return &agentRateLimiter{
+		buckets:   make(map[string]*agentBucket),
+		capacity:  float64(capacity),
+		rate:      ratePerSec,
+		idleAfter: idleAfter,
+	}
+}
+
+// allow consumes one token for keyID. Returns (allowed,
+// retryAfterSeconds). Empty keyID is allowed unconditionally to
+// keep the unauth code-path functional for tests.
+func (l *agentRateLimiter) allow(keyID string) (bool, int) {
+	if keyID == "" {
+		return true, 0
+	}
+	now := time.Now().UnixMilli()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// Lazy GC: drop buckets the agent hasn't touched in idleAfter
+	// so a long-lived process doesn't accumulate one entry per
+	// rotated key.
+	cutoff := now - l.idleAfter.Milliseconds()
+	for k, b := range l.buckets {
+		if b.lastSeenMs < cutoff {
+			delete(l.buckets, k)
+		}
+	}
+
+	b, ok := l.buckets[keyID]
+	if !ok {
+		b = &agentBucket{
+			tokens:   l.capacity - 1,
+			capacity: l.capacity,
+			rate:     l.rate,
+			lastMs:   now,
+		}
+		b.lastSeenMs = now
+		l.buckets[keyID] = b
+		return true, 0
+	}
+	// Refill since lastMs.
+	elapsedSec := float64(now-b.lastMs) / 1000.0
+	b.tokens += elapsedSec * b.rate
+	if b.tokens > b.capacity {
+		b.tokens = b.capacity
+	}
+	b.lastMs = now
+	b.lastSeenMs = now
+	if b.tokens >= 1 {
+		b.tokens--
+		return true, 0
+	}
+	// Compute seconds to next free token.
+	missing := 1 - b.tokens
+	wait := missing / b.rate
+	if wait < 1 {
+		wait = 1
+	}
+	return false, int(wait)
+}
+
 // AgentAuthMiddleware authenticates requests via X-Agent-Key header.
 type AgentAuthMiddleware struct {
 	queries *store.Queries
+	// limiter throttles per-key request volume. Hardcoded to a
+	// reasonable default (60 burst, 60/min sustained) , explicit
+	// tuning lives in NewAgentAuthMiddleware.
+	limiter *agentRateLimiter
 }
 
 func NewAgentAuthMiddleware(queries *store.Queries) *AgentAuthMiddleware {
-	return &AgentAuthMiddleware{queries: queries}
+	return &AgentAuthMiddleware{
+		queries: queries,
+		limiter: newAgentRateLimiter(60, 60.0/60.0, 30*time.Minute),
+	}
 }
 
 func (m *AgentAuthMiddleware) Middleware(next http.Handler) http.Handler {
@@ -50,6 +147,23 @@ func (m *AgentAuthMiddleware) Middleware(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
+		}
+
+		// Per-key rate limit. Runs after authentication so unknown
+		// keys don't churn the bucket map. The limiter capacity (60)
+		// matches a generous agent workload; legitimate burst
+		// activity (a build cycle is ~10 writes + 1 build) sits well
+		// below it. Runaway loops trip 429 + Retry-After.
+		if m.limiter != nil {
+			if ok, retry := m.limiter.allow(agent.KeyID); !ok {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", strconv.Itoa(retry))
+				w.WriteHeader(http.StatusTooManyRequests)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "Too many requests for this agent key; slow down.",
+				})
+				return
+			}
 		}
 
 		// Update last_used_at in background

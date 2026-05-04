@@ -582,6 +582,48 @@ CREATE INDEX IF NOT EXISTS idx_consent_records_site_method ON consent_records(si
 CREATE INDEX IF NOT EXISTS idx_consent_records_session ON consent_records(session_id);
 CREATE INDEX IF NOT EXISTS idx_consent_records_site_fingerprint ON consent_records(site_id, fingerprint);
 
+-- password_resets holds short-lived single-use tokens for the
+-- forgot-password flow. The user requests a reset by email; we
+-- mint a 32-byte hex token, store its sha256 hash, and either
+-- email a reset link or surface it via slog (when no mail sender
+-- is configured) so the operator can deliver it manually.
+--
+-- Why store the hash and not the raw token: a DB read leak (or a
+-- backup file in the wrong hands) would otherwise expose every
+-- live reset link.
+--
+-- Token lifetime is 30 minutes , long enough for a real user to
+-- find the email and click, short enough that a leaked link
+-- doesn't outlive its delivery channel. Single-use is enforced
+-- by setting used_at on first redemption; subsequent reads of
+-- the same token are rejected.
+--
+-- token_version on the user is bumped on successful reset, which
+-- invalidates every active session (including the attacker's, if
+-- they had one) per the existing JWT-with-version contract.
+CREATE TABLE IF NOT EXISTS password_resets (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT NOT NULL DEFAULT '',
+    requester_ip TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash ON password_resets(token_hash);
+
+-- schema_versions tracks which point-in-time migrations have been
+-- applied to this DB. Each row records when applySchema completed
+-- a migration step. Lets the operator reason about whether a hot-
+-- restored backup matches the running binary's expected schema
+-- without diffing the schema.sql by hand.
+CREATE TABLE IF NOT EXISTS schema_versions (
+    version    INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now')),
+    note       TEXT NOT NULL DEFAULT ''
+);
+
 -- audit_log records who-did-what-when for every destructive action
 -- across the platform. The handler layer calls a single AuditLog()
 -- helper after the underlying mutation succeeds, so the row is the
