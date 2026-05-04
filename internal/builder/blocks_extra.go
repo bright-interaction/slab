@@ -317,6 +317,15 @@ func renderFormBlock(data map[string]any) string {
 		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
 	}
 	action := dataString(data, "action")
+	formID := dataString(data, "form_id")
+	// Sprint 3 (2026-05-04): when the editor wired the block to a
+	// stored form via form_id but the operator did not supply a
+	// custom action URL, default to the platform's public submit
+	// endpoint. Same-origin via Caddy in front of the API; CORS is
+	// handled at the API for the cross-origin case.
+	if action == "" && formID != "" {
+		action = "/t/forms/" + formID + "/submit"
+	}
 	if action == "" {
 		action = "#"
 	}
@@ -324,7 +333,15 @@ func renderFormBlock(data map[string]any) string {
 	if method != "get" {
 		method = "post"
 	}
-	b.WriteString(fmt.Sprintf("    <form action=\"%s\" method=\"%s\">\n", escapeURL(action), method))
+	formIDAttr := ""
+	if formID != "" {
+		formIDAttr = fmt.Sprintf(" data-form-id=\"%s\"", escapeAttr(formID))
+	}
+	b.WriteString(fmt.Sprintf("    <form action=\"%s\" method=\"%s\"%s>\n", escapeURL(action), method, formIDAttr))
+	// Honeypot field. Bots that auto-fill all visible inputs trip
+	// this and the public submit endpoint silently drops the row.
+	// Real users never see the field (off-screen + tabindex=-1).
+	b.WriteString("      <input type=\"text\" name=\"website\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\" style=\"position:absolute;left:-9999px;width:1px;height:1px;opacity:0;\" />\n")
 	if fieldsRaw, ok := data["fields"].([]any); ok {
 		for _, f := range fieldsRaw {
 			field, ok := f.(map[string]any)

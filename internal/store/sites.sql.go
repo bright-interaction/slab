@@ -55,7 +55,7 @@ func (q *Queries) DeleteSite(ctx context.Context, id string) error {
 }
 
 const getSiteByID = `-- name: GetSiteByID :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE id = ?
+SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites WHERE id = ?
 `
 
 func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
@@ -91,6 +91,9 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 		&i.LastBuildStatus,
 		&i.LastBuildError,
 		&i.LastDeployAt,
+		&i.StorageQuotaBytes,
+		&i.BuildMinutesQuota,
+		&i.QuotaOverageBlocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -98,7 +101,7 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 }
 
 const getSiteBySlug = `-- name: GetSiteBySlug :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites WHERE slug = ?
+SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites WHERE slug = ?
 `
 
 func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) {
@@ -134,14 +137,34 @@ func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) 
 		&i.LastBuildStatus,
 		&i.LastBuildError,
 		&i.LastDeployAt,
+		&i.StorageQuotaBytes,
+		&i.BuildMinutesQuota,
+		&i.QuotaOverageBlocked,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
+const getSiteQuota = `-- name: GetSiteQuota :one
+SELECT storage_quota_bytes, build_minutes_quota, quota_overage_blocked FROM sites WHERE id = ?
+`
+
+type GetSiteQuotaRow struct {
+	StorageQuotaBytes   int64 `json:"storage_quota_bytes"`
+	BuildMinutesQuota   int64 `json:"build_minutes_quota"`
+	QuotaOverageBlocked int64 `json:"quota_overage_blocked"`
+}
+
+func (q *Queries) GetSiteQuota(ctx context.Context, id string) (GetSiteQuotaRow, error) {
+	row := q.db.QueryRowContext(ctx, getSiteQuota, id)
+	var i GetSiteQuotaRow
+	err := row.Scan(&i.StorageQuotaBytes, &i.BuildMinutesQuota, &i.QuotaOverageBlocked)
+	return i, err
+}
+
 const listSites = `-- name: ListSites :many
-SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, created_at, updated_at FROM sites ORDER BY updated_at DESC
+SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites ORDER BY updated_at DESC
 `
 
 func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
@@ -183,6 +206,9 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.LastBuildStatus,
 			&i.LastBuildError,
 			&i.LastDeployAt,
+			&i.StorageQuotaBytes,
+			&i.BuildMinutesQuota,
+			&i.QuotaOverageBlocked,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -197,6 +223,80 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listSitesForQuotaAudit = `-- name: ListSitesForQuotaAudit :many
+SELECT id, name, slug, storage_quota_bytes, build_minutes_quota, quota_overage_blocked
+FROM sites
+ORDER BY updated_at DESC
+`
+
+type ListSitesForQuotaAuditRow struct {
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	Slug                string `json:"slug"`
+	StorageQuotaBytes   int64  `json:"storage_quota_bytes"`
+	BuildMinutesQuota   int64  `json:"build_minutes_quota"`
+	QuotaOverageBlocked int64  `json:"quota_overage_blocked"`
+}
+
+func (q *Queries) ListSitesForQuotaAudit(ctx context.Context) ([]ListSitesForQuotaAuditRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSitesForQuotaAudit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSitesForQuotaAuditRow{}
+	for rows.Next() {
+		var i ListSitesForQuotaAuditRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.StorageQuotaBytes,
+			&i.BuildMinutesQuota,
+			&i.QuotaOverageBlocked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const sumBuildMinutesBySiteSinceCutoff = `-- name: SumBuildMinutesBySiteSinceCutoff :one
+SELECT COALESCE(SUM(duration_ms), 0) AS duration_ms_total
+FROM deployments
+WHERE site_id = ? AND created_at >= ?
+`
+
+type SumBuildMinutesBySiteSinceCutoffParams struct {
+	SiteID    string `json:"site_id"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (q *Queries) SumBuildMinutesBySiteSinceCutoff(ctx context.Context, arg SumBuildMinutesBySiteSinceCutoffParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, sumBuildMinutesBySiteSinceCutoff, arg.SiteID, arg.CreatedAt)
+	var duration_ms_total interface{}
+	err := row.Scan(&duration_ms_total)
+	return duration_ms_total, err
+}
+
+const sumStorageBytesBySite = `-- name: SumStorageBytesBySite :one
+SELECT COALESCE(SUM(file_size), 0) AS bytes FROM media WHERE site_id = ?
+`
+
+func (q *Queries) SumStorageBytesBySite(ctx context.Context, siteID string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, sumStorageBytesBySite, siteID)
+	var bytes interface{}
+	err := row.Scan(&bytes)
+	return bytes, err
 }
 
 const updateSite = `-- name: UpdateSite :exec
@@ -326,5 +426,28 @@ type UpdateSiteDeployAtParams struct {
 
 func (q *Queries) UpdateSiteDeployAt(ctx context.Context, arg UpdateSiteDeployAtParams) error {
 	_, err := q.db.ExecContext(ctx, updateSiteDeployAt, arg.LastDeployAt, arg.ID)
+	return err
+}
+
+const updateSiteQuota = `-- name: UpdateSiteQuota :exec
+UPDATE sites
+SET storage_quota_bytes = ?, build_minutes_quota = ?, quota_overage_blocked = ?, updated_at = datetime('now')
+WHERE id = ?
+`
+
+type UpdateSiteQuotaParams struct {
+	StorageQuotaBytes   int64  `json:"storage_quota_bytes"`
+	BuildMinutesQuota   int64  `json:"build_minutes_quota"`
+	QuotaOverageBlocked int64  `json:"quota_overage_blocked"`
+	ID                  string `json:"id"`
+}
+
+func (q *Queries) UpdateSiteQuota(ctx context.Context, arg UpdateSiteQuotaParams) error {
+	_, err := q.db.ExecContext(ctx, updateSiteQuota,
+		arg.StorageQuotaBytes,
+		arg.BuildMinutesQuota,
+		arg.QuotaOverageBlocked,
+		arg.ID,
+	)
 	return err
 }

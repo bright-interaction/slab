@@ -49,6 +49,12 @@ import (
 // Plug it from cmd/server/main.go via AuthHandler.MailSender = ...
 type MailSender interface {
 	SendPasswordResetLink(ctx context.Context, to, link string) error
+	// SendFormNotification delivers a form-submission summary to the
+	// site owner. fields are user-supplied values from the public
+	// submit endpoint; the implementation MUST escape / sanitize the
+	// values for the email body since they come from an untrusted
+	// public surface. Sprint 3 (2026-05-04).
+	SendFormNotification(ctx context.Context, to, siteName, formName string, fields map[string]string) error
 }
 
 // hashResetToken returns the sha256 hex of the raw token. Same

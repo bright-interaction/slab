@@ -29,10 +29,14 @@ type MediaHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
 	store   storage.Store
+	// quota gates uploads against the site's storage quota.
+	// Sprint 3 (2026-05-04). Optional , nil keeps tests + legacy
+	// callers working without quota enforcement.
+	quota *QuotaHandler
 }
 
-func NewMediaHandler(cfg *config.Config, queries *store.Queries, st storage.Store) *MediaHandler {
-	return &MediaHandler{cfg: cfg, queries: queries, store: st}
+func NewMediaHandler(cfg *config.Config, queries *store.Queries, st storage.Store, quota *QuotaHandler) *MediaHandler {
+	return &MediaHandler{cfg: cfg, queries: queries, store: st, quota: quota}
 }
 
 // Extensions rejected outright (mirrors brightcrm's list, adapted for image-only).
@@ -428,6 +432,9 @@ func (h *MediaHandler) AgentUploadFromBase64(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusRequestEntityTooLarge, "File too large")
 		return
 	}
+	if h.quota != nil && h.quota.EnforceStorageQuota(w, r, a.SiteID, int64(len(raw))) {
+		return
+	}
 	folder, status, msg := h.resolveUploadFolder(r.Context(), a.SiteID, req.Folder)
 	if status != http.StatusOK {
 		writeError(w, status, msg)
@@ -469,6 +476,9 @@ func (h *MediaHandler) AgentUploadFromURL(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		slog.Warn("agent upload from-url rejected", "url", req.URL, "err", err)
 		writeError(w, http.StatusBadRequest, "Failed to fetch URL (rejected or unreachable)")
+		return
+	}
+	if h.quota != nil && h.quota.EnforceStorageQuota(w, r, a.SiteID, int64(len(raw))) {
 		return
 	}
 	filename := req.Filename
@@ -625,6 +635,13 @@ func (h *MediaHandler) uploadMultipart(w http.ResponseWriter, r *http.Request, s
 	}
 	if int64(len(raw)) > h.cfg.MaxUploadSize {
 		writeError(w, http.StatusRequestEntityTooLarge, "File too large")
+		return
+	}
+
+	// Sprint 3 storage quota gate. Runs after we know the upload's
+	// final byte count but before any disk writes happen, so an
+	// over-quota tenant can't even start the imaging pipeline.
+	if h.quota != nil && h.quota.EnforceStorageQuota(w, r, siteID, int64(len(raw))) {
 		return
 	}
 

@@ -54,3 +54,24 @@ WHERE id = ?;
 
 -- name: DeleteSite :exec
 DELETE FROM sites WHERE id = ?;
+
+-- name: GetSiteQuota :one
+SELECT storage_quota_bytes, build_minutes_quota, quota_overage_blocked FROM sites WHERE id = ?;
+
+-- name: UpdateSiteQuota :exec
+UPDATE sites
+SET storage_quota_bytes = ?, build_minutes_quota = ?, quota_overage_blocked = ?, updated_at = datetime('now')
+WHERE id = ?;
+
+-- name: SumStorageBytesBySite :one
+SELECT COALESCE(SUM(file_size), 0) AS bytes FROM media WHERE site_id = ?;
+
+-- name: SumBuildMinutesBySiteSinceCutoff :one
+SELECT COALESCE(SUM(duration_ms), 0) AS duration_ms_total
+FROM deployments
+WHERE site_id = ? AND created_at >= ?;
+
+-- name: ListSitesForQuotaAudit :many
+SELECT id, name, slug, storage_quota_bytes, build_minutes_quota, quota_overage_blocked
+FROM sites
+ORDER BY updated_at DESC;

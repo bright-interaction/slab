@@ -9,6 +9,43 @@ import (
 	"context"
 )
 
+const clearUserTOTP = `-- name: ClearUserTOTP :exec
+UPDATE users SET totp_secret = '',
+                 totp_enrolled_at = '',
+                 totp_recovery_json = '[]',
+                 token_version = token_version + 1,
+                 updated_at = datetime('now')
+WHERE id = ?
+`
+
+// Disables MFA and bumps token_version so any session that thought
+// it had MFA is invalidated. Only callable by the user themselves
+// (after re-confirming current password) or by a workspace admin.
+func (q *Queries) ClearUserTOTP(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, clearUserTOTP, id)
+	return err
+}
+
+const confirmUserTOTPEnrollment = `-- name: ConfirmUserTOTPEnrollment :exec
+UPDATE users SET totp_enrolled_at = datetime('now'),
+                 totp_recovery_json = ?,
+                 token_version = token_version + 1,
+                 updated_at = datetime('now')
+WHERE id = ?
+`
+
+type ConfirmUserTOTPEnrollmentParams struct {
+	TotpRecoveryJson string `json:"totp_recovery_json"`
+	ID               string `json:"id"`
+}
+
+// Run after a successful first-code verify. Sets enrolled_at and
+// writes the bcrypt-hashed recovery codes JSON.
+func (q *Queries) ConfirmUserTOTPEnrollment(ctx context.Context, arg ConfirmUserTOTPEnrollmentParams) error {
+	_, err := q.db.ExecContext(ctx, confirmUserTOTPEnrollment, arg.TotpRecoveryJson, arg.ID)
+	return err
+}
+
 const createUser = `-- name: CreateUser :exec
 INSERT INTO users (id, email, password_hash, name, role)
 VALUES (?, ?, ?, ?, ?)
@@ -43,7 +80,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, name, role, token_version, created_at, updated_at FROM users WHERE email = ?
+SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, created_at, updated_at FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -56,6 +93,9 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Name,
 		&i.Role,
 		&i.TokenVersion,
+		&i.TotpSecret,
+		&i.TotpEnrolledAt,
+		&i.TotpRecoveryJson,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -63,7 +103,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, name, role, token_version, created_at, updated_at FROM users WHERE id = ?
+SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, created_at, updated_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -76,6 +116,9 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.Name,
 		&i.Role,
 		&i.TokenVersion,
+		&i.TotpSecret,
+		&i.TotpEnrolledAt,
+		&i.TotpRecoveryJson,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -93,7 +136,7 @@ func (q *Queries) IncrementTokenVersion(ctx context.Context, id string) error {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, name, role, token_version, created_at, updated_at FROM users ORDER BY created_at DESC
+SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, created_at, updated_at FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -112,6 +155,9 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Name,
 			&i.Role,
 			&i.TokenVersion,
+			&i.TotpSecret,
+			&i.TotpEnrolledAt,
+			&i.TotpRecoveryJson,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -126,6 +172,22 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserTOTPSecret = `-- name: SetUserTOTPSecret :exec
+UPDATE users SET totp_secret = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type SetUserTOTPSecretParams struct {
+	TotpSecret string `json:"totp_secret"`
+	ID         string `json:"id"`
+}
+
+// Stages a fresh secret without flipping enrolled_at, so the user
+// can scan the QR + try a code before the secret is locked in.
+func (q *Queries) SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error {
+	_, err := q.db.ExecContext(ctx, setUserTOTPSecret, arg.TotpSecret, arg.ID)
+	return err
 }
 
 const updateUserName = `-- name: UpdateUserName :exec
@@ -169,5 +231,21 @@ type UpdateUserRoleParams struct {
 
 func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserRole, arg.Role, arg.ID)
+	return err
+}
+
+const updateUserTOTPRecovery = `-- name: UpdateUserTOTPRecovery :exec
+UPDATE users SET totp_recovery_json = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type UpdateUserTOTPRecoveryParams struct {
+	TotpRecoveryJson string `json:"totp_recovery_json"`
+	ID               string `json:"id"`
+}
+
+// Rewrites the recovery code list (e.g. after a single-use code is
+// consumed during a recovery login).
+func (q *Queries) UpdateUserTOTPRecovery(ctx context.Context, arg UpdateUserTOTPRecoveryParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserTOTPRecovery, arg.TotpRecoveryJson, arg.ID)
 	return err
 }

@@ -298,37 +298,40 @@ type Setting struct {
 }
 
 type Site struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Slug              string `json:"slug"`
-	Domain            string `json:"domain"`
-	Status            string `json:"status"`
-	PrimaryColor      string `json:"primary_color"`
-	SecondaryColor    string `json:"secondary_color"`
-	SurfaceColor      string `json:"surface_color"`
-	BorderColor       string `json:"border_color"`
-	MutedColor        string `json:"muted_color"`
-	AccentColor       string `json:"accent_color"`
-	OnPrimaryColor    string `json:"on_primary_color"`
-	BgColor           string `json:"bg_color"`
-	TextColor         string `json:"text_color"`
-	FontHeading       string `json:"font_heading"`
-	FontBody          string `json:"font_body"`
-	MetaTitle         string `json:"meta_title"`
-	MetaDescription   string `json:"meta_description"`
-	OgImageID         string `json:"og_image_id"`
-	FaviconID         string `json:"favicon_id"`
-	Ga4ID             string `json:"ga4_id"`
-	UmamiID           string `json:"umami_id"`
-	UmamiUrl          string `json:"umami_url"`
-	CookieproofDomain string `json:"cookieproof_domain"`
-	Lang              string `json:"lang"`
-	LastBuildAt       string `json:"last_build_at"`
-	LastBuildStatus   string `json:"last_build_status"`
-	LastBuildError    string `json:"last_build_error"`
-	LastDeployAt      string `json:"last_deploy_at"`
-	CreatedAt         string `json:"created_at"`
-	UpdatedAt         string `json:"updated_at"`
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	Slug                string `json:"slug"`
+	Domain              string `json:"domain"`
+	Status              string `json:"status"`
+	PrimaryColor        string `json:"primary_color"`
+	SecondaryColor      string `json:"secondary_color"`
+	SurfaceColor        string `json:"surface_color"`
+	BorderColor         string `json:"border_color"`
+	MutedColor          string `json:"muted_color"`
+	AccentColor         string `json:"accent_color"`
+	OnPrimaryColor      string `json:"on_primary_color"`
+	BgColor             string `json:"bg_color"`
+	TextColor           string `json:"text_color"`
+	FontHeading         string `json:"font_heading"`
+	FontBody            string `json:"font_body"`
+	MetaTitle           string `json:"meta_title"`
+	MetaDescription     string `json:"meta_description"`
+	OgImageID           string `json:"og_image_id"`
+	FaviconID           string `json:"favicon_id"`
+	Ga4ID               string `json:"ga4_id"`
+	UmamiID             string `json:"umami_id"`
+	UmamiUrl            string `json:"umami_url"`
+	CookieproofDomain   string `json:"cookieproof_domain"`
+	Lang                string `json:"lang"`
+	LastBuildAt         string `json:"last_build_at"`
+	LastBuildStatus     string `json:"last_build_status"`
+	LastBuildError      string `json:"last_build_error"`
+	LastDeployAt        string `json:"last_deploy_at"`
+	StorageQuotaBytes   int64  `json:"storage_quota_bytes"`
+	BuildMinutesQuota   int64  `json:"build_minutes_quota"`
+	QuotaOverageBlocked int64  `json:"quota_overage_blocked"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
 }
 
 type SiteArchitecture struct {
@@ -411,14 +414,17 @@ type SiteSilo struct {
 }
 
 type User struct {
-	ID           string `json:"id"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	Name         string `json:"name"`
-	Role         string `json:"role"`
-	TokenVersion int64  `json:"token_version"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	ID               string `json:"id"`
+	Email            string `json:"email"`
+	PasswordHash     string `json:"password_hash"`
+	Name             string `json:"name"`
+	Role             string `json:"role"`
+	TokenVersion     int64  `json:"token_version"`
+	TotpSecret       string `json:"totp_secret"`
+	TotpEnrolledAt   string `json:"totp_enrolled_at"`
+	TotpRecoveryJson string `json:"totp_recovery_json"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 type VisitEngagement struct {

@@ -8,6 +8,8 @@
 
 	let email = $state('');
 	let password = $state('');
+	let totpCode = $state('');
+	let totpRequired = $state(false);
 	let error = $state('');
 	let loading = $state(false);
 
@@ -17,11 +19,14 @@
 		error = '';
 		loading = true;
 		try {
-			const res = await authApi.login(email, password);
+			const res = await authApi.login(email, password, totpRequired ? totpCode : undefined);
 			setUser(res.user);
 			await goto('/');
 		} catch (err) {
-			if (err instanceof ApiError) {
+			if (err instanceof ApiError && err.code === 'totp_required') {
+				totpRequired = true;
+				error = '';
+			} else if (err instanceof ApiError) {
 				error = err.message;
 			} else {
 				error = 'Sign in failed. Try again.';
@@ -54,15 +59,32 @@
 			autocomplete="current-password"
 			required
 			bind:value={password}
-			disabled={loading}
+			disabled={loading || totpRequired}
 		/>
+
+		{#if totpRequired}
+			<Input
+				label="Authentication code"
+				type="text"
+				inputmode="numeric"
+				pattern="[0-9 ]*"
+				autocomplete="one-time-code"
+				required
+				bind:value={totpCode}
+				disabled={loading}
+				placeholder="6-digit code or recovery code"
+			/>
+			<p class="text-[12px] text-text-muted">
+				Open your authenticator app and enter the 6-digit code, or paste a recovery code if you've lost the device.
+			</p>
+		{/if}
 
 		{#if error}
 			<p class="text-[12px] text-danger" role="alert">{error}</p>
 		{/if}
 
 		<Button type="submit" variant="primary" {loading} disabled={loading} class="w-full">
-			{loading ? 'Signing in.' : 'Sign in'}
+			{loading ? 'Signing in.' : totpRequired ? 'Verify' : 'Sign in'}
 		</Button>
 
 		<p class="text-center text-[12px] text-text-muted">

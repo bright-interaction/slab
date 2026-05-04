@@ -173,6 +173,11 @@ func (s *Server) Router() http.Handler {
 	publicDomH := handlers.NewDomainHandler(s.queries, nil, "")
 	r.Get("/.well-known/atomic-verify/{token}", publicDomH.VerifyToken)
 
+	// Quota handler is shared by build, media, and the dedicated
+	// /api/sites/{id}/quota + /api/admin/sites/{id}/quota endpoints.
+	// Sprint 3 (2026-05-04).
+	quotaH := handlers.NewQuotaHandler(s.queries)
+
 	// Auth (public)
 	ah := handlers.NewAuthHandler(s.cfg, s.queries)
 	r.Post("/api/auth/login", ah.Login)
@@ -182,6 +187,18 @@ func (s *Server) Router() http.Handler {
 	r.Post("/api/auth/forgot-password", ah.ForgotPassword)
 	r.Get("/api/auth/reset-password/{token}", ah.ResetPasswordInfo)
 	r.Post("/api/auth/reset-password/{token}", ah.ResetPassword)
+
+	// Sprint 3 (2026-05-04): public form-submission endpoint.
+	// Cross-origin from `*.<BuiltSiteSuffix>` inherits the existing
+	// CORS allowance for /t/* paths. Spam defense lives inside the
+	// handler (honeypot + per-IP rate limit + per-form burst).
+	formsH := handlers.NewFormHandler(s.cfg, s.queries, ah.MailSender)
+	r.Post("/t/forms/{formID}/submit", formsH.Submit)
+
+	// TOTP MFA enrollment + verify + status + disable. All four
+	// require an authenticated session, so they live behind the
+	// auth middleware group below. This block reserves the route
+	// names; the actual mounts happen inside r.Group(authMW.Middleware).
 
 	// Public invite redemption (no auth - token in path is the credential).
 	invH := handlers.NewInvitesHandler(s.cfg, s.queries)
@@ -203,6 +220,13 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/auth/me", ah.Me)
 		r.Post("/api/auth/change-password", ah.ChangePassword)
 		r.Post("/api/auth/sign-out-everywhere", ah.SignOutEverywhere)
+
+		// TOTP MFA flow (auth required; the user's existing session
+		// gates the enrollment / disable surface).
+		r.Get("/api/auth/totp/status", ah.TOTPStatus)
+		r.Post("/api/auth/totp/setup", ah.TOTPSetup)
+		r.Post("/api/auth/totp/verify", ah.TOTPVerify)
+		r.Post("/api/auth/totp/disable", ah.TOTPDisable)
 
 		// Account profile + workspace member management.
 		memh := handlers.NewMembersHandler(s.cfg, s.queries)
@@ -239,8 +263,16 @@ func (s *Server) Router() http.Handler {
 				if v, err := s.queries.GetMaxSchemaVersion(req.Context()); err == nil {
 					out["schema_version"] = v
 				}
+				if summary, err := quotaH.AdminQuotaSummary(req.Context()); err == nil {
+					out["per_site_quotas"] = summary
+				}
 				_ = json.NewEncoder(w).Encode(out)
 			})
+
+			// Admin-only quota mutation. Site members can read their
+			// own usage at /api/sites/{id}/quota; only admins can
+			// raise or block-toggle.
+			r.Patch("/api/admin/sites/{siteID}/quota", quotaH.PatchAdminQuota)
 
 			// Audit log: workspace admin sees the global feed.
 			auditH := handlers.NewAuditHandler(s.queries)
@@ -267,6 +299,20 @@ func (s *Server) Router() http.Handler {
 		siteR.Patch("/api/sites/{siteID}", sh.Update)
 		siteR.Delete("/api/sites/{siteID}", sh.Delete)
 		siteR.Get("/api/sites/{siteID}/silos", sh.ListSilos)
+
+		// Per-tenant quota usage (Sprint 3, 2026-05-04). Read-only for
+		// site members; admin-only mutation lives at /api/admin/sites
+		// further below so tenants can't raise their own ceilings.
+		siteR.Get("/api/sites/{siteID}/quota", quotaH.GetQuota)
+
+		// Form submissions admin surface (Sprint 3, 2026-05-04). The
+		// public Submit endpoint is /t/forms/{id}/submit, registered
+		// above without site-access gating. Admin list + CSV + delete
+		// inherit the siteR cross-tenant guard.
+		siteR.Get("/api/sites/{siteID}/forms", formsH.ListAdminForms)
+		siteR.Get("/api/sites/{siteID}/forms/{formID}/submissions", formsH.ListAdminSubmissions)
+		siteR.Get("/api/sites/{siteID}/forms/{formID}/submissions.csv", formsH.ExportAdminSubmissionsCSV)
+		siteR.Delete("/api/sites/{siteID}/forms/{formID}/submissions/{submissionID}", formsH.DeleteAdminSubmission)
 
 		// Custom domains. The reconciler may be nil (no host integration);
 		// the handler still records rows + serves the verify endpoint.
@@ -376,7 +422,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Delete("/api/sites/{siteID}/allowed-scripts/{scriptID}", ash.Delete)
 
 		// Media
-		mh := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
+		mh := handlers.NewMediaHandler(s.cfg, s.queries, s.storage, quotaH)
 		siteR.Get("/api/sites/{siteID}/media", mh.List)
 		siteR.Post("/api/sites/{siteID}/media", mh.Upload)
 		siteR.Get("/api/sites/{siteID}/media/folders", mh.ListFolders)
@@ -387,7 +433,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Delete("/api/sites/{siteID}/media/{mediaID}", mh.Delete)
 
 		// Builds (admin)
-		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
+		buildH := handlers.NewBuildHandler(s.cfg, s.queries, quotaH)
 		siteR.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
 		siteR.Get("/api/sites/{siteID}/builds/{buildID}/status", buildH.BuildStatusAdmin)
 		siteR.Post("/api/sites/{siteID}/builds/{buildID}/cancel", buildH.CancelBuild)
@@ -522,7 +568,7 @@ func (s *Server) Router() http.Handler {
 		r.Put("/api/agent/global/{slot}", agentH.UpdateGlobalBlock)
 
 		// Build
-		agentBuildH := handlers.NewBuildHandler(s.cfg, s.queries)
+		agentBuildH := handlers.NewBuildHandler(s.cfg, s.queries, quotaH)
 		r.Post("/api/agent/build", agentBuildH.TriggerBuild)
 		r.Get("/api/agent/build/{buildID}/status", agentBuildH.BuildStatus)
 
@@ -581,7 +627,7 @@ func (s *Server) Router() http.Handler {
 		r.Delete("/api/agent/design-references/{refID}", agentH.DeleteDesignReference)
 
 		// Media
-		agentMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
+		agentMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage, quotaH)
 		r.Get("/api/agent/media", agentH.ListMedia)
 		r.Get("/api/agent/media/folders", agentH.ListMediaFolders)
 		r.Post("/api/agent/media/folders", agentH.CreateMediaFolder)
@@ -594,7 +640,7 @@ func (s *Server) Router() http.Handler {
 	})
 
 	// Public media serving (no auth, long cache). Must come BEFORE mountFrontend.
-	publicMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage)
+	publicMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage, quotaH)
 	r.Get("/media/*", publicMediaH.ServePublic)
 	r.Head("/media/*", publicMediaH.ServePublic)
 

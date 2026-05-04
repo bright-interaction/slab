@@ -47,6 +47,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		// TOTP code or recovery code, only required when the user
+		// is enrolled in MFA. Sent on the same request so the
+		// flow stays one round-trip; validateTOTPForLogin runs
+		// after the password check has succeeded.
+		TOTPCode string `json:"totp_code"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -86,6 +91,28 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.loginLimiter.recordFailure(ipKey)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
+	}
+
+	// MFA gate. Once a user is enrolled (totp_enrolled_at set) the
+	// password alone isn't enough; they must supply a 6-digit TOTP
+	// code or a single-use recovery code in the same login request.
+	// We treat a missing TOTPCode as "client should prompt for one"
+	// via 401 + a stable error code so the SPA can render a code
+	// input without parsing message strings.
+	if user.TotpEnrolledAt != "" {
+		if req.TOTPCode == "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{
+				"error":      "MFA code required",
+				"error_code": "totp_required",
+			})
+			return
+		}
+		if !h.validateTOTPForLogin(r, user, req.TOTPCode) {
+			h.loginLimiter.recordFailure(emailKey)
+			h.loginLimiter.recordFailure(ipKey)
+			writeError(w, http.StatusUnauthorized, "Invalid MFA code")
+			return
+		}
 	}
 
 	// Successful login: reset both counters so an honest user who
