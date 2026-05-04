@@ -20,6 +20,22 @@ type AgentHandler struct {
 	db         *sql.DB
 	context    *agent.ContextBuilder
 	guardrails *agent.GuardrailEngine
+
+	// surfaceFn returns the live MCP surface (tools, resources, prompts,
+	// curriculum) for the admin Settings -> Agent page. Set after MCP
+	// server construction in internal/server/server.go via
+	// AgentHandler.SetSurfaceFn so handlers stays decoupled from the
+	// internal/mcp import (which already imports handlers, so a direct
+	// dependency back would cycle). nil when the server is constructed
+	// without MCP wiring (unit tests).
+	surfaceFn func() any
+}
+
+// SetSurfaceFn registers a closure that returns the live MCP surface.
+// The closure is called per-request in AgentSurface so the inventory
+// stays in sync with any future runtime registry changes.
+func (h *AgentHandler) SetSurfaceFn(fn func() any) {
+	h.surfaceFn = fn
 }
 
 // NewAgentHandler builds an AgentHandler. The db handle is optional; pass

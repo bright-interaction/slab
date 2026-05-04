@@ -78,6 +78,14 @@ func New(cfg *config.Config, db *sql.DB, queries *store.Queries, st storage.Stor
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 
+	// Shared MCP surface provider. Captured here at function-body scope
+	// so both the admin route group (siteR.Get /agent-surface) and the
+	// agent-key route group (which constructs the MCP server) can
+	// reach it. Set inside the agent-key block after MCP construction;
+	// the admin route reads via a wrapper closure so request order is
+	// safe even though the admin route is registered first.
+	var mcpSurfaceFn func() any
+
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -505,6 +513,20 @@ func (s *Server) Router() http.Handler {
 		// user wire an agent in one click instead of four manual steps.
 		siteR.Post("/api/sites/{siteID}/agent-bootstrap", agh.AgentBootstrap)
 
+		// MCP agent surface inventory for the admin Settings -> Agent
+		// page. Read-only; payload is the live list of tools, resources,
+		// prompts, and curriculum docs the agent has access to. Surface
+		// function is wired below after MCP server construction; the
+		// closure resolves at request time so this registration order
+		// is correct.
+		agh.SetSurfaceFn(func() any {
+			if mcpSurfaceFn == nil {
+				return nil
+			}
+			return mcpSurfaceFn()
+		})
+		siteR.Get("/api/sites/{siteID}/agent-surface", agh.AgentSurface)
+
 		// Figma design-tokens import (admin)
 		fh := handlers.NewFigmaHandler(s.cfg, s.queries)
 		siteR.Post("/api/sites/{siteID}/figma/import", fh.ImportDesignTokens)
@@ -588,6 +610,15 @@ func (s *Server) Router() http.Handler {
 			WithFontsDir(s.cfg.FontsDir).
 			WithBaseURL(s.cfg.BaseURL)
 		r.Mount("/mcp", mcpServer.Handler())
+
+		// Surface inventory: set the shared closure so the admin
+		// agent-surface route (registered earlier on agh) and the agent
+		// chain (agentH) both resolve to the same live inventory. The
+		// closure resolves the MCP server reference at request time, so
+		// future runtime registry changes show up on the next admin
+		// load without a restart.
+		mcpSurfaceFn = func() any { return mcpServer.AgentSurface() }
+		agentH.SetSurfaceFn(mcpSurfaceFn)
 
 		// Evaluation
 		r.Get("/api/agent/evaluation/{buildID}", agentH.GetEvaluation)
