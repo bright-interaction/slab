@@ -112,12 +112,28 @@ type SiteContext struct {
 // eval checks. Hard-coded in agent/context.go so every site gets it
 // without per-site KB seeding.
 type EvalPlaybookInfo struct {
-	Goal           string             `json:"goal"`
-	PageTemplate   PageTemplate       `json:"page_template"`
-	HardRules      []HardRule         `json:"hard_rules"`
-	BuildLoop      []string           `json:"build_loop"`
-	AdminOnlyItems []AdminOnlyItem    `json:"admin_only_items"`
-	VerificationGate []string         `json:"verification_gate"`
+	Goal             string          `json:"goal"`
+	Mastery          MasteryInfo     `json:"mastery"`
+	PageTemplate     PageTemplate    `json:"page_template"`
+	HardRules        []HardRule      `json:"hard_rules"`
+	BuildLoop        []string        `json:"build_loop"`
+	AdminOnlyItems   []AdminOnlyItem `json:"admin_only_items"`
+	VerificationGate []string        `json:"verification_gate"`
+}
+
+// MasteryInfo points the agent at the curriculum + cross-reference graph
+// surfaced via MCP. Read on every connection so agents that do not pick
+// the master_the_stack prompt still discover the curriculum and the
+// graph; without this, the new resources would be invisible to default
+// flows. The graph URI returns nodes + edges for every doc, tool,
+// resource, prompt, and concept tag (mentions, tagged, ordered_after
+// edges) so the agent can pick what to read instead of crawling 30+
+// resources sequentially.
+type MasteryInfo struct {
+	GraphURI     string   `json:"graph_uri"`
+	CatalogURI   string   `json:"catalog_uri"`
+	ReadingOrder []string `json:"reading_order"`
+	Hint         string   `json:"hint"`
 }
 
 // DesignPlaybookInfo is the agent's design DNA. Read before composing any
@@ -1027,6 +1043,35 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 // whole setup pass without trial-and-error against the eval.
 func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 	return EvalPlaybookInfo{
+		Mastery: MasteryInfo{
+			GraphURI:   "atomicsite://meta/knowledge-graph",
+			CatalogURI: "atomicsite://knowledge/index",
+			ReadingOrder: []string{
+				// Stack mastery first: how the builder emits Astro + TS + custom CSS,
+				// the block registry vocabulary, then the i18n / security / privacy boundaries.
+				"astro-conventions",
+				"typescript-strict",
+				"css-variable-system",
+				"block-renderer-patterns",
+				"i18n-authoring",
+				"security-authoring",
+				"personalization",
+				"cookieproof-integration",
+				// UX mastery: foundational tokens before composition, accessibility before motion,
+				// performance before forms, premium-design-principles last as the synthesis.
+				"typography-scale",
+				"color-system",
+				"spacing-rhythm",
+				"motion-curves",
+				"accessibility-patterns",
+				"performance-budgets",
+				"forms-ux",
+				"nav-ux",
+				"dark-mode",
+				"premium-design-principles",
+			},
+			Hint: "Read atomicsite://meta/knowledge-graph FIRST on session start. It returns nodes + edges for every doc, tool, resource, prompt, and concept tag, so you can pick what's relevant in one fetch instead of crawling 30+ resources. Follow up with atomicsite://knowledge/<slug> for full bodies, and tools/list / resources/list for the live MCP surface. The reading_order above is the deterministic curriculum sequence the master_the_stack prompt walks; honor it when picking docs to read.",
+		},
 		Goal: "Atomicsite is a website builder where designers / agents pick blocks and content freely; the platform guardrails the technical side so the site ends up correctly architected. You handle: design (block sequence, copy, imagery), brand (palette, fonts, logo), structure (pages, slugs, locales). Atomicsite handles automatically: SEO meta + JSON-LD, hreflang emission, sitemap, robots.txt, llms.txt, security.txt, security headers (HSTS, CSP, X-Frame-Options, COOP/CORP/COEP, Permissions-Policy), <picture> + WebP variants + width/height, lazy loading, mobile breakpoints, focus indicators, semantic landmarks, FAQPage / Organization JSON-LD, h1/h2 hierarchy enforcement at block-render time. Drive the site to 95%+ on agent-writable eval categories. Custom interactive widgets (calculators, scanners, custom visualisations) are bespoke — build them as Astro components in the site's component catalog (see component block_type) when a customer needs one; atomicsite ships the generic primitives (form, feature_grid, replacement_grid, embed, logo_carousel, etc.) the agent composes from.",
 		PageTemplate: PageTemplate{
 			Description: "Canonical block sequence for a marketing-grade homepage modeled after world-class marketing sites (Linear, Stripe, Vercel, Resend). Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
@@ -1054,7 +1099,7 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 			{Rule: "Update block sort_order via update_block (now persists; previously dropped). Don't delete-and-recreate to reorder.", WhyItMatters: "Was a contradiction in the agent surface; fixed in the same session that authored this playbook (commit 8a0f87d0). Block sort_order writes are now reliable.", HowToApply: "update_block(block_id, sort_order=N, data=...). Use unique sort_order values per page so render order is deterministic."},
 		},
 		BuildLoop: []string{
-			"1. Read /api/agent/context to get pending_setup + settings_catalog + block_schemas + this playbook.",
+			"1. Read /api/agent/context to get pending_setup + settings_catalog + block_schemas + this playbook. Then fetch atomicsite://meta/knowledge-graph for the cross-reference map of curriculum + tools + resources + prompts; pick relevant nodes from the graph instead of crawling. Walk atomicsite://knowledge/<slug> for any doc whose summary is on point. The reading_order in eval_playbook.mastery is the deterministic curriculum sequence.",
 			"2. Profile + branding + settings via update_profile / PATCH /api/agent/branding / bulk_upsert_settings.",
 			"3. Page structure: create_page for every page in every locale.",
 			"4. Per-page meta: update_page(slug, meta_title, meta_description, no_index, og_image_id) for every page.",
