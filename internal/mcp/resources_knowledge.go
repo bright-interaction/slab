@@ -48,4 +48,34 @@ func (s *Server) registerKnowledgeResources() {
 			},
 		})
 	}
+
+	// Knowledge graph: nodes (docs, tools, resources, prompts, tags) +
+	// edges (mentions, tagged, ordered_after) so the agent can navigate
+	// the curriculum and the live MCP surface efficiently. Inspired by
+	// the user's graphify tool which produces ~71x token reduction over
+	// raw source-file reads. The graph is computed on each read against
+	// the live tool/resource/prompt registries; cheap (small fixed
+	// inputs) and always in sync.
+	register(Resource{
+		URI:         "atomicsite://meta/knowledge-graph",
+		Name:        "Knowledge graph",
+		Description: "Graph of every doc, tool, resource, prompt, and concept tag with edges typed by kind (mentions, tagged, ordered_after). Read this once at session start to navigate the curriculum and the MCP surface efficiently; follow up with resources/read or tools/list to fetch the picked nodes.",
+		MimeType:    "application/json",
+		Reader: func(ctx context.Context, _ *authmw.AgentIdentity) (string, error) {
+			toolNames := make([]string, 0, len(s.tools))
+			for name := range s.tools {
+				toolNames = append(toolNames, name)
+			}
+			resourceURIs := make([]string, 0, len(s.resources))
+			for uri := range s.resources {
+				resourceURIs = append(resourceURIs, uri)
+			}
+			promptNames := make([]string, 0, len(s.prompts))
+			for name := range s.prompts {
+				promptNames = append(promptNames, name)
+			}
+			g := knowledge.BuildGraph(toolNames, resourceURIs, promptNames)
+			return mustJSON(g), nil
+		},
+	})
 }

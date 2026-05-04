@@ -177,6 +177,9 @@ func TestKnowledgeResourcesRegistered(t *testing.T) {
 	if _, ok := s.resources["atomicsite://knowledge/index"]; !ok {
 		t.Error("atomicsite://knowledge/index resource missing")
 	}
+	if _, ok := s.resources["atomicsite://meta/knowledge-graph"]; !ok {
+		t.Error("atomicsite://meta/knowledge-graph resource missing (the cross-reference graph)")
+	}
 
 	requiredKnowledgeSlugs := []string{
 		// stack curriculum
