@@ -38,6 +38,7 @@ type Querier interface {
 	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
 	CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error)
 	CountConsentBySiteByMethod(ctx context.Context, arg CountConsentBySiteByMethodParams) (int64, error)
+	CountItemsByCollection(ctx context.Context, collectionID string) (int64, error)
 	// Distinct fingerprints in the last N minutes (caller passes the cutoff
 	// timestamp). Used for the "live now" widget.
 	CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error)
@@ -55,6 +56,7 @@ type Querier interface {
 	CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error
 	CreateBlock(ctx context.Context, arg CreateBlockParams) error
 	CreateCSSClass(ctx context.Context, arg CreateCSSClassParams) error
+	CreateCollection(ctx context.Context, arg CreateCollectionParams) error
 	CreateComponent(ctx context.Context, arg CreateComponentParams) error
 	CreateDeployTarget(ctx context.Context, arg CreateDeployTargetParams) error
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
@@ -66,6 +68,7 @@ type Querier interface {
 	CreateGlobalBlock(ctx context.Context, arg CreateGlobalBlockParams) error
 	CreateGuardrail(ctx context.Context, arg CreateGuardrailParams) error
 	CreateInvite(ctx context.Context, arg CreateInviteParams) error
+	CreateItem(ctx context.Context, arg CreateItemParams) error
 	CreateKnowledgebaseEntry(ctx context.Context, arg CreateKnowledgebaseEntryParams) error
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
 	CreateMediaFolder(ctx context.Context, arg CreateMediaFolderParams) error
@@ -82,6 +85,7 @@ type Querier interface {
 	DeleteBlock(ctx context.Context, id string) error
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
+	DeleteCollection(ctx context.Context, id string) error
 	DeleteComponent(ctx context.Context, id string) error
 	// Per-site retention purge for the GDPR proof log. created_at is unix-ms;
 	// caller passes the cutoff. Returns the affected row count so the
@@ -99,6 +103,7 @@ type Querier interface {
 	DeleteGlobalBlock(ctx context.Context, id string) error
 	DeleteGuardrail(ctx context.Context, id string) error
 	DeleteInvite(ctx context.Context, id string) error
+	DeleteItem(ctx context.Context, id string) error
 	DeleteKnowledgebaseEntry(ctx context.Context, id string) error
 	DeleteMedia(ctx context.Context, id string) error
 	DeleteMediaFolder(ctx context.Context, arg DeleteMediaFolderParams) error
@@ -132,6 +137,8 @@ type Querier interface {
 	GetBlockByID(ctx context.Context, id string) (Block, error)
 	GetCSSClassByID(ctx context.Context, id string) (CssClass, error)
 	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
+	GetCollectionByID(ctx context.Context, id string) (Collection, error)
+	GetCollectionBySiteAndSlug(ctx context.Context, arg GetCollectionBySiteAndSlugParams) (Collection, error)
 	GetComponentByID(ctx context.Context, id string) (Component, error)
 	GetComponentByName(ctx context.Context, arg GetComponentByNameParams) (Component, error)
 	GetConsentByID(ctx context.Context, arg GetConsentByIDParams) (ConsentRecord, error)
@@ -146,6 +153,8 @@ type Querier interface {
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
 	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
 	GetInviteByToken(ctx context.Context, token string) (Invite, error)
+	GetItemByCollectionLocaleSlug(ctx context.Context, arg GetItemByCollectionLocaleSlugParams) (CollectionItem, error)
+	GetItemByID(ctx context.Context, id string) (CollectionItem, error)
 	GetKnowledgebaseByID(ctx context.Context, id string) (KnowledgebaseEntry, error)
 	GetMaxSchemaVersion(ctx context.Context) (interface{}, error)
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
@@ -176,6 +185,7 @@ type Querier interface {
 	ListActiveKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
 	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
+	ListAllPublishedItemsBySite(ctx context.Context, siteID string) ([]CollectionItem, error)
 	// Allowed scripts
 	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
 	ListAuditLogByResource(ctx context.Context, arg ListAuditLogByResourceParams) ([]AuditLog, error)
@@ -191,6 +201,7 @@ type Querier interface {
 	// agent context Build.
 	ListBlocksBySite(ctx context.Context, siteID string) ([]ListBlocksBySiteRow, error)
 	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
+	ListCollectionsBySite(ctx context.Context, siteID string) ([]Collection, error)
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
 	// No method filter. Caller passes method='' or omits filtering. Splitting
 	// this from ListConsentBySiteByMethod avoids sqlc generating positional
@@ -215,7 +226,9 @@ type Querier interface {
 	ListGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	ListGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
 	ListIdentifiedSessions(ctx context.Context, arg ListIdentifiedSessionsParams) ([]VisitSession, error)
+	ListItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
 	ListKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
+	ListLocalesByCollection(ctx context.Context, collectionID string) ([]string, error)
 	ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error)
 	ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error)
 	ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error)
@@ -223,6 +236,8 @@ type Querier interface {
 	ListMediaInFolderPaginated(ctx context.Context, arg ListMediaInFolderPaginatedParams) ([]Medium, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
+	ListPublishedItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
+	ListPublishedItemsByCollectionAndLocale(ctx context.Context, arg ListPublishedItemsByCollectionAndLocaleParams) ([]CollectionItem, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListRecentDeploymentsBySite(ctx context.Context, arg ListRecentDeploymentsBySiteParams) ([]Deployment, error)
 	ListRedirectsBySite(ctx context.Context, siteID string) ([]Redirect, error)
@@ -279,6 +294,7 @@ type Querier interface {
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error
 	UpdateBlockOrder(ctx context.Context, arg UpdateBlockOrderParams) error
 	UpdateCSSClass(ctx context.Context, arg UpdateCSSClassParams) error
+	UpdateCollection(ctx context.Context, arg UpdateCollectionParams) error
 	UpdateComponent(ctx context.Context, arg UpdateComponentParams) error
 	UpdateDeployTarget(ctx context.Context, arg UpdateDeployTargetParams) error
 	UpdateDeploymentDeployed(ctx context.Context, arg UpdateDeploymentDeployedParams) error
@@ -289,6 +305,7 @@ type Querier interface {
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error
 	UpdateGuardrail(ctx context.Context, arg UpdateGuardrailParams) error
+	UpdateItem(ctx context.Context, arg UpdateItemParams) error
 	UpdateKnowledgebaseEntry(ctx context.Context, arg UpdateKnowledgebaseEntryParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) error
 	UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderParams) error

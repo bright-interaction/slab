@@ -788,6 +788,11 @@ func (s *Server) registerTools() {
 	// plus get_capabilities live in tools_extra.go to keep this file
 	// focused on the original page/block + build/eval flow.
 	s.registerExtraTools()
+
+	// AI-native Custom Collections (Sprint 4, 2026-05-04). 9 tools
+	// for Collection + item CRUD plus bulk import. Lives in
+	// tools_collections.go.
+	s.registerCollectionTools()
 }
 
 // --- helpers (shared across tool handlers) -------------------------------

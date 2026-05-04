@@ -52,6 +52,33 @@ type Block struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type Collection struct {
+	ID           string `json:"id"`
+	SiteID       string `json:"site_id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	SchemaJson   string `json:"schema_json"`
+	SettingsJson string `json:"settings_json"`
+	SortOrder    int64  `json:"sort_order"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type CollectionItem struct {
+	ID           string `json:"id"`
+	CollectionID string `json:"collection_id"`
+	SiteID       string `json:"site_id"`
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	DataJson     string `json:"data_json"`
+	Locale       string `json:"locale"`
+	Status       string `json:"status"`
+	PublishedAt  string `json:"published_at"`
+	SortOrder    int64  `json:"sort_order"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
 type Component struct {
 	ID          string `json:"id"`
 	SiteID      string `json:"site_id"`

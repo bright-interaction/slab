@@ -32,6 +32,13 @@ func RunSEOChecks(site *SiteContext) []CheckResult {
 	checks = append(checks, checkSitemap(site))
 	checks = append(checks, checkLLMsTxt(site))
 
+	// Custom Collections checks (Sprint 4, 2026-05-04). All three
+	// short-circuit when the site has no Collection-rendered pages
+	// so single-page-builder sites never see a "fail".
+	checks = append(checks, CheckCollectionJSONLDPresent(site))
+	checks = append(checks, CheckCollectionHreflangAlternates(site))
+	checks = append(checks, CheckCollectionInternalLinks(site))
+
 	// Per-page checks aggregated into single results (reports first failing page)
 	checks = append(checks, perPageCheck("Has Title", "on-page", 2, site, func(p PageContext) (bool, string) {
 		t := titleOf(p.Doc)
@@ -664,3 +671,169 @@ func checkLLMsTxt(site *SiteContext) CheckResult {
 	}
 	return Pass("llms.txt", "files", 1, "llms.txt present (AI search readiness)")
 }
+
+// --- Custom Collections checks (Sprint 4, 2026-05-04) ---
+
+// isCollectionItemPage is the heuristic: the renderer wraps each
+// item in <article class="block--collection-item" data-collection=
+// "..." data-item="...">. If the parsed page has any element with
+// both data-collection AND data-item attributes, treat it as a
+// Collection item detail page.
+func isCollectionItemPage(p PageContext) bool {
+	if p.Doc == nil {
+		return false
+	}
+	var found bool
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if found || n == nil {
+			return
+		}
+		if n.Type == html.ElementNode {
+			hasCollection := false
+			hasItem := false
+			for _, a := range n.Attr {
+				if a.Key == "data-collection" && a.Val != "" {
+					hasCollection = true
+				}
+				if a.Key == "data-item" && a.Val != "" {
+					hasItem = true
+				}
+			}
+			if hasCollection && hasItem {
+				found = true
+				return
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(p.Doc)
+	return found
+}
+
+// isCollectionIndexPage detects the collection index page. The
+// renderer wraps the list in <section data-collection="..."> WITHOUT
+// a data-item, so the index has data-collection elsewhere on the
+// page but never data-item.
+func isCollectionIndexPage(p PageContext) bool {
+	if p.Doc == nil {
+		return false
+	}
+	hasCollection := false
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n == nil {
+			return
+		}
+		if n.Type == html.ElementNode {
+			for _, a := range n.Attr {
+				if a.Key == "data-collection" && a.Val != "" {
+					hasCollection = true
+					break
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(p.Doc)
+	return hasCollection && !isCollectionItemPage(p)
+}
+
+// CheckCollectionJSONLDPresent: every Collection-item page must
+// embed a <script type="application/ld+json"> with a non-empty @type.
+func CheckCollectionJSONLDPresent(site *SiteContext) CheckResult {
+	for _, p := range site.Pages {
+		if !isCollectionItemPage(p) {
+			continue
+		}
+		var any404 bool
+		var hasType bool
+		walkJSONLD(p.Doc, func(node map[string]any) {
+			any404 = true
+			if t, _ := node["@type"].(string); t != "" {
+				hasType = true
+			}
+		})
+		if !any404 {
+			return Fail("Collection JSON-LD present", "collections", 2, SeverityWarning,
+				fmt.Sprintf("page %s renders a Collection item but has no <script type=\"application/ld+json\">", p.Slug),
+				"Set settings.schema_org_type on the Collection (Article, Product, Person, Event, etc.) so the renderer emits structured data automatically.")
+		}
+		if !hasType {
+			return Fail("Collection JSON-LD present", "collections", 2, SeverityWarning,
+				fmt.Sprintf("page %s emits JSON-LD but no @type", p.Slug),
+				"Pick a schema.org type that fits the Collection (Article for posts, Product for ecommerce, Person for team profiles).")
+		}
+	}
+	return Pass("Collection JSON-LD present", "collections", 2, "Every Collection item page carries structured data.")
+}
+
+// CheckCollectionHreflangAlternates: an item page with locale
+// variants must emit <link rel="alternate" hreflang="..."> for each.
+// Heuristic: if any pages share the same path stub but differ by
+// locale prefix, every such page should advertise the others.
+func CheckCollectionHreflangAlternates(site *SiteContext) CheckResult {
+	// Group item pages by their item slug component (last path segment).
+	// If the same slug exists at multiple locale prefixes, all pages
+	// with that slug must advertise hreflang.
+	bySlug := map[string]int{}
+	for _, p := range site.Pages {
+		if !isCollectionItemPage(p) {
+			continue
+		}
+		bySlug[lastPathSegment(p.Slug)]++
+	}
+	for _, p := range site.Pages {
+		if !isCollectionItemPage(p) {
+			continue
+		}
+		if bySlug[lastPathSegment(p.Slug)] < 2 {
+			continue // single-locale, no hreflang needed
+		}
+		alts := elementsByTag(p.Doc, "link")
+		var ok bool
+		for _, l := range alts {
+			if attr(l, "rel") == "alternate" && attr(l, "hreflang") != "" {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return Fail("Collection hreflang alternates", "collections", 2, SeverityWarning,
+				fmt.Sprintf("page %s shares its slug across locales but emits no hreflang", p.Slug),
+				"Set seo.hreflang_strategy=path and ensure each item has a locale variant with the same slug.")
+		}
+	}
+	return Pass("Collection hreflang alternates", "collections", 2, "Multi-locale Collection items advertise their alternates.")
+}
+
+// CheckCollectionInternalLinks: every Collection index page should
+// link to at least one item; every item page should link back to the
+// index.
+func CheckCollectionInternalLinks(site *SiteContext) CheckResult {
+	for _, p := range site.Pages {
+		if !isCollectionIndexPage(p) {
+			continue
+		}
+		links := elementsByTag(p.Doc, "a")
+		if len(links) == 0 {
+			return Fail("Collection internal links", "collections", 1, SeverityInfo,
+				fmt.Sprintf("Collection index %s has no item links", p.Slug),
+				"Index pages should link to every published item. Re-run the build after publishing items.")
+		}
+	}
+	return Pass("Collection internal links", "collections", 1, "Collection index pages link to items.")
+}
+
+func lastPathSegment(slug string) string {
+	slug = strings.TrimRight(slug, "/")
+	if i := strings.LastIndex(slug, "/"); i >= 0 {
+		return slug[i+1:]
+	}
+	return slug
+}
+

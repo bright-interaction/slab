@@ -380,6 +380,24 @@ func (s *Server) Router() http.Handler {
 		siteR.Patch("/api/sites/{siteID}/knowledgebase/{entryID}", kbh.Update)
 		siteR.Delete("/api/sites/{siteID}/knowledgebase/{entryID}", kbh.Delete)
 
+		// Custom Collections (Sprint 4, 2026-05-04). True CMS layer:
+		// schema definition + items + bulk import. Items render as
+		// pages or feed collection_list blocks. Schema validation,
+		// cross-tenant guard, AuditLog all mirror the knowledgebase
+		// pattern.
+		colH := handlers.NewCollectionHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/collections", colH.ListCollections)
+		siteR.Post("/api/sites/{siteID}/collections", colH.CreateCollection)
+		siteR.Get("/api/sites/{siteID}/collections/{collectionID}", colH.GetCollection)
+		siteR.Patch("/api/sites/{siteID}/collections/{collectionID}", colH.UpdateCollection)
+		siteR.Delete("/api/sites/{siteID}/collections/{collectionID}", colH.DeleteCollection)
+		siteR.Get("/api/sites/{siteID}/collections/{collectionID}/items", colH.ListItems)
+		siteR.Post("/api/sites/{siteID}/collections/{collectionID}/items", colH.CreateItem)
+		siteR.Post("/api/sites/{siteID}/collections/{collectionID}/items/import", colH.BulkImport)
+		siteR.Get("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.GetItem)
+		siteR.Patch("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.UpdateItem)
+		siteR.Delete("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.DeleteItem)
+
 		// Components
 		ch := handlers.NewComponentHandler(s.cfg, s.queries)
 		siteR.Get("/api/sites/{siteID}/components", ch.List)

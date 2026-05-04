@@ -144,6 +144,13 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		mediaByID := loadBlockMedia(ctx, queries, blocks)
 		pageCtx.mediaByID = mediaByID
 
+		// Sprint 4 (2026-05-04): pre-resolve any collection_list blocks
+		// by querying their Collection's published items and stuffing
+		// them into the block's data_json under "_resolved_items".
+		// Keeps renderDataBlock's signature stable while letting the
+		// renderer access live data.
+		resolveCollectionListBlocks(ctx, queries, site, blocks)
+
 		content := renderPageWithContext(page, blocks, componentNames, pageCtx)
 		pagePath := slugToFilePath(page.Slug, wsDir)
 
@@ -414,6 +421,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderImageBlock(data, mediaByID)
 	case "quote":
 		return renderQuoteBlock(data)
+	case "collection_list":
+		return renderCollectionListBlock(data, mediaByID)
 	default:
 		return renderGenericBlock(blockType, data)
 	}
