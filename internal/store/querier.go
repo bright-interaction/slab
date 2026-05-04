@@ -63,6 +63,7 @@ type Querier interface {
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
 	CreateMediaFolder(ctx context.Context, arg CreateMediaFolderParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
+	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
 	CreateSilo(ctx context.Context, arg CreateSiloParams) error
 	CreateSite(ctx context.Context, arg CreateSiteParams) error
@@ -139,10 +140,12 @@ type Querier interface {
 	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
 	GetInviteByToken(ctx context.Context, token string) (Invite, error)
 	GetKnowledgebaseByID(ctx context.Context, id string) (KnowledgebaseEntry, error)
+	GetMaxSchemaVersion(ctx context.Context) (interface{}, error)
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
 	GetMediaFolder(ctx context.Context, arg GetMediaFolderParams) (MediaFolder, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
+	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
 	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
 	GetSessionByFingerprint(ctx context.Context, arg GetSessionByFingerprintParams) (VisitSession, error)
 	GetSetting(ctx context.Context, arg GetSettingParams) (SiteSetting, error)
@@ -215,6 +218,7 @@ type Querier interface {
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListRecentDeploymentsBySite(ctx context.Context, arg ListRecentDeploymentsBySiteParams) ([]Deployment, error)
 	ListRedirectsBySite(ctx context.Context, siteID string) ([]Redirect, error)
+	ListSchemaVersions(ctx context.Context) ([]SchemaVersion, error)
 	ListSettingsByCategory(ctx context.Context, arg ListSettingsByCategoryParams) ([]SiteSetting, error)
 	ListSettingsBySite(ctx context.Context, siteID string) ([]SiteSetting, error)
 	// Silos
@@ -227,12 +231,15 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
 	MarkInviteUsed(ctx context.Context, id string) error
+	MarkPasswordResetUsed(ctx context.Context, id string) error
 	// Pageviews per UTC day for the requested window. Returned as ISO-date
 	// buckets so the frontend can render a sparkline / bar chart directly.
 	PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error)
 	// Pageviews per UTC hour for the last day window. Used when range = 1d.
 	PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error)
+	PurgeExpiredPasswordResets(ctx context.Context) error
 	RecordConsent(ctx context.Context, arg RecordConsentParams) error
+	RecordSchemaVersion(ctx context.Context, arg RecordSchemaVersionParams) error
 	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	RemoveSiteMember(ctx context.Context, arg RemoveSiteMemberParams) error

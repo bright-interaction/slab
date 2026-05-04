@@ -18,9 +18,14 @@ type AuthHandler struct {
 	queries *store.Queries
 	// loginLimiter throttles failed logins per (email, ip). Closes audit
 	// finding H3. Configured at NewAuthHandler with 5 failures / 15min
-	// lockout — defeats both single-account brute force and credential
+	// lockout , defeats both single-account brute force and credential
 	// spray from one host.
 	loginLimiter *loginRateLimiter
+	// MailSender is the optional integration that delivers password-
+	// reset links via email. nil means "log the link to slog so an
+	// operator can deliver it manually" , appropriate for self-host
+	// single-admin deployments where setting up SMTP is overkill.
+	MailSender MailSender
 }
 
 func NewAuthHandler(cfg *config.Config, queries *store.Queries) *AuthHandler {

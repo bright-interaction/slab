@@ -48,3 +48,27 @@ export function inviteInfo(token: string): Promise<InviteInfo> {
 export function redeemInvite(token: string, name: string, password: string): Promise<AuthResponse> {
 	return apiPost<AuthResponse>(`/auth/signup/${token}`, { name, password });
 }
+
+// Forgot-password flow. Always returns 200 (the bare ack defeats
+// account enumeration). Operator log surfaces the link when no
+// MailSender is wired.
+export interface ForgotPasswordResponse {
+	status: string;
+	message?: string;
+}
+
+export function forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+	return apiPost<ForgotPasswordResponse>('/auth/forgot-password', { email });
+}
+
+export interface ResetTokenInfo {
+	email: string; // masked, e.g. a***@example.com
+}
+
+export function resetPasswordInfo(token: string): Promise<ResetTokenInfo> {
+	return apiGet<ResetTokenInfo>(`/auth/reset-password/${token}`);
+}
+
+export function resetPassword(token: string, password: string): Promise<StatusResponse> {
+	return apiPost<StatusResponse>(`/auth/reset-password/${token}`, { password });
+}

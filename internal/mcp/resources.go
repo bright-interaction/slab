@@ -97,6 +97,15 @@ func (s *Server) registerResources() {
 			return mustJSON(c.Structure), nil
 		},
 	})
+
+	// Curriculum (atomicsite://knowledge/*) and service-context
+	// resources (atomicsite://eval/*, build/history, deploy/status,
+	// domains, members, knowledgebase, consent/stats, retention/status,
+	// integrations, design-references, meta/capabilities) live in
+	// dedicated files so this one stays focused on the original
+	// site-shape resources.
+	s.registerKnowledgeResources()
+	s.registerServiceContextResources()
 }
 
 // errResourceNotFound is returned when a Reader can't resolve its URI to

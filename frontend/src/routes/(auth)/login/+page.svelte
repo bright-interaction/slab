@@ -64,5 +64,11 @@
 		<Button type="submit" variant="primary" {loading} disabled={loading} class="w-full">
 			{loading ? 'Signing in.' : 'Sign in'}
 		</Button>
+
+		<p class="text-center text-[12px] text-text-muted">
+			<a href="/forgot-password" class="text-accent underline-offset-2 hover:underline">
+				Forgot password?
+			</a>
+		</p>
 	</form>
 </div>

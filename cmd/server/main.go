@@ -344,6 +344,20 @@ func applySchema(sqlDB *sql.DB) error {
 		SELECT id, 'brand', 1 FROM sites`); err != nil {
 		return fmt.Errorf("seed brand folder: %w", err)
 	}
+	// Record schema version so the operator (and the /api/admin/metrics
+	// endpoint) can answer "what migration set is this DB at?" with a
+	// single query. The version equals len(migrations) , every additional
+	// entry in the migrations slice bumps it. INSERT OR IGNORE keeps the
+	// statement idempotent across reboots.
+	migVersion := len(migrations)
+	if _, err := sqlDB.Exec(
+		`INSERT OR IGNORE INTO schema_versions (version, note) VALUES (?, ?)`,
+		migVersion, fmt.Sprintf("applied %d column migrations", migVersion),
+	); err != nil {
+		// Non-fatal: tracking row failure mustn't break startup, but
+		// surface it loudly so an operator notices the gap.
+		slog.Warn("schema_versions: record version failed (non-fatal)", "version", migVersion, "err", err)
+	}
 	return nil
 }
 
@@ -414,7 +428,7 @@ func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 	if password == "" {
 		// Reached only in local dev (Validate would have refused otherwise).
 		password = config.DefaultAdminPassword
-		slog.Warn("seeded admin with documented default password — local dev only", "email", email)
+		slog.Warn("seeded admin with documented default password , local dev only", "email", email)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
