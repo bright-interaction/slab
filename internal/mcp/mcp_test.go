@@ -155,3 +155,216 @@ func TestAgentWritableCategories(t *testing.T) {
 		t.Error("allowed-scripts must NOT be agent-writable (CSP widens attack surface)")
 	}
 }
+
+// --- expansion guards (knowledge curriculum, service context, write tools) ---
+
+// TestKnowledgeResourcesRegistered asserts every doc in
+// internal/knowledge has a matching atomicsite://knowledge/<slug>
+// resource, plus the catalog index. This is the expansion that turns
+// the agent into an Astro + TS + custom-CSS + UX/UI expert; if any
+// curriculum doc is missing, the agent is missing a chunk of its
+// training material.
+func TestKnowledgeResourcesRegistered(t *testing.T) {
+	s := &Server{
+		tools:     map[string]Tool{},
+		resources: map[string]Resource{},
+		prompts:   map[string]Prompt{},
+	}
+	s.registerTools()
+	s.registerResources()
+	s.registerPrompts()
+
+	if _, ok := s.resources["atomicsite://knowledge/index"]; !ok {
+		t.Error("atomicsite://knowledge/index resource missing")
+	}
+
+	requiredKnowledgeSlugs := []string{
+		// stack curriculum
+		"astro-conventions",
+		"typescript-strict",
+		"css-variable-system",
+		"block-renderer-patterns",
+		"i18n-authoring",
+		"security-authoring",
+		"personalization",
+		"cookieproof-integration",
+		// ux curriculum
+		"typography-scale",
+		"color-system",
+		"spacing-rhythm",
+		"motion-curves",
+		"accessibility-patterns",
+		"performance-budgets",
+		"forms-ux",
+		"nav-ux",
+		"dark-mode",
+		"premium-design-principles",
+	}
+	for _, slug := range requiredKnowledgeSlugs {
+		uri := "atomicsite://knowledge/" + slug
+		if _, ok := s.resources[uri]; !ok {
+			t.Errorf("knowledge resource %q missing; check internal/knowledge/embed.go docMetadataTable", uri)
+		}
+	}
+}
+
+// TestServiceContextResourcesRegistered asserts the service-context
+// resources that let the agent reason about whole-site state are wired.
+func TestServiceContextResourcesRegistered(t *testing.T) {
+	s := &Server{
+		tools:     map[string]Tool{},
+		resources: map[string]Resource{},
+		prompts:   map[string]Prompt{},
+	}
+	s.registerTools()
+	s.registerResources()
+	s.registerPrompts()
+
+	required := []string{
+		"atomicsite://eval/latest",
+		"atomicsite://build/history",
+		"atomicsite://deploy/status",
+		"atomicsite://domains",
+		"atomicsite://members",
+		"atomicsite://knowledgebase",
+		"atomicsite://consent/stats",
+		"atomicsite://retention/status",
+		"atomicsite://integrations",
+		"atomicsite://design-references",
+		"atomicsite://meta/capabilities",
+	}
+	for _, uri := range required {
+		if _, ok := s.resources[uri]; !ok {
+			t.Errorf("service-context resource %q missing", uri)
+		}
+	}
+}
+
+// TestExtraWriteToolsRegistered asserts the operator-mutable tools are
+// wired and correctly flagged as RequiresWrite. Read-only listers stay
+// callable by any active key; write tools must gate on the capability.
+func TestExtraWriteToolsRegistered(t *testing.T) {
+	s := &Server{
+		tools:     map[string]Tool{},
+		resources: map[string]Resource{},
+		prompts:   map[string]Prompt{},
+	}
+	s.registerTools()
+	s.registerResources()
+	s.registerPrompts()
+
+	readOnly := []string{
+		"list_components",
+		"list_css_classes",
+		"list_knowledgebase",
+		"list_guardrails",
+		"list_allowed_scripts",
+		"list_fonts",
+		"list_design_references",
+		"get_capabilities",
+	}
+	for _, name := range readOnly {
+		tool, ok := s.tools[name]
+		if !ok {
+			t.Errorf("read-only tool %q missing", name)
+			continue
+		}
+		if tool.RequiresWrite {
+			t.Errorf("tool %q marked RequiresWrite; should be readable by any active key", name)
+		}
+	}
+
+	writeTools := []string{
+		"create_component",
+		"update_component",
+		"delete_component",
+		"upsert_css_class",
+		"delete_css_class",
+		"create_knowledgebase_entry",
+		"update_knowledgebase_entry",
+		"delete_knowledgebase_entry",
+		"create_guardrail",
+		"delete_guardrail",
+		"register_allowed_script",
+		"revoke_allowed_script",
+		"delete_font",
+		"add_design_reference",
+		"delete_design_reference",
+	}
+	for _, name := range writeTools {
+		tool, ok := s.tools[name]
+		if !ok {
+			t.Errorf("write tool %q missing", name)
+			continue
+		}
+		if !tool.RequiresWrite {
+			t.Errorf("tool %q must be RequiresWrite=true; mutates site state", name)
+		}
+	}
+}
+
+// TestNewPromptsRegistered asserts the four expansion prompts ship.
+func TestNewPromptsRegistered(t *testing.T) {
+	s := &Server{
+		tools:     map[string]Tool{},
+		resources: map[string]Resource{},
+		prompts:   map[string]Prompt{},
+	}
+	s.registerTools()
+	s.registerResources()
+	s.registerPrompts()
+
+	required := []string{
+		"master_the_stack",
+		"audit_for_premium_feel",
+		"build_from_figma",
+		"learn_from_reference",
+	}
+	for _, name := range required {
+		if _, ok := s.prompts[name]; !ok {
+			t.Errorf("expansion prompt %q missing", name)
+		}
+	}
+}
+
+// TestPrivacyPostureExpansion is the negative-regression guard for the
+// expansion: even with the new write surfaces, no tool or resource may
+// expose visitor PII. The original TestPrivacyPosture catches "visitor"
+// and "session" substrings; this extends the check across every new
+// curriculum / service-context / write surface to be doubly sure.
+func TestPrivacyPostureExpansion(t *testing.T) {
+	s := &Server{
+		tools:     map[string]Tool{},
+		resources: map[string]Resource{},
+		prompts:   map[string]Prompt{},
+	}
+	s.registerTools()
+	s.registerResources()
+	s.registerPrompts()
+
+	bannedSubstrings := []string{
+		"visit_events",
+		"consent_records",
+		"fingerprint",
+		"visitor_id",
+		"session_metadata",
+		"identified_tier",
+	}
+
+	for name := range s.tools {
+		lower := strings.ToLower(name)
+		for _, banned := range bannedSubstrings {
+			if strings.Contains(lower, banned) {
+				t.Errorf("tool %q contains banned PII substring %q", name, banned)
+			}
+		}
+	}
+	for uri := range s.resources {
+		lower := strings.ToLower(uri)
+		for _, banned := range bannedSubstrings {
+			if strings.Contains(lower, banned) {
+				t.Errorf("resource %q contains banned PII substring %q", uri, banned)
+			}
+		}
+	}
+}

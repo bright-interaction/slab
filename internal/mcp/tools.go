@@ -782,6 +782,12 @@ func (s *Server) registerTools() {
 			return mustJSON(evals), nil
 		},
 	})
+
+	// Operator-mutable surfaces (components, css_classes, knowledgebase,
+	// guardrails, allowed_scripts, fonts read+delete, design_references)
+	// plus get_capabilities live in tools_extra.go to keep this file
+	// focused on the original page/block + build/eval flow.
+	s.registerExtraTools()
 }
 
 // --- helpers (shared across tool handlers) -------------------------------

@@ -142,4 +142,84 @@ Drive end-to-end now. Ask me only when you genuinely need a value (org-nr, socia
 			}, nil
 		},
 	})
+
+	register(Prompt{
+		Name:        "master_the_stack",
+		Description: "Walk the curriculum that turns you into an Atomic Site stack expert: Astro + TypeScript + the CSS-variable system + the 19 block types + i18n + security + personalization + cookieproof, plus the UX/UI discipline (typography, color, spacing, motion, accessibility, performance, forms, nav, dark mode, premium-design principles). Read each doc in atomicsite://knowledge/* in order, then return a confidence summary.",
+		Render: func(ctx context.Context, agent *authmw.AgentIdentity, _ map[string]string) ([]PromptMessage, error) {
+			return []PromptMessage{
+				{Role: "user", Content: Content{Type: "text", Text: `Become an expert on the Atomic Site stack and design discipline.
+
+Step 1. Read atomicsite://knowledge/index. It returns a catalog of every curriculum doc in two halves: stack (how the builder emits Astro + TypeScript + custom-CSS sites) and ux (the discipline that makes output feel premium).
+
+Step 2. Walk the stack docs in order: astro-conventions, typescript-strict, css-variable-system, block-renderer-patterns, i18n-authoring, security-authoring, personalization, cookieproof-integration. Read each via atomicsite://knowledge/<slug>. Take notes on what each teaches; do not just skim.
+
+Step 3. Walk the ux docs in order: typography-scale, color-system, spacing-rhythm, motion-curves, accessibility-patterns, performance-budgets, forms-ux, nav-ux, dark-mode, premium-design-principles. Same depth.
+
+Step 4. Read atomicsite://site/context to see the actual site you will be working on, and atomicsite://meta/capabilities to see exactly what tools and resources you have access to.
+
+Step 5. Summarise back to me in 8 to 12 bullet points: what the builder writes vs what you write, which CSS variables drive the visual system, what the privacy boundaries are, which tools you can call, and which UX disciplines you are now ready to apply. End with one specific next move you would propose for this site.`}},
+			}, nil
+		},
+	})
+
+	register(Prompt{
+		Name:        "audit_for_premium_feel",
+		Description: "Run a build, read the eval scores, then layer UX/UI heuristics on top: typography, color calibration, motion, dark-mode parity, premium-design principles. Propose specific block edits to lift the site from passable to premium.",
+		Render: func(ctx context.Context, agent *authmw.AgentIdentity, _ map[string]string) ([]PromptMessage, error) {
+			return []PromptMessage{
+				{Role: "user", Content: Content{Type: "text", Text: `Audit this site for premium feel and propose specific edits.
+
+Step 1. Trigger a build via the trigger_build tool. Wait for it to complete via get_build_status.
+
+Step 2. Read atomicsite://eval/latest to see the per-category scores. Note any check failing under the 90% threshold.
+
+Step 3. Read these UX curriculum docs to layer heuristics on top of the eval rubric: atomicsite://knowledge/typography-scale, color-system, spacing-rhythm, motion-curves, premium-design-principles.
+
+Step 4. Walk every page (list_pages then list_blocks per page). For each block, evaluate against the heuristics: is the type-scale contrast strong enough? Is whitespace generous? Are colors calibrated? Is motion present and disciplined? Is the asymmetry intentional?
+
+Step 5. Produce a punch list: per-block before/after. Cite the specific knowledge doc that motivates each change. Do not auto-apply; show me the list and wait for sign-off.`}},
+			}, nil
+		},
+	})
+
+	register(Prompt{
+		Name:        "build_from_figma",
+		Description: "Use a Figma file as the design reference for the site: import tokens (colors, typography), seed CSS classes from the file, then build the first page using the imported palette and fonts. The agent never sees the access token; the user pastes it directly to the admin Figma import flow.",
+		Render: func(ctx context.Context, agent *authmw.AgentIdentity, _ map[string]string) ([]PromptMessage, error) {
+			return []PromptMessage{
+				{Role: "user", Content: Content{Type: "text", Text: `Build this site using a Figma file as the design reference.
+
+Step 1. Ask me for the Figma file URL.
+
+Step 2. Direct me to the admin Figma import page (Settings -> Design -> Figma import). I paste the URL plus a personal access token there; the import handler fetches the file once, seeds CSS classes for every published color and text style, and updates branding's primary color and fonts. The token is never persisted and never flows through MCP.
+
+Step 3. Once I confirm the import completed, read atomicsite://site/context to pick up the new branding tokens, list_css_classes to see the seeded classes, and list_fonts to see the new font families.
+
+Step 4. Walk the UX curriculum docs that govern composition: atomicsite://knowledge/typography-scale, color-system, premium-design-principles.
+
+Step 5. Propose a homepage composition using the imported tokens: hero with the brand primary, typography scaled correctly for the new font family, calibrated whitespace. Show me the block list before creating any blocks.`}},
+			}, nil
+		},
+	})
+
+	register(Prompt{
+		Name:        "learn_from_reference",
+		Description: "Register a public GitHub repo as a design reference (taste-skill, high-end-visual-design, custom), read its README and tailwind config, extract patterns, then apply them to the site without copying code.",
+		Render: func(ctx context.Context, agent *authmw.AgentIdentity, _ map[string]string) ([]PromptMessage, error) {
+			return []PromptMessage{
+				{Role: "user", Content: Content{Type: "text", Text: `Learn from a public GitHub design reference and apply its principles to this site.
+
+Step 1. Ask me for the GitHub URL of the reference repo (e.g. taste-skill, a component library, an agency portfolio I admire).
+
+Step 2. Call add_design_reference with the URL. Then call refresh_design_reference with the returned id so the handler fetches a representative bundle: README, tailwind config, sample components.
+
+Step 3. Read atomicsite://design-references and find the entry. The fetched_json field carries the bundle. Read each file: what colors does the reference use? What type-scale? What spacing? What component patterns?
+
+Step 4. Walk these UX docs to filter what to copy vs what to leave: atomicsite://knowledge/premium-design-principles, color-system, typography-scale. Reference taste, do not imitate the surface.
+
+Step 5. Propose a list of patterns to apply: which CSS classes to add (upsert_css_class), which knowledgebase entries to write (create_knowledgebase_entry to capture brand voice notes), which blocks to refactor. Show me the list and the citation for each ("from <reference repo>: <pattern>") before applying.`}},
+			}, nil
+		},
+	})
 }
