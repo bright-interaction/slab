@@ -2,10 +2,16 @@ package mcp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	authmw "github.com/bright-interaction/slab/internal/middleware"
@@ -735,4 +741,154 @@ func (s *Server) registerExtraTools() {
 			return mustJSON(s.capabilitiesSnapshot(agent)), nil
 		},
 	})
+
+	// --- font upload (base64 JSON-RPC variant of the multipart REST handler) ---
+
+	register(Tool{
+		Name:        "upload_font",
+		Description: "Uploads a woff2 font as base64 data via JSON-RPC. The REST handler at POST /api/sites/{siteID}/fonts accepts multipart; this tool is the agent-friendly equivalent. Required: family_name (1-64 chars, letters/digits/spaces/hyphen/underscore), file_base64 (woff2 binary, max 2MB after decode). Optional: weight (100-900, default 400), style (normal|italic, default normal), original_name (display filename). Server validates the woff2 signature ('wOF2' magic at offset 0) before writing. UNIQUE per (site, family, weight, style); duplicate uploads return a clear error.",
+		InputSchema: schema(`{
+			"type":"object",
+			"properties":{
+				"family_name":{"type":"string"},
+				"file_base64":{"type":"string"},
+				"weight":{"type":"number"},
+				"style":{"type":"string","enum":["normal","italic"]},
+				"original_name":{"type":"string"}
+			},
+			"required":["family_name","file_base64"]
+		}`),
+		RequiresWrite: true,
+		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
+			if s.fontsDir == "" {
+				return "", errors.New("upload_font is not configured on this server (FontsDir unset); upload via the REST endpoint POST /api/sites/{siteID}/fonts instead")
+			}
+			var args struct {
+				FamilyName   string `json:"family_name"`
+				FileBase64   string `json:"file_base64"`
+				Weight       int64  `json:"weight"`
+				Style        string `json:"style"`
+				OriginalName string `json:"original_name"`
+			}
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+			args.FamilyName = strings.TrimSpace(args.FamilyName)
+			if !validFontFamilyName.MatchString(args.FamilyName) {
+				return "", errors.New("family_name must be 1 to 64 chars: letters, digits, spaces, hyphen, underscore")
+			}
+			if args.Weight == 0 {
+				args.Weight = 400
+			}
+			if args.Weight < 100 || args.Weight > 900 {
+				return "", errors.New("weight must be between 100 and 900")
+			}
+			if args.Style == "" {
+				args.Style = "normal"
+			}
+			if args.Style != "normal" && args.Style != "italic" {
+				return "", errors.New("style must be normal or italic")
+			}
+			body, err := base64.StdEncoding.DecodeString(args.FileBase64)
+			if err != nil {
+				return "", fmt.Errorf("file_base64 is not valid base64: %v", err)
+			}
+			if len(body) > fontUploadMaxBytes {
+				return "", fmt.Errorf("font exceeds %d byte cap (got %d)", fontUploadMaxBytes, len(body))
+			}
+			if len(body) < 4 || string(body[:4]) != "wOF2" {
+				return "", errors.New("only woff2 fonts are accepted (signature 'wOF2' at offset 0)")
+			}
+			id := newFontIDForMCP()
+			siteFontsDir := filepath.Join(s.fontsDir, agent.SiteID)
+			if err := os.MkdirAll(siteFontsDir, 0o755); err != nil {
+				return "", fmt.Errorf("failed to prepare fonts directory: %v", err)
+			}
+			outPath := filepath.Join(siteFontsDir, id+".woff2")
+			if err := os.WriteFile(outPath, body, 0o644); err != nil {
+				return "", fmt.Errorf("failed to write font file: %v", err)
+			}
+			if err := s.queries.CreateSiteFont(ctx, store.CreateSiteFontParams{
+				ID:           id,
+				SiteID:       agent.SiteID,
+				FamilyName:   args.FamilyName,
+				Weight:       args.Weight,
+				Style:        args.Style,
+				FilePath:     outPath,
+				FileSize:     int64(len(body)),
+				OriginalName: cleanFontFilename(args.OriginalName),
+			}); err != nil {
+				_ = os.Remove(outPath)
+				if strings.Contains(err.Error(), "UNIQUE") {
+					return "", errors.New("a font with this family / weight / style already exists for this site")
+				}
+				return "", fmt.Errorf("failed to record font: %v", err)
+			}
+			return mustJSON(map[string]any{
+				"id":          id,
+				"family_name": args.FamilyName,
+				"weight":      args.Weight,
+				"style":       args.Style,
+				"size":        len(body),
+				"status":      "uploaded",
+			}), nil
+		},
+	})
+
+	// --- figma import: tool returns admin URL + instructions ---
+
+	register(Tool{
+		Name:        "get_figma_import_url",
+		Description: "Returns the admin URL where the user pastes a Figma file URL + personal access token to import design tokens. The agent does NOT receive the access token through MCP (security: tokens stay between user and server). Use this in the build_from_figma flow: call this tool, present the URL + instructions to the user, wait for them to confirm import completed, then read atomicsite://site/context to pick up the new branding tokens and atomicsite://figma/imports for the import record.",
+		InputSchema: schema(`{"type":"object","properties":{}}`),
+		Handler: func(_ context.Context, agent *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
+			base := strings.TrimRight(s.baseURL, "/")
+			if base == "" {
+				base = "(BASE_URL not configured; use admin host)"
+			}
+			adminPath := fmt.Sprintf("/sites/%s/settings/design", agent.SiteID)
+			return mustJSON(map[string]any{
+				"admin_url": base + adminPath,
+				"instructions": []string{
+					"1. Open the admin URL above in your browser.",
+					"2. Find the Figma section under Design Settings.",
+					"3. Paste your Figma file URL (https://www.figma.com/design/<key>/...).",
+					"4. Paste a Figma personal access token (figd_... or figpat_...). The token is used once to fetch the file and is NEVER persisted server-side.",
+					"5. Click Import. The handler seeds CSS classes per published color + text style, updates branding's primary color, and updates font_heading + font_body to the most-likely brand fonts.",
+					"6. After confirmation, call get_site_context to pick up the new tokens, list_css_classes to see the seeded classes, and list_fonts to see the new families.",
+				},
+				"why_not_a_direct_tool": "Pasting the Figma access token through MCP would route it through the AI host's transcript, which is logged by some hosts and visible in conversation context. Keeping the token in the user's browser session is the safer pattern.",
+			}), nil
+		},
+	})
+}
+
+// validFontFamilyName mirrors handlers.validFamilyName: 1 to 64 chars,
+// letters / digits / spaces / hyphen / underscore. Duplicated here
+// (tiny regex; not worth a shared package) so MCP stays decoupled from
+// handlers internals.
+var validFontFamilyName = regexp.MustCompile(`^[A-Za-z0-9 _-]{1,64}$`)
+
+// fontUploadMaxBytes mirrors handlers.fontUploadMaxBytes (2 MB).
+const fontUploadMaxBytes = 2 << 20
+
+// newFontIDForMCP mirrors handlers.newFontID. Distinct name to avoid a
+// rename conflict if both files import.
+func newFontIDForMCP() string {
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// cleanFontFilename trims and strips path separators from
+// agent-supplied filenames before they hit the database. Mirrors the
+// behaviour of handlers.cleanFilename without taking a dependency.
+func cleanFontFilename(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.ReplaceAll(name, "/", "")
+	name = strings.ReplaceAll(name, "\\", "")
+	if len(name) > 128 {
+		name = name[:128]
+	}
+	return name
 }

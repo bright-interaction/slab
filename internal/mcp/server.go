@@ -34,9 +34,34 @@ type Server struct {
 	context *agent.ContextBuilder
 	builds  BuildTrigger
 
+	// fontsDir is the on-disk root the upload_font tool writes woff2
+	// files to, mirroring the FontsHandler's storage path. Optional;
+	// when empty, upload_font returns a not-configured error so unit
+	// tests can construct Servers without filesystem coupling.
+	fontsDir string
+
+	// baseURL is the admin's external base URL, used by tools that
+	// need to point users at admin pages (e.g. get_figma_import_url
+	// returns BaseURL + /sites/{siteID}/settings/design/figma).
+	baseURL string
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
+}
+
+// WithFontsDir configures the on-disk root for woff2 uploads. Call once
+// after NewServer with the same value handlers use (cfg.FontsDir).
+func (s *Server) WithFontsDir(dir string) *Server {
+	s.fontsDir = dir
+	return s
+}
+
+// WithBaseURL configures the admin base URL used by tools that need to
+// link the user back to the admin (e.g. Figma import).
+func (s *Server) WithBaseURL(u string) *Server {
+	s.baseURL = u
+	return s
 }
 
 // NewServer constructs an MCP server with every registered tool /
