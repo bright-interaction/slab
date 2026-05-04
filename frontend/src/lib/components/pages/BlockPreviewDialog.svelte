@@ -28,8 +28,8 @@
 	});
 </script>
 
-<Dialog bind:open title="Live preview" description="Block-only render. Header and footer appear on the full page." size="lg">
-	<div class="min-h-[200px]">
+<Dialog bind:open title="Live preview" description="Block-only render at desktop width. Header and footer render on the full page." size="xl">
+	<div class="min-h-[60vh]">
 		{#if mounted}
 			<BlockPreview {siteID} {pageID} {blockID} {blockType} {dataJson} />
 		{/if}
