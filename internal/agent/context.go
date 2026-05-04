@@ -28,6 +28,12 @@ type SiteContext struct {
 	Knowledgebase    []KBEntry             `json:"knowledgebase"`
 	Components       []ComponentInfo       `json:"components"`
 	CSSClasses       []CSSClassInfo        `json:"css_classes"`
+	// Collections lists every Custom Collection (custom content type)
+	// the agent can read or write via the *_collection / *_collection_item
+	// MCP tools. Schema describes field shape; item_count + locales help
+	// the agent decide whether bulk-import or per-item create is the
+	// right path.
+	Collections []CollectionInfo `json:"collections"`
 	Constraints      Constraints           `json:"constraints"`
 	Architecture     ArchitectureInfo      `json:"architecture"`
 	DesignReferences []DesignReferenceInfo `json:"design_references"`
@@ -799,6 +805,22 @@ type CSSClassInfo struct {
 	UsageNote string `json:"usage_note"`
 }
 
+// CollectionInfo summarises one Custom Collection for the agent
+// context. Sprint 4 (2026-05-04). The agent uses this to author
+// items via the bulk_import_collection_items MCP tool without a
+// separate round-trip to /api/sites/{id}/collections.
+type CollectionInfo struct {
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	Schema        any            `json:"schema"`
+	Settings      map[string]any `json:"settings"`
+	ItemCount     int64          `json:"item_count"`
+	Locales       []string       `json:"locales"`
+	SchemaOrgType string         `json:"schema_org_type,omitempty"`
+	RenderAsPages bool           `json:"render_as_pages"`
+}
+
 type Constraints struct {
 	AllowedBlockTypes  []string `json:"allowed_block_types"`
 	ForbiddenPatterns  []string `json:"forbidden_patterns"`
@@ -942,6 +964,35 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		})
 	}
 
+	// Sprint 4 (2026-05-04): Custom Collections summary.
+	var collectionInfos []CollectionInfo
+	if cols, err := b.queries.ListCollectionsBySite(ctx, siteID); err == nil {
+		for _, c := range cols {
+			var schema any
+			_ = json.Unmarshal([]byte(c.SchemaJson), &schema)
+			var settings map[string]any
+			_ = json.Unmarshal([]byte(c.SettingsJson), &settings)
+			if settings == nil {
+				settings = map[string]any{}
+			}
+			itemCount, _ := b.queries.CountItemsByCollection(ctx, c.ID)
+			locales, _ := b.queries.ListLocalesByCollection(ctx, c.ID)
+			schemaOrgType, _ := settings["schema_org_type"].(string)
+			renderAsPages, _ := settings["render_as_pages"].(bool)
+			collectionInfos = append(collectionInfos, CollectionInfo{
+				ID:            c.ID,
+				Name:          c.Name,
+				Slug:          c.Slug,
+				Schema:        schema,
+				Settings:      settings,
+				ItemCount:     itemCount,
+				Locales:       locales,
+				SchemaOrgType: schemaOrgType,
+				RenderAsPages: renderAsPages,
+			})
+		}
+	}
+
 	constraints := b.buildConstraints(ctx, siteID)
 
 	// Design references: pull every saved GitHub bundle so the agent can
@@ -1020,6 +1071,7 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 		Knowledgebase:    kbInfos,
 		Components:       compInfos,
 		CSSClasses:       cssInfos,
+		Collections:      collectionInfos,
 		Constraints:      constraints,
 		Architecture:     archInfo,
 		DesignReferences: refInfos,
@@ -1048,11 +1100,14 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 			CatalogURI: "atomicsite://knowledge/index",
 			ReadingOrder: []string{
 				// Stack mastery first: how the builder emits Astro + TS + custom CSS,
-				// the block registry vocabulary, then the i18n / security / privacy boundaries.
+				// the block registry vocabulary, the Collection / schema-org layer
+				// added in Sprint 4, then the i18n / security / privacy boundaries.
 				"astro-conventions",
 				"typescript-strict",
 				"css-variable-system",
 				"block-renderer-patterns",
+				"collection-design-patterns",
+				"schema-org-per-collection-type",
 				"i18n-authoring",
 				"security-authoring",
 				"personalization",
