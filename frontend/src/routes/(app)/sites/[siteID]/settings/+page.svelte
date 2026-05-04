@@ -86,6 +86,12 @@
 			SettingsIcon
 		)}
 		{@render sectionCard(
+			`/sites/${siteID}/settings/agent`,
+			'Agent',
+			'Inventory of what an AI agent connected via MCP can see and do.',
+			Bot
+		)}
+		{@render sectionCard(
 			`/sites/${siteID}/settings/domains`,
 			'Domains',
 			'Custom hostnames, verification, TLS, canonical URL.',
