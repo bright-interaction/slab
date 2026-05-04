@@ -83,6 +83,14 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware(s.cfg))
+	// Global body-size cap. Sets an upper bound on every request body
+	// before any handler reads it, sized to cfg.MaxUploadSize so the
+	// JSON-API surface (which never legitimately needs more than a
+	// few MB) and the multipart-upload surface (which can hit the
+	// configured ceiling) share the same limit. Without this, a
+	// malicious client can POST gigabytes of JSON to /api/sites/...
+	// and exhaust the goroutine's memory before json.Decode finishes.
+	r.Use(jsonBodySizeMiddleware(s.cfg.MaxUploadSize))
 
 	// Health (public). Audit M4: probes real component status instead of
 	// returning a fixed `{status:ok}`. Kubernetes / Dockyard / external
@@ -225,6 +233,10 @@ func (s *Server) Router() http.Handler {
 				}
 				_ = json.NewEncoder(w).Encode(out)
 			})
+
+			// Audit log: workspace admin sees the global feed.
+			auditH := handlers.NewAuditHandler(s.queries)
+			r.Get("/api/admin/audit-log", auditH.GlobalFeed)
 		})
 
 		// Audit C1: every /api/sites/{siteID}/* route below must verify
@@ -234,6 +246,10 @@ func (s *Server) Router() http.Handler {
 		// non-siteID list/create/seed endpoints stay on plain `r`.
 		siteAccessMW := authmw.SiteAccessMiddleware(s.queries)
 		siteR := r.With(siteAccessMW)
+
+		// Per-site audit feed: any member with site access can read.
+		auditFeedH := handlers.NewAuditHandler(s.queries)
+		siteR.Get("/api/sites/{siteID}/audit-log", auditFeedH.SiteFeed)
 
 		// Sites
 		r.Get("/api/sites", sh.List)
@@ -366,6 +382,7 @@ func (s *Server) Router() http.Handler {
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries)
 		siteR.Post("/api/sites/{siteID}/build", buildH.TriggerBuildAdmin)
 		siteR.Get("/api/sites/{siteID}/builds/{buildID}/status", buildH.BuildStatusAdmin)
+		siteR.Post("/api/sites/{siteID}/builds/{buildID}/cancel", buildH.CancelBuild)
 		siteR.Post("/api/sites/{siteID}/deploy", buildH.Deploy)
 
 		// Deploy targets (admin)
@@ -743,3 +760,27 @@ func stripScheme(origin string) string {
 	return host
 }
 
+
+// jsonBodySizeMiddleware caps r.Body to maxBytes before any handler
+// reads it. Without this, a malicious client can POST gigabytes of
+// JSON and exhaust the goroutine's memory before json.Decoder hits a
+// natural error. http.MaxBytesReader emits a clean 413-style failure
+// at the decode site once the cap is exceeded.
+//
+// File-upload routes that need a higher cap call MaxBytesReader
+// themselves with a larger value, which overrides the wrap below
+// (the inner Read returns ErrBodyTooLarge once either limit hits).
+//
+// Small file like this lives next to the middleware it wraps for
+// discoverability. If we add a third middleware we'll split into
+// internal/server/middleware.go.
+func jsonBodySizeMiddleware(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil && r.ContentLength != 0 {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

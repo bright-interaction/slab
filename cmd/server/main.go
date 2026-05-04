@@ -3,15 +3,18 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -41,6 +44,12 @@ func main() {
 		switch os.Args[1] {
 		case "reset-password":
 			resetPasswordCLI(os.Args[2:])
+			return
+		case "backup-db":
+			backupDBCLI(os.Args[2:])
+			return
+		case "list-orphans":
+			listOrphansCLI(os.Args[2:])
 			return
 		}
 	}
@@ -536,4 +545,185 @@ func parseZoneMap(s string) map[string]string {
 		return nil
 	}
 	return out
+}
+
+// backupDBCLI is the `atomicsite backup-db [--output=PATH]` subcommand.
+// Uses SQLite's VACUUM INTO to take a WAL-consistent online snapshot
+// without locking writers, then optionally compresses with gzip.
+//
+// Why VACUUM INTO instead of cp /data/atomicsite.db: a hot copy of
+// the .db file can land mid-WAL-checkpoint and produce a corrupt
+// snapshot. VACUUM INTO acquires a read transaction, materialises a
+// page-by-page copy at the destination, and writes it consistently.
+// SQLite docs: https://sqlite.org/lang_vacuum.html#vacuuminto
+//
+// Usage:
+//   atomicsite backup-db                        # /data/backups/atomicsite-{ts}.db
+//   atomicsite backup-db --output=/path/file.db
+//   atomicsite backup-db --gzip                 # appends .gz, gzip stream
+//   atomicsite backup-db --output=/dev/stdout   # pipe to S3, B2, age, gpg
+func backupDBCLI(args []string) {
+	cfg := config.Load()
+
+	outPath := ""
+	gzipOut := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--gzip" || a == "-z":
+			gzipOut = true
+		case strings.HasPrefix(a, "--output="):
+			outPath = strings.TrimPrefix(a, "--output=")
+		case a == "--output" || a == "-o":
+			if i+1 >= len(args) {
+				fmt.Fprintln(os.Stderr, "--output requires a path")
+				os.Exit(2)
+			}
+			outPath = args[i+1]
+			i++
+		default:
+			fmt.Fprintf(os.Stderr, "unknown arg: %s\n", a)
+			os.Exit(2)
+		}
+	}
+
+	if outPath == "" {
+		ts := time.Now().UTC().Format("20060102T150405Z")
+		ext := ".db"
+		if gzipOut {
+			ext = ".db.gz"
+		}
+		outPath = filepath.Join(cfg.DataDir, "backups", "atomicsite-"+ts+ext)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "create backup dir:", err)
+		os.Exit(1)
+	}
+
+	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=10000")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "open db:", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+
+	if gzipOut {
+		// Two-phase: VACUUM INTO a tmp file, then stream-gzip it to the
+		// final destination. SQLite can't VACUUM INTO a stream, so the
+		// tmp file is unavoidable.
+		tmpPath := outPath + ".tmp"
+		defer os.Remove(tmpPath)
+		if _, err := sqlDB.Exec("VACUUM INTO ?", tmpPath); err != nil {
+			fmt.Fprintln(os.Stderr, "vacuum into:", err)
+			os.Exit(1)
+		}
+		src, err := os.Open(tmpPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "open tmp:", err)
+			os.Exit(1)
+		}
+		defer src.Close()
+		dst, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "open output:", err)
+			os.Exit(1)
+		}
+		defer dst.Close()
+		gz := gzip.NewWriter(dst)
+		if _, err := io.Copy(gz, src); err != nil {
+			fmt.Fprintln(os.Stderr, "gzip copy:", err)
+			os.Exit(1)
+		}
+		if err := gz.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, "gzip close:", err)
+			os.Exit(1)
+		}
+	} else {
+		if _, err := sqlDB.Exec("VACUUM INTO ?", outPath); err != nil {
+			fmt.Fprintln(os.Stderr, "vacuum into:", err)
+			os.Exit(1)
+		}
+	}
+
+	info, err := os.Stat(outPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "stat output:", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "backup ok: %s (%d bytes)\n", outPath, info.Size())
+}
+
+// listOrphansCLI is the `atomicsite list-orphans` subcommand. Walks
+// {DataDir}/workspaces/ and reports any directory whose siteID is no
+// longer in the sites table. Read-only; the retention manager actually
+// reaps these on its daily sweep, but operators want a one-shot
+// "what's eating disk right now?" view.
+//
+// Usage: atomicsite list-orphans
+func listOrphansCLI(args []string) {
+	if len(args) > 0 {
+		fmt.Fprintln(os.Stderr, "list-orphans takes no arguments")
+		os.Exit(2)
+	}
+	cfg := config.Load()
+	wsRoot := filepath.Join(cfg.DataDir, "workspaces")
+	entries, err := os.ReadDir(wsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintln(os.Stderr, "no workspaces dir at", wsRoot)
+			return
+		}
+		fmt.Fprintln(os.Stderr, "read workspaces:", err)
+		os.Exit(1)
+	}
+
+	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "open db:", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+	queries := store.New(sqlDB)
+	sites, err := queries.ListSites(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "list sites:", err)
+		os.Exit(1)
+	}
+	known := make(map[string]bool, len(sites))
+	for _, s := range sites {
+		known[s.ID] = true
+	}
+
+	var totalBytes int64
+	orphanCount := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		id := e.Name()
+		if known[id] {
+			continue
+		}
+		size := dirSizeBytes(filepath.Join(wsRoot, id))
+		totalBytes += size
+		orphanCount++
+		fmt.Printf("%s\t%d\t%s\n", id, size, filepath.Join(wsRoot, id))
+	}
+	fmt.Fprintf(os.Stderr, "%d orphan workspaces, %.2f MB total\n",
+		orphanCount, float64(totalBytes)/1024/1024)
+}
+
+// dirSizeBytes walks a directory and sums file sizes. Returns 0 on
+// any error so the CLI can still proceed with the rest of the dirs.
+func dirSizeBytes(root string) int64 {
+	var total int64
+	_ = filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total
 }

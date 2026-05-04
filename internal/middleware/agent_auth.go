@@ -76,6 +76,11 @@ func (m *AgentAuthMiddleware) authenticate(r *http.Request) (*AgentIdentity, err
 	}
 
 	keyHash := HashAgentKey(raw)
+	// Revocation enforcement: GetAgentKeyByHash already filters
+	// WHERE is_active = 1 at the SQL level, so a revoked key (set
+	// is_active = 0 by RevokeAgentKey) returns sql.ErrNoRows here
+	// and the request is rejected with errAgentInvalidKey. The test
+	// in agent_auth_test.go pins this contract.
 	row, err := m.queries.GetAgentKeyByHash(r.Context(), keyHash)
 	if err != nil {
 		return nil, errAgentInvalidKey

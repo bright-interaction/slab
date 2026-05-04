@@ -740,7 +740,8 @@ func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	siteID := urlParam(r, "siteID")
-	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+	site, err := h.queries.GetSiteByID(r.Context(), siteID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
@@ -749,6 +750,12 @@ func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to delete site")
 		return
 	}
+
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionDelete, "site", siteID, map[string]any{
+		"name":   site.Name,
+		"slug":   site.Slug,
+		"domain": site.Domain,
+	})
 
 	// Audit H8: clean up the workspace dir on disk after the row is gone.
 	// The DB cascades all child tables, but `{DataDir}/workspaces/{siteID}/`

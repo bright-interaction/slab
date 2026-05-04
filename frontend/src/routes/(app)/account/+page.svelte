@@ -119,8 +119,8 @@
 	async function savePassword(e: SubmitEvent) {
 		e.preventDefault();
 		if (savingPassword) return;
-		if (newPassword.length < 8) {
-			toast.error('New password must be at least 8 characters.');
+		if (newPassword.length < 12) {
+			toast.error('New password must be at least 12 characters.');
 			return;
 		}
 		if (newPassword !== confirmPassword) {

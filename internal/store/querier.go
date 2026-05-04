@@ -167,6 +167,12 @@ type Querier interface {
 	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
 	// Allowed scripts
 	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
+	ListAuditLogByResource(ctx context.Context, arg ListAuditLogByResourceParams) ([]AuditLog, error)
+	ListAuditLogBySite(ctx context.Context, arg ListAuditLogBySiteParams) ([]AuditLog, error)
+	// Used by the workspace-admin "everything that happened" feed. site_id
+	// can be empty for non-site-scoped actions (member invites, secret
+	// rotations).
+	ListAuditLogGlobal(ctx context.Context, limit int64) ([]AuditLog, error)
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
 	// Audit H1: single-query alternative to "list pages, loop with
 	// ListBlocksByPage". Returns every block for the site joined with its
@@ -283,6 +289,7 @@ type Querier interface {
 	UpsertVisitSession(ctx context.Context, arg UpsertVisitSessionParams) error
 	UpsertVisitorMetadataByFingerprint(ctx context.Context, arg UpsertVisitorMetadataByFingerprintParams) (int64, error)
 	UpsertVisitorMetadataByVisitorID(ctx context.Context, arg UpsertVisitorMetadataByVisitorIDParams) (int64, error)
+	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) error
 }
 
 var _ Querier = (*Queries)(nil)
