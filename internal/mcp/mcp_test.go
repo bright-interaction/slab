@@ -265,6 +265,7 @@ func TestExtraWriteToolsRegistered(t *testing.T) {
 		"list_fonts",
 		"list_design_references",
 		"get_capabilities",
+		"get_figma_import_url",
 	}
 	for _, name := range readOnly {
 		tool, ok := s.tools[name]
@@ -291,6 +292,7 @@ func TestExtraWriteToolsRegistered(t *testing.T) {
 		"register_allowed_script",
 		"revoke_allowed_script",
 		"delete_font",
+		"upload_font",
 		"add_design_reference",
 		"delete_design_reference",
 	}
@@ -368,6 +370,55 @@ func TestPrivacyPostureExpansion(t *testing.T) {
 			if strings.Contains(lower, banned) {
 				t.Errorf("resource %q contains banned PII substring %q", uri, banned)
 			}
+		}
+	}
+}
+
+// TestFontFamilyValidator guards the upload_font precondition: family
+// names go on disk and into the database, so loose validation lets a
+// caller plant arbitrary path / SQL / shell metacharacters into the
+// system. Mirrors handlers.validFamilyName.
+func TestFontFamilyValidator(t *testing.T) {
+	cases := []struct {
+		input string
+		ok    bool
+	}{
+		{"Inter", true},
+		{"Acme Sans", true},
+		{"Acme-Sans_2", true},
+		{"abc", true},
+		{"", false},
+		{strings.Repeat("a", 65), false},
+		{"Ac/me", false},
+		{"Ac\\me", false},
+		{"Ac;me", false},
+		{"Ac.me", false},
+		{"Ac me\n", false},
+	}
+	for _, c := range cases {
+		got := validFontFamilyName.MatchString(c.input)
+		if got != c.ok {
+			t.Errorf("validFontFamilyName(%q) = %v, want %v", c.input, got, c.ok)
+		}
+	}
+}
+
+// TestCleanFontFilename strips path separators agent-side before they
+// land in the original_name column and any future log line.
+func TestCleanFontFilename(t *testing.T) {
+	cases := []struct {
+		input, want string
+	}{
+		{"Inter-Regular.woff2", "Inter-Regular.woff2"},
+		{"  spaced  ", "spaced"},
+		{"../../etc/passwd", "....etcpasswd"},
+		{"a\\b\\c.woff2", "abc.woff2"},
+		{strings.Repeat("x", 200), strings.Repeat("x", 128)},
+	}
+	for _, c := range cases {
+		got := cleanFontFilename(c.input)
+		if got != c.want {
+			t.Errorf("cleanFontFilename(%q) = %q, want %q", c.input, got, c.want)
 		}
 	}
 }

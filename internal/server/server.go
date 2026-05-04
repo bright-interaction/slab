@@ -584,7 +584,9 @@ func (s *Server) Router() http.Handler {
 		// + builder logic the REST handlers use. Allow-list driven so
 		// future REST endpoints can't accidentally leak PII through MCP.
 		// Auth: same X-Agent-Key as the rest of /api/agent/*.
-		mcpServer := mcp.NewServer(s.queries, agentBuildH)
+		mcpServer := mcp.NewServer(s.queries, agentBuildH).
+			WithFontsDir(s.cfg.FontsDir).
+			WithBaseURL(s.cfg.BaseURL)
 		r.Mount("/mcp", mcpServer.Handler())
 
 		// Evaluation
