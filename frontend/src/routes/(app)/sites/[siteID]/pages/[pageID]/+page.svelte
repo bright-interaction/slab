@@ -207,6 +207,8 @@
 			const res = await blocksApi.bulkSave(siteID, pageID, payload);
 			const next = [...(res.blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order);
 			blocks = next;
+			// Preserve the expanded block across the round-trip so saving
+			// while editing one block does not collapse it.
 			editorRef?.syncFrom(next);
 			toast.success('Page saved.');
 		} catch (err) {
@@ -261,16 +263,23 @@
 	}
 
 	async function discardBlocks() {
-		if (!editorState.dirty) return;
+		const anyDirty = editorState.dirty || seoDirty || (titleEditing && titleDraft !== (pageData?.title ?? ''));
+		if (!anyDirty) return;
 		const ok = await confirm({
-			title: 'Discard unsaved block changes?',
-			message: 'You will lose any edits made since the last save.',
+			title: 'Discard unsaved changes?',
+			message:
+				'You will lose any unsaved edits to blocks, page title, and SEO settings since the last save.',
 			confirmText: 'Discard',
 			cancelText: 'Keep editing',
 			variant: 'danger'
 		});
 		if (!ok) return;
 		editorRef?.reset();
+		if (pageData) {
+			titleDraft = pageData.title;
+			titleEditing = false;
+			hydrateSeo(pageData);
+		}
 		toast.info('Changes discarded.');
 	}
 
@@ -368,8 +377,9 @@
 				</Button>
 				<Button
 					variant="ghost"
-					disabled={!editorState.dirty || saving}
+					disabled={(!editorState.dirty && !seoDirty) || saving}
 					onclick={discardBlocks}
+					title="Discard unsaved block, title, and SEO edits"
 				>
 					Discard
 				</Button>
@@ -536,7 +546,7 @@
 					}}
 				/>
 			{:else}
-				<TextMode {blocks} onFieldChange={handleTextField} />
+				<TextMode {blocks} {textSaving} onFieldChange={handleTextField} />
 			{/if}
 		</section>
 	{/if}

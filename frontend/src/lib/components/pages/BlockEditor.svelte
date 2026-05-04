@@ -101,10 +101,21 @@
 		}));
 	}
 
-	export function syncFrom(next: Block[]) {
+	export function syncFrom(next: Block[], preserveExpandedBlockId?: string) {
+		// Preserve expansion across saves so the user's open block stays open.
+		// We have to remap from server block.id -> local _localId because clone()
+		// regenerates _localId for new blocks.
+		const prevExpanded = expandedId;
+		const prevExpandedBlockId =
+			preserveExpandedBlockId ??
+			blocks.find((b) => b._localId === prevExpanded)?.id ??
+			'';
 		blocks = clone(next);
 		initialSnapshot = clone(next);
-		expandedId = null;
+		const match = prevExpandedBlockId
+			? blocks.find((b) => b.id === prevExpandedBlockId)
+			: undefined;
+		expandedId = match ? match._localId : null;
 		draggingId = null;
 	}
 
@@ -166,6 +177,16 @@
 		blocks = next;
 	}
 
+	function setType(localId: string, blockType: string, dataJson: string) {
+		// Used by the per-block code editor when a typed block is converted to
+		// raw_astro. Patches block_type and data_json in lockstep so the dirty
+		// snapshot picks up both as a single change.
+		const next = blocks.map((b) =>
+			b._localId === localId ? { ...b, block_type: blockType, data_json: dataJson } : b
+		);
+		blocks = next;
+	}
+
 	function deleteBlock(localId: string) {
 		blocks = blocks
 			.filter((b) => b._localId !== localId)
@@ -218,6 +239,7 @@
 				onToggleVisibility={(v) => toggleVisibility(block._localId, v)}
 				onDataChange={(json) => setDataJson(block._localId, json)}
 				onNameChange={(name) => setName(block._localId, name)}
+				onTypeChange={(type, json) => setType(block._localId, type, json)}
 				onDelete={() => deleteBlock(block._localId)}
 				ondragstart={(e) => handleDragStart(block._localId, e)}
 				ondragover={(e) => handleDragOver(block._localId, e)}

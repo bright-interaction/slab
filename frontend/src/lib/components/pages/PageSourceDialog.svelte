@@ -20,18 +20,24 @@
 	let astro = $state<string | null>(null);
 	let slug = $state<string>('');
 	let copied = $state(false);
+	let inFlight: number = 0;
 
 	async function load(): Promise<void> {
+		// Track the request id so a stale fetch (user closed and reopened the
+		// dialog before the first call resolved) doesn't overwrite fresh state.
+		const requestId = ++inFlight;
 		loading = true;
 		error = null;
 		try {
 			const res = await pagesApi.previewSource(siteID, pageID);
+			if (requestId !== inFlight) return;
 			astro = res.astro;
 			slug = res.slug;
 		} catch (err) {
+			if (requestId !== inFlight) return;
 			error = err instanceof Error ? err.message : 'Failed to render page';
 		} finally {
-			loading = false;
+			if (requestId === inFlight) loading = false;
 		}
 	}
 
@@ -40,9 +46,12 @@
 			void load();
 		}
 		if (!open) {
-			// Drop the cached source on close so the next open re-fetches.
+			// Drop the cached source on close so the next open re-fetches and
+			// invalidate any in-flight request.
+			inFlight++;
 			astro = null;
 			error = null;
+			loading = false;
 			copied = false;
 		}
 	});

@@ -3,9 +3,11 @@
 
 	let {
 		blocks,
+		textSaving = {},
 		onFieldChange
 	}: {
 		blocks: Block[];
+		textSaving?: Record<string, boolean>;
 		onFieldChange: (blockID: string, fieldKey: string, nextValue: string) => void;
 	} = $props();
 
@@ -112,9 +114,17 @@
 				<span class="font-mono text-[10.5px] uppercase tracking-[0.18em] text-text-secondary">
 					{group.block.block_type}
 				</span>
-				<span class="text-[10.5px] text-text-muted">
-					{group.rows.length}
-					{group.rows.length === 1 ? 'field' : 'fields'}
+				<span class="flex items-center gap-2 text-[10.5px] text-text-muted">
+					{#if textSaving[group.block.id]}
+						<span class="inline-flex items-center gap-1 text-accent">
+							<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-accent"></span>
+							saving…
+						</span>
+					{/if}
+					<span>
+						{group.rows.length}
+						{group.rows.length === 1 ? 'field' : 'fields'}
+					</span>
 				</span>
 			</header>
 			<div class="divide-y divide-border-light">
