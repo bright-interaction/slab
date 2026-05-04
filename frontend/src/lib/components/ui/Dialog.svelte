@@ -14,7 +14,7 @@
 		open?: boolean;
 		title?: string;
 		description?: string;
-		size?: 'sm' | 'md' | 'lg';
+		size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 		onOpenChange?: (open: boolean) => void;
 		children?: Snippet;
 		footer?: Snippet;
@@ -23,7 +23,9 @@
 	const sizeClasses: Record<string, string> = {
 		sm: 'max-w-md',
 		md: 'max-w-lg',
-		lg: 'max-w-2xl'
+		lg: 'max-w-2xl',
+		xl: 'max-w-7xl',
+		full: 'max-w-[calc(100vw-2rem)]'
 	};
 </script>
 
@@ -51,9 +53,9 @@
 			class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-fadeIn"
 		/>
 		<BitsDialog.Content
-			class="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] {sizeClasses[
+			class="fixed left-1/2 top-1/2 z-50 flex w-[calc(100%-2rem)] {sizeClasses[
 				size
-			]} -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-bg-surface shadow-2xl focus:outline-none data-[state=open]:animate-scaleIn"
+			]} max-h-[calc(100vh-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-bg-surface shadow-2xl focus:outline-none data-[state=open]:animate-scaleIn"
 		>
 			{#if title || description}
 				<div class="flex items-start justify-between gap-4 px-6 pt-6 pb-2">
@@ -89,13 +91,13 @@
 			{/if}
 
 			{#if children}
-				<div class="px-6 py-4">
+				<div class="flex-1 overflow-y-auto px-6 py-4">
 					{@render children()}
 				</div>
 			{/if}
 
 			{#if footer}
-				<div class="flex justify-end gap-2 border-t border-border-light px-6 py-4">
+				<div class="flex shrink-0 justify-end gap-2 border-t border-border-light px-6 py-4">
 					{@render footer()}
 				</div>
 			{/if}
