@@ -425,6 +425,56 @@ CREATE TABLE IF NOT EXISTS form_submissions (
 CREATE INDEX IF NOT EXISTS idx_form_submissions_form ON form_submissions(form_id);
 CREATE INDEX IF NOT EXISTS idx_form_submissions_site ON form_submissions(site_id);
 
+-- AI-native Custom Collections (Sprint 4, 2026-05-04). The CMS layer that
+-- turns Atomic Site from "landing page builder" into a true content
+-- platform. A Collection is a user-defined content type (case studies,
+-- portfolio items, products, team members, FAQ entries, events, etc.)
+-- with a schema_json field array. Items conform to the schema and can
+-- render either as standalone pages (settings.render_as_pages = true)
+-- or as data fed into a collection_list block on a page. JSON-LD per
+-- item is auto-generated from settings.schema_org_type.
+CREATE TABLE IF NOT EXISTS collections (
+    id            TEXT PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    slug          TEXT NOT NULL,
+    -- schema_json: array of field definitions
+    -- [{name, type, label, required, options?, max_length?, ref_collection?}]
+    -- types: text, textarea, richtext, number, boolean, date, datetime,
+    --        url, email, image, gallery, select, multiselect, reference,
+    --        color, json
+    schema_json   TEXT NOT NULL DEFAULT '[]',
+    -- settings_json: {render_as_pages, schema_org_type, list_page_template,
+    --                 detail_page_template, items_per_index_page,
+    --                 requires_member_role}
+    -- requires_member_role is a Sprint 5 hook left passthrough today.
+    settings_json TEXT NOT NULL DEFAULT '{}',
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_collections_site ON collections(site_id);
+
+CREATE TABLE IF NOT EXISTS collection_items (
+    id            TEXT PRIMARY KEY,
+    collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    slug          TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    data_json     TEXT NOT NULL DEFAULT '{}',
+    locale        TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'draft',
+    published_at  TEXT NOT NULL DEFAULT '',
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(collection_id, locale, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_collection_items_collection ON collection_items(collection_id);
+CREATE INDEX IF NOT EXISTS idx_collection_items_site ON collection_items(site_id);
+CREATE INDEX IF NOT EXISTS idx_collection_items_status ON collection_items(status);
+
 -- Build evaluation results (130+ checks from site-inspector)
 CREATE TABLE IF NOT EXISTS evaluations (
     id          TEXT PRIMARY KEY,

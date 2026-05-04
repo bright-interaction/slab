@@ -61,6 +61,16 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 		return fail("no published pages found. Publish at least one page before building.")
 	}
 
+	// 5a. Custom Collections (Sprint 4, 2026-05-04). Emits index +
+	// per-item .astro pages for every Collection with
+	// settings.render_as_pages = true. Inherits Base.astro layout,
+	// hreflang, lang, A+ headers from the standard renderer chain.
+	collectionPageCount, err := RenderCollectionPages(ctx, queries, siteID, wsDir)
+	if err != nil {
+		return fail("render collections: " + err.Error())
+	}
+	pageCount += collectionPageCount
+
 	// 6. Config
 	if err := RenderConfig(ctx, queries, siteID, wsDir); err != nil {
 		return fail("render config: " + err.Error())

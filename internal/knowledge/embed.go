@@ -39,6 +39,8 @@ var docMetadataTable = []docMetadata{
 	{"typescript-strict", CategoryStack, 20, "Strict-mode TypeScript patterns for Astro components: no any, type-only imports, prop typing."},
 	{"css-variable-system", CategoryStack, 30, "The 6 color slots, container widths, breakpoints, how custom properties drive the entire visual system."},
 	{"block-renderer-patterns", CategoryStack, 40, "The 19 block types, their schema kinds, how to extend with a custom block, when to use raw_astro."},
+	{"collection-design-patterns", CategoryStack, 45, "Custom Collections (CMS layer): when to pick Collection vs Component vs global block, schema design, slug + locale model, agent bulk-import flow."},
+	{"schema-org-per-collection-type", CategoryStack, 47, "Field-name conventions per schema.org type (Article, Product, Person, Event, JobPosting, Recipe, FAQPage, Review) so JSON-LD auto-emits."},
 	{"i18n-authoring", CategoryStack, 50, "Path vs subdomain vs off strategies, hreflang trailing-slash rule, default-lang routing."},
 	{"security-authoring", CategoryStack, 60, "The 11 A+ headers, when to whitelist via allowed_scripts vs csp_extra_directives, why raw_astro is admin-only."},
 	{"personalization", CategoryStack, 70, "Visitor-state hooks the builder leaves available, the do-not-touch boundary on identified-tier PII."},

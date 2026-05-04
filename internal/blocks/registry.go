@@ -326,4 +326,37 @@ func init() {
 			{Key: "class", Label: "Section class", Kind: KindText, Help: "Added to the auto-section wrapper, ignored when code already opens with a section/header/etc."},
 		},
 	})
+
+	// Sprint 4 (2026-05-04): Custom Collections list block. Renders
+	// N items from a Collection at build time. Items themselves
+	// already render as standalone pages (when settings.render_as_pages
+	// is true); this block lets any page show a curated subset.
+	Register(Schema{
+		Type: "collection_list", Label: "Collection list", Category: "content",
+		Description: "Renders items from a Custom Collection (case studies, products, team members, etc.) at build time. Sort, limit, and optionally filter by visitor metadata via the personalization DSL.",
+		Fields: []Field{
+			{Key: "collection_id", Label: "Collection", Kind: KindText, Required: true, Help: "ID of the Collection to pull items from. Pick from /api/sites/{siteID}/collections."},
+			{Key: "heading", Label: "Heading", Kind: KindText},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "limit", Label: "Max items", Kind: KindNumber, Help: "Default 12. Use 0 for unlimited (subject to a 200 cap)."},
+			{Key: "sort_by", Label: "Sort by", Kind: KindSelect, Options: []Option{
+				{Value: "sort_order", Label: "Manual order"},
+				{Value: "published_at", Label: "Date published"},
+				{Value: "created_at", Label: "Date created"},
+				{Value: "title", Label: "Title (A-Z)"},
+			}},
+			{Key: "sort_dir", Label: "Sort direction", Kind: KindSelect, Options: []Option{
+				{Value: "asc", Label: "Ascending"},
+				{Value: "desc", Label: "Descending"},
+			}},
+			{Key: "card_template", Label: "Card layout", Kind: KindSelect, Options: []Option{
+				{Value: "title_image", Label: "Title above image"},
+				{Value: "image_title", Label: "Image above title"},
+				{Value: "compact", Label: "Compact list"},
+				{Value: "grid_2", Label: "Two-column grid"},
+				{Value: "grid_3", Label: "Three-column grid"},
+			}},
+			{Key: "filter", Label: "Static filter (DSL)", Kind: KindText, Help: `Personalization-DSL filter applied at build time, e.g. industry == "finance" OR featured present.`},
+		},
+	})
 }
