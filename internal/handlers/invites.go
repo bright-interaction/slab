@@ -189,8 +189,12 @@ func (h *InvitesHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if len(req.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "Password must be at least 8 characters")
+	// Unified policy: 12-char floor everywhere a user sets a password
+	// (matches /api/auth/change-password and the reset-password CLI).
+	// Single source of truth so an invited editor can't slip in with
+	// a weaker password than the admin floor.
+	if len(req.Password) < 12 {
+		writeError(w, http.StatusBadRequest, "Password must be at least 12 characters")
 		return
 	}
 	if _, err := h.queries.GetUserByEmail(r.Context(), row.Email); err == nil {

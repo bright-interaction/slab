@@ -915,6 +915,9 @@ func (h *AgentHandler) CreateMediaFolder(w http.ResponseWriter, r *http.Request)
 	if a == nil {
 		return
 	}
+	if !requireWrite(w, a) {
+		return
+	}
 	var req struct {
 		Name string `json:"name"`
 	}
@@ -947,6 +950,9 @@ func (h *AgentHandler) CreateMediaFolder(w http.ResponseWriter, r *http.Request)
 func (h *AgentHandler) DeleteMediaFolder(w http.ResponseWriter, r *http.Request) {
 	a := requireAgent(w, r)
 	if a == nil {
+		return
+	}
+	if !requireWrite(w, a) {
 		return
 	}
 	name := urlParam(r, "folderName")
@@ -1032,6 +1038,11 @@ func (h *AgentHandler) GenerateAgentKey(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionCreate, "agent_key", id, map[string]any{
+		"name":         req.Name,
+		"capabilities": req.Capabilities,
+	})
+
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"id":   id,
 		"name": req.Name,
@@ -1053,10 +1064,12 @@ func (h *AgentHandler) ListAgentKeys(w http.ResponseWriter, r *http.Request) {
 
 // RevokeAgentKey deactivates an agent key (admin endpoint).
 func (h *AgentHandler) RevokeAgentKey(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
 	keyID := urlParam(r, "keyID")
 	if err := h.queries.DeactivateAgentKey(r.Context(), keyID); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to revoke key")
 		return
 	}
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionRevoke, "agent_key", keyID, nil)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }

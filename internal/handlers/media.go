@@ -383,6 +383,9 @@ func (h *MediaHandler) AgentUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Agent not authenticated")
 		return
 	}
+	if !requireWrite(w, a) {
+		return
+	}
 	h.uploadMultipart(w, r, a.SiteID)
 }
 
@@ -391,6 +394,9 @@ func (h *MediaHandler) AgentUploadFromBase64(w http.ResponseWriter, r *http.Requ
 	a := authmw.GetAgent(r)
 	if a == nil {
 		writeError(w, http.StatusUnauthorized, "Agent not authenticated")
+		return
+	}
+	if !requireWrite(w, a) {
 		return
 	}
 	var req struct {
@@ -442,6 +448,9 @@ func (h *MediaHandler) AgentUploadFromURL(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusUnauthorized, "Agent not authenticated")
 		return
 	}
+	if !requireWrite(w, a) {
+		return
+	}
 	var req struct {
 		URL      string `json:"url"`
 		Filename string `json:"filename"`
@@ -489,6 +498,9 @@ func (h *MediaHandler) AgentUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Agent not authenticated")
 		return
 	}
+	if !requireWrite(w, a) {
+		return
+	}
 	id := urlParam(r, "mediaID")
 	m, err := h.queries.GetMediaByID(r.Context(), id)
 	if err != nil || m.SiteID != a.SiteID {
@@ -527,6 +539,9 @@ func (h *MediaHandler) AgentDelete(w http.ResponseWriter, r *http.Request) {
 	a := authmw.GetAgent(r)
 	if a == nil {
 		writeError(w, http.StatusUnauthorized, "Agent not authenticated")
+		return
+	}
+	if !requireWrite(w, a) {
 		return
 	}
 	id := urlParam(r, "mediaID")

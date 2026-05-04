@@ -25,6 +25,19 @@ type AllowedScript struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type AuditLog struct {
+	ID           string `json:"id"`
+	ActorUserID  string `json:"actor_user_id"`
+	ActorRole    string `json:"actor_role"`
+	ActorIp      string `json:"actor_ip"`
+	SiteID       string `json:"site_id"`
+	Action       string `json:"action"`
+	ResourceType string `json:"resource_type"`
+	ResourceID   string `json:"resource_id"`
+	ChangesJson  string `json:"changes_json"`
+	CreatedAt    string `json:"created_at"`
+}
+
 type Block struct {
 	ID              string `json:"id"`
 	PageID          string `json:"page_id"`

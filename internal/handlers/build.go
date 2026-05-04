@@ -32,6 +32,11 @@ type BuildHandler struct {
 
 	mu     sync.Mutex
 	builds map[string]*buildState // deploymentID -> state
+	// cancels maps deployment_id -> context cancel func for the
+	// in-flight goroutine. CancelBuild looks up here and calls
+	// the func to interrupt bun / eval / deploy. Entries are
+	// removed once the goroutine returns.
+	cancels map[string]context.CancelFunc
 
 	// siteMu guards per-site build serialization. The audit's C4 finding:
 	// two simultaneous builds for the same site_id share the workspace
@@ -57,8 +62,64 @@ func NewBuildHandler(cfg *config.Config, queries *store.Queries) *BuildHandler {
 		cfg:      cfg,
 		queries:  queries,
 		builds:   make(map[string]*buildState),
+		cancels:  make(map[string]context.CancelFunc),
 		siteLock: make(map[string]*sync.Mutex),
 	}
+}
+
+// registerCancel stashes the cancel func for an in-flight build so
+// the admin Cancel endpoint can interrupt it. clearCancel removes
+// the entry once the goroutine returns.
+func (h *BuildHandler) registerCancel(buildID string, cancel context.CancelFunc) {
+	h.mu.Lock()
+	h.cancels[buildID] = cancel
+	h.mu.Unlock()
+}
+
+func (h *BuildHandler) clearCancel(buildID string) {
+	h.mu.Lock()
+	delete(h.cancels, buildID)
+	h.mu.Unlock()
+}
+
+// CancelBuild aborts the in-flight goroutine for buildID by calling
+// its derived-context cancel. Pre-existing bun / eval / rsync exec
+// commands honour ctx via exec.CommandContext, so the chain unwinds
+// within a few seconds. Idempotent: calling on a finished build is
+// a no-op.
+//
+// POST /api/sites/{siteID}/builds/{buildID}/cancel  (admin-only via
+// the existing siteR + RequireSiteAccess middleware on the parent
+// route group)
+func (h *BuildHandler) CancelBuild(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	buildID := urlParam(r, "buildID")
+	// Cross-tenant guard: deployment must belong to the URL siteID.
+	dep, err := h.queries.GetDeploymentByID(r.Context(), buildID)
+	if err != nil || dep.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Build not found")
+		return
+	}
+	h.mu.Lock()
+	cancel, ok := h.cancels[buildID]
+	st, _ := h.builds[buildID]
+	h.mu.Unlock()
+	if !ok {
+		// Either already finished or never tracked. Returning 200 keeps
+		// the cancel verb idempotent so admin scripts can fire it
+		// without checking state first.
+		writeJSON(w, http.StatusOK, map[string]string{"status": "not running"})
+		return
+	}
+	cancel()
+	if st != nil {
+		h.mu.Lock()
+		st.Status = "cancelled"
+		st.Error = "build cancelled by admin"
+		h.mu.Unlock()
+	}
+	slog.Info("build: cancelled by admin", "build_id", buildID, "site_id", siteID)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelling"})
 }
 
 // lockForSite returns the per-site build mutex, creating it on first
@@ -121,6 +182,10 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 		// inside Compile honour ctx via exec.CommandContext.
 		bgCtx, cancel := context.WithTimeout(context.Background(), builder.BuildTimeout)
 		defer cancel()
+		// Register the cancel func so the admin Cancel endpoint can
+		// interrupt the goroutine before BuildTimeout elapses.
+		h.registerCancel(deployID, cancel)
+		defer h.clearCancel(deployID)
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 
 		// Run evaluation against the built dist/ if compile succeeded.
@@ -203,6 +268,8 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 		defer lock.Unlock()
 		bgCtx, cancel := context.WithTimeout(context.Background(), builder.BuildTimeout)
 		defer cancel()
+		h.registerCancel(deployID, cancel)
+		defer h.clearCancel(deployID)
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {

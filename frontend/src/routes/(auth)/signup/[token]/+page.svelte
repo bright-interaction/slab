@@ -43,8 +43,8 @@
 		e.preventDefault();
 		if (submitting) return;
 		submitError = '';
-		if (password.length < 8) {
-			submitError = 'Password must be at least 8 characters.';
+		if (password.length < 12) {
+			submitError = 'Password must be at least 12 characters.';
 			return;
 		}
 		if (password !== confirm) {

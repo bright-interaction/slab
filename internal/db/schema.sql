@@ -582,6 +582,40 @@ CREATE INDEX IF NOT EXISTS idx_consent_records_site_method ON consent_records(si
 CREATE INDEX IF NOT EXISTS idx_consent_records_session ON consent_records(session_id);
 CREATE INDEX IF NOT EXISTS idx_consent_records_site_fingerprint ON consent_records(site_id, fingerprint);
 
+-- audit_log records who-did-what-when for every destructive action
+-- across the platform. The handler layer calls a single AuditLog()
+-- helper after the underlying mutation succeeds, so the row is the
+-- "we did this" entry, not the "we tried this" entry.
+--
+-- Why a single global table (vs per-resource tables): the consumers
+-- (compliance reviews, incident root-cause analysis, GDPR data-export)
+-- want a chronological feed across every resource type. JSONB diff in
+-- changes_json keeps schema evolution cheap.
+--
+-- Indexes:
+--   idx_audit_log_site_time      -> the per-site activity feed in admin
+--   idx_audit_log_actor_time     -> "what has user X been doing"
+--   idx_audit_log_resource       -> "what has been done to resource X"
+--
+-- Retention: not auto-purged. Default retention is forever; operators
+-- who need a cap can wire a `general.audit_retention_days` setting
+-- and add it to the retention manager (Phase N).
+CREATE TABLE IF NOT EXISTS audit_log (
+    id              TEXT PRIMARY KEY,
+    actor_user_id   TEXT NOT NULL DEFAULT '',
+    actor_role      TEXT NOT NULL DEFAULT '',
+    actor_ip        TEXT NOT NULL DEFAULT '',
+    site_id         TEXT NOT NULL DEFAULT '',
+    action          TEXT NOT NULL,
+    resource_type   TEXT NOT NULL,
+    resource_id     TEXT NOT NULL DEFAULT '',
+    changes_json    TEXT NOT NULL DEFAULT '{}',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_site_time ON audit_log(site_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor_time ON audit_log(actor_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
+
 -- consent_salts holds daily-rotated salts used to hash IPs in
 -- consent_records.ip_hash. One row per UTC day. Old rows are pruned by the
 -- retention job (default 30 days) so historical hashes can never be

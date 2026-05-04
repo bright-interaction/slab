@@ -89,7 +89,8 @@ func (h *MembersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Cannot delete your own account")
 		return
 	}
-	if _, err := h.queries.GetUserByID(r.Context(), id); err != nil {
+	target, err := h.queries.GetUserByID(r.Context(), id)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Member not found")
 		return
 	}
@@ -97,6 +98,11 @@ func (h *MembersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to delete member")
 		return
 	}
+	AuditLog(r.Context(), h.queries, r, "", AuditActionDelete, "member", id, map[string]any{
+		"email": target.Email,
+		"role":  target.Role,
+		"name":  target.Name,
+	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

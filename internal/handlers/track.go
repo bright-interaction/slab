@@ -72,6 +72,12 @@ type TrackHandler struct {
 	// sustained covers any plausible legitimate flow (a real visitor changes
 	// consent at most a handful of times per session).
 	consentLimiter *consentRateLimiter
+	// pageviewLimiter and engagementLimiter cover the other public /t/*
+	// endpoints. Pageview gets a higher ceiling (legitimate SPA route
+	// changes can fire dozens per session); engagement is in between
+	// (one beacon per visibilitychange / pagehide).
+	pageviewLimiter   *consentRateLimiter
+	engagementLimiter *consentRateLimiter
 }
 
 // NewTrackHandler builds a TrackHandler. The CRM sync client and throttler
@@ -85,7 +91,9 @@ func NewTrackHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *Tr
 		crmClient:       crmsync.NewClient(cfg.BrightCRMWebhookURL, cfg.BrightCRMWebhookSecret),
 		crmThrot:        crmsync.NewThrottler(cfg.CRMSyncMinInterval),
 		inboundVerifier: sharedsecret.NewVerifier(cfg.BrightCRMWebhookSecret, cfg.BrightCRMWebhookSecretPrevious),
-		consentLimiter:  newConsentRateLimiter(20, 20.0/60.0, 10*time.Minute),
+		consentLimiter:    newConsentRateLimiter(20, 20.0/60.0, 10*time.Minute),
+		pageviewLimiter:   newConsentRateLimiter(100, 60.0/60.0, 10*time.Minute),
+		engagementLimiter: newConsentRateLimiter(50, 30.0/60.0, 10*time.Minute),
 	}
 }
 
@@ -457,6 +465,12 @@ type pageViewRequest struct {
 // catch every navigation), but client-routed sites need it to show up in
 // per-page counts. Always 204 on completion.
 func (h *TrackHandler) PageView(w http.ResponseWriter, r *http.Request) {
+	if h.pageviewLimiter != nil && !h.pageviewLimiter.allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "5")
+		writeError(w, http.StatusTooManyRequests, "Too many pageview pings; slow down")
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
 	defer r.Body.Close()
 
@@ -566,6 +580,12 @@ type engagementRequest struct {
 // time on page / max scroll depth). 204 on completion. Always best-effort:
 // no error is fatal; the beacon doesn't read the response.
 func (h *TrackHandler) Engagement(w http.ResponseWriter, r *http.Request) {
+	if h.engagementLimiter != nil && !h.engagementLimiter.allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "5")
+		writeError(w, http.StatusTooManyRequests, "Too many engagement beacons; slow down")
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
 	defer r.Body.Close()
 
