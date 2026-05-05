@@ -29,9 +29,22 @@
 </script>
 
 <Dialog bind:open title="Live preview" description="Block-only render at desktop width. Header and footer render on the full page." size="xl">
-	<div class="min-h-[60vh]">
+	<div class="overflow-hidden rounded-lg border border-border-light bg-white">
 		{#if mounted}
-			<BlockPreview {siteID} {pageID} {blockID} {blockType} {dataJson} />
+			<!-- 720px is a generous floor (covers 70vh hero on a 1024-tall window
+			     with room for safe area), 4000px ceiling lets full process_steps
+			     and pricing blocks render without internal iframe scroll. The
+			     dialog body itself scrolls if total content exceeds viewport. -->
+			<BlockPreview
+				{siteID}
+				{pageID}
+				{blockID}
+				{blockType}
+				{dataJson}
+				minHeight={720}
+				maxHeight={4000}
+				hideChrome
+			/>
 		{/if}
 	</div>
 </Dialog>
