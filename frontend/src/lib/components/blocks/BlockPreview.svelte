@@ -7,17 +7,23 @@
 		pageID,
 		blockID,
 		blockType,
-		dataJson
+		dataJson,
+		minHeight = 0,
+		maxHeight = 1600,
+		hideChrome = false
 	}: {
 		siteID: string;
 		pageID: string;
 		blockID: string;
 		blockType: string;
 		dataJson: string;
+		minHeight?: number;
+		maxHeight?: number;
+		hideChrome?: boolean;
 	} = $props();
 
 	let iframeEl: HTMLIFrameElement | null = $state(null);
-	let height = $state(160);
+	let height = $state(Math.max(160, minHeight));
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let ready = $state(false);
@@ -109,7 +115,7 @@ ${'<'}/script>
 		const onMsg = (ev: MessageEvent) => {
 			const data = ev.data as { source?: string; height?: number } | null;
 			if (data && data.source === 'atomicsite-preview' && typeof data.height === 'number') {
-				const h = Math.max(120, Math.min(1600, Math.ceil(data.height)));
+				const h = Math.max(Math.max(120, minHeight), Math.min(maxHeight, Math.ceil(data.height)));
 				if (Math.abs(h - height) > 4) height = h;
 			}
 		};
@@ -122,13 +128,15 @@ ${'<'}/script>
 	});
 </script>
 
-<div class="relative rounded-lg border border-border-light bg-bg-surface overflow-hidden">
-	<div class="flex items-center justify-between gap-2 border-b border-border-light bg-bg-elevated/40 px-3 py-1.5">
-		<span class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-muted">Live preview</span>
-		{#if loading}
-			<span class="text-[11px] text-text-muted">Rendering…</span>
-		{/if}
-	</div>
+<div class="relative {hideChrome ? '' : 'rounded-lg border border-border-light bg-bg-surface'} overflow-hidden">
+	{#if !hideChrome}
+		<div class="flex items-center justify-between gap-2 border-b border-border-light bg-bg-elevated/40 px-3 py-1.5">
+			<span class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-text-muted">Live preview</span>
+			{#if loading}
+				<span class="text-[11px] text-text-muted">Rendering…</span>
+			{/if}
+		</div>
+	{/if}
 	{#if error}
 		<p class="px-3 py-3 text-[12px] text-danger">{error}</p>
 	{/if}
@@ -139,7 +147,9 @@ ${'<'}/script>
 		style="height: {height}px;"
 		class="block w-full bg-white"
 	></iframe>
-	<p class="border-t border-border-light bg-bg-elevated/40 px-3 py-1.5 text-[10.5px] text-text-muted">
-		Block-only preview. Header and footer render on the full page.
-	</p>
+	{#if !hideChrome}
+		<p class="border-t border-border-light bg-bg-elevated/40 px-3 py-1.5 text-[10.5px] text-text-muted">
+			Block-only preview. Header and footer render on the full page.
+		</p>
+	{/if}
 </div>
