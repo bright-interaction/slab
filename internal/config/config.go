@@ -101,10 +101,17 @@ type Config struct {
 	// rights for the reload script.
 	NginxConfDir       string // /etc/nginx/conf.d (auto-included by http{})
 	NginxSitesDir      string // /etc/nginx/sites-enabled (vhost includes)
-	AcmeWebrootDir     string // /var/www/acme — webroot for certbot HTTP-01
+	AcmeWebrootDir     string // /var/www/acme, webroot for certbot HTTP-01
 	CertbotPath        string // path to the certbot binary, or empty
 	NginxReloadCommand string // shell command, e.g. "sudo /usr/local/bin/atomicsite-nginx-reload"
 	EdgeIP             string // public A-record target shown to admins
+
+	// DesignReferencesDir points at the bundled MIT-licensed reference
+	// repos (astrowind, astro-paper, starlight, shadcn-svelte, shadcn-ui).
+	// Used by the search_design_corpus MCP tool. Empty disables corpus
+	// search; the tool returns a "not configured" error.
+	// Read from DESIGN_REFERENCES_DIR.
+	DesignReferencesDir string
 }
 
 func Load() *Config {
@@ -139,6 +146,8 @@ func Load() *Config {
 		CertbotPath:        envOr("ATOMICSITE_CERTBOT_PATH", ""),
 		NginxReloadCommand: envOr("ATOMICSITE_NGINX_RELOAD_CMD", ""),
 		EdgeIP:             envOr("ATOMICSITE_EDGE_IP", ""),
+
+		DesignReferencesDir: envOr("DESIGN_REFERENCES_DIR", ""),
 	}
 }
 

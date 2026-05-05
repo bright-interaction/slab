@@ -1375,6 +1375,11 @@ func defaultEndpoints() EndpointsInfo {
 // marketing sites (Linear, Stripe, Vercel, Resend), onwidget/astrowind,
 // and a year of marketing-site audits. Keep punchy and actionable;
 // agents skim, they don't study.
+// DefaultDesignPlaybook returns the platform-level design DNA every
+// agent reads. Exported so internal/critique can run the same playbook
+// rules against rendered output without duplicating the source of truth.
+func DefaultDesignPlaybook() DesignPlaybookInfo { return defaultDesignPlaybook() }
+
 func defaultDesignPlaybook() DesignPlaybookInfo {
 	return DesignPlaybookInfo{
 		Stack: "Atomicsite renders agent input into static Astro 5 sites styled with Tailwind 4 utilities + a per-site CSS pipeline (internal/builder/css.go). Block content is authored as JSON via the agent API; the renderer turns it into semantic HTML. TypeScript is reserved for built-in interactive widgets (CookieProof, hydration script, circuit canvas) — agents do not write Astro/TS by hand. Every visual decision flows through block_type + data fields + settings + the eight CSS custom properties (--color-primary, --color-text, --color-bg, --color-surface-elevated, --font-heading, --font-body, --font-mono, --container-width).",

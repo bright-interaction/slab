@@ -249,6 +249,13 @@
 					run: () => navigate(item.href)
 				});
 			}
+			out.push({
+				id: 'action:design-critique',
+				category: 'Actions',
+				label: 'View design critique',
+				secondary: 'Latest build, AntiPatterns + slop-term findings',
+				run: () => navigate(`/sites/${site.id}/evaluations`)
+			});
 		}
 		out.push({
 			id: 'action:new-site',
