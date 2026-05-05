@@ -10,8 +10,8 @@ func init() {
 		Description: "Above-the-fold attention-grab. One per page. Drives a primary CTA.",
 		Fields: []Field{
 			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText, Help: "Small mono uppercase label above the headline."},
-			{Key: "headline", Label: "Headline", Kind: KindText, Help: "Wrap an inline accent fragment in [[double brackets]] to colour it with --color-primary."},
-			{Key: "headline_accent", Label: "Headline accent", Kind: KindText, Help: "Optional second line in --color-primary (alternative to [[brackets]])."},
+			{Key: "headline", Label: "Headline", Kind: KindTextarea, Help: "Multi-line. Each newline becomes a visual <br>. Wrap an inline accent fragment in [[double brackets]] to colour it with --color-primary."},
+			{Key: "headline_accent", Label: "Headline accent", Kind: KindTextarea, Help: "Optional second line in --color-primary (alternative to [[brackets]])."},
 			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
 			{Key: "image_id", Label: "Background image", Kind: KindImageID},
 			{Key: "image_alt", Label: "Image alt text", Kind: KindText},
@@ -32,8 +32,8 @@ func init() {
 		Description: "Side-by-side hero with text on the left and image on the right (stacks on mobile).",
 		Fields: []Field{
 			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText},
-			{Key: "headline", Label: "Headline", Kind: KindText, Help: "Use [[double brackets]] for an inline accent fragment."},
-			{Key: "headline_accent", Label: "Headline accent", Kind: KindText},
+			{Key: "headline", Label: "Headline", Kind: KindTextarea, Help: "Multi-line. Each newline becomes a visual <br>. Use [[double brackets]] for an inline accent fragment."},
+			{Key: "headline_accent", Label: "Headline accent", Kind: KindTextarea},
 			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
 			{Key: "image_id", Label: "Right column image", Kind: KindImageID},
 			{Key: "image_alt", Label: "Image alt text", Kind: KindText},

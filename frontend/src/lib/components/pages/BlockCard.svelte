@@ -219,7 +219,15 @@
 			for (const key of candidates) {
 				const v = parsed[key];
 				if (typeof v === 'string' && v.trim().length > 0) {
-					const clean = v.replace(/\[\[|\]\]/g, '').trim();
+					// Collapse \n and other whitespace runs into single spaces.
+					// Headlines often contain "\n" for visual line breaks (the
+					// renderer turns them into <br>), but in a one-line label
+					// they need to render as proper word separators or you get
+					// "Stop rentingyour business.Own it."
+					const clean = v
+						.replace(/\[\[|\]\]/g, '')
+						.replace(/\s+/g, ' ')
+						.trim();
 					return clean.length > 60 ? `${clean.slice(0, 60)}.` : clean;
 				}
 			}
