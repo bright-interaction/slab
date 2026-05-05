@@ -197,13 +197,11 @@
 		}
 	});
 
-	function summary(): string {
-		// User-set block name wins; falls through to the data_json text fields
-		// when name is blank so legacy blocks keep showing meaningful labels.
-		if (block.name && block.name.trim().length > 0) {
-			const clean = block.name.trim();
-			return clean.length > 60 ? `${clean.slice(0, 60)}.` : clean;
-		}
+	// Derive the auto label from block.data_json. Used in two places: as the
+	// collapsed-header summary fallback when block.name is empty, and as the
+	// placeholder of the Block name input so the user understands what the
+	// header is showing when they leave the field blank.
+	function autoLabel(): string {
 		try {
 			const parsed = JSON.parse(block.data_json || '{}') as Record<string, unknown>;
 			const candidates = [
@@ -221,7 +219,7 @@
 			for (const key of candidates) {
 				const v = parsed[key];
 				if (typeof v === 'string' && v.trim().length > 0) {
-					const clean = v.replace(/\[\[|\]\]/g, '');
+					const clean = v.replace(/\[\[|\]\]/g, '').trim();
 					return clean.length > 60 ? `${clean.slice(0, 60)}.` : clean;
 				}
 			}
@@ -231,7 +229,6 @@
 					return `${arr.length} ${key}`;
 				}
 			}
-			// raw_astro doesn't have a headline; fall back to first-line of code.
 			if (block.block_type === 'raw_astro' && typeof parsed.code === 'string') {
 				const firstLine = parsed.code.split('\n').find((l) => l.trim().length > 0) || '';
 				if (firstLine) {
@@ -242,10 +239,21 @@
 		} catch {
 			// ignore
 		}
-		return 'No content yet.';
+		return '';
+	}
+
+	function summary(): string {
+		if (block.name && block.name.trim().length > 0) {
+			const clean = block.name.trim();
+			return clean.length > 60 ? `${clean.slice(0, 60)}.` : clean;
+		}
+		const auto = autoLabel();
+		return auto || 'No content yet.';
 	}
 
 	const summaryText = $derived(summary());
+	const autoLabelText = $derived(autoLabel());
+	const namePlaceholder = $derived(autoLabelText || 'e.g. Hero, homepage');
 
 	function handleCodeInput(e: Event) {
 		const value = (e.currentTarget as HTMLTextAreaElement).value;
@@ -256,9 +264,11 @@
 
 <div
 	role="listitem"
-	class="rounded-xl border border-border/50 bg-bg-surface transition-colors {dragging
-		? 'ring-1 ring-accent opacity-60'
-		: 'hover:bg-bg-elevated/40'}"
+	class="rounded-xl border bg-bg-surface transition-colors {dragging
+		? 'border-accent ring-1 ring-accent opacity-60'
+		: expanded
+			? 'border-border'
+			: 'border-border/50 hover:bg-bg-elevated/40'}"
 	{ondragover}
 	{ondrop}
 	{ondragend}
@@ -283,7 +293,16 @@
 			>
 				{block.block_type}
 			</span>
-			<span class="truncate text-[13px] text-text-secondary">{summaryText}</span>
+			<span
+				class="truncate text-[13px] {block.name && block.name.trim().length > 0
+					? 'text-text-secondary'
+					: 'text-text-muted'}"
+				title={block.name && block.name.trim().length > 0
+					? 'Block name'
+					: 'Auto-derived from block content. Set a Block name in the expanded view to override.'}
+			>
+				{summaryText}
+			</span>
 		</button>
 		<div class="flex items-center gap-2">
 			<Switch bind:checked={visibleBound} />
@@ -336,7 +355,10 @@
 			<div class="mb-4">
 				<Input
 					label="Block name"
-					hint="Shown in the editor card header. Independent of headings inside the block."
+					hint={autoLabelText
+						? `Optional. Defaults to "${autoLabelText}" in the card header.`
+						: 'Optional. Used as the card header label.'}
+					placeholder={namePlaceholder}
 					value={block.name || ''}
 					oninput={(e) => onNameChange((e.currentTarget as HTMLInputElement).value)}
 				/>
