@@ -33,23 +33,30 @@
 		privacy: 'Privacy'
 	};
 
-	// Tone-aware palette. Mirrors the donut + grade badge colours so the
-	// trend chart reads in the same colour vocabulary as the rest of the
-	// evaluation UI.
+	// Brand-aligned monochromatic palette. All five categories share the
+	// brightinteraction.com teal family so the chart reads as ONE
+	// coherent dataset rather than a five-colour rainbow. Differentiation
+	// comes from luminance, not hue. Direct end-of-line labels carry the
+	// category name so the legend doesn't have to map dot-to-line.
 	const COLOR: Record<CategoryKey, string> = {
-		security: '#ef4444',
-		seo: '#6366f1',
-		performance: '#0ea5e9',
-		accessibility: '#f59e0b',
-		privacy: '#10b981'
+		security: '#0E7490',     // cyan-700, darkest
+		seo: '#0891B2',          // cyan-600, brand primary
+		performance: '#06B6D4',  // cyan-400
+		accessibility: '#475569', // slate-600 (neutral foil)
+		privacy: '#94A3B8'       // slate-400 (lightest neutral)
 	};
 
 	const VIEW_W = 800;
 	const VIEW_H = 260;
-	const PAD_L = 40;
-	const PAD_R = 16;
-	const PAD_T = 16;
-	const PAD_B = 36;
+	const PAD_L = 36;
+	const PAD_R = 96; // wider right pad so end-of-line labels fit
+	const PAD_T = 24;
+	const PAD_B = 32;
+	// Y axis floor. Most scores live in the 60-100 band; a 0-100 axis
+	// crams every line into the top 20% of the chart and the variation
+	// disappears. Anchor at 50 so a B/B- still looks like progress.
+	const Y_MIN = 50;
+	const Y_MAX = 100;
 
 	const sorted = $derived(
 		[...builds].sort(
@@ -76,15 +83,17 @@
 		const innerW = VIEW_W - PAD_L - PAD_R;
 		const innerH = VIEW_H - PAD_T - PAD_B;
 		const step = n === 1 ? 0 : innerW / (n - 1);
+		const range = Y_MAX - Y_MIN;
 		const pts: Point[] = [];
 		for (let i = 0; i < n; i++) {
 			const entry = sorted[i];
 			if (!entry) continue;
 			const v = categoryPercent(entry, cat);
 			if (v === null) continue;
-			// Centre the single point when only one build is present.
 			const x = n === 1 ? PAD_L + innerW / 2 : PAD_L + step * i;
-			const y = PAD_T + innerH - (v / 100) * innerH;
+			// Clamp below to Y_MIN so a sub-50 score still shows on chart.
+			const clamped = Math.max(Y_MIN, Math.min(Y_MAX, v));
+			const y = PAD_T + innerH - ((clamped - Y_MIN) / range) * innerH;
 			pts.push({ x, y, v });
 		}
 		return pts;
@@ -105,16 +114,6 @@
 			d += ` Q ${cx} ${cur.y} ${cur.x} ${cur.y}`;
 		}
 		return d;
-	}
-
-	// Closes the line into a filled area for the gradient under each line.
-	function areaPath(pts: Point[]): string {
-		if (pts.length === 0) return '';
-		const first = pts[0];
-		const last = pts[pts.length - 1];
-		if (!first || !last) return '';
-		const baseY = VIEW_H - PAD_B;
-		return `${smoothPath(pts)} L ${last.x} ${baseY} L ${first.x} ${baseY} Z`;
 	}
 
 	let hover = $state<{ idx: number; x: number } | null>(null);
@@ -197,19 +196,12 @@
 			onpointermove={onPointerMove}
 			onpointerleave={onPointerLeave}
 		>
-			<defs>
-				{#each CATEGORIES as cat (cat)}
-					<linearGradient id="grad-{cat}" x1="0" x2="0" y1="0" y2="1">
-						<stop offset="0%" stop-color={COLOR[cat]} stop-opacity="0.18" />
-						<stop offset="100%" stop-color={COLOR[cat]} stop-opacity="0" />
-					</linearGradient>
-				{/each}
-			</defs>
-
-			<!-- Y axis grid lines at 0/50/100. Less noise than 5 levels. -->
-			{#each [0, 50, 100] as level (level)}
+			<!-- Y axis grid: 50/75/100. Anchored to the visible band so the
+			     gridlines actually align with the data. -->
+			{#each [50, 75, 100] as level (level)}
 				{@const innerH = VIEW_H - PAD_T - PAD_B}
-				{@const y = PAD_T + innerH - (level / 100) * innerH}
+				{@const range = Y_MAX - Y_MIN}
+				{@const y = PAD_T + innerH - ((level - Y_MIN) / range) * innerH}
 				<line
 					x1={PAD_L}
 					x2={VIEW_W - PAD_R}
@@ -217,7 +209,7 @@
 					y2={y}
 					stroke="var(--color-border-light, rgba(0,0,0,0.06))"
 					stroke-width="1"
-					stroke-dasharray={level === 0 ? '0' : '3 4'}
+					stroke-dasharray={level === 100 ? '0' : '3 4'}
 				/>
 				<text
 					x={PAD_L - 8}
@@ -244,15 +236,10 @@
 				/>
 			{/if}
 
-			<!-- Area fills, drawn first so lines sit on top -->
-			{#each CATEGORIES as cat (cat)}
-				{@const pts = pointsFor(cat)}
-				{#if pts.length >= 2}
-					<path d={areaPath(pts)} fill="url(#grad-{cat})" stroke="none" />
-				{/if}
-			{/each}
-
-			<!-- Lines per category with bigger anchor points -->
+			<!-- Lines per category. No area fills (the rainbow of overlapping
+			     gradients was the "horrible design" the user called out).
+			     Anchor points only on the latest build to reduce visual
+			     noise; the line itself communicates the trend. -->
 			{#each CATEGORIES as cat (cat)}
 				{@const pts = pointsFor(cat)}
 				{#if pts.length > 0}
@@ -260,20 +247,32 @@
 						d={smoothPath(pts)}
 						fill="none"
 						stroke={COLOR[cat]}
-						stroke-width="2.5"
+						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 					/>
-					{#each pts as p, i (`${cat}-${i}`)}
+					{@const last = pts[pts.length - 1]}
+					{#if last}
 						<circle
-							cx={p.x}
-							cy={p.y}
+							cx={last.x}
+							cy={last.y}
 							r="3.5"
 							fill="var(--color-bg-surface, #ffffff)"
 							stroke={COLOR[cat]}
 							stroke-width="2"
 						/>
-					{/each}
+						<!-- End-of-line label removes the need for a coloured-dot legend.  -->
+						<text
+							x={last.x + 8}
+							y={last.y + 4}
+							text-anchor="start"
+							font-size="10.5"
+							font-weight="500"
+							fill={COLOR[cat]}
+						>
+							{CATEGORY_LABEL[cat]}
+						</text>
+					{/if}
 				{/if}
 			{/each}
 
@@ -334,16 +333,4 @@
 		{/if}
 	{/if}
 
-	<!-- Legend -->
-	<div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-text-muted">
-		{#each CATEGORIES as cat (cat)}
-			<span class="inline-flex items-center gap-1.5">
-				<span
-					class="inline-block h-2 w-2 rounded-full"
-					style="background: {COLOR[cat]};"
-				></span>
-				{CATEGORY_LABEL[cat]}
-			</span>
-		{/each}
-	</div>
 </div>
