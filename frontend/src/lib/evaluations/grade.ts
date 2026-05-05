@@ -1,14 +1,17 @@
 // Single source of truth for the 13-grade scale used by atomicsite
 // evaluations. Mirrors internal/eval/grading.go.ScoreToGrade.
 //
-// Tiers + colours:
-//   A+ A A-      (>= 90)  -> success    (emerald)
-//   B+ B B-      (80-89)  -> success-soft (light emerald)
-//   C+ C C-      (70-79)  -> warning    (amber)
+// Tiers + colours (brand-aligned):
+//   A+ A A-      (>= 90)  -> success      (brand teal #0891B2)
+//   B+ B B-      (80-89)  -> success-soft (brand teal light #06B6D4)
+//   C+ C C-      (70-79)  -> warning      (amber)
 //   D+ D D-      (60-69)  -> warning-strong (orange)
-//   F            (< 60)   -> danger     (red)
+//   F            (< 60)   -> danger       (red)
 //
-// Site Inspector uses an identical scheme so cross-tool readings line up.
+// "Success" is the brightinteraction.com brand teal so high-scoring
+// categories read in the brand's accent colour rather than generic
+// emerald. C/D/F remain warning/danger because the semantic signal
+// (green = good, red = bad) needs to survive any palette change.
 
 export type Grade =
 	| 'A+' | 'A' | 'A-'
@@ -83,9 +86,11 @@ export function pctTone(pct: number): Tone {
 export function toneCSSColor(tone: Tone): string {
 	switch (tone) {
 		case 'success':
-			return 'var(--t-success, #10b981)';
+			// Brand teal (brightinteraction.com gold.DEFAULT = #0891B2).
+			return 'var(--t-success, #0891B2)';
 		case 'success-soft':
-			return 'var(--t-success-soft, #6ee7b7)';
+			// Brand teal light (gold.light = #06B6D4).
+			return 'var(--t-success-soft, #06B6D4)';
 		case 'warning':
 			return 'var(--t-warning, #f59e0b)';
 		case 'warning-strong':
