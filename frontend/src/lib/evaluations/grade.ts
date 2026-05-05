@@ -1,17 +1,16 @@
 // Single source of truth for the 13-grade scale used by atomicsite
 // evaluations. Mirrors internal/eval/grading.go.ScoreToGrade.
 //
-// Tiers + colours (brand-aligned):
-//   A+ A A-      (>= 90)  -> success      (brand teal #0891B2)
-//   B+ B B-      (80-89)  -> success-soft (brand teal light #06B6D4)
-//   C+ C C-      (70-79)  -> warning      (amber)
-//   D+ D D-      (60-69)  -> warning-strong (orange)
-//   F            (< 60)   -> danger       (red)
+// Colours map to atomicsite's own Swiss Minimal palette declared in
+// app.css. We use the existing --t-success / --t-warning / --t-danger
+// tokens rather than inventing new accents so the score badges read
+// in the same vocabulary as every other status surface in the admin.
 //
-// "Success" is the brightinteraction.com brand teal so high-scoring
-// categories read in the brand's accent colour rather than generic
-// emerald. C/D/F remain warning/danger because the semantic signal
-// (green = good, red = bad) needs to survive any palette change.
+//   A+ A A-      (>= 90)  -> --t-success      forest green   #15803d
+//   B+ B B-      (80-89)  -> success-soft     green-600      #16a34a
+//   C+ C C-      (70-79)  -> --t-warning      amber          #d97706
+//   D+ D D-      (60-69)  -> warning-strong   orange         #ea580c
+//   F            (< 60)   -> --t-danger       red            #dc2626
 
 export type Grade =
 	| 'A+' | 'A' | 'A-'
@@ -86,18 +85,16 @@ export function pctTone(pct: number): Tone {
 export function toneCSSColor(tone: Tone): string {
 	switch (tone) {
 		case 'success':
-			// Brand teal (brightinteraction.com gold.DEFAULT = #0891B2).
-			return 'var(--t-success, #0891B2)';
+			return 'var(--t-success, #15803d)';
 		case 'success-soft':
-			// Brand teal light (gold.light = #06B6D4).
-			return 'var(--t-success-soft, #06B6D4)';
+			return 'var(--t-success-soft, #16a34a)';
 		case 'warning':
-			return 'var(--t-warning, #f59e0b)';
+			return 'var(--t-warning, #d97706)';
 		case 'warning-strong':
-			return 'var(--t-warning-strong, #f97316)';
+			return 'var(--t-warning-strong, #ea580c)';
 		case 'danger':
-			return 'var(--t-danger, #ef4444)';
+			return 'var(--t-danger, #dc2626)';
 		default:
-			return 'var(--t-text-muted, #94a3b8)';
+			return 'var(--t-text-muted, #a3a3a3)';
 	}
 }
