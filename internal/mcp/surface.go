@@ -139,6 +139,8 @@ func (s *Server) AgentSurface() AgentSurface {
 			"No tool reads visitor metadata, sessions, fingerprints, or identified-tier records.",
 			"consent/stats returns aggregates only.",
 			"raw_astro and security-category writes are admin-only.",
+			"search_design_corpus reads only the bundled MIT-licensed reference repos; no PII, no site state.",
+			"design_critique reads only the calling site's own evaluations rows; cross-site reads are blocked by AgentAuthMiddleware.",
 		},
 		Endpoint:        "/api/agent/mcp",
 		ProtocolVersion: Protocol,

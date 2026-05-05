@@ -12,6 +12,7 @@ import (
 
 	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/critique"
 	"github.com/bright-interaction/slab/internal/deploy"
 	"github.com/bright-interaction/slab/internal/eval"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
@@ -205,6 +206,13 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 				// Eval failures are non-fatal; build succeeded.
 				result.BuildLog += "\n=== eval ===\nfailed: " + err.Error() + "\n"
 			}
+			// Design critique runs after eval and persists to the same
+			// evaluations table with category="design" so the existing
+			// /api/sites/{id}/evaluations endpoint surfaces both. Same
+			// non-fatal pattern: critique failures don't fail the build.
+			if _, err := critique.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
+				result.BuildLog += "\n=== critique ===\nfailed: " + err.Error() + "\n"
+			}
 		}
 
 		h.mu.Lock()
@@ -285,6 +293,9 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
 				result.BuildLog += "\n=== eval ===\nfailed: " + err.Error() + "\n"
+			}
+			if _, err := critique.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
+				result.BuildLog += "\n=== critique ===\nfailed: " + err.Error() + "\n"
 			}
 			// Auto-deploy to the site's default deploy target so trigger_build
 			// is a true publish verb, not just "build to workspace + eval".
@@ -659,6 +670,9 @@ func (h *BuildHandler) TriggerBuildAdmin(w http.ResponseWriter, r *http.Request)
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, adminSiteID, deployID, result.DistDir); err != nil {
 				result.BuildLog += "\n=== eval ===\nfailed: " + err.Error() + "\n"
+			}
+			if _, err := critique.Run(bgCtx, h.queries, adminSiteID, deployID, result.DistDir); err != nil {
+				result.BuildLog += "\n=== critique ===\nfailed: " + err.Error() + "\n"
 			}
 		}
 

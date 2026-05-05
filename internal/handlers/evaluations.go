@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -41,4 +42,27 @@ func (h *EvaluationHandler) ListBySite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, rows)
+}
+
+// AgentCritique returns the persisted design critique for a build,
+// scoped to the calling agent's site. Mirrors RunDesignCritique used
+// by the MCP tool so REST + MCP return the same shape. URL: GET
+// /api/agent/critique/{buildID} (buildID may be the literal "latest"
+// to fall back to the site's most-recent successful build).
+func (h *EvaluationHandler) AgentCritique(w http.ResponseWriter, r *http.Request) {
+	id := authmw.GetAgent(r)
+	if id == nil {
+		writeError(w, http.StatusUnauthorized, "agent identity required")
+		return
+	}
+	buildID := urlParam(r, "buildID")
+	if buildID == "latest" {
+		buildID = ""
+	}
+	res, err := RunDesignCritique(r.Context(), h.queries, id.SiteID, DesignCritiqueRequest{BuildID: buildID})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }

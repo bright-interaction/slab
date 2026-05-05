@@ -612,6 +612,13 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/agent/build", agentBuildH.TriggerBuild)
 		r.Get("/api/agent/build/{buildID}/status", agentBuildH.BuildStatus)
 
+		// Design critique. Reads the persisted "design" category
+		// evaluations rows, derived from DesignPlaybook anti-patterns +
+		// slop-term rules. buildID may be "latest" to fall back to the
+		// site's most-recent successful build.
+		agentCritiqueH := handlers.NewEvaluationHandler(s.cfg, s.queries)
+		r.Get("/api/agent/critique/{buildID}", agentCritiqueH.AgentCritique)
+
 		// Screenshot. Closes the visual-feedback loop: agent edits blocks,
 		// triggers build, calls /api/agent/screenshot to get a base64 PNG of
 		// the rendered page, and can iterate against pixels in the same turn.
@@ -626,7 +633,8 @@ func (s *Server) Router() http.Handler {
 		// Auth: same X-Agent-Key as the rest of /api/agent/*.
 		mcpServer := mcp.NewServer(s.queries, agentBuildH).
 			WithFontsDir(s.cfg.FontsDir).
-			WithBaseURL(s.cfg.BaseURL)
+			WithBaseURL(s.cfg.BaseURL).
+			WithDesignReferencesDir(s.cfg.DesignReferencesDir)
 		r.Mount("/mcp", mcpServer.Handler())
 
 		// Surface inventory: set the shared closure so the admin

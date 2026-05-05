@@ -45,6 +45,11 @@ type Server struct {
 	// returns BaseURL + /sites/{siteID}/settings/design/figma).
 	baseURL string
 
+	// designReferencesDir points at the bundled MIT-licensed reference
+	// repos that the search_design_corpus tool walks. Empty disables
+	// the tool with a clean "not configured" error.
+	designReferencesDir string
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -61,6 +66,13 @@ func (s *Server) WithFontsDir(dir string) *Server {
 // link the user back to the admin (e.g. Figma import).
 func (s *Server) WithBaseURL(u string) *Server {
 	s.baseURL = u
+	return s
+}
+
+// WithDesignReferencesDir configures the corpus root for the
+// search_design_corpus tool. Should be set to cfg.DesignReferencesDir.
+func (s *Server) WithDesignReferencesDir(dir string) *Server {
+	s.designReferencesDir = dir
 	return s
 }
 
@@ -85,6 +97,7 @@ func NewServer(queries *store.Queries, builds BuildTrigger) *Server {
 	s.registerTools()
 	s.registerResources()
 	s.registerPrompts()
+	s.registerDesignTools()
 	return s
 }
 
