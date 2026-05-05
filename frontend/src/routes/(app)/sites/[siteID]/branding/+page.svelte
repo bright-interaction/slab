@@ -12,11 +12,11 @@
 	import ColorSlot from '$lib/components/branding/ColorSlot.svelte';
 	import ContrastMatrix from '$lib/components/branding/ContrastMatrix.svelte';
 	import type { SlotKey } from '$lib/components/branding/ContrastMatrix.svelte';
-	import BrandingPreview from '$lib/components/branding/BrandingPreview.svelte';
 	import { setSite } from '$lib/stores/currentSite.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { contrastRatio, passesAA } from '$lib/wcag';
-	import { Trash2, RefreshCw, Github, Upload as UploadIcon, Smartphone, Monitor } from 'lucide-svelte';
+	import { Trash2, RefreshCw, Github, Upload as UploadIcon, Eye } from 'lucide-svelte';
+	import BrandingPreviewDialog from '$lib/components/branding/BrandingPreviewDialog.svelte';
 	import type { CssClass, Site } from '$lib/api/types';
 
 	let { data }: { data: { site: Site } } = $props();
@@ -108,7 +108,7 @@
 	});
 
 	let saving = $state(false);
-	let previewViewport = $state<'mobile' | 'desktop'>('mobile');
+	let previewOpen = $state(false);
 
 	const colors = $derived({ primary, secondary, bg, text });
 
@@ -447,6 +447,10 @@
 					{designRefs.length === 1 ? 'ref' : 'refs'}
 				</span>
 			</div>
+			<Button variant="ghost" onclick={() => (previewOpen = true)} title="Open live preview">
+				<Eye class="mr-1 h-3.5 w-3.5" />
+				Preview
+			</Button>
 			<Button variant="ghost" onclick={discard} disabled={!dirty || saving}>
 				Discard
 			</Button>
@@ -456,7 +460,7 @@
 		</div>
 	</header>
 
-	<div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_28rem]">
+	<div class="mt-8">
 		<div class="flex flex-col gap-8">
 			<section class="flex flex-col gap-6">
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
@@ -783,65 +787,20 @@
 			</section>
 		</div>
 
-		<aside class="lg:sticky lg:top-24 lg:self-start">
-			<div class="flex items-center justify-between">
-				<span class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-					Live preview
-				</span>
-				<div
-					role="group"
-					aria-label="Preview viewport"
-					class="inline-flex items-center gap-0.5 rounded-md border border-border-light bg-bg-elevated p-0.5"
-				>
-					<button
-						type="button"
-						aria-pressed={previewViewport === 'mobile'}
-						aria-label="Mobile preview"
-						onclick={() => (previewViewport = 'mobile')}
-						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {previewViewport ===
-						'mobile'
-							? 'bg-bg-surface text-text-primary shadow-sm'
-							: 'text-text-muted hover:text-text-primary'}"
-					>
-						<Smartphone size={13} strokeWidth={1.75} />
-						Mobile
-					</button>
-					<button
-						type="button"
-						aria-pressed={previewViewport === 'desktop'}
-						aria-label="Desktop preview"
-						onclick={() => (previewViewport = 'desktop')}
-						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {previewViewport ===
-						'desktop'
-							? 'bg-bg-surface text-text-primary shadow-sm'
-							: 'text-text-muted hover:text-text-primary'}"
-					>
-						<Monitor size={13} strokeWidth={1.75} />
-						Desktop
-					</button>
-				</div>
-			</div>
-			<div class="mt-4">
-				<BrandingPreview
-					{primary}
-					{secondary}
-					{bg}
-					{text}
-					{surface}
-					{border}
-					{muted}
-					{accent}
-					{onPrimary}
-					{fontHeading}
-					{fontBody}
-					viewport={previewViewport}
-				/>
-			</div>
-			<p class="mt-3 text-center text-[10.5px] text-text-muted">
-				{previewViewport === 'mobile'
-					? 'Click Desktop to scale a 1100px canvas into the panel.'
-					: 'Scaled-down view of the desktop layout.'}
-			</p>
-		</aside>
 	</div>
 </div>
+
+<BrandingPreviewDialog
+	bind:open={previewOpen}
+	{primary}
+	{secondary}
+	{bg}
+	{text}
+	{surface}
+	{border}
+	{muted}
+	{accent}
+	{onPrimary}
+	{fontHeading}
+	{fontBody}
+/>
