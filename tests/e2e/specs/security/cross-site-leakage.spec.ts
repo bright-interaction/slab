@@ -45,9 +45,15 @@ test.describe('security: agent key cannot read another site\'s data', () => {
 			expect(body.site.id).toBe(siteA.id);
 			expect(body.site.id).not.toBe(siteB.id);
 
-			const slugs = (body.structure.pages as Array<{ slug: string }>).map((p) => p.slug);
-			expect(slugs).toContain('/a-only');
-			expect(slugs).not.toContain('/b-only');
+			// Slugs are stored without a leading slash since Phase 24's
+			// slug-normalisation pass; the agent-context surface returns
+			// them as-is. Strip any leading slash before asserting so
+			// the test survives both representations.
+			const slugs = (body.structure.pages as Array<{ slug: string }>).map((p) =>
+				p.slug.replace(/^\//, '')
+			);
+			expect(slugs).toContain('a-only');
+			expect(slugs).not.toContain('b-only');
 		} finally {
 			await ctx.dispose();
 		}

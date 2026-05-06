@@ -22,7 +22,9 @@ test.describe('admin-api: agent-keys', () => {
 		expect(res.status()).toBe(201);
 		const body = await res.json();
 		expect(body.id).toBeTruthy();
-		expect(body.key).toMatch(/^ask_[0-9a-f]{64}$/);
+		// Phase 23 (2026-04-30) renamed the key prefix from `ask_` to
+		// `atomic_` and standardised on 64 hex chars.
+		expect(body.key).toMatch(/^atomic_[0-9a-f]{64}$/);
 		expect(body.note).toMatch(/cannot be retrieved/i);
 	});
 

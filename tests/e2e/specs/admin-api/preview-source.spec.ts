@@ -27,10 +27,14 @@ test.describe('admin-api: block + page preview source', () => {
 	});
 
 	test('GET block preview returns rendered Astro source', async ({ adminApi }) => {
+		// Phase 24 (2026-04-30) renamed the hero data field from
+		// `heading` to `headline` and emits the heading at <h1> level
+		// (one h1 per page, hero owns it). Subheading renders as
+		// <p class="subheading">.
 		const block = await createBlock(adminApi, site.id, page.id, {
 			block_type: 'hero',
 			data: {
-				heading: 'A calm site',
+				headline: 'A calm site',
 				subheading: 'that earns the click',
 				cta_text: 'Get started',
 				cta_url: '/start'
@@ -44,8 +48,8 @@ test.describe('admin-api: block + page preview source', () => {
 		expect(body.block_id).toBe(block.id);
 		expect(body.block_type).toBe('hero');
 		expect(body.page_id).toBe(page.id);
-		expect(body.astro).toContain('<h2>A calm site</h2>');
-		expect(body.astro).toContain('<p>that earns the click</p>');
+		expect(body.astro).toContain('<h1>A calm site</h1>');
+		expect(body.astro).toContain('<p class="subheading">that earns the click</p>');
 		expect(body.astro).toContain('href="/start"');
 		expect(body.astro).toContain('>Get started</a>');
 	});
@@ -96,9 +100,12 @@ test.describe('admin-api: block + page preview source', () => {
 
 	test('GET page preview returns assembled .astro source', async ({ adminApi }) => {
 		const fresh = await createPage(adminApi, site.id, { title: 'About', slug: 'about' });
+		// Hero uses `headline` and renders <h1>; text uses `heading` and
+		// renders <h2>. The order check below verifies the renderer
+		// emits blocks in sort_order regardless of block_type.
 		await createBlock(adminApi, site.id, fresh.id, {
 			block_type: 'hero',
-			data: { heading: 'First section' },
+			data: { headline: 'First section' },
 			sort_order: 0
 		});
 		await createBlock(adminApi, site.id, fresh.id, {
@@ -113,7 +120,7 @@ test.describe('admin-api: block + page preview source', () => {
 		expect(body.slug.replace(/^\//, '')).toBe('about');
 		expect(body.astro).toContain("import Base from '../layouts/Base.astro'");
 		expect(body.astro).toContain('<Base title=');
-		const firstIdx = body.astro.indexOf('<h2>First section</h2>');
+		const firstIdx = body.astro.indexOf('<h1>First section</h1>');
 		const secondIdx = body.astro.indexOf('<h2>Second section</h2>');
 		expect(firstIdx).toBeGreaterThan(-1);
 		expect(secondIdx).toBeGreaterThan(firstIdx);
@@ -131,16 +138,16 @@ test.describe('admin-api: block + page preview source', () => {
 
 	test('Page preview reflects PATCH edits without a build', async ({ adminApi }) => {
 		const fresh = await createPage(adminApi, site.id);
+		// Use a text block (heading -> <h2>) so the test stays
+		// invariant under any future hero re-shape.
 		const block = await createBlock(adminApi, site.id, fresh.id, {
-			block_type: 'hero',
+			block_type: 'text',
 			data: { heading: 'Original' }
 		});
-		// First fetch
 		let res = await adminApi.get(u(`/api/sites/${site.id}/pages/${fresh.id}/preview`));
 		let body = await res.json();
 		expect(body.astro).toContain('<h2>Original</h2>');
 
-		// Edit via PATCH (the same path Text Mode autosave hits) and re-fetch.
 		const patch = await adminApi.patch(
 			u(`/api/sites/${site.id}/pages/${fresh.id}/blocks/${block.id}`),
 			{ data: { data: { heading: 'Edited live' } } }
