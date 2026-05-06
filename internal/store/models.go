@@ -128,6 +128,33 @@ type ConsentSalt struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type ConversionEvent struct {
+	ID             string `json:"id"`
+	SiteID         string `json:"site_id"`
+	GoalID         string `json:"goal_id"`
+	Fingerprint    string `json:"fingerprint"`
+	SessionID      string `json:"session_id"`
+	Path           string `json:"path"`
+	Ts             string `json:"ts"`
+	ValueCents     int64  `json:"value_cents"`
+	ValueCurrency  string `json:"value_currency"`
+	PropertiesJson string `json:"properties_json"`
+}
+
+type ConversionGoal struct {
+	ID            string `json:"id"`
+	SiteID        string `json:"site_id"`
+	Slug          string `json:"slug"`
+	Name          string `json:"name"`
+	MatchType     string `json:"match_type"`
+	MatchValue    string `json:"match_value"`
+	ValueCents    int64  `json:"value_cents"`
+	ValueCurrency string `json:"value_currency"`
+	Active        int64  `json:"active"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
 type CssClass struct {
 	ID        string `json:"id"`
 	SiteID    string `json:"site_id"`

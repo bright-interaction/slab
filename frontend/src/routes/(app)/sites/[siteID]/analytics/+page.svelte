@@ -4,6 +4,9 @@
 	import type {
 		AnalyticsOverview,
 		ConversionPath,
+		GoalAggregate,
+		GoalInput,
+		GoalMatchType,
 		SinceRange,
 		TrackedFieldsResponse,
 		VisitSession
@@ -45,6 +48,20 @@
 
 	let trackedFields = $state<TrackedFieldsResponse | null>(null);
 	let trackedExpanded = $state(false);
+
+	// Phase 31.1 conversion goals.
+	let goals = $state<GoalAggregate[]>([]);
+	let goalsLoading = $state(true);
+	let goalsError = $state<string | null>(null);
+	let goalUniqueVisitors = $state(0);
+	let goalFormOpen = $state(false);
+	let goalSaving = $state(false);
+	let goalSaveError = $state<string | null>(null);
+	let goalDraftSlug = $state('');
+	let goalDraftName = $state('');
+	let goalDraftMatchType = $state<GoalMatchType>('url_pattern');
+	let goalDraftMatchValue = $state('');
+	let goalDraftValueCents = $state(0);
 
 	let nowTick = $state(Date.now());
 	let nowInterval: ReturnType<typeof setInterval> | null = null;
@@ -100,6 +117,7 @@
 
 	$effect(() => {
 		void loadOverview(siteID, since);
+		void loadGoals(siteID, since);
 	});
 
 	$effect(() => {
@@ -113,6 +131,65 @@
 			trackedFields = await analyticsApi.getTrackedFields(id);
 		} catch {
 			trackedFields = null;
+		}
+	}
+
+	async function loadGoals(id: string, range: SinceRange) {
+		goalsLoading = true;
+		goalsError = null;
+		try {
+			const resp = await analyticsApi.getGoalsAnalytics(id, range);
+			goals = resp.goals ?? [];
+			goalUniqueVisitors = resp.unique_visitors ?? 0;
+		} catch (err) {
+			goalsError = err instanceof Error ? err.message : 'Failed to load goals';
+			goals = [];
+		} finally {
+			goalsLoading = false;
+		}
+	}
+
+	function resetGoalDraft() {
+		goalDraftSlug = '';
+		goalDraftName = '';
+		goalDraftMatchType = 'url_pattern';
+		goalDraftMatchValue = '';
+		goalDraftValueCents = 0;
+		goalSaveError = null;
+	}
+
+	async function submitGoal(e: Event) {
+		e.preventDefault();
+		if (goalSaving) return;
+		goalSaving = true;
+		goalSaveError = null;
+		try {
+			await analyticsApi.createGoal(siteID, {
+				slug: goalDraftSlug.trim(),
+				name: goalDraftName.trim(),
+				match_type: goalDraftMatchType,
+				match_value: goalDraftMatchValue.trim(),
+				value_cents: goalDraftValueCents | 0,
+				value_currency: 'EUR',
+				active: true
+			});
+			goalFormOpen = false;
+			resetGoalDraft();
+			await loadGoals(siteID, since);
+		} catch (err) {
+			goalSaveError = err instanceof Error ? err.message : 'Failed to create goal';
+		} finally {
+			goalSaving = false;
+		}
+	}
+
+	async function removeGoal(id: string) {
+		if (!confirm('Delete this goal? Recorded conversions for it will be removed.')) return;
+		try {
+			await analyticsApi.deleteGoal(siteID, id);
+			await loadGoals(siteID, since);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to delete goal');
 		}
 	}
 
@@ -666,6 +743,186 @@
 								</li>
 							{/each}
 						</ul>
+					{/if}
+				</div>
+			</Card>
+		</section>
+
+		<section class="mt-8">
+			<Card padding="md">
+				<div class="flex items-baseline justify-between gap-3">
+					<div>
+						<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+							Goals
+						</h2>
+						<p class="mt-1 text-[12px] text-text-muted">
+							Conversions tracked over the active range. Match a URL pattern,
+							fire <code class="font-mono">window.atomic.track()</code>, or
+							hook a form submission.
+						</p>
+					</div>
+					<Button
+						size="sm"
+						variant="secondary"
+						onclick={() => {
+							goalFormOpen = !goalFormOpen;
+							if (!goalFormOpen) resetGoalDraft();
+						}}
+					>
+						{goalFormOpen ? 'Cancel' : 'New goal'}
+					</Button>
+				</div>
+
+				{#if goalFormOpen}
+					<form
+						class="mt-4 grid gap-3 rounded-lg border border-border-light bg-bg-elevated p-4 sm:grid-cols-2"
+						onsubmit={submitGoal}
+					>
+						<label class="flex flex-col gap-1 text-[12px] text-text-muted">
+							Slug
+							<input
+								type="text"
+								required
+								pattern="[a-z0-9][a-z0-9_-]*"
+								maxlength="63"
+								placeholder="lead"
+								class="rounded border border-border-light bg-bg-surface px-2 py-1 text-[13px] text-text-primary"
+								bind:value={goalDraftSlug}
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-[12px] text-text-muted">
+							Name
+							<input
+								type="text"
+								required
+								maxlength="120"
+								placeholder="Lead captured"
+								class="rounded border border-border-light bg-bg-surface px-2 py-1 text-[13px] text-text-primary"
+								bind:value={goalDraftName}
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-[12px] text-text-muted">
+							Match type
+							<select
+								class="rounded border border-border-light bg-bg-surface px-2 py-1 text-[13px] text-text-primary"
+								bind:value={goalDraftMatchType}
+							>
+								<option value="url_pattern">URL pattern</option>
+								<option value="event_name">Event name (atomic.track)</option>
+								<option value="form_submit">Form submit</option>
+							</select>
+						</label>
+						<label class="flex flex-col gap-1 text-[12px] text-text-muted">
+							Match value
+							<input
+								type="text"
+								required
+								maxlength="1024"
+								placeholder={goalDraftMatchType === 'url_pattern'
+									? '/thank-you/*'
+									: goalDraftMatchType === 'event_name'
+										? 'signup'
+										: 'form_id'}
+								class="rounded border border-border-light bg-bg-surface px-2 py-1 font-mono text-[13px] text-text-primary"
+								bind:value={goalDraftMatchValue}
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-[12px] text-text-muted sm:col-span-2">
+							Value (cents, optional)
+							<input
+								type="number"
+								min="0"
+								step="1"
+								placeholder="0"
+								class="rounded border border-border-light bg-bg-surface px-2 py-1 text-[13px] text-text-primary"
+								bind:value={goalDraftValueCents}
+							/>
+						</label>
+						{#if goalSaveError}
+							<p class="text-[12px] text-danger sm:col-span-2">{goalSaveError}</p>
+						{/if}
+						<div class="flex justify-end gap-2 sm:col-span-2">
+							<Button
+								size="sm"
+								variant="ghost"
+								onclick={() => {
+									goalFormOpen = false;
+									resetGoalDraft();
+								}}
+								type="button"
+							>
+								Cancel
+							</Button>
+							<Button size="sm" variant="primary" type="submit" disabled={goalSaving}>
+								{goalSaving ? 'Saving...' : 'Create goal'}
+							</Button>
+						</div>
+					</form>
+				{/if}
+
+				<div class="mt-4">
+					{#if goalsLoading}
+						<div class="space-y-2">
+							{#each Array(3) as _, i (i)}
+								<Skeleton width="100%" height="2.5rem" />
+							{/each}
+						</div>
+					{:else if goalsError}
+						<p class="py-4 text-[12px] text-danger">{goalsError}</p>
+					{:else if goals.length === 0}
+						<EmptyState
+							title="No goals yet"
+							description="Define a goal to start measuring conversion rate."
+							icon={BarChart3}
+						/>
+					{:else}
+						<table class="w-full text-[13px]">
+							<thead>
+								<tr class="border-b border-border-light text-[11px] font-mono uppercase tracking-[0.15em] text-text-muted">
+									<th class="py-2 text-left font-normal">Goal</th>
+									<th class="py-2 text-left font-normal">Match</th>
+									<th class="py-2 text-right font-normal">Conv</th>
+									<th class="py-2 text-right font-normal">Unique</th>
+									<th class="py-2 text-right font-normal">Rate</th>
+									<th class="py-2 text-right font-normal" aria-label="Actions"></th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each goals as g (g.id)}
+									<tr class="border-b border-border-light/50">
+										<td class="py-2">
+											<div class="font-medium text-text-primary">{g.name}</div>
+											<div class="font-mono text-[11px] text-text-muted">{g.slug}</div>
+										</td>
+										<td class="py-2 font-mono text-[11px] text-text-secondary">
+											<Badge>{g.match_type}</Badge>
+											<span class="ml-1">{g.match_value}</span>
+										</td>
+										<td class="py-2 text-right tabular-nums">{formatNumber(g.conversions)}</td>
+										<td class="py-2 text-right tabular-nums">{formatNumber(g.unique_converters)}</td>
+										<td class="py-2 text-right tabular-nums">
+											{g.conversion_rate_pct.toFixed(2)}%
+										</td>
+										<td class="py-2 text-right">
+											<button
+												type="button"
+												class="text-[11px] text-text-muted hover:text-danger"
+												onclick={() => removeGoal(g.id)}
+												aria-label="Delete {g.name}"
+											>
+												Delete
+											</button>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+						{#if goalUniqueVisitors > 0}
+							<p class="mt-3 text-[11px] text-text-muted">
+								Rate is conversions / unique visitors over the same range
+								({formatNumber(goalUniqueVisitors)} unique).
+							</p>
+						{/if}
 					{/if}
 				</div>
 			</Card>

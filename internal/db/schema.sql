@@ -995,3 +995,46 @@ CREATE TABLE IF NOT EXISTS site_domains (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_site_domains_hostname ON site_domains(hostname);
 CREATE INDEX IF NOT EXISTS idx_site_domains_site ON site_domains(site_id);
 CREATE INDEX IF NOT EXISTS idx_site_domains_status ON site_domains(status);
+
+-- Conversion goals + events (Phase 31.1, 2026-05-06). Each site defines
+-- goals that count as conversions; visit/event/form-submit activity is
+-- evaluated against active goals and a row is appended to
+-- conversion_events on a match. Three match strategies cover the common
+-- cases without leaving operators stuck: a URL-pattern glob for "land
+-- on /thank-you/* counts", an event_name for explicit
+-- atomic.track('signup') JS calls, and a form_submit match keyed on
+-- form_id for native CMS forms. value_cents is optional monetary value
+-- for downstream revenue summing (Phase 31.4 wires deal revenue back
+-- in; goals carry intent-value in the meantime).
+CREATE TABLE IF NOT EXISTS conversion_goals (
+    id              TEXT PRIMARY KEY,
+    site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    slug            TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    match_type      TEXT NOT NULL,
+    match_value     TEXT NOT NULL,
+    value_cents     INTEGER NOT NULL DEFAULT 0,
+    value_currency  TEXT NOT NULL DEFAULT 'EUR',
+    active          INTEGER NOT NULL DEFAULT 1,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_conversion_goals_site ON conversion_goals(site_id);
+CREATE INDEX IF NOT EXISTS idx_conversion_goals_active ON conversion_goals(site_id, active);
+
+CREATE TABLE IF NOT EXISTS conversion_events (
+    id               TEXT PRIMARY KEY,
+    site_id          TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    goal_id          TEXT NOT NULL REFERENCES conversion_goals(id) ON DELETE CASCADE,
+    fingerprint      TEXT NOT NULL,
+    session_id       TEXT NOT NULL DEFAULT '',
+    path             TEXT NOT NULL DEFAULT '',
+    ts               TEXT NOT NULL,
+    value_cents      INTEGER NOT NULL DEFAULT 0,
+    value_currency   TEXT NOT NULL DEFAULT 'EUR',
+    properties_json  TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_conversion_events_site_ts ON conversion_events(site_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_conversion_events_goal_ts ON conversion_events(goal_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_conversion_events_fingerprint ON conversion_events(site_id, fingerprint);

@@ -13,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/conversions"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -37,6 +39,7 @@ type FormHandler struct {
 	mail      MailSender
 	limiter   *loginRateLimiter
 	burst     *formBurstTracker
+	recorder  *conversions.Recorder
 }
 
 func NewFormHandler(cfg *config.Config, queries *store.Queries, mail MailSender) *FormHandler {
@@ -47,8 +50,9 @@ func NewFormHandler(cfg *config.Config, queries *store.Queries, mail MailSender)
 		// 10 submissions per IP per rolling hour. Permissive enough
 		// for the legitimate "filled it twice because the network
 		// blipped" case, restrictive enough to make spam costly.
-		limiter: newLoginRateLimiter(10, time.Hour, 2*time.Hour),
-		burst:   newFormBurstTracker(),
+		limiter:  newLoginRateLimiter(10, time.Hour, 2*time.Hour),
+		burst:    newFormBurstTracker(),
+		recorder: conversions.NewRecorder(queries),
 	}
 }
 
@@ -186,6 +190,22 @@ func (h *FormHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Reset the per-IP counter on success so a legitimate user that
 	// submits two forms in a row doesn't hit the cap.
 	h.limiter.recordSuccess("f:" + ip)
+
+	// Conversion goal evaluation (Phase 31.1). form_submit goals
+	// fire here so a successful submission produces both a
+	// form_submissions row and any matching conversion_event rows.
+	// Best-effort: a failed eval never fails the submit.
+	if h.recorder != nil {
+		fp := authmw.GetFingerprint(r)
+		h.recorder.Evaluate(r.Context(), conversions.Signal{
+			SiteID:      form.SiteID,
+			Fingerprint: fp,
+			Path:        r.Header.Get("Referer"),
+			MatchType:   conversions.MatchTypeFormSubmit,
+			MatchValue:  form.ID,
+			Properties:  map[string]any{"submission_id": subID},
+		})
+	}
 
 	// Optional notification email (fire-and-forget, errors logged).
 	cfg := parseFormActionConfig(form.ActionConfig)
