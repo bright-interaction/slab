@@ -19,8 +19,12 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"regexp"
 
@@ -57,6 +61,24 @@ func GetWorkspaceMembership(r *http.Request) *WorkspaceMembership {
 // by the authenticated user's workspace membership. Mount it after
 // AuthMiddleware so the user is already in context. The {workspaceID}
 // URL param is required.
+//
+// Cross-workspace access policy (Phase 30.6, GDPR-defensible audit
+// trail for the Cloud tier):
+//
+//   - User has a workspace_members row → pass through with that role.
+//   - user.role='admin' without a row → bypass (break-glass), write
+//     audit_log with action="cross_workspace_admin". Both reads and
+//     writes allowed; the audit row is the paper trail.
+//   - user.role='support' without a row → bypass for GET only, write
+//     audit_log with action="cross_workspace_support". Refuses
+//     non-GET with 403 so the support team can never write to a
+//     customer's content. Read-only access for hand-on-tech support
+//     in the early Cloud phase.
+//   - Any other role without a row → 403.
+//
+// Every cross-workspace bypass writes an audit row, so the BI team
+// can answer "who looked at this workspace, when, why" via the
+// existing /api/admin/audit-log surface.
 func WorkspaceAccessMiddleware(queries *store.Queries) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,19 +92,7 @@ func WorkspaceAccessMiddleware(queries *store.Queries) func(http.Handler) http.H
 				writeAuthError(w, http.StatusBadRequest, "Invalid workspaceID")
 				return
 			}
-			// Global admin (the OSS seeded admin) bypasses the check
-			// for backward compat with the single-deploy shape. Cloud
-			// installs disable this bypass via a build-time flag in
-			// Phase 30.2 once Stripe lands; for 30.1 the bypass keeps
-			// existing tests green.
-			if user.Role == "admin" {
-				ctx := context.WithValue(r.Context(), WorkspaceContextKey, &WorkspaceMembership{
-					WorkspaceID: workspaceID,
-					Role:        "owner",
-				})
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
+			// Membership first. Owns the happy path.
 			row, err := queries.GetWorkspaceMembership(r.Context(), store.GetWorkspaceMembershipParams{
 				WorkspaceID: workspaceID,
 				UserID:      user.ID,
@@ -95,13 +105,122 @@ func WorkspaceAccessMiddleware(queries *store.Queries) func(http.Handler) http.H
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
-			if errors.Is(err, sql.ErrNoRows) {
-				writeAuthError(w, http.StatusForbidden, "No access to this workspace")
+			if !errors.Is(err, sql.ErrNoRows) {
+				writeAuthError(w, http.StatusInternalServerError, "Authorization check failed")
 				return
 			}
-			writeAuthError(w, http.StatusInternalServerError, "Authorization check failed")
+
+			// No membership row. Check global-role escalation.
+			switch user.Role {
+			case "admin":
+				writeCrossWorkspaceAudit(r.Context(), queries, user, workspaceID, r, "cross_workspace_admin")
+				ctx := context.WithValue(r.Context(), WorkspaceContextKey, &WorkspaceMembership{
+					WorkspaceID: workspaceID,
+					Role:        "owner",
+				})
+				next.ServeHTTP(w, r.WithContext(ctx))
+			case "support":
+				if r.Method != http.MethodGet && r.Method != http.MethodHead {
+					writeAuthError(w, http.StatusForbidden, "Support role is read-only across workspaces")
+					return
+				}
+				writeCrossWorkspaceAudit(r.Context(), queries, user, workspaceID, r, "cross_workspace_support")
+				ctx := context.WithValue(r.Context(), WorkspaceContextKey, &WorkspaceMembership{
+					WorkspaceID: workspaceID,
+					Role:        "member",
+				})
+				next.ServeHTTP(w, r.WithContext(ctx))
+			default:
+				writeAuthError(w, http.StatusForbidden, "No access to this workspace")
+			}
 		})
 	}
+}
+
+// writeCrossWorkspaceAudit records a cross-workspace bypass event
+// in audit_log. Phase 30.6, 2026-05-06. Logged-best-effort: a write
+// failure is non-fatal (we don't want a DB blip to gate the
+// support-team's admin work) but slog'd so an operator can see it.
+func writeCrossWorkspaceAudit(ctx context.Context, queries *store.Queries, user *AuthUser, workspaceID string, r *http.Request, action string) {
+	changes, _ := json.Marshal(map[string]any{
+		"method": r.Method,
+		"path":   r.URL.Path,
+		"role":   user.Role,
+	})
+	id := newAuditID()
+	if err := queries.WriteAuditLog(ctx, store.WriteAuditLogParams{
+		ID:           id,
+		ActorUserID:  user.ID,
+		ActorRole:    user.Role,
+		ActorIp:      auditClientIP(r),
+		SiteID:       "",
+		Action:       action,
+		ResourceType: "workspace",
+		ResourceID:   workspaceID,
+		ChangesJson:  string(changes),
+	}); err != nil {
+		slog.Warn("audit_log: cross-workspace bypass write failed",
+			"actor", user.ID, "workspace_id", workspaceID, "action", action, "err", err)
+	}
+}
+
+func newAuditID() string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+// auditClientIP picks the best-effort visitor IP for audit_log.
+// Mirrors handlers.clientIP without the import-cycle. Standard
+// X-Forwarded-For first entry → X-Real-IP → r.RemoteAddr.
+func auditClientIP(r *http.Request) string {
+	if v := r.Header.Get("X-Forwarded-For"); v != "" {
+		if comma := indexByte(v, ','); comma > 0 {
+			return trimSpace(v[:comma])
+		}
+		return trimSpace(v)
+	}
+	if v := r.Header.Get("X-Real-IP"); v != "" {
+		return trimSpace(v)
+	}
+	addr := r.RemoteAddr
+	if colon := lastIndexByte(addr, ':'); colon > 0 {
+		return addr[:colon]
+	}
+	return addr
+}
+
+// Tiny string helpers to avoid importing strings just for these. Keeps
+// the middleware free of optional dependencies.
+func indexByte(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+func lastIndexByte(s string, c byte) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
+}
+
+func trimSpace(s string) string {
+	start, end := 0, len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
 }
 
 // RequireWorkspaceRole gates handlers that need a specific role
