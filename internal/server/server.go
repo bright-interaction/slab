@@ -815,10 +815,17 @@ func (s *Server) Router() http.Handler {
 		// + builder logic the REST handlers use. Allow-list driven so
 		// future REST endpoints can't accidentally leak PII through MCP.
 		// Auth: same X-Agent-Key as the rest of /api/agent/*.
+		// Construct a fresh media handler for the MCP migration uploader;
+		// the siteR-scoped migrationMediaH from earlier in this file
+		// isn't visible here. Both wrap the same s.queries / s.storage
+		// so the underlying upload pipeline is identical.
+		mcpMigrationMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage, handlers.NewQuotaHandler(s.queries))
 		mcpServer := mcp.NewServer(s.queries, agentBuildH).
 			WithFontsDir(s.cfg.FontsDir).
 			WithBaseURL(s.cfg.BaseURL).
-			WithDesignReferencesDir(s.cfg.DesignReferencesDir)
+			WithDesignReferencesDir(s.cfg.DesignReferencesDir).
+			WithVerifyJobManager(s.verifyJobMgr).
+			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH))
 		r.Mount("/mcp", mcpServer.Handler())
 
 		// Surface inventory: set the shared closure so the admin

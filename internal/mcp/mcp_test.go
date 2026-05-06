@@ -403,6 +403,106 @@ func TestFontFamilyValidator(t *testing.T) {
 	}
 }
 
+// TestMigrationToolsRegistered asserts the Sprint 4.5 (2026-05-06) MCP
+// migration surface ships every tool needed for an end-to-end CMS
+// migration: read (list / get / list_verifications / list_verify_jobs /
+// list_missing_urls), write (start / apply / delete / verify-live /
+// cancel / create_redirect_from_missing / dismiss). RequiresWrite gating
+// is asserted alongside.
+func TestMigrationToolsRegistered(t *testing.T) {
+	s := &Server{
+		tools:     map[string]Tool{},
+		resources: map[string]Resource{},
+		prompts:   map[string]Prompt{},
+	}
+	s.registerTools()
+
+	readOnly := []string{
+		"list_migrations",
+		"get_migration",
+		"plan_migration",
+		"list_verify_jobs",
+		"get_verify_job",
+		"list_migration_verifications",
+		"list_missing_urls",
+	}
+	for _, name := range readOnly {
+		tool, ok := s.tools[name]
+		if !ok {
+			t.Errorf("read-only migration tool %q missing", name)
+			continue
+		}
+		if tool.RequiresWrite {
+			t.Errorf("migration tool %q marked RequiresWrite; should be readable by any active key", name)
+		}
+	}
+
+	writeTools := []string{
+		"start_migration_crawl",
+		"apply_migration",
+		"delete_migration",
+		"verify_migration_live",
+		"cancel_verify_job",
+		"create_redirect_from_missing",
+		"dismiss_missing_url",
+	}
+	for _, name := range writeTools {
+		tool, ok := s.tools[name]
+		if !ok {
+			t.Errorf("write migration tool %q missing", name)
+			continue
+		}
+		if !tool.RequiresWrite {
+			t.Errorf("migration tool %q must be RequiresWrite=true; mutates site state", name)
+		}
+	}
+}
+
+// TestPathTokenSafeForMCP locks the redirect-creation validation in.
+// Mirrors handlers.pathTokenSafeForHandler so the MCP create_redirect_
+// from_missing tool rejects the same hostile inputs the HTTP handler
+// would. Adding a forbidden char must update both.
+func TestPathTokenSafeForMCP(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"/normal", true},
+		{"/path/with-dash_and-digits-123", true},
+		{"/with{brace", false},
+		{"/with}brace", false},
+		{"/with;semi", false},
+		{"/with\"quote", false},
+		{"/with\\back", false},
+		{"/with'apostrophe", false},
+		{"/with\x00null", false},
+		{"/with\x7fdel", false},
+	}
+	for _, c := range cases {
+		got := pathTokenSafeForMCP(c.in)
+		if got != c.want {
+			t.Errorf("pathTokenSafeForMCP(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestValidRedirectStatusForMCP asserts the 5-status whitelist matches
+// the HTTP handler's validRedirectStatusCodes map.
+func TestValidRedirectStatusForMCP(t *testing.T) {
+	allowed := []int64{301, 302, 307, 308, 410}
+	for _, c := range allowed {
+		if !validRedirectStatusForMCP(c) {
+			t.Errorf("status %d should be allowed", c)
+		}
+	}
+	rejected := []int64{200, 300, 303, 401, 404, 500, 0, -1}
+	for _, c := range rejected {
+		if validRedirectStatusForMCP(c) {
+			t.Errorf("status %d should be rejected", c)
+		}
+	}
+}
+
 // TestCleanFontFilename strips path separators agent-side before they
 // land in the original_name column and any future log line.
 func TestCleanFontFilename(t *testing.T) {

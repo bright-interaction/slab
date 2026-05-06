@@ -10,6 +10,7 @@ import (
 
 	"github.com/bright-interaction/slab/internal/agent"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/migration"
 	"github.com/bright-interaction/slab/internal/store"
 )
 
@@ -50,6 +51,19 @@ type Server struct {
 	// the tool with a clean "not configured" error.
 	designReferencesDir string
 
+	// verifyJobMgr drives the async verify-live worker for migration
+	// MCP tools (Sprint 4, 2026-05-06). Nil disables verify_migration_live
+	// + cancel_verify_job with a clean "not configured" error so the
+	// rest of the migration surface stays callable.
+	verifyJobMgr *migration.JobManager
+
+	// media is the MediaUploader the apply_migration tool injects into
+	// the porter so imported images get re-hosted (no source-CDN
+	// hot-linking). Nil makes apply_migration fall back to a noop
+	// uploader which records each image as a warning - the migration
+	// still applies, the human just gets to retry media later.
+	media migration.MediaUploader
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -73,6 +87,23 @@ func (s *Server) WithBaseURL(u string) *Server {
 // search_design_corpus tool. Should be set to cfg.DesignReferencesDir.
 func (s *Server) WithDesignReferencesDir(dir string) *Server {
 	s.designReferencesDir = dir
+	return s
+}
+
+// WithVerifyJobManager wires the async verify-live worker so the
+// verify_migration_live + cancel_verify_job MCP tools can enqueue +
+// cancel runs. Sprint 4 (2026-05-06).
+func (s *Server) WithVerifyJobManager(m *migration.JobManager) *Server {
+	s.verifyJobMgr = m
+	return s
+}
+
+// WithMediaUploader wires the production media uploader the porter
+// uses when apply_migration is invoked through MCP. Same instance the
+// HTTP MigrationHandler uses; without it apply_migration falls back to
+// a noop uploader and records warnings per image.
+func (s *Server) WithMediaUploader(m migration.MediaUploader) *Server {
+	s.media = m
 	return s
 }
 
