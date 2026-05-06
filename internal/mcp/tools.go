@@ -799,6 +799,12 @@ func (s *Server) registerTools() {
 	// surface so the AI can drive an end-to-end CMS migration through
 	// MCP without dropping to raw HTTP. Lives in tools_migrations.go.
 	s.registerMigrationTools()
+
+	// Conversion goals + events (Phase 31.1.1, 2026-05-06). 6 tools
+	// wrapping the goals admin REST surface plus a server-side
+	// track_event for back-channel conversions. Lives in
+	// tools_goals.go.
+	s.registerGoalTools()
 }
 
 // --- helpers (shared across tool handlers) -------------------------------

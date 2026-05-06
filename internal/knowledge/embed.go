@@ -45,6 +45,7 @@ var docMetadataTable = []docMetadata{
 	{"security-authoring", CategoryStack, 60, "The 11 A+ headers, when to whitelist via allowed_scripts vs csp_extra_directives, why raw_astro is admin-only."},
 	{"personalization", CategoryStack, 70, "Visitor-state hooks the builder leaves available, the do-not-touch boundary on identified-tier PII."},
 	{"cookieproof-integration", CategoryStack, 80, "IMY 2026 equal-prominence rule, cookie-table model, language toggle, override surface."},
+	{"analytics-conversions-and-identify", CategoryStack, 85, "Conversion goals (3 match types), atomic.track JS API, /t/identify + form-auto-identify, end-to-end attribution chain BrightCRM email -> click -> pageview -> form -> CRM."},
 
 	// UX curriculum: the discipline that makes output feel premium.
 	{"typography-scale", CategoryUX, 10, "Inter/Geist/JetBrains-Mono baseline, modular scale, line-heights, font-display:swap, woff2-only policy."},

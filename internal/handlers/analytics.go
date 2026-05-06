@@ -366,6 +366,15 @@ func (h *AnalyticsHandler) AnalyticsTrackedFields(w http.ResponseWriter, r *http
 		{"field": "prefers_reduced_motion", "stored": "0 or 1", "source": "matchMedia('(prefers-reduced-motion)')", "purpose": "Accessibility preference share"},
 		{"field": "time_on_page_ms", "stored": "integer ms (capped 6h)", "source": "Inline beacon: performance.now() delta on hide", "purpose": "Avg time on page, by-page engagement"},
 		{"field": "max_scroll_pct", "stored": "0 to 100", "source": "Inline beacon: scrollY tracker on hide", "purpose": "Deepest scroll position per visit"},
+		// Phase 31.1 / 31.3 (2026-05-06) additions. Visible on the
+		// Tracked Fields panel so the privacy-promise surface stays
+		// in lockstep with the schema as conversion events + form-
+		// submitted email identification become first-class.
+		{"field": "conversion_events.goal_id", "stored": "stable goal slug (operator-authored)", "source": "Goal evaluator on /t/pageview, /t/event, form submit", "purpose": "Per-goal conversion counts and rates"},
+		{"field": "conversion_events.value_cents", "stored": "non-negative integer (minor currency units)", "source": "Goal definition value_cents OR atomic.track({valueCents}) override", "purpose": "Intent-value sums per goal (Phase 31.4 wires realised revenue)"},
+		{"field": "conversion_events.properties_json", "stored": "operator-authored JSON object", "source": "atomic.track(name, props) second arg, or form submission_id", "purpose": "Optional per-event extras for downstream segmentation"},
+		{"field": "visit_sessions.email", "stored": "RFC 5322 address from form submit or POST /t/identify", "source": "PickEmail() over form fields, or explicit /t/identify body", "purpose": "Identified Sessions panel + per-email conversion drill-down (admin only, never exposed via MCP)"},
+		{"field": "visit_sessions.identified_at", "stored": "RFC3339 UTC timestamp (preserved on re-identify via COALESCE)", "source": "First successful identify; preserves the original moment of consent", "purpose": "Time-to-identify metrics, retention sweep boundary (identified sessions are kept regardless of last_seen_at)"},
 	}
 	notTracked := []map[string]string{
 		{"field": "ip", "reason": "Hashed into fingerprint then dropped at the parser. Never written to disk."},
@@ -373,6 +382,8 @@ func (h *AnalyticsHandler) AnalyticsTrackedFields(w http.ResponseWriter, r *http
 		{"field": "city / region", "reason": "We use only CF-IPCountry. No IP geo-lookup, no city/region storage."},
 		{"field": "click events / mouse coords", "reason": "Out of scope. Beacon collects engagement, not surveillance."},
 		{"field": "cookies", "reason": "No analytics cookies. Visit identification uses the hashed fingerprint."},
+		{"field": "form-submitted PII other than email", "reason": "Form submissions land in form_submissions.data_json with site_id-scoped access. Only the email is promoted to visit_sessions for analytics; everything else stays in the form's own row, retention-policied separately."},
+		{"field": "identified email exposure via MCP", "reason": "The visit_sessions.email column is admin-only via the REST surface. MCP returns aggregate counts and rates, never per-email lists; an agent that needs drill-down works through the operator."},
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tracked":     tracked,

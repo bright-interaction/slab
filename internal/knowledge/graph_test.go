@@ -108,10 +108,11 @@ func TestBuildGraphOrderedAfterChainsCurriculum(t *testing.T) {
 			uxChain++
 		}
 	}
-	// 10 stack docs (after Sprint 4 added collection-design-patterns +
-	// schema-org-per-collection-type) and 10 ux docs; chain is n-1.
-	if stackChain != 9 {
-		t.Errorf("expected 9 stack ordered_after edges, got %d", stackChain)
+	// 11 stack docs (Sprint 4 added collection-design-patterns +
+	// schema-org-per-collection-type; Phase 31.1.1 added
+	// analytics-conversions-and-identify) and 10 ux docs; chain is n-1.
+	if stackChain != 10 {
+		t.Errorf("expected 10 stack ordered_after edges, got %d", stackChain)
 	}
 	if uxChain != 9 {
 		t.Errorf("expected 9 ux ordered_after edges, got %d", uxChain)

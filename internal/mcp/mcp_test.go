@@ -78,6 +78,13 @@ func TestRequiredToolsRegistered(t *testing.T) {
 		"trigger_build",
 		"get_build_status",
 		"get_evaluation",
+		// Phase 31.1.1 conversion goals + events.
+		"list_goals",
+		"create_goal",
+		"update_goal",
+		"delete_goal",
+		"get_goals_analytics",
+		"track_event",
 	}
 	for _, name := range required {
 		if _, ok := s.tools[name]; !ok {
@@ -92,6 +99,8 @@ func TestRequiredToolsRegistered(t *testing.T) {
 		"atomicsite://site/i18n",
 		"atomicsite://site/pending_setup",
 		"atomicsite://site/structure",
+		// Phase 31.1.1 (2026-05-06).
+		"atomicsite://analytics/goals",
 	}
 	for _, uri := range requiredResources {
 		if _, ok := s.resources[uri]; !ok {
