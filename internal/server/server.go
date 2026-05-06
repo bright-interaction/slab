@@ -495,10 +495,17 @@ func (s *Server) Router() http.Handler {
 		// a source CMS (sitemap / WordPress / Webflow / Ghost), store the
 		// normalised manifest, generate a URL plan, then apply: pages +
 		// collection items + redirects + re-uploaded media all commit in
-		// one call. The default media uploader is a no-op (warns instead
-		// of fetching binaries) so this surface works out of the box;
-		// cmd/server/main.go wires the real uploader when ready.
-		migrH := handlers.NewMigrationHandler(s.cfg, s.queries, handlers.NoopMediaUploader())
+		// one call.
+		//
+		// Sprint 1 of the post-Layer-3d plan (2026-05-06): the migration
+		// porter now hands off media to the production uploader, which
+		// runs every imported image through the same SSRF-guarded fetch
+		// + imaging pipeline that drives /api/sites/{id}/media/upload-
+		// from-url. Result: migrated sites are fully self-hosted (no
+		// hot-linking the source CDN) and inherit content-type + quota
+		// guarantees automatically.
+		migrationMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage, quotaH)
+		migrH := handlers.NewMigrationHandler(s.cfg, s.queries, handlers.NewProductionMediaUploader(migrationMediaH))
 		siteR.Get("/api/sites/{siteID}/migrations", migrH.List)
 		siteR.Post("/api/sites/{siteID}/migrations", migrH.Start)
 		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}", migrH.Get)
