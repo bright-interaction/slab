@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -41,6 +42,17 @@ func newRedirectHandlerForTest(t *testing.T) (*RedirectHandler, *store.Queries, 
 	}); err != nil {
 		t.Fatalf("create site: %v", err)
 	}
+	// Sprint 3 (2026-05-06): bulk import is plan-gated, which requires
+	// resolveUserWorkspace to find a workspace. Seed an OSS workspace
+	// so the gate's "unlimited" path returns -1 and tests pass without
+	// hitting plan caps.
+	if err := q.CreateWorkspace(context.Background(), store.CreateWorkspaceParams{
+		ID: "ws-redir-test", Name: "Test", Slug: "test-redir-ws",
+		Plan: "oss", Region: "eu", BillingEmail: "ops@test.local",
+		Status: "active", TrialEndsAt: "",
+	}); err != nil {
+		t.Fatalf("seed workspace: %v", err)
+	}
 	cfg := &config.Config{BaseURL: "http://localhost:8080"}
 	return NewRedirectHandler(cfg, q), q, siteID
 }
@@ -53,6 +65,11 @@ func withRedirectParams(siteID, redirectID string, h http.HandlerFunc) http.Hand
 			rctx.URLParams.Add("redirectID", redirectID)
 		}
 		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+		// Sprint 3 (2026-05-06): bulk import requires auth context.
+		// Inject admin so resolveUserWorkspace finds the seeded ws.
+		// Other handlers (Create/Update/Delete/Get/List) ignore the
+		// extra context, so this is a safe no-op for them.
+		r = seedAuthCtx(r)
 		h(w, r)
 	}
 }
@@ -386,5 +403,129 @@ func TestRedirects_DeleteRemovesRow(t *testing.T) {
 	}
 	if rows, _ := q.ListRedirectsBySite(context.Background(), siteID); len(rows) != 0 {
 		t.Errorf("delete left rows: %+v", rows)
+	}
+}
+
+// ------- Sprint 3: bulk import plan-quota gate -------
+
+// newRedirectStackOnPlan constructs a redirect handler whose seeded
+// workspace is on a specific billing plan, so the cap test can target
+// any tier in the ladder.
+func newRedirectStackOnPlan(t *testing.T, plan string) (*RedirectHandler, *store.Queries, string) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "redirq.db")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	q := store.New(sqlDB)
+	siteID := "abcdef0123456789abcdefrq"
+	_ = q.CreateSite(context.Background(), store.CreateSiteParams{
+		ID: siteID, Name: "T", Slug: "t-redir-q", PrimaryColor: "#000",
+		SecondaryColor: "#000", BgColor: "#FFF", TextColor: "#111",
+		FontHeading: "Inter", FontBody: "Inter", Lang: "en",
+	})
+	_ = q.CreateWorkspace(context.Background(), store.CreateWorkspaceParams{
+		ID: "ws-redir-quota", Name: "Quota", Slug: "redir-quota-ws",
+		Plan: plan, Region: "eu", BillingEmail: "ops@test.local",
+		Status: "active", TrialEndsAt: "",
+	})
+	cfg := &config.Config{BaseURL: "http://localhost:8080"}
+	return NewRedirectHandler(cfg, q), q, siteID
+}
+
+// TestRedirects_BulkImportBlockedBySoloPlanCap verifies that 501 redirect
+// rows on a Solo plan (cap=500) returns 402 with no rows inserted.
+func TestRedirects_BulkImportBlockedBySoloPlanCap(t *testing.T) {
+	h, q, siteID := newRedirectStackOnPlan(t, "solo")
+	items := make([]map[string]any, 501)
+	for i := range items {
+		items[i] = map[string]any{
+			"from_path":   fmt.Sprintf("/q-from-%d", i),
+			"to_path":     fmt.Sprintf("/q-to-%d", i),
+			"status_code": 301,
+		}
+	}
+	rr := postJSONRedir(withRedirectParams(siteID, "", h.BulkImport), map[string]any{
+		"items": items,
+	})
+	if rr.Code != http.StatusPaymentRequired {
+		t.Fatalf("want 402, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rows, _ := q.ListRedirectsBySite(context.Background(), siteID)
+	if len(rows) != 0 {
+		t.Errorf("quota-blocked import must insert zero rows, got %d", len(rows))
+	}
+}
+
+// TestRedirects_BulkImportAllowedAtSoloCap verifies the boundary: exactly
+// 500 redirects on a Solo plan succeeds.
+func TestRedirects_BulkImportAllowedAtSoloCap(t *testing.T) {
+	h, q, siteID := newRedirectStackOnPlan(t, "solo")
+	items := make([]map[string]any, 500)
+	for i := range items {
+		items[i] = map[string]any{
+			"from_path":   fmt.Sprintf("/cap-from-%d", i),
+			"to_path":     fmt.Sprintf("/cap-to-%d", i),
+			"status_code": 301,
+		}
+	}
+	rr := postJSONRedir(withRedirectParams(siteID, "", h.BulkImport), map[string]any{
+		"items": items,
+	})
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("at-cap import must succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	rows, _ := q.ListRedirectsBySite(context.Background(), siteID)
+	if len(rows) != 500 {
+		t.Errorf("want 500 rows, got %d", len(rows))
+	}
+}
+
+// TestRedirects_BulkImportAccountsForExistingRedirects: 499 already
+// stored on a Solo plan, importing 2 more must 402 because total = 501.
+func TestRedirects_BulkImportAccountsForExisting(t *testing.T) {
+	h, q, siteID := newRedirectStackOnPlan(t, "solo")
+	for i := 0; i < 499; i++ {
+		_ = q.CreateRedirect(context.Background(), store.CreateRedirectParams{
+			ID: fmt.Sprintf("pre%04d", i), SiteID: siteID,
+			FromPath: fmt.Sprintf("/pre-%d", i), ToPath: fmt.Sprintf("/dst-%d", i),
+			StatusCode: 301, IsAuto: 0,
+		})
+	}
+	rr := postJSONRedir(withRedirectParams(siteID, "", h.BulkImport), map[string]any{
+		"items": []map[string]any{
+			{"from_path": "/extra-a", "to_path": "/x", "status_code": 301},
+			{"from_path": "/extra-b", "to_path": "/y", "status_code": 301},
+		},
+	})
+	if rr.Code != http.StatusPaymentRequired {
+		t.Errorf("want 402 (existing+projected over cap), got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestRedirects_BulkImportAllowedOnOSSPlan: OSS plan returns -1
+// (unlimited) so a large import only hits the global 50k ceiling.
+func TestRedirects_BulkImportAllowedOnOSSPlan(t *testing.T) {
+	h, _, siteID := newRedirectStackOnPlan(t, "oss")
+	items := make([]map[string]any, 600) // > solo cap, < global ceiling
+	for i := range items {
+		items[i] = map[string]any{
+			"from_path":   fmt.Sprintf("/oss-%d", i),
+			"to_path":     fmt.Sprintf("/d-%d", i),
+			"status_code": 301,
+		}
+	}
+	rr := postJSONRedir(withRedirectParams(siteID, "", h.BulkImport), map[string]any{
+		"items": items,
+	})
+	if rr.Code != http.StatusCreated {
+		t.Errorf("OSS unlimited tier must allow large bulk import, got %d", rr.Code)
 	}
 }

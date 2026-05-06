@@ -221,6 +221,17 @@ func (h *RedirectHandler) BulkImport(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("Importing %d rows would exceed site cap of %d", len(items), redirectMaxPerSite))
 		return
 	}
+	// Sprint 3 (2026-05-06): plan-quota gate. Workspace plan caps are
+	// stricter than the global redirectMaxPerSite for paid tiers
+	// (solo=500, studio=2500, agency=10000) so the bulk import path
+	// has to consult the plan before inserting. OSS / unlimited plans
+	// fall through to the global 50k cap above. Auth required: an
+	// anonymous bulk import returns 401 here, matching the migration
+	// Apply contract.
+	if status, msg := h.checkRedirectsQuotaForImport(r, siteID, count, int64(len(items))); status != 0 {
+		writeError(w, status, msg)
+		return
+	}
 
 	// Validate every row before touching the DB. Includes intra-batch
 	// collision detection so a single bad batch is rejected as a unit.
@@ -588,4 +599,31 @@ func redirectToMap(r store.Redirect) map[string]any {
 		"is_auto":     r.IsAuto == 1,
 		"created_at":  r.CreatedAt,
 	}
+}
+
+// checkRedirectsQuotaForImport enforces the workspace plan's
+// max_redirects_per_site cap before bulk import inserts new rows.
+// Returns (0, "") on pass; (status, message) on refuse. OSS / unlimited
+// tiers return -1 from the EE provider so they bypass the gate and
+// fall through to the global redirectMaxPerSite ceiling. Auth required.
+func (h *RedirectHandler) checkRedirectsQuotaForImport(r *http.Request, siteID string, current, projected int64) (int, string) {
+	workspaceID, err := resolveUserWorkspace(r, h.queries)
+	if err != nil {
+		return http.StatusUnauthorized, err.Error()
+	}
+	limit := planLimitForRequest(r.Context(), h.queries, workspaceID, "max_redirects_per_site")
+	if limit < 0 {
+		return 0, ""
+	}
+	if current+projected > limit {
+		AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "redirect_import_blocked", "", map[string]any{
+			"reason":       "max_redirects_per_site",
+			"current":      current,
+			"projected":    projected,
+			"limit":        limit,
+			"workspace_id": workspaceID,
+		})
+		return http.StatusPaymentRequired, quotaRedirectsError(current, projected, limit)
+	}
+	return 0, ""
 }

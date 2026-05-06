@@ -78,3 +78,48 @@ func TestAllReturnsCommercialOnly(t *testing.T) {
 		}
 	}
 }
+
+// TestMaxPagesPerSite locks in the per-tier page caps that gate migration
+// Apply (Sprint 3 of the post-Layer-3d plan, 2026-05-06). Solo's 50 cap
+// is what stops a free-trial user from importing a 500-page WordPress
+// blog into a tier they're not paying for.
+func TestMaxPagesPerSite(t *testing.T) {
+	cases := map[string]int64{
+		"oss":    -1,
+		"solo":   50,
+		"studio": 250,
+		"agency": 1000,
+	}
+	for plan, want := range cases {
+		if got := Limit(plan, "max_pages_per_site"); got != want {
+			t.Errorf("%s max_pages_per_site: got %d, want %d", plan, got, want)
+		}
+	}
+}
+
+// TestMaxRedirectsPerSite locks in the per-tier redirect caps that gate
+// bulk redirect import. The migration porter emits ~1.5x as many redirects
+// as pages on a typical migration (page renames + .html stripping + date
+// archive collapse), so the cap scales as 10x pages to leave headroom.
+func TestMaxRedirectsPerSite(t *testing.T) {
+	cases := map[string]int64{
+		"oss":    -1,
+		"solo":   500,
+		"studio": 2500,
+		"agency": 10000,
+	}
+	for plan, want := range cases {
+		if got := Limit(plan, "max_redirects_per_site"); got != want {
+			t.Errorf("%s max_redirects_per_site: got %d, want %d", plan, got, want)
+		}
+	}
+}
+
+// TestLimitOnUnknownPlan ensures malformed workspace.plan values don't
+// silently grant unlimited quotas - they fall back to OSS which IS
+// unlimited (-1) but at least the behaviour is documented.
+func TestLimitOnUnknownPlan(t *testing.T) {
+	if got := Limit("future-tier-not-yet-shipped", "max_pages_per_site"); got != -1 {
+		t.Errorf("unknown plan should fall back to oss (-1), got %d", got)
+	}
+}

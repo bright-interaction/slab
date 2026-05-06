@@ -287,6 +287,20 @@ func (h *MigrationHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	}
 	plan := migration.PlanURLs(&manifest, existing, opts)
 
+	// Sprint 3 (2026-05-06): plan-quota gate. Refuse with 402 when the
+	// migration would push the site past its workspace plan's
+	// max_pages_per_site cap. The porter does NOT enforce this on its
+	// own (CreatePage doesn't see the workspace) so the gate has to
+	// live at the handler boundary. OSS / unknown plans return -1 from
+	// the EE provider so OSS users keep unlimited access.
+	if status, msg := h.checkPagesQuotaForApply(r, siteID, plan); status != 0 {
+		_ = h.queries.UpdateMigrationStatus(r.Context(), store.UpdateMigrationStatusParams{
+			ID: id, Status: "ready", Error: "",
+		})
+		writeError(w, status, msg)
+		return
+	}
+
 	porter := migration.NewPorter(h.queries, h.media)
 	result, err := porter.Apply(r.Context(), siteID, &manifest, plan)
 	if err != nil {
@@ -613,6 +627,50 @@ func (h *MigrationHandler) ListVerifications(w http.ResponseWriter, r *http.Requ
 		"ok":     counts.OkCount,
 		"failed": counts.FailCount,
 	})
+}
+
+// checkPagesQuotaForApply enforces the workspace plan's
+// max_pages_per_site cap before the porter inserts pages. Returns
+// (0, "") when the plan permits the import (or is unlimited or OSS or
+// unauthenticated-test-context). Returns (status, message) when the
+// import would exceed the cap. The migration row stays at status="ready"
+// so the operator can adjust skip paths or upgrade the plan and retry.
+//
+// Auth context is REQUIRED: an anonymous Apply call returns 401 here.
+// This matches SiteHandler.Seed which already gates on authentication.
+func (h *MigrationHandler) checkPagesQuotaForApply(r *http.Request, siteID string, plan migration.URLPlan) (int, string) {
+	workspaceID, err := resolveUserWorkspace(r, h.queries)
+	if err != nil {
+		return http.StatusUnauthorized, err.Error()
+	}
+	limit := planLimitForRequest(r.Context(), h.queries, workspaceID, "max_pages_per_site")
+	if limit < 0 {
+		// OSS or unlimited tier: skip gate.
+		return 0, ""
+	}
+	current, err := h.queries.CountPagesBySite(r.Context(), siteID)
+	if err != nil {
+		// Don't refuse on a transient count failure; the porter has its
+		// own integrity guarantees. Log via audit on the apply success.
+		return 0, ""
+	}
+	projected := int64(0)
+	for _, pp := range plan.Pages {
+		if !pp.Skipped {
+			projected++
+		}
+	}
+	if current+projected > limit {
+		AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "migration_apply_blocked", "", map[string]any{
+			"reason":          "max_pages_per_site",
+			"current":         current,
+			"projected":       projected,
+			"limit":           limit,
+			"workspace_id":    workspaceID,
+		})
+		return http.StatusPaymentRequired, quotaPagesError(siteID, current, projected, limit)
+	}
+	return 0, ""
 }
 
 // noopMediaUploader is the default uploader when the server boots without
