@@ -224,7 +224,10 @@
 			General
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			Site identity, primary domain, language and meta defaults.
+			Site name, languages, and meta-tag defaults. Custom hostnames + TLS live in
+			<a href="/sites/{siteID}/settings/domains" class="text-accent underline-offset-2 hover:underline">Domains</a>;
+			where the built artifact ships to is in
+			<a href="/sites/{siteID}/settings/deployment" class="text-accent underline-offset-2 hover:underline">Deployment</a>.
 		</p>
 	</header>
 

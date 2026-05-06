@@ -14,7 +14,8 @@
 		FileText,
 		Bot,
 		Sparkles,
-		Lock
+		Lock,
+		Import
 	} from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
 
@@ -78,35 +79,66 @@
 		</p>
 	</header>
 
-	<section class="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+	{#snippet groupHeading(label: string, hint: string)}
+		<header class="mb-3 mt-8 flex flex-col gap-0.5">
+			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">{label}</h2>
+			<p class="text-[12px] text-text-secondary">{hint}</p>
+		</header>
+	{/snippet}
+
+	{@render groupHeading(
+		'Site identity',
+		'Names, languages, and the legal/contact info that surfaces in your footer and JSON-LD.'
+	)}
+	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/general`,
 			'General',
-			'Site name, domain, language, defaults.',
+			'Site name, default language, hreflang, meta-tag templates.',
 			SettingsIcon
 		)}
 		{@render sectionCard(
-			`/sites/${siteID}/settings/agent`,
-			'Agent',
-			'Inventory of what an AI agent connected via MCP can see and do.',
-			Bot
+			`/sites/${siteID}/settings/profile`,
+			'Business info',
+			'Legal name, registration number, address, privacy + security contacts. Powers footer, security.txt, JSON-LD.',
+			Building2
 		)}
+	</section>
+
+	{@render groupHeading(
+		'Hosting',
+		'Where the site answers from on the public internet, and where the built artifact gets shipped.'
+	)}
+	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/domains`,
 			'Domains',
-			'Custom hostnames, verification, TLS, canonical URL.',
+			'Custom hostnames, DNS verification, Lets Encrypt TLS, canonical flag, 301 aliases.',
 			Globe
 		)}
 		{@render sectionCard(
-			`/sites/${siteID}/settings/security`,
-			'Security',
-			'HSTS, CSP, frame options, referrer policy.',
-			ShieldCheck
+			`/sites/${siteID}/settings/deployment`,
+			'Deployment',
+			'Targets the built artifact rsyncs to (rsync, Dockyard, local). Distinct from Domains: which server publishes vs which hostname answers.',
+			Cloud
 		)}
+		{@render sectionCard(
+			`/sites/${siteID}/settings/nginx`,
+			'Nginx preview',
+			'Read-only preview of the per-domain server config the builder emits. Debug aid.',
+			Server
+		)}
+	</section>
+
+	{@render groupHeading(
+		'Discovery and tracking',
+		'How search engines, AI assistants, and analytics see the live site.'
+	)}
+	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/seo`,
 			'SEO',
-			'Meta templates, sitemap, robots, hreflang.',
+			'Meta templates, sitemap, robots.txt, hreflang.',
 			Search
 		)}
 		{@render sectionCard(
@@ -115,36 +147,51 @@
 			'CookieProof, GA4, Umami, CRM webhook.',
 			BarChart3
 		)}
+	</section>
+
+	{@render groupHeading(
+		'Security',
+		'Headers + scripts the site emits to the visitor browser.'
+	)}
+	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+		{@render sectionCard(
+			`/sites/${siteID}/settings/security`,
+			'Headers',
+			'HSTS, CSP, frame options, referrer policy.',
+			ShieldCheck
+		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/allowed-scripts`,
 			'Trusted external domains',
 			'Whitelist iframes (cal.com), scripts, CDNs in CSP.',
 			Code2
 		)}
+	</section>
+
+	{@render groupHeading(
+		'Workflow and integrations',
+		'Bulk operations on this site and what an AI agent can do via MCP.'
+	)}
+	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
-			`/sites/${siteID}/settings/profile`,
-			'Profile',
-			'Business info, legal contacts, address.',
-			Building2
+			`/sites/${siteID}/migrations`,
+			'Migrations',
+			'Crawl a source CMS (Sitemap, WordPress, Webflow, Ghost), review the URL plan, apply pages + redirects + media, then verify the live site after DNS flips.',
+			Import
 		)}
 		{@render sectionCard(
-			`/sites/${siteID}/settings/nginx`,
-			'Nginx',
-			'Preview the generated server config.',
-			Server
-		)}
-		{@render sectionCard(
-			`/sites/${siteID}/settings/deployment`,
-			'Deployment',
-			'Targets for publishing built sites.',
-			Cloud
+			`/sites/${siteID}/settings/agent`,
+			'Agent (MCP)',
+			'Inventory of what an AI agent connected via MCP can see and do on this site.',
+			Bot
 		)}
 	</section>
 
 	<p class="mt-6 text-[12px] text-text-muted">
-		Looking for "Delete this site"? It's now in
-		<a href="/account" class="text-accent underline-offset-2 hover:underline">Account settings</a>
-		so destructive cross-site actions live in one place.
+		Looking for "Delete this site" or your own user profile (name, password, MFA)?
+		Both live in
+		<a href="/account" class="text-accent underline-offset-2 hover:underline">Account settings</a>.
+		The "Business info" card above is for the SITE's legal info (footer, schema), not your user account.
 	</p>
 
 	<section class="mt-10">
