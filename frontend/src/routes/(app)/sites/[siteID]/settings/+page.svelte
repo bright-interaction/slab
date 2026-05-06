@@ -43,14 +43,15 @@
 
 {#snippet sectionCard(
 	href: string,
+	sectionLabel: string,
 	title: string,
 	subtitle: string,
 	IconCmp: typeof SettingsIcon,
 	danger: boolean = false
 )}
-	<a {href} class="block">
-		<Card padding="md" hoverable class={danger ? 'border-danger/30' : ''}>
-			<div class="flex items-start gap-3">
+	<a {href} class="block h-full">
+		<Card padding="md" hoverable class="h-full {danger ? 'border-danger/30' : ''}">
+			<div class="flex items-start gap-3 h-full">
 				<span
 					class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-light {danger
 						? 'text-danger bg-danger/5'
@@ -59,6 +60,9 @@
 					<IconCmp size={16} strokeWidth={1.5} />
 				</span>
 				<div class="flex flex-col gap-0.5 min-w-0">
+					<p class="text-[10px] font-mono uppercase tracking-[0.18em] text-text-muted">
+						{sectionLabel}
+					</p>
 					<p class="text-[13px] font-medium {danger ? 'text-danger' : 'text-text-primary'}">
 						{title}
 					</p>
@@ -79,110 +83,82 @@
 		</p>
 	</header>
 
-	{#snippet groupHeading(label: string, hint: string)}
-		<header class="mb-3 mt-8 flex flex-col gap-0.5">
-			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">{label}</h2>
-			<p class="text-[12px] text-text-secondary">{hint}</p>
-		</header>
-	{/snippet}
-
-	{@render groupHeading(
-		'Site identity',
-		'Names, languages, and the legal/contact info that surfaces in your footer and JSON-LD.'
-	)}
-	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+	<section class="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/general`,
+			'Site identity',
 			'General',
 			'Site name, default language, hreflang, meta-tag templates.',
 			SettingsIcon
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/profile`,
+			'Site identity',
 			'Business info',
-			'Legal name, registration number, address, privacy + security contacts. Powers footer, security.txt, JSON-LD.',
+			'Legal name, address, privacy + security contacts. Powers footer, security.txt, JSON-LD.',
 			Building2
 		)}
-	</section>
-
-	{@render groupHeading(
-		'Hosting',
-		'Where the site answers from on the public internet, and where the built artifact gets shipped.'
-	)}
-	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/domains`,
+			'Hosting',
 			'Domains',
-			'Custom hostnames, DNS verification, Lets Encrypt TLS, canonical flag, 301 aliases.',
+			'Custom hostnames, DNS verification, TLS, canonical flag, 301 aliases.',
 			Globe
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/deployment`,
+			'Hosting',
 			'Deployment',
-			'Targets the built artifact rsyncs to (rsync, Dockyard, local). Distinct from Domains: which server publishes vs which hostname answers.',
+			'Where the built artifact rsyncs to (rsync, Dockyard, local).',
 			Cloud
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/nginx`,
+			'Hosting',
 			'Nginx preview',
-			'Read-only preview of the per-domain server config the builder emits. Debug aid.',
+			'Read-only preview of the generated server config. Debug aid.',
 			Server
 		)}
-	</section>
-
-	{@render groupHeading(
-		'Discovery and tracking',
-		'How search engines, AI assistants, and analytics see the live site.'
-	)}
-	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/seo`,
+			'Discovery',
 			'SEO',
 			'Meta templates, sitemap, robots.txt, hreflang.',
 			Search
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/analytics`,
+			'Discovery',
 			'Analytics',
 			'CookieProof, GA4, Umami, CRM webhook.',
 			BarChart3
 		)}
-	</section>
-
-	{@render groupHeading(
-		'Security',
-		'Headers + scripts the site emits to the visitor browser.'
-	)}
-	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/settings/security`,
+			'Security',
 			'Headers',
 			'HSTS, CSP, frame options, referrer policy.',
 			ShieldCheck
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/allowed-scripts`,
+			'Security',
 			'Trusted external domains',
 			'Whitelist iframes (cal.com), scripts, CDNs in CSP.',
 			Code2
 		)}
-	</section>
-
-	{@render groupHeading(
-		'Workflow and integrations',
-		'Bulk operations on this site and what an AI agent can do via MCP.'
-	)}
-	<section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
 		{@render sectionCard(
 			`/sites/${siteID}/migrations`,
+			'Workflow',
 			'Migrations',
-			'Crawl a source CMS (Sitemap, WordPress, Webflow, Ghost), review the URL plan, apply pages + redirects + media, then verify the live site after DNS flips.',
+			'Crawl a source CMS, review the URL plan, apply pages + redirects + media, verify after DNS flips.',
 			Import
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/agent`,
+			'Workflow',
 			'Agent (MCP)',
-			'Inventory of what an AI agent connected via MCP can see and do on this site.',
+			'What an AI agent connected via MCP can see and do on this site.',
 			Bot
 		)}
 	</section>
