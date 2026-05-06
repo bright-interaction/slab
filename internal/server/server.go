@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/bright-interaction/slab/ee"
 	"github.com/bright-interaction/slab/internal/analyticsdb"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/domains"
@@ -116,6 +117,23 @@ func (s *Server) Router() http.Handler {
 	// The endpoint returns 200 when sqlite is ok regardless of duckdb so
 	// load balancers don't take the whole service out for a degraded
 	// analytics layer.
+	// /api/mode (Phase 30.6, 2026-05-06). Public, unauthenticated.
+	// Tells the admin SPA whether it's running against an OSS binary
+	// or a Cloud (-tags ee) binary so cloud-only UI (Billing page,
+	// WorkspaceSwitcher, plan upgrade prompts) can hide gracefully
+	// in OSS rather than rendering 503-ing pages. Plus the deployment
+	// mode env var so the frontend can branch on single vs cloud.
+	r.Get("/api/mode", func(w http.ResponseWriter, req *http.Request) {
+		mode := "single"
+		if s.cfg != nil && s.cfg.DeploymentMode != "" {
+			mode = s.cfg.DeploymentMode
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		body := `{"mode":"` + mode + `","ee":` + boolToStr(ee.IsAvailable()) + `}`
+		_, _ = w.Write([]byte(body))
+	})
+
 	r.Get("/api/health", func(w http.ResponseWriter, req *http.Request) {
 		ctx, cancel := context.WithTimeout(req.Context(), 2*time.Second)
 		defer cancel()
@@ -945,6 +963,15 @@ func boolToOKFail(ok bool) string {
 		return "ok"
 	}
 	return "fail"
+}
+
+// boolToStr formats a bool as a JSON literal "true" / "false" for the
+// /api/mode response, which builds JSON via concat.
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // stripScheme reduces an Origin header value (e.g. https://foo.example:443)
