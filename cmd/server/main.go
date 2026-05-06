@@ -30,6 +30,7 @@ import (
 	"github.com/bright-interaction/slab/internal/config"
 	dbpkg "github.com/bright-interaction/slab/internal/db"
 	"github.com/bright-interaction/slab/internal/domains"
+	"github.com/bright-interaction/slab/internal/migration"
 	"github.com/bright-interaction/slab/internal/retention"
 	"github.com/bright-interaction/slab/internal/server"
 	"github.com/bright-interaction/slab/internal/storage"
@@ -179,9 +180,19 @@ func main() {
 		analyticsMgrConn = nil
 	}
 
+	// Verify-job manager: async background worker for verify-live crawls
+	// (Sprint 4 of the migration system, 2026-05-06). On boot, the
+	// manager's Start reaps any rows left in queued/running state from a
+	// previous process so a server crash mid-crawl can't leave a job
+	// stuck. Workers are spawned per Enqueue call; cancel + shutdown
+	// are wired through Stop below.
+	verifyJobMgr := migration.NewJobManager(queries)
+	verifyJobMgr.Start(mgrCtx)
+
 	srv := server.New(cfg, sqlDB, queries, st)
 	srv.AnalyticsDB = analyticsMgrConn
 	srv.RetentionMgr = retentionMgr
+	srv.SetVerifyJobManager(verifyJobMgr)
 	srv.OnAnalyticsSettingsChange = func(_ context.Context) {
 		// Use a fresh background context: the request that triggered this may
 		// finish before Reload completes, and we don't want a cancelled context
@@ -264,6 +275,7 @@ func main() {
 	_ = httpSrv.Shutdown(shutCtx)
 	analyticsMgr.Stop(shutCtx)
 	retentionMgr.Stop(shutCtx)
+	verifyJobMgr.Stop(shutCtx)
 	if analyticsMgrConn != nil {
 		_ = analyticsMgrConn.Close()
 	}

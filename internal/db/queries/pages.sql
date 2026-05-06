@@ -41,3 +41,31 @@ DELETE FROM pages WHERE id = ?;
 
 -- name: CountPagesBySite :one
 SELECT COUNT(*) FROM pages WHERE site_id = ?;
+
+-- name: ListExistingPageSlugsBySite :many
+-- Sprint 4 (2026-05-06): used by the migration upsert path so the
+-- plan-quota gate can subtract pages whose slug already exists from
+-- the projected addition. Returns slugs without leading slash.
+SELECT slug FROM pages WHERE site_id = ?;
+
+-- name: UpsertPage :one
+-- Sprint 4 (2026-05-06): re-import upsert mode. INSERTs fresh, UPDATEs
+-- on (site_id, slug) conflict. RETURNING * lets the porter detect the
+-- outcome by comparing returned row.ID to the candidate ID it passed.
+INSERT INTO pages
+    (id, site_id, title, slug, status, meta_title, meta_description,
+     og_image_id, layout, sort_order, show_in_nav, no_index,
+     canonical_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(site_id, slug) DO UPDATE SET
+    title            = excluded.title,
+    status           = excluded.status,
+    meta_title       = excluded.meta_title,
+    meta_description = excluded.meta_description,
+    og_image_id      = excluded.og_image_id,
+    layout           = excluded.layout,
+    sort_order       = excluded.sort_order,
+    no_index         = excluded.no_index,
+    canonical_url    = excluded.canonical_url,
+    updated_at       = datetime('now')
+RETURNING *;

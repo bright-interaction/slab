@@ -14,6 +14,22 @@ SELECT COUNT(*) FROM redirects WHERE site_id = ?;
 INSERT INTO redirects (id, site_id, from_path, to_path, status_code, is_auto, created_at)
 VALUES (?, ?, ?, ?, ?, ?, datetime('now'));
 
+-- name: UpsertRedirect :one
+-- Sprint 4 (2026-05-06): re-import upsert. ON CONFLICT(site_id, from_path)
+-- DO UPDATE leaves created_at alone and returns the existing row's id, so
+-- the porter detects insert-vs-update by comparing returned ID.
+INSERT INTO redirects (id, site_id, from_path, to_path, status_code, is_auto, created_at)
+VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+ON CONFLICT(site_id, from_path) DO UPDATE SET
+    to_path     = excluded.to_path,
+    status_code = excluded.status_code,
+    is_auto     = excluded.is_auto
+RETURNING *;
+
+-- name: ListExistingRedirectFromPathsBySite :many
+-- Sprint 4 (2026-05-06): mirror of ListExistingPageSlugsBySite.
+SELECT from_path FROM redirects WHERE site_id = ?;
+
 -- name: UpdateRedirect :exec
 UPDATE redirects SET from_path = ?, to_path = ?, status_code = ? WHERE id = ?;
 

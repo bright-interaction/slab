@@ -21,6 +21,15 @@ type VerifyOptions struct {
 	MaxHops         int
 	Timeout         time.Duration
 	AllowPrivate    bool // tests only
+
+	// OnResult fires once per URL as soon as its result is known. Sprint
+	// 4 (2026-05-06) async verify-live uses this to flush per-URL rows
+	// into migration_verifications and bump the verify_jobs counters
+	// during a long crawl. Optional; nil disables the callback so the
+	// synchronous test fixture stays unchanged. Implementers must keep
+	// the callback fast - it runs on the worker goroutine and any delay
+	// here adds to the verify wall time.
+	OnResult func(VerifyResult)
 }
 
 const (
@@ -81,7 +90,11 @@ func VerifyLive(ctx context.Context, sourceURLs []string, deployedDomain string,
 	for i, raw := range sourceURLs {
 		i, raw := i, raw
 		g.Go(func() error {
-			results[i] = verifyOne(gctx, raw, deployedDomain, opts, &hostMu)
+			r := verifyOne(gctx, raw, deployedDomain, opts, &hostMu)
+			results[i] = r
+			if opts.OnResult != nil {
+				opts.OnResult(r)
+			}
 			return nil
 		})
 	}

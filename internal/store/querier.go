@@ -62,6 +62,7 @@ type Querier interface {
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
 	CountUniqueConvertersByGoal(ctx context.Context, arg CountUniqueConvertersByGoalParams) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
+	CountVerifyJobsByStatus(ctx context.Context, migrationID string) (CountVerifyJobsByStatusRow, error)
 	// Pre-flight count for the retention manager so the slog line can name how
 	// many rows the upcoming DELETE will drop without re-running the query.
 	CountVisitEventsBySiteOlderThan(ctx context.Context, arg CountVisitEventsBySiteOlderThanParams) (int64, error)
@@ -99,6 +100,7 @@ type Querier interface {
 	CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	CreateVerifyJob(ctx context.Context, arg CreateVerifyJobParams) error
 	CreateWaitlistEntry(ctx context.Context, arg CreateWaitlistEntryParams) error
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error
 	CreateWorkspaceInvite(ctx context.Context, arg CreateWorkspaceInviteParams) error
@@ -164,6 +166,7 @@ type Querier interface {
 	DeleteWorkspace(ctx context.Context, id string) error
 	DeleteWorkspaceInvite(ctx context.Context, id string) error
 	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
+	FinishVerifyJob(ctx context.Context, arg FinishVerifyJobParams) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
 	GetBillingEventByExternalID(ctx context.Context, arg GetBillingEventByExternalIDParams) (BillingEvent, error)
@@ -219,6 +222,7 @@ type Querier interface {
 	GetSubscriptionByWorkspace(ctx context.Context, workspaceID string) (Subscription, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
+	GetVerifyJob(ctx context.Context, id string) (VerifyJob, error)
 	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
 	GetWaitlistByEmail(ctx context.Context, email string) (Waitlist, error)
 	GetWaitlistByID(ctx context.Context, id string) (Waitlist, error)
@@ -276,6 +280,12 @@ type Querier interface {
 	// Evaluations
 	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
 	ListEvaluationsBySite(ctx context.Context, arg ListEvaluationsBySiteParams) ([]Evaluation, error)
+	// Sprint 4 (2026-05-06): used by the migration upsert path so the
+	// plan-quota gate can subtract pages whose slug already exists from
+	// the projected addition. Returns slugs without leading slash.
+	ListExistingPageSlugsBySite(ctx context.Context, siteID string) ([]string, error)
+	// Sprint 4 (2026-05-06): mirror of ListExistingPageSlugsBySite.
+	ListExistingRedirectFromPathsBySite(ctx context.Context, siteID string) ([]string, error)
 	// Form submissions
 	ListFormSubmissions(ctx context.Context, formID string) ([]FormSubmission, error)
 	ListFormSubmissionsBySite(ctx context.Context, arg ListFormSubmissionsBySiteParams) ([]FormSubmission, error)
@@ -320,6 +330,7 @@ type Querier interface {
 	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
 	ListUnprocessedBillingEvents(ctx context.Context) ([]BillingEvent, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	ListVerifyJobsByMigration(ctx context.Context, migrationID string) ([]VerifyJob, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
 	ListWaitlist(ctx context.Context) ([]Waitlist, error)
 	ListWorkspaceIDsForUser(ctx context.Context, userID string) ([]string, error)
@@ -328,6 +339,7 @@ type Querier interface {
 	MarkBillingEventProcessed(ctx context.Context, arg MarkBillingEventProcessedParams) error
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
+	MarkVerifyJobRunning(ctx context.Context, id string) error
 	MarkWaitlistInvited(ctx context.Context, arg MarkWaitlistInvitedParams) error
 	MarkWorkspaceInviteUsed(ctx context.Context, id string) error
 	// Pageviews per UTC day for the requested window. Returned as ISO-date
@@ -340,6 +352,7 @@ type Querier interface {
 	// than the cutoff are dropped. Unprocessed events stay forever so the
 	// operator can investigate.
 	PurgeOldBillingEvents(ctx context.Context, processedAt string) error
+	ReapStaleVerifyJobs(ctx context.Context) error
 	// UNIQUE(provider, external_event_id) makes duplicate inserts no-op
 	// via INSERT OR IGNORE. Idempotency at the schema layer means handlers
 	// don't need a separate "have we seen this id" check.
@@ -420,11 +433,23 @@ type Querier interface {
 	// Rewrites the recovery code list (e.g. after a single-use code is
 	// consumed during a recovery login).
 	UpdateUserTOTPRecovery(ctx context.Context, arg UpdateUserTOTPRecoveryParams) error
+	UpdateVerifyJobProgress(ctx context.Context, arg UpdateVerifyJobProgressParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) error
 	UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) error
 	UpdateWorkspaceStripe(ctx context.Context, arg UpdateWorkspaceStripeParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
+	// Sprint 4 (2026-05-06): re-import upsert. Conflict on the
+	// (collection_id, locale, slug) compound natural key.
+	UpsertItem(ctx context.Context, arg UpsertItemParams) (CollectionItem, error)
 	UpsertMissingURL(ctx context.Context, arg UpsertMissingURLParams) error
+	// Sprint 4 (2026-05-06): re-import upsert mode. INSERTs fresh, UPDATEs
+	// on (site_id, slug) conflict. RETURNING * lets the porter detect the
+	// outcome by comparing returned row.ID to the candidate ID it passed.
+	UpsertPage(ctx context.Context, arg UpsertPageParams) (Page, error)
+	// Sprint 4 (2026-05-06): re-import upsert. ON CONFLICT(site_id, from_path)
+	// DO UPDATE leaves created_at alone and returns the existing row's id, so
+	// the porter detects insert-vs-update by comparing returned ID.
+	UpsertRedirect(ctx context.Context, arg UpsertRedirectParams) (Redirect, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error

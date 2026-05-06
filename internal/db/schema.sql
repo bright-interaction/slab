@@ -602,6 +602,34 @@ CREATE TABLE IF NOT EXISTS migration_verifications (
 CREATE INDEX IF NOT EXISTS idx_migration_verifications_site ON migration_verifications(site_id);
 CREATE INDEX IF NOT EXISTS idx_migration_verifications_migration ON migration_verifications(migration_id);
 
+-- Verify jobs (Sprint 4 of the migration system, 2026-05-06). Async
+-- container that owns a verify-live crawl: a single row tracks total +
+-- processed counts so the UI can render a progress bar while the worker
+-- writes per-URL results into migration_verifications. Lifts the 1k URL
+-- sync-request cap because the request returns 202 immediately and the
+-- crawl runs in a background goroutine for as long as it takes.
+-- status flow: queued -> running -> done | failed | cancelled.
+-- Reaper marks any 'running' rows older than the boot time as 'failed'
+-- on startup so a server crash can't leave a job stuck running forever.
+CREATE TABLE IF NOT EXISTS verify_jobs (
+    id              TEXT PRIMARY KEY,
+    site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    migration_id    TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'queued',
+    total_urls      INTEGER NOT NULL DEFAULT 0,
+    processed_urls  INTEGER NOT NULL DEFAULT 0,
+    ok_count        INTEGER NOT NULL DEFAULT 0,
+    fail_count      INTEGER NOT NULL DEFAULT 0,
+    deployed_domain TEXT NOT NULL DEFAULT '',
+    error           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    started_at      TEXT NOT NULL DEFAULT '',
+    completed_at    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_verify_jobs_site ON verify_jobs(site_id);
+CREATE INDEX IF NOT EXISTS idx_verify_jobs_migration ON verify_jobs(migration_id);
+CREATE INDEX IF NOT EXISTS idx_verify_jobs_status ON verify_jobs(status);
+
 -- Missing URLs: 404s captured in real-time by the analytics nginx-log
 -- parser, aggregated per (site_id, path). One row per unique 404 path;
 -- hit_count increments on each new request. The UI lists them top-N by

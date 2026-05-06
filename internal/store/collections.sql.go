@@ -509,3 +509,63 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) error {
 	)
 	return err
 }
+
+const upsertItem = `-- name: UpsertItem :one
+INSERT INTO collection_items
+    (id, collection_id, site_id, slug, title, data_json, locale, status, published_at, sort_order)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(collection_id, locale, slug) DO UPDATE SET
+    title        = excluded.title,
+    data_json    = excluded.data_json,
+    status       = excluded.status,
+    published_at = excluded.published_at,
+    sort_order   = excluded.sort_order,
+    updated_at   = datetime('now')
+RETURNING id, collection_id, site_id, slug, title, data_json, locale, status, published_at, sort_order, created_at, updated_at
+`
+
+type UpsertItemParams struct {
+	ID           string `json:"id"`
+	CollectionID string `json:"collection_id"`
+	SiteID       string `json:"site_id"`
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	DataJson     string `json:"data_json"`
+	Locale       string `json:"locale"`
+	Status       string `json:"status"`
+	PublishedAt  string `json:"published_at"`
+	SortOrder    int64  `json:"sort_order"`
+}
+
+// Sprint 4 (2026-05-06): re-import upsert. Conflict on the
+// (collection_id, locale, slug) compound natural key.
+func (q *Queries) UpsertItem(ctx context.Context, arg UpsertItemParams) (CollectionItem, error) {
+	row := q.db.QueryRowContext(ctx, upsertItem,
+		arg.ID,
+		arg.CollectionID,
+		arg.SiteID,
+		arg.Slug,
+		arg.Title,
+		arg.DataJson,
+		arg.Locale,
+		arg.Status,
+		arg.PublishedAt,
+		arg.SortOrder,
+	)
+	var i CollectionItem
+	err := row.Scan(
+		&i.ID,
+		&i.CollectionID,
+		&i.SiteID,
+		&i.Slug,
+		&i.Title,
+		&i.DataJson,
+		&i.Locale,
+		&i.Status,
+		&i.PublishedAt,
+		&i.SortOrder,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
