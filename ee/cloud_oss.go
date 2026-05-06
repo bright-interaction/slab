@@ -15,3 +15,7 @@ func NewProvider() Provider { return ossProvider{} }
 type ossProvider struct{}
 
 func (ossProvider) Mode() string { return "oss" }
+
+// PlanLimits in OSS returns -1 for every resource (unlimited). Single-
+// deploy installs are never plan-gated; the operator owns the box.
+func (ossProvider) PlanLimits(plan, resource string) int64 { return -1 }

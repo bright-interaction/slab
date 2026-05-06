@@ -55,7 +55,7 @@ func (q *Queries) DeleteSite(ctx context.Context, id string) error {
 }
 
 const getSiteByID = `-- name: GetSiteByID :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites WHERE id = ?
+SELECT id, workspace_id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites WHERE id = ?
 `
 
 func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
@@ -63,6 +63,7 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 	var i Site
 	err := row.Scan(
 		&i.ID,
+		&i.WorkspaceID,
 		&i.Name,
 		&i.Slug,
 		&i.Domain,
@@ -101,7 +102,7 @@ func (q *Queries) GetSiteByID(ctx context.Context, id string) (Site, error) {
 }
 
 const getSiteBySlug = `-- name: GetSiteBySlug :one
-SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites WHERE slug = ?
+SELECT id, workspace_id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites WHERE slug = ?
 `
 
 func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) {
@@ -109,6 +110,7 @@ func (q *Queries) GetSiteBySlug(ctx context.Context, slug string) (Site, error) 
 	var i Site
 	err := row.Scan(
 		&i.ID,
+		&i.WorkspaceID,
 		&i.Name,
 		&i.Slug,
 		&i.Domain,
@@ -164,7 +166,7 @@ func (q *Queries) GetSiteQuota(ctx context.Context, id string) (GetSiteQuotaRow,
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites ORDER BY updated_at DESC
+SELECT id, workspace_id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites ORDER BY updated_at DESC
 `
 
 func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
@@ -178,6 +180,7 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 		var i Site
 		if err := rows.Scan(
 			&i.ID,
+			&i.WorkspaceID,
 			&i.Name,
 			&i.Slug,
 			&i.Domain,

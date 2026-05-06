@@ -5,8 +5,10 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -111,6 +113,19 @@ func main() {
 			}
 		}
 	}
+
+	// Phase 30 bootstrap (Cloud Tier MVP, 2026-05-05): ensure at least
+	// one workspace exists, every existing user is a member, every
+	// existing site is owned by it. Idempotent: once any workspace
+	// exists with members + the sites all have a workspace_id, the
+	// helper is a no-op on every subsequent boot.
+	//
+	// In OSS single-deploy mode this is invisible to the operator: the
+	// auto-bootstrap workspace named "default" owns every site and the
+	// existing admin gets owner role. Cloud installs (-tags ee) skip
+	// the auto-bootstrap when CountWorkspaces > 0 and let the signup
+	// flow create workspaces explicitly.
+	ensureDefaultWorkspace(queries)
 
 	// Set embedded frontend FS
 	sub, err := fs.Sub(frontendFiles, "frontend/build")
@@ -339,6 +354,12 @@ func applySchema(sqlDB *sql.DB) error {
 		{"sites", "storage_quota_bytes", "INTEGER NOT NULL DEFAULT 1073741824"},
 		{"sites", "build_minutes_quota", "INTEGER NOT NULL DEFAULT 600"},
 		{"sites", "quota_overage_blocked", "INTEGER NOT NULL DEFAULT 1"},
+		// Workspace ownership (Phase 30, Cloud Tier MVP, 2026-05-05).
+		// Every site is owned by a workspace; OSS installs auto-bootstrap
+		// one workspace at boot (ensureDefaultWorkspace) and backfill
+		// every existing site into it. Empty default lets the migration
+		// land on prod DBs before the bootstrap runs.
+		{"sites", "workspace_id", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {
@@ -465,6 +486,91 @@ func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 	}
 
 	slog.Info("seeded admin user", "email", email)
+}
+
+// ensureDefaultWorkspace runs after seedAdminUser and the C1
+// site_members backfill. Idempotent. Three steps:
+//
+//  1. If at least one workspace already exists, do nothing further than
+//     the per-workspace member backfill (covers OSS upgrades from a
+//     prior boot where the workspace was created but a new admin was
+//     added later).
+//  2. Otherwise create a workspace named "Default" with slug "default"
+//     and plan "oss". The workspace id flows into the sites backfill
+//     in step 3 so every existing site lands inside it.
+//  3. Backfill: every user with role='admin' becomes a workspace owner;
+//     every site with workspace_id='' is moved into the new workspace.
+//     Both queries are idempotent (NOT EXISTS / WHERE = '').
+//
+// Phase 30, Cloud Tier MVP, 2026-05-05.
+func ensureDefaultWorkspace(queries *store.Queries) {
+	ctx := context.Background()
+	count, err := queries.CountWorkspaces(ctx)
+	if err != nil {
+		slog.Warn("ensureDefaultWorkspace: count failed", "err", err)
+		return
+	}
+	var workspaceID string
+	if count == 0 {
+		workspaceID = newID()
+		if err := queries.CreateWorkspace(ctx, store.CreateWorkspaceParams{
+			ID:           workspaceID,
+			Name:         "Default",
+			Slug:         "default",
+			Plan:         "oss",
+			Region:       "eu",
+			BillingEmail: "",
+			Status:       "active",
+			TrialEndsAt:  "",
+		}); err != nil {
+			slog.Warn("ensureDefaultWorkspace: create failed", "err", err)
+			return
+		}
+		slog.Info("ensureDefaultWorkspace: created default workspace", "id", workspaceID)
+	} else {
+		// Use the first existing workspace as the home for any
+		// orphaned sites left over from a partial migration. The
+		// CountWorkspaces > 0 path also covers Cloud installs where
+		// signup creates workspaces explicitly.
+		all, err := queries.ListAllWorkspaces(ctx)
+		if err != nil || len(all) == 0 {
+			return
+		}
+		workspaceID = all[0].ID
+	}
+
+	// Add every admin as workspace owner if no member rows yet.
+	users, err := queries.ListUsers(ctx)
+	if err == nil {
+		for _, u := range users {
+			if u.Role == "admin" {
+				if err := queries.BackfillWorkspaceMembersForAdmin(ctx, u.ID); err != nil {
+					slog.Warn("ensureDefaultWorkspace: backfill admin failed", "user_id", u.ID, "err", err)
+				}
+				break // First admin is sufficient for the bootstrap row.
+			}
+		}
+	}
+
+	// Backfill orphan sites into the default workspace.
+	if err := queries.BackfillSitesWorkspace(ctx, workspaceID); err != nil {
+		slog.Warn("ensureDefaultWorkspace: backfill sites failed", "err", err)
+	}
+}
+
+// newID generates a 24-hex ID matching the existing site/page id
+// pattern. Used by ensureDefaultWorkspace; handlers/helpers.go has its
+// own copy so the bootstrap stays decoupled from package handlers.
+func newID() string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		// Read failures are catastrophic; the boot path will retry
+		// next start. Returning an empty id fails the CreateWorkspace
+		// fast (PRIMARY KEY violation) so we never silently mint a
+		// shared id.
+		return ""
+	}
+	return hex.EncodeToString(b)
 }
 
 // resetPasswordCLI is the `atomicsite reset-password <email>` subcommand.
