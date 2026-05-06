@@ -35,6 +35,16 @@ func GetFingerprint(r *http.Request) string {
 	return v
 }
 
+// WithFingerprintForTest stashes a fingerprint on ctx the way
+// FingerprintMiddleware would. Test-only seam: production code paths
+// always go through the middleware. Exported because handler-level
+// tests that don't run the full chi pipeline still need a way to
+// hand the handler a fingerprint without re-implementing the
+// header-derive dance.
+func WithFingerprintForTest(ctx context.Context, fingerprint string) context.Context {
+	return context.WithValue(ctx, fingerprintContextKey{}, fingerprint)
+}
+
 // FingerprintMiddleware ensures every request has an atomicsite_fp cookie. If
 // the client already sent one, we trust it and pass it through. Otherwise we
 // derive a stable hash from request signals + the server-side AnalyticsSalt,

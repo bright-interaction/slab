@@ -358,6 +358,12 @@ type Querier interface {
 	// Stages a fresh secret without flipping enrolled_at, so the user
 	// can scan the QR + try a code before the secret is locked in.
 	SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error
+	// Phase 31.3 (2026-05-06): form-submit / explicit-identify path. Sets
+	// email + stamps identified_at if it wasn't already (a re-identify keeps
+	// the original timestamp so analytics + retention treat the session as
+	// one continuous identified visitor). Returns rows affected so the
+	// caller can detect the no-session case (0) without a second roundtrip.
+	SetVisitSessionEmail(ctx context.Context, arg SetVisitSessionEmailParams) (int64, error)
 	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
 	SumBuildMinutesBySiteSinceCutoff(ctx context.Context, arg SumBuildMinutesBySiteSinceCutoffParams) (interface{}, error)
 	SumStorageBytesBySite(ctx context.Context, siteID string) (interface{}, error)

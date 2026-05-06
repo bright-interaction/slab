@@ -180,6 +180,12 @@ func (s *Server) Router() http.Handler {
 		// by window.atomic.track(name, props). Goal-eval matches the
 		// posted name against active event_name goals.
 		r.Post("/t/event", trackH.EventTrack)
+		// /t/identify (Phase 31.3): explicit visitor-email
+		// identification. Stamps email + identified_at on the
+		// session keyed by the cookie-derived fingerprint and
+		// fires a crmsync event so BrightCRM matches the freshly-
+		// named contact to their behavioural history.
+		r.Post("/t/identify", trackH.Identify)
 		// Bidirectional CRM personalization (Phase 18.1).
 		// /t/inbound accepts CRM-pushed metadata for a known visitor;
 		// HMAC-SHA256 (same secret as outbound) on X-Atomicsite-Signature.
@@ -224,8 +230,15 @@ func (s *Server) Router() http.Handler {
 	// Cross-origin from `*.<BuiltSiteSuffix>` inherits the existing
 	// CORS allowance for /t/* paths. Spam defense lives inside the
 	// handler (honeypot + per-IP rate limit + per-form burst).
-	formsH := handlers.NewFormHandler(s.cfg, s.queries, ah.MailSender)
-	r.Post("/t/forms/{formID}/submit", formsH.Submit)
+	//
+	// Phase 31.3 (2026-05-06): wrapped with FingerprintMiddleware so
+	// the auto-identify path inside Submit() can pull the visitor's
+	// fingerprint from cookie + link a submitted email to the
+	// existing visit_session. The shared idRecorder from trackH is
+	// injected so every identify path -- explicit /t/identify and
+	// auto-form -- runs the same DB update + crmsync dispatch.
+	formsH := handlers.NewFormHandler(s.cfg, s.queries, ah.MailSender, trackH.IdentifyRecorder())
+	r.With(authmw.FingerprintMiddleware(s.cfg)).Post("/t/forms/{formID}/submit", formsH.Submit)
 
 	// TOTP MFA enrollment + verify + status + disable. All four
 	// require an authenticated session, so they live behind the
