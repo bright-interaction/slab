@@ -448,6 +448,21 @@ func (s *Server) Router() http.Handler {
 		siteR.Put("/api/sites/{siteID}/redirects/{redirectID}", redirH.Update)
 		siteR.Delete("/api/sites/{siteID}/redirects/{redirectID}", redirH.Delete)
 
+		// Migrations (Layer 3 of the migration system, 2026-05-06). Crawl
+		// a source CMS (sitemap / WordPress / Webflow / Ghost), store the
+		// normalised manifest, generate a URL plan, then apply: pages +
+		// collection items + redirects + re-uploaded media all commit in
+		// one call. The default media uploader is a no-op (warns instead
+		// of fetching binaries) so this surface works out of the box;
+		// cmd/server/main.go wires the real uploader when ready.
+		migrH := handlers.NewMigrationHandler(s.cfg, s.queries, handlers.NoopMediaUploader())
+		siteR.Get("/api/sites/{siteID}/migrations", migrH.List)
+		siteR.Post("/api/sites/{siteID}/migrations", migrH.Start)
+		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}", migrH.Get)
+		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/plan", migrH.Plan)
+		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/apply", migrH.Apply)
+		siteR.Delete("/api/sites/{siteID}/migrations/{migrationID}", migrH.Delete)
+
 		// Components
 		ch := handlers.NewComponentHandler(s.cfg, s.queries)
 		siteR.Get("/api/sites/{siteID}/components", ch.List)
