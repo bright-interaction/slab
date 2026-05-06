@@ -12,6 +12,7 @@
 		{ id: 'branding', label: 'Branding', href: `/sites/${siteID}/branding` },
 		{ id: 'media', label: 'Media', href: `/sites/${siteID}/media` },
 		{ id: 'build', label: 'Build', href: `/sites/${siteID}/build` },
+		{ id: 'migrations', label: 'Migrations', href: `/sites/${siteID}/migrations` },
 		{ id: 'analytics', label: 'Analytics', href: `/sites/${siteID}/analytics` },
 		{ id: 'cookies', label: 'Cookies', href: `/sites/${siteID}/cookies` },
 		{ id: 'settings', label: 'Settings', href: `/sites/${siteID}/settings` }
