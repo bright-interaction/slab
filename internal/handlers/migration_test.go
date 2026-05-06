@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
@@ -305,6 +306,233 @@ func TestMigration_ListReturnsSummaryNotFullManifest(t *testing.T) {
 	// Body should NOT contain the 10kB HTML blob.
 	if strings.Count(rr.Body.String(), "a") > 1000 {
 		t.Errorf("List leaked full manifest body; expected only summary stats")
+	}
+}
+
+// ----- Sprint 2: VerifyCoverage (pre-launch dry-run) -----
+
+func TestMigration_VerifyCoverageBucketsCorrectly(t *testing.T) {
+	h, q, siteID := newMigrationHandlerForTest(t)
+	// Seed: a live page at /existing and a manual redirect /old -> /new.
+	_ = q.CreatePage(context.Background(), store.CreatePageParams{
+		ID: "p1", SiteID: siteID, Title: "Existing", Slug: "existing", Layout: "default",
+	})
+	_ = q.CreateRedirect(context.Background(), store.CreateRedirectParams{
+		ID: "r1", SiteID: siteID, FromPath: "/old", ToPath: "/new",
+		StatusCode: 301, IsAuto: 0,
+	})
+	// Manifest contributes a NEW page /from-manifest plus a redirect
+	// /legacy -> /modern (auto from a slug-strip).
+	manifest := migration.MigrationManifest{
+		Pages: []migration.MigrationPage{
+			{SourcePath: "/from-manifest", Title: "From manifest"},
+			{SourcePath: "/legacy.html", Title: "Legacy"},
+		},
+	}
+	mj, _ := json.Marshal(manifest)
+	migID := "test-mig-vc"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: string(mj), Status: "ready",
+	})
+
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.VerifyCoverage), map[string]any{
+		"urls": []string{
+			"https://old/existing",      // live page -> 200
+			"https://old/from-manifest", // planned page -> 200 (post-apply)
+			"https://old/old",           // existing redirect -> 301
+			"https://old/legacy.html",   // planned redirect -> 301 (post-apply)
+			"https://old/orphan",        // unmapped -> 404
+			"",                          // malformed
+		},
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("VerifyCoverage: %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp VerifyResponse
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if len(resp.Will200) != 2 {
+		t.Errorf("Will200: want 2, got %d (%v)", len(resp.Will200), resp.Will200)
+	}
+	if len(resp.Will301) != 2 {
+		t.Errorf("Will301: want 2, got %d (%v)", len(resp.Will301), resp.Will301)
+	}
+	if len(resp.Will404) != 1 {
+		t.Errorf("Will404: want 1, got %d (%v)", len(resp.Will404), resp.Will404)
+	}
+	if len(resp.Malformed) != 1 {
+		t.Errorf("Malformed: want 1, got %d", len(resp.Malformed))
+	}
+}
+
+func TestMigration_VerifyCoverageRejectsEmpty(t *testing.T) {
+	h, q, siteID := newMigrationHandlerForTest(t)
+	migID := "test-mig-vc-empty"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: "{}", Status: "ready",
+	})
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.VerifyCoverage), map[string]any{
+		"urls": []string{},
+	})
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("empty urls must 400, got %d", rr.Code)
+	}
+}
+
+func TestMigration_VerifyCoverageCrossTenantBlocked(t *testing.T) {
+	h, q, siteA := newMigrationHandlerForTest(t)
+	siteB := "abcdef0123456789abcdefvc"
+	_ = q.CreateSite(context.Background(), store.CreateSiteParams{
+		ID: siteB, Name: "B", Slug: "b-vc", PrimaryColor: "#000",
+		SecondaryColor: "#000", BgColor: "#FFF", TextColor: "#111",
+		FontHeading: "Inter", FontBody: "Inter", Lang: "en",
+	})
+	migID := "test-mig-vc-tenA"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteA, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: "{}", Status: "ready",
+	})
+	rr := postJSONMigr(withMigrationParams(siteB, migID, h.VerifyCoverage), map[string]any{
+		"urls": []string{"/x"},
+	})
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("cross-tenant must 404, got %d", rr.Code)
+	}
+}
+
+// ----- Sprint 2: VerifyLive (post-launch crawl) -----
+
+func TestMigration_VerifyLiveStoresResults(t *testing.T) {
+	h, q, siteID := newMigrationHandlerForTest(t)
+	// Synthetic deployed atomicsite: /old 301 -> /new (200), /broken 404.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/new", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/new", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/broken", func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	migID := "test-mig-vl"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: "{}", Status: "applied",
+	})
+
+	// Test seam: allow loopback so httptest.Server is reachable. The
+	// production code path (server.go) never sets AllowPrivate=true.
+	h.SetVerifyOptionsForTest(migration.VerifyOptions{
+		AllowPrivate: true, PolitenessDelay: 1 * time.Millisecond,
+	})
+
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.VerifyLive), map[string]any{
+		"urls":            []string{"/old", "/new", "/broken"},
+		"deployed_domain": srv.URL, // includes scheme
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("VerifyLive: %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Checked int                       `json:"checked"`
+		OK      int                       `json:"ok"`
+		Failed  int                       `json:"failed"`
+		Results []migration.VerifyResult  `json:"results"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if resp.Checked != 3 || resp.OK != 2 || resp.Failed != 1 {
+		t.Errorf("counts: checked=%d ok=%d failed=%d", resp.Checked, resp.OK, resp.Failed)
+	}
+
+	// Persisted rows: 3 verifications stored on the migration.
+	stored, _ := q.ListMigrationVerifications(context.Background(), migID)
+	if len(stored) != 3 {
+		t.Errorf("stored verifications: want 3, got %d", len(stored))
+	}
+	counts, _ := q.CountMigrationVerificationsByOK(context.Background(), migID)
+	if counts.OkCount != 2 || counts.FailCount != 1 {
+		t.Errorf("count query: ok=%d fail=%d", counts.OkCount, counts.FailCount)
+	}
+}
+
+func TestMigration_VerifyLiveRequiresDeployedDomain(t *testing.T) {
+	h, q, siteID := newMigrationHandlerForTest(t)
+	migID := "test-mig-vl-nodomain"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: "{}", Status: "applied",
+	})
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.VerifyLive), map[string]any{
+		"urls": []string{"/x"},
+	})
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("missing deployed_domain must 400, got %d", rr.Code)
+	}
+}
+
+func TestMigration_VerifyLiveCapsTo1000URLs(t *testing.T) {
+	h, q, siteID := newMigrationHandlerForTest(t)
+	migID := "test-mig-vl-cap"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: "{}", Status: "applied",
+	})
+	urls := make([]string, 1001)
+	for i := range urls {
+		urls[i] = "/p" + strings.Repeat("0", 6)
+	}
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.VerifyLive), map[string]any{
+		"urls":            urls,
+		"deployed_domain": "deploy.example",
+	})
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("over-cap must 413, got %d", rr.Code)
+	}
+}
+
+// ----- Sprint 2: ListVerifications -----
+
+func TestMigration_ListVerificationsReturnsStoredRows(t *testing.T) {
+	h, q, siteID := newMigrationHandlerForTest(t)
+	migID := "test-mig-listv"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: "{}", Status: "applied",
+	})
+	// Seed two stored verifications directly.
+	_ = q.CreateMigrationVerification(context.Background(), store.CreateMigrationVerificationParams{
+		ID: "v1", SiteID: siteID, MigrationID: migID,
+		SourceUrl: "https://old/a", StatusCode: 200, FinalUrl: "https://new/a",
+		Hops: 0, Ok: 1, Error: "",
+	})
+	_ = q.CreateMigrationVerification(context.Background(), store.CreateMigrationVerificationParams{
+		ID: "v2", SiteID: siteID, MigrationID: migID,
+		SourceUrl: "https://old/b", StatusCode: 404, FinalUrl: "https://new/b",
+		Hops: 1, Ok: 0, Error: "terminal status 404",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	withMigrationParams(siteID, migID, h.ListVerifications)(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("ListVerifications: %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Items  []map[string]any `json:"items"`
+		OK     int64            `json:"ok"`
+		Failed int64            `json:"failed"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if len(resp.Items) != 2 {
+		t.Errorf("items: %d", len(resp.Items))
+	}
+	if resp.OK != 1 || resp.Failed != 1 {
+		t.Errorf("counts: ok=%d fail=%d", resp.OK, resp.Failed)
 	}
 }
 

@@ -511,7 +511,26 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}", migrH.Get)
 		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/plan", migrH.Plan)
 		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/apply", migrH.Apply)
+		// Sprint 2 (2026-05-06): pre-launch dry-run + post-launch crawl
+		// + verification history. verify-coverage runs the same diff as
+		// /redirects/verify but scoped to a migration's manifest so the
+		// agent reasons about post-apply state. verify-live actually
+		// crawls the deployed domain to assert each old URL one-hops to
+		// 200, storing per-URL results in migration_verifications.
+		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/verify-coverage", migrH.VerifyCoverage)
+		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/verify-live", migrH.VerifyLive)
+		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}/verifications", migrH.ListVerifications)
 		siteR.Delete("/api/sites/{siteID}/migrations/{migrationID}", migrH.Delete)
+
+		// Missing URLs (Sprint 2 of the migration system, 2026-05-06).
+		// 404s captured in real-time by the analytics nginx-log parser
+		// surface here so the operator (or agent) can convert them into
+		// 301/410 redirects with one click. The conversion creates a
+		// redirect row + clears the missing-url entry atomically.
+		missH := handlers.NewMissingURLsHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/missing-urls", missH.List)
+		siteR.Post("/api/sites/{siteID}/missing-urls/{missingID}/redirect", missH.CreateRedirect)
+		siteR.Delete("/api/sites/{siteID}/missing-urls/{missingID}", missH.Dismiss)
 
 		// Components
 		ch := handlers.NewComponentHandler(s.cfg, s.queries)

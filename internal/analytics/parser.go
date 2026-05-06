@@ -16,6 +16,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bright-interaction/slab/internal/store"
@@ -281,6 +282,41 @@ func (p *Parser) processLine(ctx context.Context, raw []byte) {
 	}); err != nil {
 		p.logger.Warn("upsert session", "error", err)
 	}
+
+	// 404 capture (Layer 5 / Sprint 2 of the migration system, 2026-05-06).
+	// Aggregate hits by (site_id, path) so the migration dashboard can show
+	// "top forgotten URLs" and offer one-click redirect creation. Wrapped
+	// in a fast-path 404 check so the hot loop stays cheap for sites with
+	// healthy traffic patterns.
+	if ll.Status == 404 {
+		// Strip query string + fragment so hits to /old?ref=foo and
+		// /old?ref=bar coalesce into one row keyed on /old. The redirect
+		// rule the operator creates will fire regardless of query string
+		// because nginx exact-match ignores the query.
+		path := stripQueryFragment(ll.Path)
+		if path == "" {
+			return
+		}
+		if err := p.queries.UpsertMissingURL(ctx, store.UpsertMissingURLParams{
+			ID:      newID(),
+			SiteID:  p.siteID,
+			Path:    path,
+			Referer: ll.Ref,
+		}); err != nil {
+			p.logger.Warn("upsert missing url", "error", err, "path", path)
+		}
+	}
+}
+
+// stripQueryFragment returns the path component without ?query or #fragment.
+// 404 aggregation keys on path-only because that's what the redirect rule
+// the operator creates will match against (nginx exact-match ignores
+// the query string).
+func stripQueryFragment(p string) string {
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		return p[:i]
+	}
+	return p
 }
 
 // normaliseCountry coerces the CF-IPCountry value into a clean ISO 3166-1
