@@ -14,9 +14,22 @@ import (
 
 	"github.com/bright-interaction/slab/internal/config"
 	dbpkg "github.com/bright-interaction/slab/internal/db"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/starterkits"
 	"github.com/bright-interaction/slab/internal/store"
 )
+
+// seedAuthCtx wraps the request with a fake admin user + injects the
+// admin's UserContextKey so the workspace gate added in Phase 30.2 (cloud
+// tier) finds an authenticated caller. Centralised here so any new Seed
+// test can reuse it instead of re-deriving the auth wiring.
+func seedAuthCtx(req *http.Request) *http.Request {
+	user := &authmw.AuthUser{
+		ID: "test-admin", Email: "test@admin.local",
+		Name: "Test Admin", Role: "admin",
+	}
+	return req.WithContext(context.WithValue(req.Context(), authmw.UserContextKey, user))
+}
 
 type seedFakeKit struct {
 	id          string
@@ -50,7 +63,18 @@ func setupSeedTestDB(t *testing.T) (*sql.DB, *store.Queries) {
 		t.Fatalf("apply schema: %v", err)
 	}
 	t.Cleanup(func() { sqlDB.Close() })
-	return sqlDB, store.New(sqlDB)
+	q := store.New(sqlDB)
+	// Phase 30.2: Seed/Create resolve a workspace via ListWorkspaceIDsForUser
+	// or, for admins with no membership row, ListAllWorkspaces[0]. Tests use
+	// the admin path so we just need one workspace to exist.
+	if err := q.CreateWorkspace(context.Background(), store.CreateWorkspaceParams{
+		ID: "ws-test", Name: "Test", Slug: "test-ws",
+		Plan: "oss", Region: "eu", BillingEmail: "ops@test.local",
+		Status: "active", TrialEndsAt: "",
+	}); err != nil {
+		t.Fatalf("seed workspace: %v", err)
+	}
+	return sqlDB, q
 }
 
 func mustCount(t *testing.T, sqlDB *sql.DB, query string, args ...any) int64 {
@@ -95,7 +119,7 @@ func TestSiteHandler_Seed_HappyPath(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -156,7 +180,7 @@ func TestSiteHandler_Seed_DuplicateSlug_RollsBack(t *testing.T) {
 	req1 := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
-	h.Seed(rr1, req1)
+	h.Seed(rr1, seedAuthCtx(req1))
 	if rr1.Code != http.StatusOK {
 		t.Fatalf("first seed: expected 200, got %d: %s", rr1.Code, rr1.Body.String())
 	}
@@ -169,7 +193,7 @@ func TestSiteHandler_Seed_DuplicateSlug_RollsBack(t *testing.T) {
 	req2 := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
-	h.Seed(rr2, req2)
+	h.Seed(rr2, seedAuthCtx(req2))
 	if rr2.Code != http.StatusConflict {
 		t.Fatalf("second seed: expected 409, got %d: %s", rr2.Code, rr2.Body.String())
 	}
@@ -193,7 +217,7 @@ func TestSiteHandler_Seed_BadSlug(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -207,7 +231,7 @@ func TestSiteHandler_Seed_BadColor(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
 	}
@@ -233,7 +257,7 @@ func TestSiteHandler_Seed_StarterKit_Applied(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -264,7 +288,7 @@ func TestSiteHandler_Seed_StarterKit_Unknown_Rejected(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unknown kit, got %d: %s", rr.Code, rr.Body.String())
@@ -293,7 +317,7 @@ func TestSiteHandler_Seed_StarterKit_ApplyError_RollsBack(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 when kit Apply fails, got %d: %s", rr.Code, rr.Body.String())
@@ -317,7 +341,7 @@ func TestSiteHandler_Seed_NoKit_StillWorks(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/sites/seed", bytes.NewReader([]byte(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
-	h.Seed(rr, req)
+	h.Seed(rr, seedAuthCtx(req))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 without a kit, got %d: %s", rr.Code, rr.Body.String())
