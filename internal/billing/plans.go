@@ -12,17 +12,25 @@
 package billing
 
 // Plan describes one tier in the plan ladder. -1 means unlimited.
+//
+// MaxPagesPerSite + MaxRedirectsPerSite were added 2026-05-06 (Sprint 3
+// of the post-Layer-3d migration plan) to gate migration Apply + bulk
+// redirect import against plan limits. Without these dimensions the
+// migration porter could insert thousands of rows into a free-tier site
+// in one call, blowing past the customer's actual contract.
 type Plan struct {
-	Key             string `json:"key"`
-	Name            string `json:"name"`
-	PriceCents      int64  `json:"price_cents"`
-	Currency        string `json:"currency"`
-	MaxSites        int64  `json:"max_sites"`
-	StorageGB       int64  `json:"storage_gb"`
-	BuildMinutes    int64  `json:"build_minutes"`
-	CustomDomain    bool   `json:"custom_domain"`
-	WhiteLabel      bool   `json:"white_label"`
-	PrioritySupport bool   `json:"priority_support"`
+	Key                 string `json:"key"`
+	Name                string `json:"name"`
+	PriceCents          int64  `json:"price_cents"`
+	Currency            string `json:"currency"`
+	MaxSites            int64  `json:"max_sites"`
+	MaxPagesPerSite     int64  `json:"max_pages_per_site"`
+	MaxRedirectsPerSite int64  `json:"max_redirects_per_site"`
+	StorageGB           int64  `json:"storage_gb"`
+	BuildMinutes        int64  `json:"build_minutes"`
+	CustomDomain        bool   `json:"custom_domain"`
+	WhiteLabel          bool   `json:"white_label"`
+	PrioritySupport     bool   `json:"priority_support"`
 }
 
 // Plans is the canonical plan ladder. Lookup by key. The OSS plan is
@@ -30,49 +38,57 @@ type Plan struct {
 // only enforced when the EE Provider routes quota checks through here.
 var Plans = map[string]Plan{
 	"oss": {
-		Key:          "oss",
-		Name:         "OSS",
-		PriceCents:   0,
-		Currency:     "EUR",
-		MaxSites:     -1,
-		StorageGB:    -1,
-		BuildMinutes: -1,
-		CustomDomain: true,
-		WhiteLabel:   true,
+		Key:                 "oss",
+		Name:                "OSS",
+		PriceCents:          0,
+		Currency:            "EUR",
+		MaxSites:            -1,
+		MaxPagesPerSite:     -1,
+		MaxRedirectsPerSite: -1,
+		StorageGB:           -1,
+		BuildMinutes:        -1,
+		CustomDomain:        true,
+		WhiteLabel:          true,
 	},
 	"solo": {
-		Key:          "solo",
-		Name:         "Solo",
-		PriceCents:   1900,
-		Currency:     "EUR",
-		MaxSites:     1,
-		StorageGB:    1,
-		BuildMinutes: 600,
-		CustomDomain: false,
-		WhiteLabel:   false,
+		Key:                 "solo",
+		Name:                "Solo",
+		PriceCents:          1900,
+		Currency:            "EUR",
+		MaxSites:            1,
+		MaxPagesPerSite:     50,
+		MaxRedirectsPerSite: 500,
+		StorageGB:           1,
+		BuildMinutes:        600,
+		CustomDomain:        false,
+		WhiteLabel:          false,
 	},
 	"studio": {
-		Key:           "studio",
-		Name:          "Studio",
-		PriceCents:    7900,
-		Currency:      "EUR",
-		MaxSites:      5,
-		StorageGB:     10,
-		BuildMinutes:  3000,
-		CustomDomain:  true,
-		WhiteLabel:    false,
+		Key:                 "studio",
+		Name:                "Studio",
+		PriceCents:          7900,
+		Currency:            "EUR",
+		MaxSites:            5,
+		MaxPagesPerSite:     250,
+		MaxRedirectsPerSite: 2500,
+		StorageGB:           10,
+		BuildMinutes:        3000,
+		CustomDomain:        true,
+		WhiteLabel:          false,
 	},
 	"agency": {
-		Key:             "agency",
-		Name:            "Agency",
-		PriceCents:      29900,
-		Currency:        "EUR",
-		MaxSites:        25,
-		StorageGB:       50,
-		BuildMinutes:    12000,
-		CustomDomain:    true,
-		WhiteLabel:      true,
-		PrioritySupport: true,
+		Key:                 "agency",
+		Name:                "Agency",
+		PriceCents:          29900,
+		Currency:            "EUR",
+		MaxSites:            25,
+		MaxPagesPerSite:     1000,
+		MaxRedirectsPerSite: 10000,
+		StorageGB:           50,
+		BuildMinutes:        12000,
+		CustomDomain:        true,
+		WhiteLabel:          true,
+		PrioritySupport:     true,
 	},
 }
 
@@ -95,6 +111,10 @@ func Limit(planKey, resource string) int64 {
 	switch resource {
 	case "max_sites":
 		return p.MaxSites
+	case "max_pages_per_site":
+		return p.MaxPagesPerSite
+	case "max_redirects_per_site":
+		return p.MaxRedirectsPerSite
 	case "storage_gb":
 		return p.StorageGB
 	case "build_minutes":

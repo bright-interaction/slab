@@ -60,6 +60,16 @@ func newMigrationHandlerForTest(t *testing.T) (*MigrationHandler, *store.Queries
 	}); err != nil {
 		t.Fatalf("create site: %v", err)
 	}
+	// Sprint 3 (2026-05-06): Apply is plan-gated. Seed an OSS workspace
+	// so the gate returns -1 (unlimited) and tests pass without hitting
+	// caps. Cap-blocking is exercised in dedicated quota tests below.
+	if err := q.CreateWorkspace(context.Background(), store.CreateWorkspaceParams{
+		ID: "ws-migr-test", Name: "Test", Slug: "test-migr-ws",
+		Plan: "oss", Region: "eu", BillingEmail: "ops@test.local",
+		Status: "active", TrialEndsAt: "",
+	}); err != nil {
+		t.Fatalf("seed workspace: %v", err)
+	}
 	cfg := &config.Config{BaseURL: "http://localhost:8080"}
 	return NewMigrationHandler(cfg, q, &fakeUploaderForHandlers{}), q, siteID
 }
@@ -72,6 +82,11 @@ func withMigrationParams(siteID, migrationID string, h http.HandlerFunc) http.Ha
 			rctx.URLParams.Add("migrationID", migrationID)
 		}
 		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+		// Sprint 3 (2026-05-06): Apply requires auth context for the
+		// plan-quota gate. Inject admin so resolveUserWorkspace finds
+		// the seeded workspace. Non-gated handlers ignore the extra
+		// context, so this is a safe no-op for them.
+		r = seedAuthCtx(r)
 		h(w, r)
 	}
 }
@@ -533,6 +548,179 @@ func TestMigration_ListVerificationsReturnsStoredRows(t *testing.T) {
 	}
 	if resp.OK != 1 || resp.Failed != 1 {
 		t.Errorf("counts: ok=%d fail=%d", resp.OK, resp.Failed)
+	}
+}
+
+// ----- Sprint 3: workspace plan-quota gate on Apply -----
+
+// newPaidPlanMigrationStack returns a migration handler whose seeded
+// workspace is on a specific plan. Used by the quota tests.
+func newPaidPlanMigrationStack(t *testing.T, plan string) (*MigrationHandler, *store.Queries, string) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "migr-quota.db")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	q := store.New(sqlDB)
+	siteID := "abcdef0123456789abcdefqq"
+	_ = q.CreateSite(context.Background(), store.CreateSiteParams{
+		ID: siteID, Name: "T", Slug: "t-migr-q", PrimaryColor: "#000",
+		SecondaryColor: "#000", BgColor: "#FFF", TextColor: "#111",
+		FontHeading: "Inter", FontBody: "Inter", Lang: "en",
+	})
+	_ = q.CreateWorkspace(context.Background(), store.CreateWorkspaceParams{
+		ID: "ws-quota", Name: "Quota Test", Slug: "quota-test-ws",
+		Plan: plan, Region: "eu", BillingEmail: "ops@test.local",
+		Status: "active", TrialEndsAt: "",
+	})
+	cfg := &config.Config{BaseURL: "http://localhost:8080"}
+	return NewMigrationHandler(cfg, q, &fakeUploaderForHandlers{}), q, siteID
+}
+
+// makeManifestWithNPages helper - generates a manifest the URL planner
+// turns into N new pages (no skips, no collisions).
+func makeManifestWithNPages(n int) migration.MigrationManifest {
+	pages := make([]migration.MigrationPage, n)
+	for i := 0; i < n; i++ {
+		pages[i] = migration.MigrationPage{
+			SourcePath: fmt.Sprintf("/quota-page-%d", i),
+			Title:      fmt.Sprintf("Page %d", i),
+		}
+	}
+	return migration.MigrationManifest{Pages: pages}
+}
+
+// TestMigration_ApplyBlockedBySoloPlanCap verifies that a 51-page
+// manifest applied against a Solo workspace (50-page cap) returns 402
+// without inserting any pages and leaves the migration row at status=ready.
+func TestMigration_ApplyBlockedBySoloPlanCap(t *testing.T) {
+	h, q, siteID := newPaidPlanMigrationStack(t, "solo")
+	manifest := makeManifestWithNPages(51) // exceeds solo cap of 50
+	mj, _ := json.Marshal(manifest)
+	migID := "test-mig-quota-block"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: string(mj), Status: "ready",
+	})
+
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.Apply), map[string]any{})
+	if rr.Code != http.StatusPaymentRequired {
+		t.Fatalf("want 402, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "max_pages_per_site") &&
+		!strings.Contains(rr.Body.String(), "plan cap") {
+		t.Errorf("error should mention plan cap or dimension: %s", rr.Body.String())
+	}
+
+	// Migration row must stay at "ready" so the operator can adjust skips
+	// and retry without re-crawling.
+	row, _ := q.GetMigrationByID(context.Background(), migID)
+	if row.Status != "ready" {
+		t.Errorf("status flipped on quota block (must stay ready), got %q", row.Status)
+	}
+	// No pages should have been inserted.
+	pages, _ := q.ListPagesBySite(context.Background(), siteID)
+	if len(pages) != 0 {
+		t.Errorf("quota-blocked apply must insert zero pages, got %d", len(pages))
+	}
+}
+
+// TestMigration_ApplyAllowedAtSoloCap verifies the boundary condition:
+// exactly 50 pages on a Solo plan succeeds.
+func TestMigration_ApplyAllowedAtSoloCap(t *testing.T) {
+	h, q, siteID := newPaidPlanMigrationStack(t, "solo")
+	manifest := makeManifestWithNPages(50) // exactly at cap
+	mj, _ := json.Marshal(manifest)
+	migID := "test-mig-quota-edge"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: string(mj), Status: "ready",
+	})
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.Apply), map[string]any{})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("at-cap apply must succeed, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	pages, _ := q.ListPagesBySite(context.Background(), siteID)
+	if len(pages) != 50 {
+		t.Errorf("want 50 pages, got %d", len(pages))
+	}
+}
+
+// TestMigration_ApplyAllowedOnOSSPlan verifies that the OSS plan (-1
+// unlimited) lets a large import through without complaint.
+func TestMigration_ApplyAllowedOnOSSPlan(t *testing.T) {
+	h, q, siteID := newPaidPlanMigrationStack(t, "oss")
+	manifest := makeManifestWithNPages(120) // far above any paid cap
+	mj, _ := json.Marshal(manifest)
+	migID := "test-mig-oss-unlimited"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: string(mj), Status: "ready",
+	})
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.Apply), map[string]any{})
+	if rr.Code != http.StatusOK {
+		t.Errorf("OSS plan must allow unlimited; got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestMigration_ApplyAccountsForExistingPages confirms that the gate adds
+// current site pages to the projected count - if the site already has
+// 49 pages on a Solo plan and the manifest adds 2 more, the second one
+// pushes past 50 and the apply must be refused.
+func TestMigration_ApplyAccountsForExistingPages(t *testing.T) {
+	h, q, siteID := newPaidPlanMigrationStack(t, "solo")
+	// Pre-seed 49 pages directly.
+	for i := 0; i < 49; i++ {
+		_ = q.CreatePage(context.Background(), store.CreatePageParams{
+			ID: fmt.Sprintf("pre-%03d", i), SiteID: siteID,
+			Title: fmt.Sprintf("Pre %d", i), Slug: fmt.Sprintf("pre-%d", i),
+			Layout: "default",
+		})
+	}
+	manifest := makeManifestWithNPages(2) // 49 + 2 = 51 > 50
+	mj, _ := json.Marshal(manifest)
+	migID := "test-mig-quota-existing"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: string(mj), Status: "ready",
+	})
+	rr := postJSONMigr(withMigrationParams(siteID, migID, h.Apply), map[string]any{})
+	if rr.Code != http.StatusPaymentRequired {
+		t.Errorf("want 402 (existing+projected over cap), got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestMigration_ApplyRequiresAuth proves the gate refuses anonymous
+// callers (matches the existing SiteHandler.Seed contract).
+func TestMigration_ApplyRequiresAuth(t *testing.T) {
+	h, q, siteID := newPaidPlanMigrationStack(t, "solo")
+	manifest := makeManifestWithNPages(1)
+	mj, _ := json.Marshal(manifest)
+	migID := "test-mig-anon"
+	_ = q.CreateMigration(context.Background(), store.CreateMigrationParams{
+		ID: migID, SiteID: siteID, SourceUrl: "x", SourceType: "sitemap",
+		ManifestJson: string(mj), Status: "ready",
+	})
+	// Bypass the seedAuthCtx-injecting helper to send a truly unauth'd
+	// request straight at h.Apply.
+	body, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("siteID", siteID)
+	rctx.URLParams.Add("migrationID", migID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+	h.Apply(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous Apply must 401, got %d", rr.Code)
 	}
 }
 
