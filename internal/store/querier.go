@@ -93,6 +93,7 @@ type Querier interface {
 	CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	CreateWaitlistEntry(ctx context.Context, arg CreateWaitlistEntryParams) error
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error
 	CreateWorkspaceInvite(ctx context.Context, arg CreateWorkspaceInviteParams) error
 	DeactivateAgentKey(ctx context.Context, id string) error
@@ -149,6 +150,7 @@ type Querier interface {
 	// analytics dashboard's identified-visitor list and represent CRM-confirmed
 	// contacts) -- only fully anonymous sessions older than the cutoff drop.
 	DeleteVisitSessionsBySiteOlderThan(ctx context.Context, arg DeleteVisitSessionsBySiteOlderThanParams) (int64, error)
+	DeleteWaitlistEntry(ctx context.Context, id string) error
 	DeleteWorkspace(ctx context.Context, id string) error
 	DeleteWorkspaceInvite(ctx context.Context, id string) error
 	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
@@ -204,6 +206,8 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
+	GetWaitlistByEmail(ctx context.Context, email string) (Waitlist, error)
+	GetWaitlistByID(ctx context.Context, id string) (Waitlist, error)
 	GetWorkspaceByID(ctx context.Context, id string) (Workspace, error)
 	GetWorkspaceBySlug(ctx context.Context, slug string) (Workspace, error)
 	GetWorkspaceInviteByToken(ctx context.Context, token string) (WorkspaceInvite, error)
@@ -268,6 +272,7 @@ type Querier interface {
 	ListMigrationsBySite(ctx context.Context, siteID string) ([]Migration, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
+	ListPendingWaitlist(ctx context.Context) ([]Waitlist, error)
 	ListPendingWorkspaceInvites(ctx context.Context, workspaceID string) ([]WorkspaceInvite, error)
 	ListPublishedItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
 	ListPublishedItemsByCollectionAndLocale(ctx context.Context, arg ListPublishedItemsByCollectionAndLocaleParams) ([]CollectionItem, error)
@@ -290,12 +295,14 @@ type Querier interface {
 	ListUnprocessedBillingEvents(ctx context.Context) ([]BillingEvent, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
+	ListWaitlist(ctx context.Context) ([]Waitlist, error)
 	ListWorkspaceIDsForUser(ctx context.Context, userID string) ([]string, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]ListWorkspaceMembersRow, error)
 	ListWorkspacesForUser(ctx context.Context, userID string) ([]ListWorkspacesForUserRow, error)
 	MarkBillingEventProcessed(ctx context.Context, arg MarkBillingEventProcessedParams) error
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
+	MarkWaitlistInvited(ctx context.Context, arg MarkWaitlistInvitedParams) error
 	MarkWorkspaceInviteUsed(ctx context.Context, id string) error
 	// Pageviews per UTC day for the requested window. Returned as ISO-date
 	// buckets so the frontend can render a sparkline / bar chart directly.
