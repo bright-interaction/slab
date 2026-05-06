@@ -208,14 +208,14 @@
 	<div class="space-y-3">
 		<div>
 			<label for="to_path" class="block text-xs text-text-muted mb-1.5">Destination path</label>
-			<Input id="to_path" bind:value={toPath} placeholder="/new-location" />
+			<Input bind:value={toPath} placeholder="/new-location" />
 			<p class="text-xs text-text-muted mt-1.5">
 				Must start with <code>/</code>. Off-site, open-redirect, and no-op redirects are rejected.
 			</p>
 		</div>
 		<div>
 			<label for="status_code" class="block text-xs text-text-muted mb-1.5">Status code</label>
-			<Select id="status_code" bind:value={statusCodeStr} options={statusOptions} />
+			<Select bind:value={statusCodeStr} options={statusOptions} />
 		</div>
 	</div>
 	{#snippet footer()}

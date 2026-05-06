@@ -70,12 +70,12 @@
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 			<div>
 				<label for="source_type" class="block text-xs text-text-muted mb-1.5">Source type</label>
-				<Select id="source_type" bind:value={sourceType} options={sourceTypes} />
+				<Select bind:value={sourceType} options={sourceTypes} />
 			</div>
 			<div class="md:col-span-2">
 				<label for="source_url" class="block text-xs text-text-muted mb-1.5">Source URL</label>
 				<Input
-					id="source_url"
+
 					bind:value={sourceURL}
 					placeholder={sourceType === 'sitemap'
 						? 'https://example.com/sitemap.xml'
@@ -95,7 +95,7 @@
 					WordPress Application Password (optional, for drafts + private posts)
 				</label>
 				<Input
-					id="wp_auth"
+
 					bind:value={wpAuthHeader}
 					placeholder="Basic base64(user:apppass)"
 					autocomplete="off"
@@ -107,14 +107,14 @@
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
 				<div>
 					<label for="wf_site" class="block text-xs text-text-muted mb-1.5">Webflow site_id</label>
-					<Input id="wf_site" bind:value={webflowSiteID} required />
+					<Input bind:value={webflowSiteID} required />
 				</div>
 				<div>
 					<label for="wf_token" class="block text-xs text-text-muted mb-1.5">
 						Webflow auth token
 					</label>
 					<Input
-						id="wf_token"
+
 						bind:value={webflowAuthToken}
 						type="password"
 						autocomplete="off"
@@ -130,7 +130,7 @@
 					Ghost Content API key
 				</label>
 				<Input
-					id="ghost_key"
+
 					bind:value={ghostContentKey}
 					type="password"
 					autocomplete="off"
