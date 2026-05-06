@@ -89,6 +89,12 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 	if err := RenderNginxConfig(ctx, queries, siteID, wsDir); err != nil {
 		return fail("render nginx.conf: " + err.Error())
 	}
+	// Phase 30.3: Caddy fragment for multi-tenant edge deployments.
+	// Lives alongside _headers and nginx.conf so the operator can
+	// pick whichever serving layer fits their deployment shape.
+	if err := RenderCaddyFragment(ctx, queries, siteID, wsDir); err != nil {
+		return fail("render Caddyfile fragment: " + err.Error())
+	}
 
 	// 6b. Media
 	if err := CopyMedia(ctx, queries, siteID, dataDir, wsDir); err != nil {
