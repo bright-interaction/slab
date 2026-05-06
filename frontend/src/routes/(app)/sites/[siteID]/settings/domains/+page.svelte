@@ -195,7 +195,7 @@
 				<a href="/sites/{siteID}/settings/deployment" class="text-accent underline-offset-2 hover:underline">Deployment</a>.
 			</p>
 		</div>
-		<Button on:click={openAddDialog}>
+		<Button onclick={openAddDialog}>
 			<Plus size={14} strokeWidth={1.5} class="mr-1" /> Add domain
 		</Button>
 	</header>
@@ -381,7 +381,7 @@
 		{/if}
 
 		<div class="mt-2 flex justify-end gap-2">
-			<Button type="button" variant="secondary" on:click={() => (dialogOpen = false)} disabled={submitting}>
+			<Button type="button" variant="secondary" onclick={() => (dialogOpen = false)} disabled={submitting}>
 				Cancel
 			</Button>
 			<Button type="submit" disabled={submitting}>

@@ -273,7 +273,7 @@
 				<div class="mt-3">
 					<Textarea
 						rows={6}
-						placeholder={`<script src="https://consent.cookiebot.com/uc.js" data-cbid="..." async></script>`}
+						placeholder={'<' + 'script src="https://consent.cookiebot.com/uc.js" data-cbid="..." async><' + '/script>'}
 						bind:value={cookieBannerSnippet}
 					/>
 				</div>
