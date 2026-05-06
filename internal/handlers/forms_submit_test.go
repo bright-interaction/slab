@@ -18,6 +18,8 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
+	"github.com/brightinteraction/atomicsite/internal/identify"
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -74,7 +76,7 @@ func newFormHandlerForTest(t *testing.T, mail MailSender) (*FormHandler, *store.
 		t.Fatalf("create form: %v", err)
 	}
 	cfg := &config.Config{BaseURL: "http://localhost:8080", AnalyticsSalt: "test-salt"}
-	return NewFormHandler(cfg, q, mail), q, siteID, formID
+	return NewFormHandler(cfg, q, mail, nil), q, siteID, formID
 }
 
 func withChiFormParams(siteID, formID string, h http.HandlerFunc) http.HandlerFunc {
@@ -283,5 +285,105 @@ func TestFormSubmit_AdminListAndDelete(t *testing.T) {
 	final, _ := q.ListFormSubmissions(context.Background(), formID)
 	if len(final) != 0 {
 		t.Errorf("expected 0 rows after delete, got %d", len(final))
+	}
+}
+
+// TestFormSubmit_AutoIdentifiesVisitor (Phase 31.3, 2026-05-06)
+// Locks the auto-identify path: when a form carries an email-shaped
+// value AND a visit_session exists for the visitor's fingerprint,
+// FormHandler.Submit pulls the email out of the submitted fields and
+// stamps it onto the session via the shared identify.Recorder.
+func TestFormSubmit_AutoIdentifiesVisitor(t *testing.T) {
+	// Standalone setup: we need the FormHandler to carry an
+	// identify.Recorder, which the shared newFormHandlerForTest
+	// constructs with nil. So we do the open-DB + create-site +
+	// create-form + construct-handler dance inline with the
+	// recorder wired.
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "forms.db")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if _, err := sqlDB.Exec(string(dbpkg.Schema)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB.Close() })
+	q := store.New(sqlDB)
+	siteID := "abcdef0123456789abcdef02"
+	if err := q.CreateSite(context.Background(), store.CreateSiteParams{
+		ID: siteID, Name: "T", Slug: "t-id", PrimaryColor: "#000",
+		SecondaryColor: "#000", BgColor: "#FFF", TextColor: "#111",
+		FontHeading: "Inter", FontBody: "Inter", Lang: "en",
+	}); err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	formID := "form_id_auto"
+	if err := q.CreateForm(context.Background(), store.CreateFormParams{
+		ID: formID, SiteID: siteID, Name: "Contact",
+		FieldsJson:   `[{"name":"email","type":"email"}]`,
+		Action:       "store",
+		ActionConfig: `{}`,
+	}); err != nil {
+		t.Fatalf("create form: %v", err)
+	}
+
+	// Compute the deterministic fingerprint the request will carry,
+	// then seed a visit_session for it.
+	salt := "test-salt"
+	ip := "203.0.113.99"
+	ua := "Go-http-client/1.1"
+	lang := ""
+	fp := authmw.DeriveFingerprint(ip, ua, lang, salt)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := q.UpsertVisitSession(context.Background(), store.UpsertVisitSessionParams{
+		ID:          "sess_id_auto",
+		SiteID:      siteID,
+		Fingerprint: fp,
+		StartedAt:   now,
+		LastSeenAt:  now,
+	}); err != nil {
+		t.Fatalf("upsert session: %v", err)
+	}
+
+	cfg := &config.Config{BaseURL: "http://localhost:8080", AnalyticsSalt: salt}
+	idRec := identify.NewRecorder(q, nil) // nil crmClient = best-effort no-op
+	h := NewFormHandler(cfg, q, nil, idRec)
+
+	// Build a request with the matching headers + a manually-set
+	// fingerprint cookie so the FingerprintMiddleware-derived value
+	// matches our seed. The simpler path: bypass the middleware and
+	// set the fingerprint in context directly.
+	body := url.Values{"email": {"identified@example.com"}, "message": {"hello"}}.Encode()
+	req := httptest.NewRequest(http.MethodPost, "/t/forms/"+formID+"/submit", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", ua)
+	req.RemoteAddr = ip + ":54321"
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("formID", formID)
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	// Stash the fingerprint as the FingerprintMiddleware would.
+	ctx = authmw.WithFingerprintForTest(ctx, fp)
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	h.Submit(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("submit: expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// The visit_session should now have the form's email.
+	sess, err := q.GetSessionByFingerprint(context.Background(), store.GetSessionByFingerprintParams{
+		SiteID: siteID, Fingerprint: fp,
+	})
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if sess.Email != "identified@example.com" {
+		t.Errorf("session email = %q, want identified@example.com", sess.Email)
+	}
+	if sess.IdentifiedAt == "" {
+		t.Errorf("identified_at should be stamped")
 	}
 }

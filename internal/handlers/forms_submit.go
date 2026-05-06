@@ -14,6 +14,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/conversions"
+	"github.com/brightinteraction/atomicsite/internal/identify"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -34,15 +35,16 @@ import (
 //  7. If the form has action_config.notify_email and a MailSender is
 //     configured, fire-and-forget a notification email.
 type FormHandler struct {
-	cfg       *config.Config
-	queries   *store.Queries
-	mail      MailSender
-	limiter   *loginRateLimiter
-	burst     *formBurstTracker
-	recorder  *conversions.Recorder
+	cfg        *config.Config
+	queries    *store.Queries
+	mail       MailSender
+	limiter    *loginRateLimiter
+	burst      *formBurstTracker
+	recorder   *conversions.Recorder
+	idRecorder *identify.Recorder
 }
 
-func NewFormHandler(cfg *config.Config, queries *store.Queries, mail MailSender) *FormHandler {
+func NewFormHandler(cfg *config.Config, queries *store.Queries, mail MailSender, idRecorder *identify.Recorder) *FormHandler {
 	return &FormHandler{
 		cfg:     cfg,
 		queries: queries,
@@ -50,9 +52,10 @@ func NewFormHandler(cfg *config.Config, queries *store.Queries, mail MailSender)
 		// 10 submissions per IP per rolling hour. Permissive enough
 		// for the legitimate "filled it twice because the network
 		// blipped" case, restrictive enough to make spam costly.
-		limiter:  newLoginRateLimiter(10, time.Hour, 2*time.Hour),
-		burst:    newFormBurstTracker(),
-		recorder: conversions.NewRecorder(queries),
+		limiter:    newLoginRateLimiter(10, time.Hour, 2*time.Hour),
+		burst:      newFormBurstTracker(),
+		recorder:   conversions.NewRecorder(queries),
+		idRecorder: idRecorder,
 	}
 }
 
@@ -191,12 +194,13 @@ func (h *FormHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// submits two forms in a row doesn't hit the cap.
 	h.limiter.recordSuccess("f:" + ip)
 
+	fp := authmw.GetFingerprint(r)
+
 	// Conversion goal evaluation (Phase 31.1). form_submit goals
 	// fire here so a successful submission produces both a
 	// form_submissions row and any matching conversion_event rows.
 	// Best-effort: a failed eval never fails the submit.
 	if h.recorder != nil {
-		fp := authmw.GetFingerprint(r)
 		h.recorder.Evaluate(r.Context(), conversions.Signal{
 			SiteID:      form.SiteID,
 			Fingerprint: fp,
@@ -205,6 +209,24 @@ func (h *FormHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			MatchValue:  form.ID,
 			Properties:  map[string]any{"submission_id": subID},
 		})
+	}
+
+	// Visitor identification (Phase 31.3, 2026-05-06). When the form
+	// carries an email-shaped value, link it to the visitor's
+	// session so atomicsite's identified-sessions panel + per-email
+	// drill-down work without a separate /t/identify ping. Best-
+	// effort: a missing fingerprint or a no-session-for-this-fp
+	// returns 0 rows and we move on; the form submission itself is
+	// already persisted in form_submissions and is the source of
+	// truth for the email regardless.
+	if h.idRecorder != nil && fp != "" {
+		if email := identify.PickEmail(fields); email != "" {
+			_, _ = h.idRecorder.Identify(r.Context(), form.SiteID, fp, email, identify.Page{
+				URL:      r.Header.Get("Referer"),
+				Path:     r.Header.Get("Referer"),
+				Referrer: r.Header.Get("Referer"),
+			})
+		}
 	}
 
 	// Optional notification email (fire-and-forget, errors logged).

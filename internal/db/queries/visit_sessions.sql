@@ -19,6 +19,18 @@ WHERE site_id = ? AND fingerprint = ?;
 SELECT * FROM visit_sessions
 WHERE site_id = ? AND fingerprint = ?;
 
+-- name: SetVisitSessionEmail :execrows
+-- Phase 31.3 (2026-05-06): form-submit / explicit-identify path. Sets
+-- email + stamps identified_at if it wasn't already (a re-identify keeps
+-- the original timestamp so analytics + retention treat the session as
+-- one continuous identified visitor). Returns rows affected so the
+-- caller can detect the no-session case (0) without a second roundtrip.
+UPDATE visit_sessions SET
+    email = ?,
+    identified_at = COALESCE(NULLIF(identified_at, ''), ?),
+    last_seen_at = ?
+WHERE site_id = ? AND fingerprint = ?;
+
 -- name: ListIdentifiedSessions :many
 SELECT * FROM visit_sessions
 WHERE site_id = ? AND identified_at != ''

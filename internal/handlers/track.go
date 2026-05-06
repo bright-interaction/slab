@@ -13,6 +13,7 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/conversions"
 	"github.com/brightinteraction/atomicsite/internal/crmsync"
+	"github.com/brightinteraction/atomicsite/internal/identify"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/sharedsecret"
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -88,26 +89,43 @@ type TrackHandler struct {
 	// and /t/event signals and records matches. nil-safe: a nil
 	// recorder no-ops, so unit tests don't have to wire it.
 	recorder *conversions.Recorder
+	// identifyLimiter caps explicit /t/identify calls. Identify is
+	// rare in normal use (a visitor identifies once per browser /
+	// device), so the budget can be tight without hurting UX.
+	identifyLimiter *consentRateLimiter
+	// idRecorder owns the identify flow shared with FormHandler. The
+	// dependency is injected (not constructed in NewTrackHandler) so
+	// the same instance can also be wired into FormHandler at server
+	// boot.
+	idRecorder *identify.Recorder
 }
 
 // NewTrackHandler builds a TrackHandler. The CRM sync client and throttler
 // are constructed from cfg; both are no-ops when BRIGHTCRM_WEBHOOK_URL or
 // BRIGHTCRM_WEBHOOK_SECRET are unset.
 func NewTrackHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *TrackHandler {
+	crmClient := crmsync.NewClient(cfg.BrightCRMWebhookURL, cfg.BrightCRMWebhookSecret)
 	return &TrackHandler{
 		cfg:             cfg,
 		queries:         queries,
 		db:              db,
-		crmClient:       crmsync.NewClient(cfg.BrightCRMWebhookURL, cfg.BrightCRMWebhookSecret),
+		crmClient:       crmClient,
 		crmThrot:        crmsync.NewThrottler(cfg.CRMSyncMinInterval),
 		inboundVerifier: sharedsecret.NewVerifier(cfg.BrightCRMWebhookSecret, cfg.BrightCRMWebhookSecretPrevious),
 		consentLimiter:    newConsentRateLimiter(20, 20.0/60.0, 10*time.Minute),
 		pageviewLimiter:   newConsentRateLimiter(100, 60.0/60.0, 10*time.Minute),
 		engagementLimiter: newConsentRateLimiter(50, 30.0/60.0, 10*time.Minute),
 		eventLimiter:      newConsentRateLimiter(50, 30.0/60.0, 10*time.Minute),
+		identifyLimiter:   newConsentRateLimiter(10, 5.0/60.0, 10*time.Minute),
 		recorder:          conversions.NewRecorder(queries),
+		idRecorder:        identify.NewRecorder(queries, crmClient),
 	}
 }
+
+// IdentifyRecorder exposes the shared identify recorder so other
+// handlers (FormHandler, primarily) can wire the same instance and
+// keep identify semantics consolidated.
+func (h *TrackHandler) IdentifyRecorder() *identify.Recorder { return h.idRecorder }
 
 // InboundVerifier exposes the verifier so the /admin/reload-secrets handler
 // can call its Update method during a Dockyard-driven rotation.
@@ -581,6 +599,72 @@ func (h *TrackHandler) PageView(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// identifyRequest is the body for POST /t/identify, fired by site
+// code that wants to attach an email to the current visitor (e.g.
+// post-checkout, post-newsletter-confirm, custom SPAs).
+type identifyRequest struct {
+	SiteID   string `json:"siteId"`
+	Email    string `json:"email"`
+	Page     string `json:"page"`
+	Title    string `json:"title"`
+	Referrer string `json:"referrer"`
+}
+
+// Identify handles POST /t/identify. Validates the email shape,
+// updates visit_sessions for the cookie-derived fingerprint, fires
+// a best-effort crmsync event. Returns 204 on success, 404 when no
+// session exists for the fingerprint (visitor never landed a
+// pageview), 400 on a bad email.
+func (h *TrackHandler) Identify(w http.ResponseWriter, r *http.Request) {
+	if h.identifyLimiter != nil && !h.identifyLimiter.allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "30")
+		writeError(w, http.StatusTooManyRequests, "Too many identify pings; slow down")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
+	defer r.Body.Close()
+
+	var req identifyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	siteID := strings.TrimSpace(req.SiteID)
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid siteId")
+		return
+	}
+	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+		writeError(w, http.StatusNotFound, "Unknown siteId")
+		return
+	}
+	fp := authmw.GetFingerprint(r)
+	if fp == "" {
+		writeError(w, http.StatusInternalServerError, "Missing fingerprint")
+		return
+	}
+
+	outcome, err := h.idRecorder.Identify(r.Context(), siteID, fp, req.Email, identify.Page{
+		URL:      req.Page,
+		Path:     req.Page,
+		Title:    req.Title,
+		Referrer: req.Referrer,
+	})
+	if err != nil {
+		if errors.Is(err, identify.ErrInvalidEmail) {
+			writeError(w, http.StatusBadRequest, "Invalid email")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Failed to identify visitor")
+		return
+	}
+	if !outcome.Updated {
+		writeError(w, http.StatusNotFound, "No session for this fingerprint")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

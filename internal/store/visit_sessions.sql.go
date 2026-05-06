@@ -190,6 +190,41 @@ func (q *Queries) ListIdentifiedSessions(ctx context.Context, arg ListIdentified
 	return items, nil
 }
 
+const setVisitSessionEmail = `-- name: SetVisitSessionEmail :execrows
+UPDATE visit_sessions SET
+    email = ?,
+    identified_at = COALESCE(NULLIF(identified_at, ''), ?),
+    last_seen_at = ?
+WHERE site_id = ? AND fingerprint = ?
+`
+
+type SetVisitSessionEmailParams struct {
+	Email        string `json:"email"`
+	IdentifiedAt string `json:"identified_at"`
+	LastSeenAt   string `json:"last_seen_at"`
+	SiteID       string `json:"site_id"`
+	Fingerprint  string `json:"fingerprint"`
+}
+
+// Phase 31.3 (2026-05-06): form-submit / explicit-identify path. Sets
+// email + stamps identified_at if it wasn't already (a re-identify keeps
+// the original timestamp so analytics + retention treat the session as
+// one continuous identified visitor). Returns rows affected so the
+// caller can detect the no-session case (0) without a second roundtrip.
+func (q *Queries) SetVisitSessionEmail(ctx context.Context, arg SetVisitSessionEmailParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setVisitSessionEmail,
+		arg.Email,
+		arg.IdentifiedAt,
+		arg.LastSeenAt,
+		arg.SiteID,
+		arg.Fingerprint,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const upsertVisitSession = `-- name: UpsertVisitSession :exec
 INSERT INTO visit_sessions (id, site_id, fingerprint, started_at, last_seen_at, page_count)
 VALUES (?, ?, ?, ?, ?, 1)
