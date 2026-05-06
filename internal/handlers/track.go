@@ -11,6 +11,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/analytics"
 	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/brightinteraction/atomicsite/internal/conversions"
 	"github.com/brightinteraction/atomicsite/internal/crmsync"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/sharedsecret"
@@ -78,6 +79,15 @@ type TrackHandler struct {
 	// (one beacon per visibilitychange / pagehide).
 	pageviewLimiter   *consentRateLimiter
 	engagementLimiter *consentRateLimiter
+	// eventLimiter caps explicit atomic.track() events. Goals fire
+	// once per visitor in normal use; the default is wide enough to
+	// cover SPAs that emit several events per page without inviting
+	// abuse.
+	eventLimiter *consentRateLimiter
+	// recorder evaluates active conversion goals against /t/pageview
+	// and /t/event signals and records matches. nil-safe: a nil
+	// recorder no-ops, so unit tests don't have to wire it.
+	recorder *conversions.Recorder
 }
 
 // NewTrackHandler builds a TrackHandler. The CRM sync client and throttler
@@ -94,6 +104,8 @@ func NewTrackHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *Tr
 		consentLimiter:    newConsentRateLimiter(20, 20.0/60.0, 10*time.Minute),
 		pageviewLimiter:   newConsentRateLimiter(100, 60.0/60.0, 10*time.Minute),
 		engagementLimiter: newConsentRateLimiter(50, 30.0/60.0, 10*time.Minute),
+		eventLimiter:      newConsentRateLimiter(50, 30.0/60.0, 10*time.Minute),
+		recorder:          conversions.NewRecorder(queries),
 	}
 }
 
@@ -552,6 +564,98 @@ func (h *TrackHandler) PageView(w http.ResponseWriter, r *http.Request) {
 		UtmCampaign: utmCampaign,
 	}); err != nil {
 		slog.Error("track: record visit_event", "site_id", siteID, "err", err)
+	}
+
+	// Conversion goal evaluation (Phase 31.1). URL-pattern goals
+	// fire here so the same /t/pageview ping produces both a visit
+	// row and any matching conversion_event rows. Best-effort: a
+	// failed match-eval never blocks the 204.
+	if h.recorder != nil {
+		h.recorder.Evaluate(r.Context(), conversions.Signal{
+			SiteID:      siteID,
+			Fingerprint: fp,
+			SessionID:   sessionID,
+			Path:        path,
+			MatchType:   conversions.MatchTypeURLPattern,
+			MatchValue:  path,
+		})
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// eventRequest is the body for POST /t/event, fired by the in-page
+// beacon when site code calls window.atomic.track(name, props).
+type eventRequest struct {
+	SiteID      string         `json:"siteId"`
+	Path        string         `json:"path"`
+	Name        string         `json:"name"`
+	ValueCents  int64          `json:"valueCents"`
+	Properties  map[string]any `json:"properties"`
+}
+
+// EventTrack handles POST /t/event. It evaluates active event_name
+// goals against the posted name and records a conversion_event for
+// each match. Always returns 204 unless the request is malformed.
+func (h *TrackHandler) EventTrack(w http.ResponseWriter, r *http.Request) {
+	if h.eventLimiter != nil && !h.eventLimiter.allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "5")
+		writeError(w, http.StatusTooManyRequests, "Too many event pings; slow down")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
+	defer r.Body.Close()
+
+	var req eventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	siteID := strings.TrimSpace(req.SiteID)
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid siteId")
+		return
+	}
+	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+		writeError(w, http.StatusNotFound, "Unknown siteId")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" || len(name) > 128 {
+		writeError(w, http.StatusBadRequest, "Invalid event name")
+		return
+	}
+	fp := authmw.GetFingerprint(r)
+	if fp == "" {
+		writeError(w, http.StatusInternalServerError, "Missing fingerprint")
+		return
+	}
+	path := strings.TrimSpace(req.Path)
+	if len(path) > 1024 {
+		path = path[:1024]
+	}
+
+	sessionID := ""
+	if sess, err := h.queries.GetSessionByFingerprint(r.Context(), store.GetSessionByFingerprintParams{
+		SiteID:      siteID,
+		Fingerprint: fp,
+	}); err == nil {
+		sessionID = sess.ID
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		slog.Warn("track: get session for event", "site_id", siteID, "err", err)
+	}
+
+	if h.recorder != nil {
+		h.recorder.Evaluate(r.Context(), conversions.Signal{
+			SiteID:             siteID,
+			Fingerprint:        fp,
+			SessionID:          sessionID,
+			Path:               path,
+			MatchType:          conversions.MatchTypeEventName,
+			MatchValue:         name,
+			ValueOverrideCents: req.ValueCents,
+			Properties:         req.Properties,
+		})
 	}
 
 	w.WriteHeader(http.StatusNoContent)

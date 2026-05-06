@@ -4,8 +4,13 @@
 //   GET /sites/{id}/analytics/sessions?identified=true&limit=25
 //   GET /sites/{id}/analytics/conversion-paths?limit=5
 //   GET /sites/{id}/analytics/tracked-fields
+//   GET /sites/{id}/analytics/goals?since=...   (Phase 31.1)
+//   GET /sites/{id}/goals                       (Phase 31.1)
+//   POST /sites/{id}/goals                      (Phase 31.1)
+//   PATCH /sites/{id}/goals/{goalID}            (Phase 31.1)
+//   DELETE /sites/{id}/goals/{goalID}           (Phase 31.1)
 
-import { apiGet } from './client';
+import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 
 export type TopPage = {
 	path: string;
@@ -143,4 +148,69 @@ export function listConversionPaths(
 
 export function getTrackedFields(siteID: string): Promise<TrackedFieldsResponse> {
 	return apiGet<TrackedFieldsResponse>(`/sites/${siteID}/analytics/tracked-fields`);
+}
+
+// --- Conversion goals (Phase 31.1, 2026-05-06) ---
+
+export type GoalMatchType = 'url_pattern' | 'event_name' | 'form_submit';
+
+export type Goal = {
+	id: string;
+	site_id: string;
+	slug: string;
+	name: string;
+	match_type: GoalMatchType;
+	match_value: string;
+	value_cents: number;
+	value_currency: string;
+	active: boolean;
+	created_at: string;
+	updated_at: string;
+};
+
+export type GoalAggregate = Goal & {
+	conversions: number;
+	unique_converters: number;
+	conversion_rate_pct: number;
+	total_value_cents: number;
+};
+
+export type GoalsAnalyticsResponse = {
+	since: string;
+	unique_visitors: number;
+	goals: GoalAggregate[];
+};
+
+export type GoalInput = {
+	slug?: string;
+	name: string;
+	match_type: GoalMatchType;
+	match_value: string;
+	value_cents?: number;
+	value_currency?: string;
+	active?: boolean;
+};
+
+export function listGoals(siteID: string): Promise<{ goals: Goal[] }> {
+	return apiGet<{ goals: Goal[] }>(`/sites/${siteID}/goals`);
+}
+
+export function createGoal(siteID: string, input: GoalInput & { slug: string }): Promise<Goal> {
+	return apiPost<Goal>(`/sites/${siteID}/goals`, input);
+}
+
+export function updateGoal(siteID: string, goalID: string, input: GoalInput): Promise<Goal> {
+	return apiPatch<Goal>(`/sites/${siteID}/goals/${goalID}`, input);
+}
+
+export function deleteGoal(siteID: string, goalID: string): Promise<{ ok: boolean }> {
+	return apiDelete<{ ok: boolean }>(`/sites/${siteID}/goals/${goalID}`);
+}
+
+export function getGoalsAnalytics(
+	siteID: string,
+	since: SinceRange = '7d'
+): Promise<GoalsAnalyticsResponse> {
+	const qs = new URLSearchParams({ since });
+	return apiGet<GoalsAnalyticsResponse>(`/sites/${siteID}/analytics/goals?${qs.toString()}`);
 }

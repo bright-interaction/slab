@@ -367,6 +367,17 @@ func EngagementBeaconScript(siteID, trackPath string, consentGated bool) string 
     var p={siteId:SITE_ID,path:location.pathname+location.search,screenW:screen.width|0,screenH:screen.height|0,viewportW:innerWidth|0,viewportH:innerHeight|0,prefersDark:dark,prefersReducedMotion:rm,timeOnPageMs:Math.round(performance.now()-t0),maxScrollPct:maxScroll};
     try{var b=new Blob([JSON.stringify(p)],{type:"application/json"});navigator.sendBeacon(TRACK_PATH+"/engagement",b);}catch(e){}
   }
+  // window.atomic.track(name, props) records an explicit conversion
+  // event. Phase 31.1, 2026-05-06. Same consent gate as the
+  // engagement beacon - if the visitor has not granted analytics
+  // consent, the call is a quiet no-op so site code can fire it
+  // unconditionally without polluting opt-out users.
+  function track(name,props){if(!ALLOWED||!name)return;
+    var p={siteId:SITE_ID,path:location.pathname+location.search,name:String(name).slice(0,128),valueCents:0,properties:null};
+    if(props&&typeof props==="object"){if(typeof props.valueCents==="number"){p.valueCents=props.valueCents|0;}p.properties=props.properties||props;}
+    try{var b=new Blob([JSON.stringify(p)],{type:"application/json"});navigator.sendBeacon(TRACK_PATH+"/event",b);}catch(e){}
+  }
+  window.atomic=window.atomic||{};window.atomic.track=track;
   document.addEventListener("consent:init",function(e){if(e&&e.detail&&e.detail.analytics)ALLOWED=true;});
   document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")send();});
   window.addEventListener("pagehide",send);

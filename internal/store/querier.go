@@ -48,6 +48,7 @@ type Querier interface {
 	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
 	CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error)
 	CountConsentBySiteByMethod(ctx context.Context, arg CountConsentBySiteByMethodParams) (int64, error)
+	CountConversionsByGoal(ctx context.Context, arg CountConversionsByGoalParams) (int64, error)
 	CountItemsByCollection(ctx context.Context, collectionID string) (int64, error)
 	// Distinct fingerprints in the last N minutes (caller passes the cutoff
 	// timestamp). Used for the "live now" widget.
@@ -59,6 +60,7 @@ type Querier interface {
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
+	CountUniqueConvertersByGoal(ctx context.Context, arg CountUniqueConvertersByGoalParams) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
 	// Pre-flight count for the retention manager so the slog line can name how
 	// many rows the upcoming DELETE will drop without re-running the query.
@@ -80,6 +82,7 @@ type Querier interface {
 	CreateForm(ctx context.Context, arg CreateFormParams) error
 	CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) error
 	CreateGlobalBlock(ctx context.Context, arg CreateGlobalBlockParams) error
+	CreateGoal(ctx context.Context, arg CreateGoalParams) error
 	CreateGuardrail(ctx context.Context, arg CreateGuardrailParams) error
 	CreateInvite(ctx context.Context, arg CreateInviteParams) error
 	CreateItem(ctx context.Context, arg CreateItemParams) error
@@ -121,6 +124,7 @@ type Querier interface {
 	DeleteForm(ctx context.Context, id string) error
 	DeleteFormSubmission(ctx context.Context, id string) error
 	DeleteGlobalBlock(ctx context.Context, id string) error
+	DeleteGoal(ctx context.Context, id string) error
 	DeleteGuardrail(ctx context.Context, id string) error
 	DeleteInvite(ctx context.Context, id string) error
 	DeleteItem(ctx context.Context, id string) error
@@ -180,6 +184,8 @@ type Querier interface {
 	GetDomainByVerifyToken(ctx context.Context, verifyToken string) (SiteDomain, error)
 	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
+	GetGoalByID(ctx context.Context, id string) (ConversionGoal, error)
+	GetGoalBySiteSlug(ctx context.Context, arg GetGoalBySiteSlugParams) (ConversionGoal, error)
 	GetGuardrailByID(ctx context.Context, id string) (GuardrailRule, error)
 	GetInviteByToken(ctx context.Context, token string) (Invite, error)
 	GetItemByCollectionLocaleSlug(ctx context.Context, arg GetItemByCollectionLocaleSlugParams) (CollectionItem, error)
@@ -223,10 +229,16 @@ type Querier interface {
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
+	// Conversion goals + events (Phase 31.1, 2026-05-06).
+	// The CRUD surface for goals plus the ingest + read queries for events.
+	// Aggregations stay simple here; richer attribution windows live behind
+	// the analytics handlers which compose these into per-range views.
+	ListActiveGoalsBySite(ctx context.Context, siteID string) ([]ConversionGoal, error)
 	ListActiveGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
 	ListActiveKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
 	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
+	ListAllGoalsBySite(ctx context.Context, siteID string) ([]ConversionGoal, error)
 	ListAllPublishedItemsBySite(ctx context.Context, siteID string) ([]CollectionItem, error)
 	ListAllWorkspaces(ctx context.Context) ([]Workspace, error)
 	// Allowed scripts
@@ -252,6 +264,9 @@ type Querier interface {
 	// driver mis-binds (caused HTTP 500 on the Proofs admin page).
 	ListConsentBySite(ctx context.Context, arg ListConsentBySiteParams) ([]ConsentRecord, error)
 	ListConsentBySiteByMethod(ctx context.Context, arg ListConsentBySiteByMethodParams) ([]ConsentRecord, error)
+	ListConversionsByGoal(ctx context.Context, arg ListConversionsByGoalParams) ([]ConversionEvent, error)
+	ListConversionsBySite(ctx context.Context, arg ListConversionsBySiteParams) ([]ConversionEvent, error)
+	ListConversionsBySiteFingerprint(ctx context.Context, arg ListConversionsBySiteFingerprintParams) ([]ConversionEvent, error)
 	ListDeployTargetsBySite(ctx context.Context, siteID string) ([]DeployTarget, error)
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
 	ListDesignReferences(ctx context.Context, siteID string) ([]DesignReference, error)
@@ -330,6 +345,7 @@ type Querier interface {
 	// don't need a separate "have we seen this id" check.
 	RecordBillingEvent(ctx context.Context, arg RecordBillingEventParams) error
 	RecordConsent(ctx context.Context, arg RecordConsentParams) error
+	RecordConversionEvent(ctx context.Context, arg RecordConversionEventParams) error
 	RecordSchemaVersion(ctx context.Context, arg RecordSchemaVersionParams) error
 	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
@@ -345,6 +361,7 @@ type Querier interface {
 	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
 	SumBuildMinutesBySiteSinceCutoff(ctx context.Context, arg SumBuildMinutesBySiteSinceCutoffParams) (interface{}, error)
 	SumStorageBytesBySite(ctx context.Context, siteID string) (interface{}, error)
+	SumValueByGoal(ctx context.Context, arg SumValueByGoalParams) (interface{}, error)
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
 	TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error)
 	TopDevices(ctx context.Context, arg TopDevicesParams) ([]TopDevicesRow, error)
@@ -372,6 +389,7 @@ type Querier interface {
 	UpdateDomainStatus(ctx context.Context, arg UpdateDomainStatusParams) error
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
 	UpdateGlobalBlock(ctx context.Context, arg UpdateGlobalBlockParams) error
+	UpdateGoal(ctx context.Context, arg UpdateGoalParams) error
 	UpdateGuardrail(ctx context.Context, arg UpdateGuardrailParams) error
 	UpdateItem(ctx context.Context, arg UpdateItemParams) error
 	UpdateKnowledgebaseEntry(ctx context.Context, arg UpdateKnowledgebaseEntryParams) error

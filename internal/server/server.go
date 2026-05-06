@@ -176,6 +176,10 @@ func (s *Server) Router() http.Handler {
 		r.Post("/t/consent", trackH.Consent)
 		r.Post("/t/pageview", trackH.PageView)
 		r.Post("/t/engagement", trackH.Engagement)
+		// /t/event (Phase 31.1): explicit conversion-event ping fired
+		// by window.atomic.track(name, props). Goal-eval matches the
+		// posted name against active event_name goals.
+		r.Post("/t/event", trackH.EventTrack)
 		// Bidirectional CRM personalization (Phase 18.1).
 		// /t/inbound accepts CRM-pushed metadata for a known visitor;
 		// HMAC-SHA256 (same secret as outbound) on X-Atomicsite-Signature.
@@ -400,6 +404,15 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/forms/{formID}/submissions", formsH.ListAdminSubmissions)
 		siteR.Get("/api/sites/{siteID}/forms/{formID}/submissions.csv", formsH.ExportAdminSubmissionsCSV)
 		siteR.Delete("/api/sites/{siteID}/forms/{formID}/submissions/{submissionID}", formsH.DeleteAdminSubmission)
+
+		// Conversion goals (Phase 31.1, 2026-05-06). Per-site CRUD +
+		// aggregated rates feed the Analytics tab Goals panel.
+		goalsH := handlers.NewConversionGoalsHandler(s.queries)
+		siteR.Get("/api/sites/{siteID}/goals", goalsH.List)
+		siteR.Post("/api/sites/{siteID}/goals", goalsH.Create)
+		siteR.Patch("/api/sites/{siteID}/goals/{goalID}", goalsH.Update)
+		siteR.Delete("/api/sites/{siteID}/goals/{goalID}", goalsH.Delete)
+		siteR.Get("/api/sites/{siteID}/analytics/goals", goalsH.AnalyticsGoals)
 
 		// Custom domains. The reconciler may be nil (no host integration);
 		// the handler still records rows + serves the verify endpoint.
