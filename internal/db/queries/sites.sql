@@ -8,8 +8,8 @@ SELECT * FROM sites WHERE id = ?;
 SELECT * FROM sites WHERE slug = ?;
 
 -- name: CreateSite :exec
-INSERT INTO sites (id, name, slug, domain, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, lang)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO sites (id, workspace_id, name, slug, domain, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, lang)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateSite :exec
 UPDATE sites SET
