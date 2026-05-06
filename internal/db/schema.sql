@@ -161,6 +161,35 @@ CREATE TABLE IF NOT EXISTS billing_events (
 CREATE INDEX IF NOT EXISTS idx_billing_events_workspace ON billing_events(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_billing_events_processed ON billing_events(processed_at);
 
+-- ============================================================
+-- Waitlist (Phase 30.5, Cloud Tier MVP, 2026-05-06).
+--
+-- Public-facing capture for the invite-beta signup model. Visitors
+-- on the pricing page submit { email, name, use_case, region } via
+-- POST /api/waitlist. The owner reviews entries in /admin/waitlist
+-- and clicks "Send invite" to mint a workspace_invite token + email
+-- the recipient via MailSender.
+--
+-- Spam mitigation: rate-limited by IP at the handler layer (5/hour
+-- per IP). The DB has a composite UNIQUE index on (email) so a
+-- single email can only sit in the waitlist once.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS waitlist (
+    id              TEXT PRIMARY KEY,
+    email           TEXT NOT NULL UNIQUE,
+    name            TEXT NOT NULL DEFAULT '',
+    use_case        TEXT NOT NULL DEFAULT '',
+    region          TEXT NOT NULL DEFAULT 'eu',
+    source_ip       TEXT NOT NULL DEFAULT '',
+    user_agent      TEXT NOT NULL DEFAULT '',
+    invited_at      TEXT NOT NULL DEFAULT '',
+    invite_token    TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_waitlist_invited ON waitlist(invited_at);
+CREATE INDEX IF NOT EXISTS idx_waitlist_created ON waitlist(created_at);
+
 -- site_members links users to sites for multi-tenant authorization. Without
 -- this table every authenticated user could read, update, delete any site
 -- by enumerating site IDs (audit finding C1, fixed 2026-05-01). The

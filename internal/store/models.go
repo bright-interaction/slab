@@ -551,6 +551,20 @@ type VisitSession struct {
 	IdentityConfirmedAt   string `json:"identity_confirmed_at"`
 }
 
+type Waitlist struct {
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	Name        string `json:"name"`
+	UseCase     string `json:"use_case"`
+	Region      string `json:"region"`
+	SourceIp    string `json:"source_ip"`
+	UserAgent   string `json:"user_agent"`
+	InvitedAt   string `json:"invited_at"`
+	InviteToken string `json:"invite_token"`
+	Notes       string `json:"notes"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type Workspace struct {
 	ID                   string `json:"id"`
 	Name                 string `json:"name"`

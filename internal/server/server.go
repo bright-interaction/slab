@@ -22,6 +22,7 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/analyticsdb"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/domains"
+	"github.com/brightinteraction/atomicsite/internal/email"
 	"github.com/brightinteraction/atomicsite/internal/handlers"
 	"github.com/brightinteraction/atomicsite/internal/mcp"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
@@ -249,6 +250,18 @@ func (s *Server) Router() http.Handler {
 			r.Post("/api/admin/invites", invH.Create)
 			r.Delete("/api/admin/invites/{inviteID}", invH.Delete)
 
+			// Waitlist admin routes (Phase 30.5). Wired here inside
+			// the RequireAdmin group; the public submit endpoint
+			// lives outside auth at /api/waitlist.
+			waitlistAdminH := handlers.NewWaitlistHandler(s.cfg, s.queries, email.NewMailerSendClient(
+				os.Getenv("MAILERSEND_API_TOKEN"),
+				os.Getenv("MAIL_FROM"),
+				os.Getenv("MAIL_FROM_NAME"),
+			))
+			r.Get("/api/admin/waitlist", waitlistAdminH.AdminList)
+			r.Post("/api/admin/waitlist/{id}/invite", waitlistAdminH.AdminInvite)
+			r.Delete("/api/admin/waitlist/{id}", waitlistAdminH.AdminDelete)
+
 			// Admin observability surface (audit I1 + I2). Returns the
 			// last retention sweep result, DB stats, and DuckDB
 			// availability so the operator has one URL to check from
@@ -322,6 +335,18 @@ func (s *Server) Router() http.Handler {
 		wsR.Post("/api/workspaces/{workspaceID}/billing/checkout", billingH.StartCheckout)
 		wsR.Get("/api/workspaces/{workspaceID}/billing", billingH.GetBilling)
 		r.Post("/api/billing/webhook", billingH.Webhook)
+
+		// Waitlist (Phase 30.5). Public capture is rate-limited at
+		// the handler layer (5/hour/IP) so a public route is safe
+		// without auth. Admin-only review + invite flow gated by
+		// RequireAdmin.
+		mailer := email.NewMailerSendClient(
+			os.Getenv("MAILERSEND_API_TOKEN"),
+			os.Getenv("MAIL_FROM"),
+			os.Getenv("MAIL_FROM_NAME"),
+		)
+		waitlistH := handlers.NewWaitlistHandler(s.cfg, s.queries, mailer)
+		r.Post("/api/waitlist", waitlistH.Submit)
 
 		// Audit C1: every /api/sites/{siteID}/* route below must verify
 		// the authenticated user has a site_members row for that siteID
