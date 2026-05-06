@@ -239,6 +239,64 @@ func (s *Server) registerServiceContextResources() {
 		},
 	})
 
+	// Phase 31.1.1 (2026-05-06). Read-only aggregate snapshot of every
+	// active conversion goal with counts + rates over the last 7 days.
+	// Companion to the get_goals_analytics tool: agents that prefer
+	// resources/read get a quick "what counts as a conversion here, and
+	// is it firing?" answer in one fetch. Aggregates only; identified-
+	// tier emails are never exposed.
+	register(Resource{
+		URI:         "atomicsite://analytics/goals",
+		Name:        "Conversion goals + rates (7-day)",
+		Description: "Per-site conversion goals with conversions / unique_converters / conversion_rate_pct / total_value_cents over the last 7 days. Use this to learn what counts as a conversion before suggesting goal changes; use the get_goals_analytics tool when you need a different time range.",
+		MimeType:    "application/json",
+		Reader: func(ctx context.Context, agent *authmw.AgentIdentity) (string, error) {
+			cutoff := time.Now().UTC().Add(-7 * 24 * time.Hour).Format(time.RFC3339)
+			goals, err := s.queries.ListAllGoalsBySite(ctx, agent.SiteID)
+			if err != nil {
+				return "", err
+			}
+			uniqueVisitors, _ := s.queries.CountUniqueVisitorsSince(ctx, store.CountUniqueVisitorsSinceParams{
+				SiteID: agent.SiteID,
+				Ts:     cutoff,
+			})
+			out := make([]map[string]any, 0, len(goals))
+			for _, g := range goals {
+				conv, _ := s.queries.CountConversionsByGoal(ctx, store.CountConversionsByGoalParams{
+					GoalID: g.ID,
+					Ts:     cutoff,
+				})
+				uniq, _ := s.queries.CountUniqueConvertersByGoal(ctx, store.CountUniqueConvertersByGoalParams{
+					GoalID: g.ID,
+					Ts:     cutoff,
+				})
+				val, _ := s.queries.SumValueByGoal(ctx, store.SumValueByGoalParams{
+					GoalID: g.ID,
+					Ts:     cutoff,
+				})
+				valCents := int64(0)
+				if v, ok := val.(int64); ok {
+					valCents = v
+				}
+				rate := 0.0
+				if uniqueVisitors > 0 {
+					rate = float64(uniq) / float64(uniqueVisitors) * 100.0
+				}
+				row := goalToMap(g)
+				row["conversions"] = conv
+				row["unique_converters"] = uniq
+				row["conversion_rate_pct"] = rate
+				row["total_value_cents"] = valCents
+				out = append(out, row)
+			}
+			return mustJSON(map[string]any{
+				"window":          "7d",
+				"unique_visitors": uniqueVisitors,
+				"goals":           out,
+			}), nil
+		},
+	})
+
 	register(Resource{
 		URI:         "atomicsite://meta/capabilities",
 		Name:        "Agent capabilities",
