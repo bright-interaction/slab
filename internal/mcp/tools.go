@@ -793,6 +793,12 @@ func (s *Server) registerTools() {
 	// for Collection + item CRUD plus bulk import. Lives in
 	// tools_collections.go.
 	s.registerCollectionTools()
+
+	// Migration system (Sprint 4.5, 2026-05-06). 13 tools wrapping the
+	// crawl + plan + apply (with upsert) + verify-live + missing-urls
+	// surface so the AI can drive an end-to-end CMS migration through
+	// MCP without dropping to raw HTTP. Lives in tools_migrations.go.
+	s.registerMigrationTools()
 }
 
 // --- helpers (shared across tool handlers) -------------------------------
