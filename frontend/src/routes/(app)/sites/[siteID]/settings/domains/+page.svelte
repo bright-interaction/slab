@@ -189,9 +189,10 @@
 				Domains
 			</h1>
 			<p class="text-[13px] text-text-secondary">
-				Attach custom hostnames to this site. We verify DNS, issue a Let's Encrypt
-				certificate, and rewrite nginx so the live site answers from the
-				new hostname with the same A+ security headers.
+				Custom hostnames the live site answers from. We verify DNS, issue a Let's Encrypt
+				certificate, and rewrite nginx so the live site serves from the new hostname with
+				the same A+ security headers. Where the built artifact ships to is separate, see
+				<a href="/sites/{siteID}/settings/deployment" class="text-accent underline-offset-2 hover:underline">Deployment</a>.
 			</p>
 		</div>
 		<Button on:click={openAddDialog}>

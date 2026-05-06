@@ -186,10 +186,12 @@
 <div class="mx-auto max-w-7xl px-6 py-8">
 	<header class="flex flex-col gap-1.5">
 		<h1 class="font-display text-3xl font-extralight tracking-tight text-text-primary">
-			Profile
+			Business info
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			Business identity and legal contacts. Used in footer, imprint and privacy templates.
+			This site's legal entity, contacts, and address. Powers the footer, imprint, privacy
+			templates, security.txt, and JSON-LD Organization schema. Per-site, distinct from
+			your user account in <a href="/account" class="text-accent underline-offset-2 hover:underline">Account settings</a>.
 		</p>
 	</header>
 

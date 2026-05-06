@@ -164,7 +164,9 @@
 				Deployment
 			</h1>
 			<p class="text-[13px] text-text-secondary">
-				Where this site gets published once a build succeeds.
+				Targets the built artifact rsyncs to once a build succeeds (rsync, Dockyard, local).
+				Distinct from <a href="/sites/{siteID}/settings/domains" class="text-accent underline-offset-2 hover:underline">Domains</a>:
+				which server publishes vs which hostname answers.
 			</p>
 		</div>
 		<Button variant="primary" onclick={openCreate}>
