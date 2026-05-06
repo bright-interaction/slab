@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	AddSiteMember(ctx context.Context, arg AddSiteMemberParams) error
+	AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMemberParams) error
 	// Per-path engagement so the dashboard can show "users spend 2m12s on
 	// /pricing but bounce at /blog/x in 8s". Capped at the busiest 10 paths.
 	AvgEngagementByPath(ctx context.Context, arg AvgEngagementByPathParams) ([]AvgEngagementByPathRow, error)
@@ -22,6 +23,15 @@ type Querier interface {
 	// single-workspace behaviour through the C1 migration without a
 	// separate data migration script.
 	BackfillSiteMembersForAdmin(ctx context.Context, userID string) error
+	// Bootstrap helper: assign the given workspace_id to every site that
+	// currently has an empty workspace_id. Idempotent. Runs once at boot
+	// after ensureDefaultWorkspace creates the default workspace.
+	BackfillSitesWorkspace(ctx context.Context, workspaceID string) error
+	// Bootstrap helper: grant the admin owner-role on every existing
+	// workspace that has zero member rows. Idempotent: once any member
+	// exists, the workspace is skipped. Used by ensureDefaultWorkspace
+	// on first boot of a Phase 30+ binary against an existing DB.
+	BackfillWorkspaceMembersForAdmin(ctx context.Context, userID string) error
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
 	// Disables MFA and bumps token_version so any session that thought
@@ -45,6 +55,7 @@ type Querier interface {
 	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
 	CountMediaInFolder(ctx context.Context, arg CountMediaInFolderParams) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
+	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
 	// Pre-flight count for the retention manager so the slog line can name how
@@ -52,6 +63,7 @@ type Querier interface {
 	CountVisitEventsBySiteOlderThan(ctx context.Context, arg CountVisitEventsBySiteOlderThanParams) (int64, error)
 	CountVisitsByPath(ctx context.Context, arg CountVisitsByPathParams) ([]CountVisitsByPathRow, error)
 	CountVisitsBySite(ctx context.Context, arg CountVisitsBySiteParams) (int64, error)
+	CountWorkspaces(ctx context.Context) (int64, error)
 	CreateAgentKey(ctx context.Context, arg CreateAgentKeyParams) error
 	CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error
 	CreateBlock(ctx context.Context, arg CreateBlockParams) error
@@ -79,6 +91,8 @@ type Querier interface {
 	CreateSite(ctx context.Context, arg CreateSiteParams) error
 	CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error
+	CreateWorkspaceInvite(ctx context.Context, arg CreateWorkspaceInviteParams) error
 	DeactivateAgentKey(ctx context.Context, id string) error
 	DeleteAgentKey(ctx context.Context, id string) error
 	DeleteAllowedScript(ctx context.Context, id string) error
@@ -131,6 +145,8 @@ type Querier interface {
 	// analytics dashboard's identified-visitor list and represent CRM-confirmed
 	// contacts) -- only fully anonymous sessions older than the cutoff drop.
 	DeleteVisitSessionsBySiteOlderThan(ctx context.Context, arg DeleteVisitSessionsBySiteOlderThanParams) (int64, error)
+	DeleteWorkspace(ctx context.Context, id string) error
+	DeleteWorkspaceInvite(ctx context.Context, id string) error
 	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
@@ -162,6 +178,7 @@ type Querier interface {
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
+	GetRedirectByID(ctx context.Context, id string) (Redirect, error)
 	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
 	GetSessionByFingerprint(ctx context.Context, arg GetSessionByFingerprintParams) (VisitSession, error)
 	GetSetting(ctx context.Context, arg GetSettingParams) (SiteSetting, error)
@@ -178,6 +195,10 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
+	GetWorkspaceByID(ctx context.Context, id string) (Workspace, error)
+	GetWorkspaceBySlug(ctx context.Context, slug string) (Workspace, error)
+	GetWorkspaceInviteByToken(ctx context.Context, token string) (WorkspaceInvite, error)
+	GetWorkspaceMembership(ctx context.Context, arg GetWorkspaceMembershipParams) (WorkspaceMember, error)
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
@@ -186,6 +207,7 @@ type Querier interface {
 	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
 	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
 	ListAllPublishedItemsBySite(ctx context.Context, siteID string) ([]CollectionItem, error)
+	ListAllWorkspaces(ctx context.Context) ([]Workspace, error)
 	// Allowed scripts
 	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
 	ListAuditLogByResource(ctx context.Context, arg ListAuditLogByResourceParams) ([]AuditLog, error)
@@ -236,6 +258,7 @@ type Querier interface {
 	ListMediaInFolderPaginated(ctx context.Context, arg ListMediaInFolderPaginatedParams) ([]Medium, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
+	ListPendingWorkspaceInvites(ctx context.Context, workspaceID string) ([]WorkspaceInvite, error)
 	ListPublishedItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
 	ListPublishedItemsByCollectionAndLocale(ctx context.Context, arg ListPublishedItemsByCollectionAndLocaleParams) ([]CollectionItem, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
@@ -250,12 +273,17 @@ type Querier interface {
 	ListSiteIDsForUser(ctx context.Context, userID string) ([]string, error)
 	ListSiteMembers(ctx context.Context, siteID string) ([]ListSiteMembersRow, error)
 	ListSites(ctx context.Context) ([]Site, error)
+	ListSitesByWorkspace(ctx context.Context, workspaceID string) ([]ListSitesByWorkspaceRow, error)
 	ListSitesForQuotaAudit(ctx context.Context) ([]ListSitesForQuotaAuditRow, error)
 	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
+	ListWorkspaceIDsForUser(ctx context.Context, userID string) ([]string, error)
+	ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]ListWorkspaceMembersRow, error)
+	ListWorkspacesForUser(ctx context.Context, userID string) ([]ListWorkspacesForUserRow, error)
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
+	MarkWorkspaceInviteUsed(ctx context.Context, id string) error
 	// Pageviews per UTC day for the requested window. Returned as ISO-date
 	// buckets so the frontend can render a sparkline / bar chart directly.
 	PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error)
@@ -267,6 +295,7 @@ type Querier interface {
 	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	RemoveSiteMember(ctx context.Context, arg RemoveSiteMemberParams) error
+	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	// Flips this row to is_canonical=1 and clears the flag on every other
 	// domain row for the same site so exactly one canonical exists.
@@ -324,6 +353,9 @@ type Querier interface {
 	// Rewrites the recovery code list (e.g. after a single-use code is
 	// consumed during a recovery login).
 	UpdateUserTOTPRecovery(ctx context.Context, arg UpdateUserTOTPRecoveryParams) error
+	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) error
+	UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) error
+	UpdateWorkspaceStripe(ctx context.Context, arg UpdateWorkspaceStripeParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error

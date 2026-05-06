@@ -24,13 +24,24 @@ var ErrNotAvailable = errors.New("atomicsite: cloud feature not available in OSS
 // that no-ops every method. The Cloud build wires real implementations
 // (Vercel API client, Caddy admin client, Stripe, etc.).
 //
-// Methods are added here as cloud features land. Today the interface is
-// intentionally minimal: the build-tag boundary itself is the deliverable,
-// not any specific cloud feature.
+// Methods are added here as cloud features land. Today the interface
+// covers Mode + workspace plan limits (Phase 30). Stripe + Cloudflare
+// for SaaS hooks land in 30.2 / 30.3.
 type Provider interface {
 	// Mode reports the build flavour. Returns "oss" or "cloud". Used by
 	// internal/config Validate() to refuse-to-start when
 	// ATOMICSITE_DEPLOYMENT_MODE=cloud is set on a binary that was not
 	// built with -tags ee.
 	Mode() string
+
+	// PlanLimits returns the cap for a plan + resource pair. Resource
+	// is one of "max_sites", "storage_gb", "build_minutes",
+	// "custom_domain" (returns 1 if allowed, 0 if not), "white_label"
+	// (same shape). Returns -1 for unlimited (OSS plan).
+	//
+	// The Cloud build reads from internal/billing/plans.go (Phase 30.2)
+	// so plan changes via Stripe webhook take effect on the next request
+	// without a binary rebuild. The OSS build returns -1 for every
+	// resource so single-deploy installs are never gated.
+	PlanLimits(plan, resource string) int64
 }

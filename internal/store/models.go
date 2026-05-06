@@ -326,6 +326,7 @@ type Setting struct {
 
 type Site struct {
 	ID                  string `json:"id"`
+	WorkspaceID         string `json:"workspace_id"`
 	Name                string `json:"name"`
 	Slug                string `json:"slug"`
 	Domain              string `json:"domain"`
@@ -505,4 +506,38 @@ type VisitSession struct {
 	MetadataJson          string `json:"metadata_json"`
 	MetadataExpiresAt     string `json:"metadata_expires_at"`
 	IdentityConfirmedAt   string `json:"identity_confirmed_at"`
+}
+
+type Workspace struct {
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	Slug                 string `json:"slug"`
+	Plan                 string `json:"plan"`
+	Region               string `json:"region"`
+	BillingEmail         string `json:"billing_email"`
+	StripeCustomerID     string `json:"stripe_customer_id"`
+	StripeSubscriptionID string `json:"stripe_subscription_id"`
+	Status               string `json:"status"`
+	TrialEndsAt          string `json:"trial_ends_at"`
+	CreatedAt            string `json:"created_at"`
+	UpdatedAt            string `json:"updated_at"`
+}
+
+type WorkspaceInvite struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	Email       string `json:"email"`
+	Role        string `json:"role"`
+	Token       string `json:"token"`
+	CreatedBy   string `json:"created_by"`
+	CreatedAt   string `json:"created_at"`
+	ExpiresAt   string `json:"expires_at"`
+	UsedAt      string `json:"used_at"`
+}
+
+type WorkspaceMember struct {
+	WorkspaceID string `json:"workspace_id"`
+	UserID      string `json:"user_id"`
+	Role        string `json:"role"`
+	CreatedAt   string `json:"created_at"`
 }

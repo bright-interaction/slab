@@ -37,6 +37,74 @@ CREATE TABLE IF NOT EXISTS invites (
 CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token);
 CREATE INDEX IF NOT EXISTS idx_invites_email ON invites(email);
 
+-- ============================================================
+-- Workspaces (Phase 30, Cloud Tier MVP, 2026-05-05).
+--
+-- A workspace is the billing + ownership boundary that contains N sites.
+-- One user can belong to N workspaces (agency tier). The plan column
+-- gates feature access (custom_domain, max_sites, white_label, etc.);
+-- plan='oss' means unlimited / no Stripe subscription, used by every
+-- single-deploy OSS install where the boot bootstrap auto-creates one
+-- workspace per user. Cloud signups create workspaces with plan='solo'
+-- on a free trial.
+--
+-- region is reserved for the EU/US split (Phase 31). MVP ships EU-only;
+-- 'eu' is the only valid value today.
+--
+-- stripe_customer_id and stripe_subscription_id are populated by the
+-- billing webhook (Phase 30.2). status mirrors the subscription state
+-- so cron jobs can suspend builds + serving without going through
+-- Stripe on every request.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS workspaces (
+    id                      TEXT PRIMARY KEY,
+    name                    TEXT NOT NULL,
+    slug                    TEXT NOT NULL UNIQUE,
+    plan                    TEXT NOT NULL DEFAULT 'oss',
+    region                  TEXT NOT NULL DEFAULT 'eu',
+    billing_email           TEXT NOT NULL DEFAULT '',
+    stripe_customer_id      TEXT NOT NULL DEFAULT '',
+    stripe_subscription_id  TEXT NOT NULL DEFAULT '',
+    status                  TEXT NOT NULL DEFAULT 'active',
+    trial_ends_at           TEXT NOT NULL DEFAULT '',
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_workspaces_slug ON workspaces(slug);
+CREATE INDEX IF NOT EXISTS idx_workspaces_status ON workspaces(status);
+
+-- Per-user role within a workspace. owner = full control + billing,
+-- admin = manage sites + members but not billing, member = read + edit
+-- assigned sites. The seed admin gets owner on the auto-bootstrap
+-- workspace; cloud signups make the registering user the owner.
+CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role          TEXT NOT NULL DEFAULT 'member',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (workspace_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON workspace_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace ON workspace_members(workspace_id);
+
+-- Workspace-scoped invite tokens. Mirrors the existing invites table
+-- shape (used for global admin invites pre-Phase-30) but adds
+-- workspace_id so a member who joins via this flow lands inside the
+-- right workspace + role. Cloud waitlist signups also mint these.
+CREATE TABLE IF NOT EXISTS workspace_invites (
+    id            TEXT PRIMARY KEY,
+    workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    email         TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'member',
+    token         TEXT NOT NULL UNIQUE,
+    created_by    TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at    TEXT NOT NULL,
+    used_at       TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_invites_token ON workspace_invites(token);
+CREATE INDEX IF NOT EXISTS idx_workspace_invites_workspace ON workspace_invites(workspace_id);
+
 -- site_members links users to sites for multi-tenant authorization. Without
 -- this table every authenticated user could read, update, delete any site
 -- by enumerating site IDs (audit finding C1, fixed 2026-05-01). The
@@ -61,6 +129,15 @@ CREATE INDEX IF NOT EXISTS idx_site_members_site ON site_members(site_id);
 
 CREATE TABLE IF NOT EXISTS sites (
     id               TEXT PRIMARY KEY,
+    -- workspace_id (Phase 30, Cloud Tier MVP, 2026-05-05). Every site
+    -- belongs to exactly one workspace. OSS installs auto-bootstrap a
+    -- single workspace at boot and migrate every existing site into it
+    -- (cmd/server/main.go ensureDefaultWorkspace). Empty string is only
+    -- valid mid-migration; the bootstrap fills it before serving any
+    -- request. Foreign key intentionally omitted on the existing
+    -- column (legacy DBs may have NULLs at migration time);
+    -- workspace_access middleware verifies membership at every request.
+    workspace_id     TEXT NOT NULL DEFAULT '',
     name             TEXT NOT NULL,
     slug             TEXT NOT NULL UNIQUE,
     domain           TEXT NOT NULL DEFAULT '',

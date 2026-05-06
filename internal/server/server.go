@@ -287,6 +287,29 @@ func (s *Server) Router() http.Handler {
 			r.Get("/api/admin/audit-log", auditH.GlobalFeed)
 		})
 
+		// Workspaces (Phase 30, Cloud Tier MVP, 2026-05-05). The
+		// non-{workspaceID} list + create endpoints stay on plain `r`;
+		// every /api/workspaces/{workspaceID}/* route gets the
+		// WorkspaceAccessMiddleware so cross-workspace reads are
+		// rejected before the handler runs. Owner-only mutations
+		// (delete, billing, member changes) are gated inside each
+		// handler via authmw.RequireWorkspaceRole.
+		wsH := handlers.NewWorkspaceHandler(s.cfg, s.queries)
+		r.Get("/api/workspaces", wsH.ListMine)
+		r.Post("/api/workspaces", wsH.Create)
+		workspaceAccessMW := authmw.WorkspaceAccessMiddleware(s.queries)
+		wsR := r.With(workspaceAccessMW)
+		wsR.Get("/api/workspaces/{workspaceID}", wsH.Get)
+		wsR.Patch("/api/workspaces/{workspaceID}", wsH.Update)
+		wsR.Delete("/api/workspaces/{workspaceID}", wsH.Delete)
+		wsR.Get("/api/workspaces/{workspaceID}/members", wsH.ListMembers)
+		wsR.Post("/api/workspaces/{workspaceID}/members", wsH.AddMember)
+		wsR.Delete("/api/workspaces/{workspaceID}/members/{userID}", wsH.RemoveMember)
+		wsR.Get("/api/workspaces/{workspaceID}/invites", wsH.ListInvites)
+		wsR.Post("/api/workspaces/{workspaceID}/invites", wsH.CreateInvite)
+		wsR.Delete("/api/workspaces/{workspaceID}/invites/{inviteID}", wsH.DeleteInvite)
+		wsR.Get("/api/workspaces/{workspaceID}/sites", wsH.ListSites)
+
 		// Audit C1: every /api/sites/{siteID}/* route below must verify
 		// the authenticated user has a site_members row for that siteID
 		// (or is a workspace admin). The siteR sub-router applies
@@ -397,6 +420,20 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.GetItem)
 		siteR.Patch("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.UpdateItem)
 		siteR.Delete("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.DeleteItem)
+
+		// Redirects (Layer 2 of the migration system, 2026-05-05). CRUD +
+		// CSV bulk import + pre-launch verify. The slug-edit auto-301 path
+		// in agent.go writes directly to the same store; this surface is
+		// what humans and the agent use for migrations and manual cleanup.
+		// Builder emission is wired in internal/builder/nginx.go.
+		redirH := handlers.NewRedirectHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/redirects", redirH.List)
+		siteR.Post("/api/sites/{siteID}/redirects", redirH.Create)
+		siteR.Post("/api/sites/{siteID}/redirects/import", redirH.BulkImport)
+		siteR.Post("/api/sites/{siteID}/redirects/verify", redirH.Verify)
+		siteR.Get("/api/sites/{siteID}/redirects/{redirectID}", redirH.Get)
+		siteR.Put("/api/sites/{siteID}/redirects/{redirectID}", redirH.Update)
+		siteR.Delete("/api/sites/{siteID}/redirects/{redirectID}", redirH.Delete)
 
 		// Components
 		ch := handlers.NewComponentHandler(s.cfg, s.queries)
