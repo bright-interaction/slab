@@ -296,6 +296,29 @@ type Migration struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
+type MigrationVerification struct {
+	ID          string `json:"id"`
+	SiteID      string `json:"site_id"`
+	MigrationID string `json:"migration_id"`
+	SourceUrl   string `json:"source_url"`
+	StatusCode  int64  `json:"status_code"`
+	FinalUrl    string `json:"final_url"`
+	Hops        int64  `json:"hops"`
+	Ok          int64  `json:"ok"`
+	Error       string `json:"error"`
+	CheckedAt   string `json:"checked_at"`
+}
+
+type MissingUrl struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	Path      string `json:"path"`
+	Referer   string `json:"referer"`
+	HitCount  int64  `json:"hit_count"`
+	FirstSeen string `json:"first_seen"`
+	LastSeen  string `json:"last_seen"`
+}
+
 type Page struct {
 	ID               string `json:"id"`
 	SiteID           string `json:"site_id"`

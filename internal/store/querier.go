@@ -54,6 +54,8 @@ type Querier interface {
 	CountLiveVisitorsSince(ctx context.Context, arg CountLiveVisitorsSinceParams) (int64, error)
 	CountMediaBySite(ctx context.Context, siteID string) (int64, error)
 	CountMediaInFolder(ctx context.Context, arg CountMediaInFolderParams) (int64, error)
+	CountMigrationVerificationsByOK(ctx context.Context, migrationID string) (CountMigrationVerificationsByOKRow, error)
+	CountMissingURLsBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
@@ -85,6 +87,7 @@ type Querier interface {
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
 	CreateMediaFolder(ctx context.Context, arg CreateMediaFolderParams) error
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) error
+	CreateMigrationVerification(ctx context.Context, arg CreateMigrationVerificationParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
@@ -125,6 +128,9 @@ type Querier interface {
 	DeleteMedia(ctx context.Context, id string) error
 	DeleteMediaFolder(ctx context.Context, arg DeleteMediaFolderParams) error
 	DeleteMigration(ctx context.Context, id string) error
+	DeleteMigrationVerificationsByMigration(ctx context.Context, migrationID string) error
+	DeleteMissingURL(ctx context.Context, id string) error
+	DeleteMissingURLByPath(ctx context.Context, arg DeleteMissingURLByPathParams) error
 	DeletePage(ctx context.Context, id string) error
 	DeleteRedirect(ctx context.Context, id string) error
 	DeleteSetting(ctx context.Context, id string) error
@@ -183,6 +189,8 @@ type Querier interface {
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
 	GetMediaFolder(ctx context.Context, arg GetMediaFolderParams) (MediaFolder, error)
 	GetMigrationByID(ctx context.Context, id string) (Migration, error)
+	GetMissingURLByID(ctx context.Context, id string) (MissingUrl, error)
+	GetMissingURLByPath(ctx context.Context, arg GetMissingURLByPathParams) (MissingUrl, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
@@ -269,7 +277,10 @@ type Querier interface {
 	ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error)
 	ListMediaFoldersBySite(ctx context.Context, siteID string) ([]MediaFolder, error)
 	ListMediaInFolderPaginated(ctx context.Context, arg ListMediaInFolderPaginatedParams) ([]Medium, error)
+	ListMigrationVerifications(ctx context.Context, migrationID string) ([]MigrationVerification, error)
+	ListMigrationVerificationsBySite(ctx context.Context, arg ListMigrationVerificationsBySiteParams) ([]MigrationVerification, error)
 	ListMigrationsBySite(ctx context.Context, siteID string) ([]Migration, error)
+	ListMissingURLsBySite(ctx context.Context, arg ListMissingURLsBySiteParams) ([]MissingUrl, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
 	ListPendingWaitlist(ctx context.Context) ([]Waitlist, error)
@@ -389,6 +400,7 @@ type Querier interface {
 	UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) error
 	UpdateWorkspaceStripe(ctx context.Context, arg UpdateWorkspaceStripeParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
+	UpsertMissingURL(ctx context.Context, arg UpsertMissingURLParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error

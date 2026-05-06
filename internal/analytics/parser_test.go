@@ -199,3 +199,91 @@ func appendLine(path, line string) error {
 	_, err = f.WriteString(line)
 	return err
 }
+
+// TestParser404IsCapturedToMissingURLs is the Sprint 2 wiring test: a 404
+// log line should land in BOTH visit_events (every request is recorded) and
+// missing_urls (404-only aggregation for the migration redirect-suggestion
+// inbox). Multiple hits on the same path must aggregate into one row with
+// hit_count incremented; query strings must be stripped so /old?ref=foo
+// and /old?ref=bar coalesce.
+func TestParser404IsCapturedToMissingURLs(t *testing.T) {
+	queries, db := newTestDB(t)
+	defer db.Close()
+
+	logPath := filepath.Join(t.TempDir(), "site.json.log")
+	if err := os.WriteFile(logPath, nil, 0o644); err != nil {
+		t.Fatalf("create log: %v", err)
+	}
+	p := NewParser("site-1", logPath, "salt", queries)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx)
+	defer p.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	// Three 404 hits: two on /old (one with query string, must coalesce),
+	// one on /gone. Plus one 200 on /home (must NOT land in missing_urls).
+	lines := []string{
+		`{"site_id":"site-1","ip":"1.1.1.1","ua":"u","al":"en","path":"/old","status":404,"ms":0.001,"ref":"https://google.com/"}`,
+		`{"site_id":"site-1","ip":"2.2.2.2","ua":"u","al":"en","path":"/old?ref=foo","status":404,"ms":0.001,"ref":""}`,
+		`{"site_id":"site-1","ip":"3.3.3.3","ua":"u","al":"en","path":"/gone","status":404,"ms":0.001,"ref":""}`,
+		`{"site_id":"site-1","ip":"4.4.4.4","ua":"u","al":"en","path":"/home","status":200,"ms":0.001,"ref":""}`,
+	}
+	for _, line := range lines {
+		if err := appendLine(logPath, line+"\n"); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+
+	// All four visit_events rows must land regardless of status code.
+	waitForRows(t, db, `SELECT COUNT(*) FROM visit_events WHERE site_id='site-1'`, 4)
+	// Two missing_urls rows: /old (hit_count=2 after coalescing) + /gone (1).
+	waitForRows(t, db, `SELECT COUNT(*) FROM missing_urls WHERE site_id='site-1'`, 2)
+
+	// Verify the /old row coalesced with hit_count=2 and the referer
+	// from the first hit (Google) is preserved when the second hit
+	// has an empty referer.
+	var path string
+	var hits int
+	var referer string
+	if err := db.QueryRow(
+		`SELECT path, hit_count, referer FROM missing_urls WHERE site_id='site-1' AND path='/old'`,
+	).Scan(&path, &hits, &referer); err != nil {
+		t.Fatalf("query /old: %v", err)
+	}
+	if path != "/old" {
+		t.Errorf("path: %q (query string should be stripped)", path)
+	}
+	if hits != 2 {
+		t.Errorf("/old hit_count: want 2, got %d", hits)
+	}
+	if referer != "https://google.com/" {
+		t.Errorf("referer should be preserved from first hit, got %q", referer)
+	}
+
+	// 200 path must NOT show up in missing_urls.
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM missing_urls WHERE site_id='site-1' AND path='/home'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("query /home: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("200 must not land in missing_urls")
+	}
+}
+
+func TestStripQueryFragment(t *testing.T) {
+	cases := map[string]string{
+		"/about":            "/about",
+		"/about?ref=email":  "/about",
+		"/about#section":    "/about",
+		"/about?x=1#sec":    "/about",
+		"":                  "",
+	}
+	for in, want := range cases {
+		if got := stripQueryFragment(in); got != want {
+			t.Errorf("stripQueryFragment(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

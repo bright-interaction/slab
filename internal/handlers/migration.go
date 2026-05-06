@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/config"
@@ -30,16 +31,31 @@ import (
 // MigrationHandler exposes the migration lifecycle. Crawl invocation and
 // porter wiring happen here; the migration package itself stays HTTP-free.
 type MigrationHandler struct {
-	cfg     *config.Config
-	queries *store.Queries
-	media   migration.MediaUploader
+	cfg        *config.Config
+	queries    *store.Queries
+	media      migration.MediaUploader
+	verifyOpts migration.VerifyOptions
 }
 
 // NewMigrationHandler returns a handler. uploader is the production media
 // uploader (or a fake in tests); the porter is constructed per-Apply call
 // so unit tests can swap it via dependency injection at the package level.
+//
+// VerifyOptions defaults to zero, which means the production SSRF guard
+// blocks loopback during VerifyLive. Tests use SetVerifyOptionsForTest to
+// flip AllowPrivate so httptest-based integration tests can exercise the
+// real crawl path.
 func NewMigrationHandler(cfg *config.Config, queries *store.Queries, uploader migration.MediaUploader) *MigrationHandler {
 	return &MigrationHandler{cfg: cfg, queries: queries, media: uploader}
+}
+
+// SetVerifyOptionsForTest is the test seam for VerifyLive. Production
+// callers never invoke it; the boot wiring in server.go leaves the zero
+// value (AllowPrivate=false) so loopback / RFC1918 / link-local addresses
+// stay blocked. Setting AllowPrivate=true is only safe in unit tests
+// against httptest.Server.
+func (h *MigrationHandler) SetVerifyOptionsForTest(opts migration.VerifyOptions) {
+	h.verifyOpts = opts
 }
 
 // migrationStartRequest is the input for POST /migrations.
@@ -334,6 +350,269 @@ func migrationToSummary(m store.Migration) map[string]any {
 		"updated_at":  m.UpdatedAt,
 		"stats":       stats,
 	}
+}
+
+// ----- Layer 5 / Sprint 2: pre-launch verify + post-launch crawl -----
+
+// verifyCoverageRequest is the input for the dry-run pre-launch check.
+// The operator pastes URLs from a Search Console "Top URLs" export (or
+// a sitemap export from the source site) and we report which buckets
+// each URL will fall into post-launch. No DB writes.
+type verifyCoverageRequest struct {
+	URLs []string `json:"urls"`
+}
+
+// VerifyCoverage runs the same logic as RedirectHandler.Verify but scoped
+// to a specific migration's manifest so the agent can reason about
+// "after this migration applies, what survives?" without flipping DNS.
+// Same response shape as the existing redirects/verify endpoint so the UI
+// can reuse the bucket renderer.
+func (h *MigrationHandler) VerifyCoverage(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	id := urlParam(r, "migrationID")
+	row, err := h.queries.GetMigrationByID(r.Context(), id)
+	if err != nil || row.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	var req verifyCoverageRequest
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	if len(req.URLs) == 0 {
+		writeError(w, http.StatusBadRequest, "urls array is required")
+		return
+	}
+	if len(req.URLs) > 100_000 {
+		writeError(w, http.StatusRequestEntityTooLarge, "verify-coverage capped at 100,000 URLs")
+		return
+	}
+
+	// Reuse the live page + redirect set so the diff reflects current
+	// atomicsite state plus what THIS migration would add. We don't
+	// actually apply the manifest; we just merge planned slugs into
+	// the existing-page map for the diff.
+	pages, _ := h.queries.ListPagesBySite(r.Context(), siteID)
+	pageSlugs := make(map[string]bool, len(pages))
+	for _, p := range pages {
+		pageSlugs[normalizeVerifyPath("/"+strings.TrimPrefix(p.Slug, "/"))] = true
+	}
+	var manifest migration.MigrationManifest
+	_ = json.Unmarshal([]byte(row.ManifestJson), &manifest)
+	plan := migration.PlanURLs(&manifest, pageSlugsToTrimmed(pageSlugs), migration.DefaultPlanOptions())
+	for _, pp := range plan.Pages {
+		if !pp.Skipped {
+			pageSlugs[normalizeVerifyPath(pp.NewSlug)] = true
+		}
+	}
+	redirects, _ := h.queries.ListRedirectsBySite(r.Context(), siteID)
+	exact := make(map[string]store.Redirect, len(redirects))
+	regexes := make([]compiledRegexRedirect, 0, 8)
+	for _, rr := range redirects {
+		if strings.HasPrefix(rr.FromPath, "~") {
+			pat := strings.TrimSpace(strings.TrimPrefix(rr.FromPath, "~"))
+			if re, err := regexp.Compile(pat); err == nil {
+				regexes = append(regexes, compiledRegexRedirect{re: re, target: rr})
+			}
+			continue
+		}
+		exact[normalizeVerifyPath(rr.FromPath)] = rr
+	}
+	// Merge planned redirects into the diff so the operator sees the
+	// shape AFTER apply, not just what's live today.
+	for _, rp := range plan.Redirects {
+		if strings.HasPrefix(rp.FromPath, "~") {
+			pat := strings.TrimSpace(strings.TrimPrefix(rp.FromPath, "~"))
+			if re, err := regexp.Compile(pat); err == nil {
+				regexes = append(regexes, compiledRegexRedirect{
+					re:     re,
+					target: store.Redirect{FromPath: rp.FromPath, ToPath: rp.ToPath, StatusCode: int64(rp.StatusCode)},
+				})
+			}
+			continue
+		}
+		exact[normalizeVerifyPath(rp.FromPath)] = store.Redirect{
+			FromPath: rp.FromPath, ToPath: rp.ToPath, StatusCode: int64(rp.StatusCode),
+		}
+	}
+
+	resp := VerifyResponse{
+		Will200:   []string{},
+		Will301:   []string{},
+		Will410:   []string{},
+		Will404:   []string{},
+		Malformed: []string{},
+	}
+	for _, raw := range req.URLs {
+		path, ok := extractURLPath(raw)
+		if !ok {
+			resp.Malformed = append(resp.Malformed, raw)
+			continue
+		}
+		key := normalizeVerifyPath(path)
+		if pageSlugs[key] {
+			resp.Will200 = append(resp.Will200, raw)
+			continue
+		}
+		if rr, ok := exact[key]; ok {
+			if rr.StatusCode == 410 {
+				resp.Will410 = append(resp.Will410, raw)
+			} else {
+				resp.Will301 = append(resp.Will301, raw)
+			}
+			continue
+		}
+		matched := false
+		for _, rx := range regexes {
+			if rx.re.MatchString(path) {
+				if rx.target.StatusCode == 410 {
+					resp.Will410 = append(resp.Will410, raw)
+				} else {
+					resp.Will301 = append(resp.Will301, raw)
+				}
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			resp.Will404 = append(resp.Will404, raw)
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// pageSlugsToTrimmed flips a "/about" map to an "about" map for PlanURLs.
+// Tiny adapter; PlanURLs takes existingSlugs without leading slash to
+// match the pages.slug column convention.
+func pageSlugsToTrimmed(in map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(in))
+	for k := range in {
+		out[strings.TrimPrefix(k, "/")] = true
+	}
+	return out
+}
+
+// verifyLiveRequest is the input for the post-DNS-flip crawl.
+type verifyLiveRequest struct {
+	// URLs is the source-site URL list (typically the same set used for
+	// VerifyCoverage). Each gets a fresh GET with redirect-following.
+	URLs []string `json:"urls"`
+	// DeployedDomain is what the operator's DNS now points at, e.g.
+	// "www.acme.com". Used to swap the host into each source URL before
+	// fetching so we exercise the new edge.
+	DeployedDomain string `json:"deployed_domain"`
+}
+
+// VerifyLive runs migration.VerifyLive against the deployed site and
+// stores per-URL results. Returns summary counts; the full per-row
+// detail is available via ListVerifications. Capped at 1,000 URLs per
+// run because each URL can take seconds (network + politeness delay)
+// and the request runs synchronously in this layer; async + queue is
+// Sprint 4.
+func (h *MigrationHandler) VerifyLive(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	id := urlParam(r, "migrationID")
+	row, err := h.queries.GetMigrationByID(r.Context(), id)
+	if err != nil || row.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	var req verifyLiveRequest
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	if strings.TrimSpace(req.DeployedDomain) == "" {
+		writeError(w, http.StatusBadRequest, "deployed_domain is required")
+		return
+	}
+	if len(req.URLs) == 0 {
+		writeError(w, http.StatusBadRequest, "urls is required")
+		return
+	}
+	if len(req.URLs) > 1000 {
+		writeError(w, http.StatusRequestEntityTooLarge, "verify-live capped at 1,000 URLs per run")
+		return
+	}
+
+	results, err := migration.VerifyLive(r.Context(), req.URLs, req.DeployedDomain, h.verifyOpts)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	okCount := 0
+	failCount := 0
+	for _, vr := range results {
+		ok := int64(0)
+		if vr.OK {
+			ok = 1
+			okCount++
+		} else {
+			failCount++
+		}
+		_ = h.queries.CreateMigrationVerification(r.Context(), store.CreateMigrationVerificationParams{
+			ID:         newID(),
+			SiteID:     siteID,
+			MigrationID: id,
+			SourceUrl:  vr.SourceURL,
+			StatusCode: int64(vr.StatusCode),
+			FinalUrl:   vr.FinalURL,
+			Hops:       int64(vr.Hops),
+			Ok:         ok,
+			Error:      vr.Error,
+		})
+	}
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "migration_verify_live", id, map[string]any{
+		"deployed_domain": req.DeployedDomain,
+		"checked":         len(results),
+		"ok":              okCount,
+		"failed":          failCount,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"checked": len(results),
+		"ok":      okCount,
+		"failed":  failCount,
+		"results": results,
+	})
+}
+
+// ListVerifications returns the stored per-URL verification history for a
+// migration, newest first. Used by the migration UI to render the
+// post-launch verification panel.
+func (h *MigrationHandler) ListVerifications(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	id := urlParam(r, "migrationID")
+	row, err := h.queries.GetMigrationByID(r.Context(), id)
+	if err != nil || row.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	rows, err := h.queries.ListMigrationVerifications(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "List verifications")
+		return
+	}
+	counts, _ := h.queries.CountMigrationVerificationsByOK(r.Context(), id)
+	out := make([]map[string]any, 0, len(rows))
+	for _, v := range rows {
+		out = append(out, map[string]any{
+			"id":          v.ID,
+			"source_url":  v.SourceUrl,
+			"status_code": v.StatusCode,
+			"final_url":   v.FinalUrl,
+			"hops":        v.Hops,
+			"ok":          v.Ok == 1,
+			"error":       v.Error,
+			"checked_at":  v.CheckedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  out,
+		"ok":     counts.OkCount,
+		"failed": counts.FailCount,
+	})
 }
 
 // noopMediaUploader is the default uploader when the server boots without

@@ -580,6 +580,49 @@ CREATE TABLE IF NOT EXISTS migrations (
 CREATE INDEX IF NOT EXISTS idx_migrations_site ON migrations(site_id);
 CREATE INDEX IF NOT EXISTS idx_migrations_status ON migrations(status);
 
+-- Migration verifications (Layer 5 / Sprint 2 of the migration system,
+-- 2026-05-06). Per-source-URL post-launch crawl results - the operator
+-- ran VerifyLive after flipping DNS and we recorded what each old URL
+-- now resolves to on the new atomicsite. ok=1 means the chain ended at
+-- 200; ok=0 means somewhere along the redirect chain we hit a 4xx/5xx
+-- or final 200 was missing. The migration UI surfaces failures for
+-- one-click manual redirect creation.
+CREATE TABLE IF NOT EXISTS migration_verifications (
+    id            TEXT PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    migration_id  TEXT NOT NULL,
+    source_url    TEXT NOT NULL,
+    status_code   INTEGER NOT NULL DEFAULT 0,
+    final_url     TEXT NOT NULL DEFAULT '',
+    hops          INTEGER NOT NULL DEFAULT 0,
+    ok            INTEGER NOT NULL DEFAULT 0,
+    error         TEXT NOT NULL DEFAULT '',
+    checked_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_migration_verifications_site ON migration_verifications(site_id);
+CREATE INDEX IF NOT EXISTS idx_migration_verifications_migration ON migration_verifications(migration_id);
+
+-- Missing URLs: 404s captured in real-time by the analytics nginx-log
+-- parser, aggregated per (site_id, path). One row per unique 404 path;
+-- hit_count increments on each new request. The UI lists them top-N by
+-- hit_count so the operator can convert ongoing organic 404 traffic
+-- into recovered link juice via the one-click "create redirect" flow.
+-- This is the highest-leverage feature in the migration system: no
+-- other CMS does it, yet every CMS migration produces a long tail of
+-- forgotten URLs that keep getting linked from the wider web.
+CREATE TABLE IF NOT EXISTS missing_urls (
+    id          TEXT PRIMARY KEY,
+    site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    path        TEXT NOT NULL,
+    referer     TEXT NOT NULL DEFAULT '',
+    hit_count   INTEGER NOT NULL DEFAULT 1,
+    first_seen  TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen   TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, path)
+);
+CREATE INDEX IF NOT EXISTS idx_missing_urls_site ON missing_urls(site_id);
+CREATE INDEX IF NOT EXISTS idx_missing_urls_count ON missing_urls(site_id, hit_count DESC);
+
 -- Form definitions (contact, lead capture, newsletter)
 CREATE TABLE IF NOT EXISTS forms (
     id            TEXT PRIMARY KEY,
