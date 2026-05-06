@@ -4,6 +4,12 @@ SELECT * FROM redirects WHERE site_id = ? ORDER BY from_path;
 -- name: GetRedirectByPath :one
 SELECT * FROM redirects WHERE site_id = ? AND from_path = ?;
 
+-- name: GetRedirectByID :one
+SELECT * FROM redirects WHERE id = ?;
+
+-- name: CountRedirectsBySite :one
+SELECT COUNT(*) FROM redirects WHERE site_id = ?;
+
 -- name: CreateRedirect :exec
 INSERT INTO redirects (id, site_id, from_path, to_path, status_code, is_auto, created_at)
 VALUES (?, ?, ?, ?, ?, ?, datetime('now'));

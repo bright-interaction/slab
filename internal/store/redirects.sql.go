@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countRedirectsBySite = `-- name: CountRedirectsBySite :one
+SELECT COUNT(*) FROM redirects WHERE site_id = ?
+`
+
+func (q *Queries) CountRedirectsBySite(ctx context.Context, siteID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRedirectsBySite, siteID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEvaluation = `-- name: CreateEvaluation :exec
 INSERT INTO evaluations (id, build_id, site_id, category, score, max_score, grade, checks_json, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -167,6 +178,25 @@ func (q *Queries) GetFormByID(ctx context.Context, id string) (Form, error) {
 		&i.ActionConfig,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRedirectByID = `-- name: GetRedirectByID :one
+SELECT id, site_id, from_path, to_path, status_code, is_auto, created_at FROM redirects WHERE id = ?
+`
+
+func (q *Queries) GetRedirectByID(ctx context.Context, id string) (Redirect, error) {
+	row := q.db.QueryRowContext(ctx, getRedirectByID, id)
+	var i Redirect
+	err := row.Scan(
+		&i.ID,
+		&i.SiteID,
+		&i.FromPath,
+		&i.ToPath,
+		&i.StatusCode,
+		&i.IsAuto,
+		&i.CreatedAt,
 	)
 	return i, err
 }
