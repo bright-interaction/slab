@@ -105,6 +105,62 @@ CREATE TABLE IF NOT EXISTS workspace_invites (
 CREATE INDEX IF NOT EXISTS idx_workspace_invites_token ON workspace_invites(token);
 CREATE INDEX IF NOT EXISTS idx_workspace_invites_workspace ON workspace_invites(workspace_id);
 
+-- ============================================================
+-- Billing (Phase 30.2, Cloud Tier MVP, 2026-05-06).
+--
+-- Provider-agnostic shape so the same tables work for Mollie today
+-- and any future provider. Atomicsite ships with Mollie because the
+-- EU-sovereign positioning rules out Stripe (US-incorporated, Cloud
+-- Act exposure). The brightcrm payment_config pattern was the
+-- reference for the provider-enum + opaque external-id design.
+--
+-- subscriptions.external_id is the Mollie subscription mol_xxxx ID;
+-- external_customer_id is the Mollie customer cst_xxxx. status mirrors
+-- the Mollie subscription state so daily cron + middleware can refuse
+-- builds without a webhook round-trip.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id                    TEXT PRIMARY KEY,
+    workspace_id          TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    provider              TEXT NOT NULL DEFAULT 'mollie',
+    external_id           TEXT NOT NULL DEFAULT '',
+    external_customer_id  TEXT NOT NULL DEFAULT '',
+    plan                  TEXT NOT NULL,
+    status                TEXT NOT NULL DEFAULT 'pending',
+    amount_cents          INTEGER NOT NULL DEFAULT 0,
+    currency              TEXT NOT NULL DEFAULT 'EUR',
+    interval_unit         TEXT NOT NULL DEFAULT 'months',
+    interval_count        INTEGER NOT NULL DEFAULT 1,
+    current_period_end    TEXT NOT NULL DEFAULT '',
+    cancel_at             TEXT NOT NULL DEFAULT '',
+    metadata_json         TEXT NOT NULL DEFAULT '{}',
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_workspace ON subscriptions(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_external ON subscriptions(external_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+-- Webhook idempotency. Every inbound webhook records its provider
+-- event id + payload before the side-effect runs. UNIQUE constraint
+-- on (provider, external_event_id) makes duplicate deliveries no-op
+-- without a per-handler check. 30-day retention sweep drops
+-- processed entries via the existing retention.Manager hook.
+CREATE TABLE IF NOT EXISTS billing_events (
+    id                  TEXT PRIMARY KEY,
+    workspace_id        TEXT NOT NULL DEFAULT '',
+    provider            TEXT NOT NULL DEFAULT 'mollie',
+    external_event_id   TEXT NOT NULL,
+    event_type          TEXT NOT NULL DEFAULT '',
+    payload_json        TEXT NOT NULL DEFAULT '{}',
+    processed_at        TEXT NOT NULL DEFAULT '',
+    error               TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(provider, external_event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_billing_events_workspace ON billing_events(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_billing_events_processed ON billing_events(processed_at);
+
 -- site_members links users to sites for multi-tenant authorization. Without
 -- this table every authenticated user could read, update, delete any site
 -- by enumerating site IDs (audit finding C1, fixed 2026-05-01). The
@@ -476,6 +532,24 @@ CREATE TABLE IF NOT EXISTS redirects (
     UNIQUE(site_id, from_path)
 );
 CREATE INDEX IF NOT EXISTS idx_redirects_site ON redirects(site_id);
+
+-- Site migrations: parsed manifest from a source CMS (WordPress/Webflow/Ghost/
+-- sitemap-crawl). Stored as JSON so the agent can review the proposed import
+-- before any pages or redirects are written. status flow:
+--   pending -> ready (after parse) -> applied (after migration_apply) | failed
+CREATE TABLE IF NOT EXISTS migrations (
+    id            TEXT PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    source_url    TEXT NOT NULL,
+    source_type   TEXT NOT NULL,
+    manifest_json TEXT NOT NULL DEFAULT '{}',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    error         TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_migrations_site ON migrations(site_id);
+CREATE INDEX IF NOT EXISTS idx_migrations_status ON migrations(status);
 
 -- Form definitions (contact, lead capture, newsletter)
 CREATE TABLE IF NOT EXISTS forms (

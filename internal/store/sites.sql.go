@@ -10,12 +10,13 @@ import (
 )
 
 const createSite = `-- name: CreateSite :exec
-INSERT INTO sites (id, name, slug, domain, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, lang)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sites (id, workspace_id, name, slug, domain, primary_color, secondary_color, bg_color, text_color, font_heading, font_body, lang)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateSiteParams struct {
 	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
 	Name           string `json:"name"`
 	Slug           string `json:"slug"`
 	Domain         string `json:"domain"`
@@ -31,6 +32,7 @@ type CreateSiteParams struct {
 func (q *Queries) CreateSite(ctx context.Context, arg CreateSiteParams) error {
 	_, err := q.db.ExecContext(ctx, createSite,
 		arg.ID,
+		arg.WorkspaceID,
 		arg.Name,
 		arg.Slug,
 		arg.Domain,

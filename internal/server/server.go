@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -309,6 +310,18 @@ func (s *Server) Router() http.Handler {
 		wsR.Post("/api/workspaces/{workspaceID}/invites", wsH.CreateInvite)
 		wsR.Delete("/api/workspaces/{workspaceID}/invites/{inviteID}", wsH.DeleteInvite)
 		wsR.Get("/api/workspaces/{workspaceID}/sites", wsH.ListSites)
+
+		// Billing (Phase 30.2). The handler is OSS-safe (returns 503
+		// when Mollie not wired); the EE build's cmd/server/main.go
+		// calls WireMollie() to attach the real client. The webhook
+		// route lives outside the workspace group because Mollie
+		// posts unauthenticated; verification is via re-fetching the
+		// payment from the Mollie API (never trust the body).
+		billingH := handlers.NewBillingHandler(s.cfg, s.queries)
+		handlers.WireMollie(billingH, os.Getenv("MOLLIE_API_KEY"))
+		wsR.Post("/api/workspaces/{workspaceID}/billing/checkout", billingH.StartCheckout)
+		wsR.Get("/api/workspaces/{workspaceID}/billing", billingH.GetBilling)
+		r.Post("/api/billing/webhook", billingH.Webhook)
 
 		// Audit C1: every /api/sites/{siteID}/* route below must verify
 		// the authenticated user has a site_members row for that siteID

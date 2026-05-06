@@ -38,6 +38,18 @@ type AuditLog struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+type BillingEvent struct {
+	ID              string `json:"id"`
+	WorkspaceID     string `json:"workspace_id"`
+	Provider        string `json:"provider"`
+	ExternalEventID string `json:"external_event_id"`
+	EventType       string `json:"event_type"`
+	PayloadJson     string `json:"payload_json"`
+	ProcessedAt     string `json:"processed_at"`
+	Error           string `json:"error"`
+	CreatedAt       string `json:"created_at"`
+}
+
 type Block struct {
 	ID              string `json:"id"`
 	PageID          string `json:"page_id"`
@@ -272,6 +284,18 @@ type Medium struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
+type Migration struct {
+	ID           string `json:"id"`
+	SiteID       string `json:"site_id"`
+	SourceUrl    string `json:"source_url"`
+	SourceType   string `json:"source_type"`
+	ManifestJson string `json:"manifest_json"`
+	Status       string `json:"status"`
+	Error        string `json:"error"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
 type Page struct {
 	ID               string `json:"id"`
 	SiteID           string `json:"site_id"`
@@ -439,6 +463,25 @@ type SiteSilo struct {
 	SiloType   string `json:"silo_type"`
 	SortOrder  int64  `json:"sort_order"`
 	CreatedAt  string `json:"created_at"`
+}
+
+type Subscription struct {
+	ID                 string `json:"id"`
+	WorkspaceID        string `json:"workspace_id"`
+	Provider           string `json:"provider"`
+	ExternalID         string `json:"external_id"`
+	ExternalCustomerID string `json:"external_customer_id"`
+	Plan               string `json:"plan"`
+	Status             string `json:"status"`
+	AmountCents        int64  `json:"amount_cents"`
+	Currency           string `json:"currency"`
+	IntervalUnit       string `json:"interval_unit"`
+	IntervalCount      int64  `json:"interval_count"`
+	CurrentPeriodEnd   string `json:"current_period_end"`
+	CancelAt           string `json:"cancel_at"`
+	MetadataJson       string `json:"metadata_json"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
 }
 
 type User struct {

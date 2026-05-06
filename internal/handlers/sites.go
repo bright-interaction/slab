@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/brightinteraction/atomicsite/ee"
 	"github.com/brightinteraction/atomicsite/internal/agent"
 	"github.com/brightinteraction/atomicsite/internal/config"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
@@ -137,6 +138,7 @@ func (h *SiteHandler) ListSilos(w http.ResponseWriter, r *http.Request) {
 }
 
 type createSiteRequest struct {
+	WorkspaceID    string `json:"workspace_id"`
 	Name           string `json:"name"`
 	Slug           string `json:"slug"`
 	Domain         string `json:"domain"`
@@ -157,6 +159,20 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" || req.Slug == "" {
 		writeError(w, http.StatusBadRequest, "Name and slug are required")
+		return
+	}
+	// Phase 30.2: resolve the workspace this site belongs to and gate
+	// against the workspace's plan. The OSS path resolves to the
+	// auto-bootstrap workspace and PlanLimits returns -1 (unlimited)
+	// from the OSS Provider; cloud installs check Solo/Studio/Agency
+	// caps and refuse with 402 when the customer is over the cap.
+	workspaceID, err := h.resolveWorkspaceForCreate(r, req.WorkspaceID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.checkSiteQuota(r, workspaceID); err != nil {
+		writeError(w, http.StatusPaymentRequired, err.Error())
 		return
 	}
 
@@ -188,6 +204,7 @@ func (h *SiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.queries.CreateSite(r.Context(), store.CreateSiteParams{
 		ID:             id,
+		WorkspaceID:    workspaceID,
 		Name:           req.Name,
 		Slug:           slug,
 		Domain:         req.Domain,
@@ -400,6 +417,18 @@ func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
+	// Phase 30.2: Seed needs the same workspace gate Create has.
+	// Resolves the user's workspace, refuses with 402 over plan caps.
+	workspaceID, err := h.resolveWorkspaceForCreate(r, "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.checkSiteQuota(r, workspaceID); err != nil {
+		writeError(w, http.StatusPaymentRequired, err.Error())
+		return
+	}
+
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
 		slog.Error("seed: begin tx", "error", err)
@@ -414,6 +443,7 @@ func (h *SiteHandler) Seed(w http.ResponseWriter, r *http.Request) {
 	// 1. sites row
 	if err := qtx.CreateSite(ctx, store.CreateSiteParams{
 		ID:             siteID,
+		WorkspaceID:    workspaceID,
 		Name:           req.Info.Name,
 		Slug:           req.Info.Slug,
 		Domain:         req.Info.Domain,
@@ -775,3 +805,70 @@ func (h *SiteHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
+
+// resolveWorkspaceForCreate maps a Create-site request to the workspace
+// the site will belong to. Phase 30.2.
+//
+//   - explicit body.workspace_id wins (cloud signup picks the right ws)
+//   - else the user's first workspace via ListWorkspaceIDsForUser
+//   - else 400 (caller should never get here in OSS because the boot
+//     bootstrap auto-creates a default workspace + memberships)
+func (h *SiteHandler) resolveWorkspaceForCreate(r *http.Request, requested string) (string, error) {
+	user := authmw.GetUser(r)
+	if user == nil {
+		return "", errors.New("not authenticated")
+	}
+	if requested != "" {
+		// Verify membership before trusting the body. Admins (the
+		// seeded OSS admin) bypass; cloud non-admins must be members.
+		if user.Role == "admin" {
+			return requested, nil
+		}
+		_, err := h.queries.GetWorkspaceMembership(r.Context(), store.GetWorkspaceMembershipParams{
+			WorkspaceID: requested,
+			UserID:      user.ID,
+		})
+		if err != nil {
+			return "", errors.New("not a member of the requested workspace")
+		}
+		return requested, nil
+	}
+	ids, err := h.queries.ListWorkspaceIDsForUser(r.Context(), user.ID)
+	if err != nil || len(ids) == 0 {
+		// Admin path falls back to the first existing workspace
+		// (the OSS auto-bootstrap one).
+		if user.Role == "admin" {
+			all, err := h.queries.ListAllWorkspaces(r.Context())
+			if err == nil && len(all) > 0 {
+				return all[0].ID, nil
+			}
+		}
+		return "", errors.New("user has no workspace; create one first")
+	}
+	return ids[0], nil
+}
+
+// checkSiteQuota enforces the workspace's plan cap on site count.
+// OSS Provider returns -1 (unlimited) for max_sites so this is a
+// no-op in single-deploy installs. Cloud installs return the plan
+// limit and the handler refuses with 402.
+func (h *SiteHandler) checkSiteQuota(r *http.Request, workspaceID string) error {
+	ws, err := h.queries.GetWorkspaceByID(r.Context(), workspaceID)
+	if err != nil {
+		return errors.New("workspace not found")
+	}
+	provider := ee.NewProvider()
+	limit := provider.PlanLimits(ws.Plan, "max_sites")
+	if limit < 0 {
+		return nil
+	}
+	sites, err := h.queries.ListSitesByWorkspace(r.Context(), workspaceID)
+	if err != nil {
+		return errors.New("failed to count sites")
+	}
+	if int64(len(sites)) >= limit {
+		return errors.New("plan max sites reached; upgrade plan to add more")
+	}
+	return nil
+}
+

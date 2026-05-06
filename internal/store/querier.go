@@ -84,12 +84,14 @@ type Querier interface {
 	CreateKnowledgebaseEntry(ctx context.Context, arg CreateKnowledgebaseEntryParams) error
 	CreateMedia(ctx context.Context, arg CreateMediaParams) error
 	CreateMediaFolder(ctx context.Context, arg CreateMediaFolderParams) error
+	CreateMigration(ctx context.Context, arg CreateMigrationParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
 	CreateSilo(ctx context.Context, arg CreateSiloParams) error
 	CreateSite(ctx context.Context, arg CreateSiteParams) error
 	CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error
+	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) error
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error
 	CreateWorkspaceInvite(ctx context.Context, arg CreateWorkspaceInviteParams) error
@@ -121,6 +123,7 @@ type Querier interface {
 	DeleteKnowledgebaseEntry(ctx context.Context, id string) error
 	DeleteMedia(ctx context.Context, id string) error
 	DeleteMediaFolder(ctx context.Context, arg DeleteMediaFolderParams) error
+	DeleteMigration(ctx context.Context, id string) error
 	DeletePage(ctx context.Context, id string) error
 	DeleteRedirect(ctx context.Context, id string) error
 	DeleteSetting(ctx context.Context, id string) error
@@ -128,6 +131,7 @@ type Querier interface {
 	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
 	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
+	DeleteSubscription(ctx context.Context, id string) error
 	DeleteUser(ctx context.Context, id string) error
 	// Per-site retention purge for engagement rows (screen size, time-on-page,
 	// scroll depth). ts is RFC3339 UTC; caller passes the cutoff.
@@ -150,6 +154,7 @@ type Querier interface {
 	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
+	GetBillingEventByExternalID(ctx context.Context, arg GetBillingEventByExternalIDParams) (BillingEvent, error)
 	GetBlockByID(ctx context.Context, id string) (Block, error)
 	GetCSSClassByID(ctx context.Context, id string) (CssClass, error)
 	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
@@ -175,6 +180,7 @@ type Querier interface {
 	GetMaxSchemaVersion(ctx context.Context) (interface{}, error)
 	GetMediaByID(ctx context.Context, id string) (Medium, error)
 	GetMediaFolder(ctx context.Context, arg GetMediaFolderParams) (MediaFolder, error)
+	GetMigrationByID(ctx context.Context, id string) (Migration, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
@@ -192,6 +198,9 @@ type Querier interface {
 	// Site profiles
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
 	GetSiteQuota(ctx context.Context, id string) (GetSiteQuotaRow, error)
+	GetSubscriptionByExternalID(ctx context.Context, externalID string) (Subscription, error)
+	GetSubscriptionByID(ctx context.Context, id string) (Subscription, error)
+	GetSubscriptionByWorkspace(ctx context.Context, workspaceID string) (Subscription, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
@@ -256,6 +265,7 @@ type Querier interface {
 	ListMediaBySitePaginated(ctx context.Context, arg ListMediaBySitePaginatedParams) ([]Medium, error)
 	ListMediaFoldersBySite(ctx context.Context, siteID string) ([]MediaFolder, error)
 	ListMediaInFolderPaginated(ctx context.Context, arg ListMediaInFolderPaginatedParams) ([]Medium, error)
+	ListMigrationsBySite(ctx context.Context, siteID string) ([]Migration, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
 	ListPendingWorkspaceInvites(ctx context.Context, workspaceID string) ([]WorkspaceInvite, error)
@@ -275,12 +285,15 @@ type Querier interface {
 	ListSites(ctx context.Context) ([]Site, error)
 	ListSitesByWorkspace(ctx context.Context, workspaceID string) ([]ListSitesByWorkspaceRow, error)
 	ListSitesForQuotaAudit(ctx context.Context) ([]ListSitesForQuotaAuditRow, error)
+	ListSubscriptionsBySite(ctx context.Context) ([]Subscription, error)
 	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
+	ListUnprocessedBillingEvents(ctx context.Context) ([]BillingEvent, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
 	ListWorkspaceIDsForUser(ctx context.Context, userID string) ([]string, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]ListWorkspaceMembersRow, error)
 	ListWorkspacesForUser(ctx context.Context, userID string) ([]ListWorkspacesForUserRow, error)
+	MarkBillingEventProcessed(ctx context.Context, arg MarkBillingEventProcessedParams) error
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
 	MarkWorkspaceInviteUsed(ctx context.Context, id string) error
@@ -290,6 +303,14 @@ type Querier interface {
 	// Pageviews per UTC hour for the last day window. Used when range = 1d.
 	PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error)
 	PurgeExpiredPasswordResets(ctx context.Context) error
+	// Run by retention.Manager. 30-day retention; processed events older
+	// than the cutoff are dropped. Unprocessed events stay forever so the
+	// operator can investigate.
+	PurgeOldBillingEvents(ctx context.Context, processedAt string) error
+	// UNIQUE(provider, external_event_id) makes duplicate inserts no-op
+	// via INSERT OR IGNORE. Idempotency at the schema layer means handlers
+	// don't need a separate "have we seen this id" check.
+	RecordBillingEvent(ctx context.Context, arg RecordBillingEventParams) error
 	RecordConsent(ctx context.Context, arg RecordConsentParams) error
 	RecordSchemaVersion(ctx context.Context, arg RecordSchemaVersionParams) error
 	RecordVisitEngagement(ctx context.Context, arg RecordVisitEngagementParams) error
@@ -339,6 +360,8 @@ type Querier interface {
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) error
 	UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderParams) error
 	UpdateMediaVariants(ctx context.Context, arg UpdateMediaVariantsParams) error
+	UpdateMigrationManifest(ctx context.Context, arg UpdateMigrationManifestParams) error
+	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
 	UpdatePage(ctx context.Context, arg UpdatePageParams) error
 	UpdatePageOrder(ctx context.Context, arg UpdatePageOrderParams) error
 	UpdateRedirect(ctx context.Context, arg UpdateRedirectParams) error
@@ -347,6 +370,8 @@ type Querier interface {
 	UpdateSiteBuildStatus(ctx context.Context, arg UpdateSiteBuildStatusParams) error
 	UpdateSiteDeployAt(ctx context.Context, arg UpdateSiteDeployAtParams) error
 	UpdateSiteQuota(ctx context.Context, arg UpdateSiteQuotaParams) error
+	UpdateSubscriptionExternal(ctx context.Context, arg UpdateSubscriptionExternalParams) error
+	UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscriptionStatusParams) error
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
