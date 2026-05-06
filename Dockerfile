@@ -63,8 +63,20 @@ RUN apt-get update -qq \
        fonts-liberation fonts-dejavu-core \
        libnss3 libfreetype6 libharfbuzz0b \
        libstdc++6 libgcc-s1 \
-       unzip curl \
+       sqlite3 \
+       unzip curl wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Phase 30.4: Litestream for continuous SQLite WAL replication to
+# Hetzner Object Storage (or any S3-compatible target). Sub-1-second
+# RPO without leaving the data layer. Binary download is the upstream
+# canonical path (no Debian package). v0.3.13 is the last stable as
+# of 2026-05-06; bump when upstream cuts a new release. The binary
+# is statically linked, ~25MB, no runtime deps.
+RUN ARCH=$(dpkg --print-architecture) \
+    && wget -q -O /tmp/litestream.deb "https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-${ARCH}.deb" \
+    && dpkg -i /tmp/litestream.deb \
+    && rm /tmp/litestream.deb
 ENV CHROMEDP_HEADLESS_FLAGS="" \
     CHROMEDP_NO_SANDBOX=1
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
@@ -82,8 +94,11 @@ COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 RUN groupadd -g 1000 atomicsite && useradd -u 1000 -g atomicsite -m -d /app atomicsite
 RUN mkdir -p /app/data && chown -R atomicsite:atomicsite /app
 COPY --from=backend /server /app/server
+COPY litestream.yml /app/litestream.yml
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 WORKDIR /app
 USER atomicsite
 ENV DATA_DIR=/app/data
 EXPOSE 8080
-ENTRYPOINT ["/app/server"]
+ENTRYPOINT ["/app/entrypoint.sh"]

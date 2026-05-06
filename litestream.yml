@@ -1,0 +1,53 @@
+# Litestream config for Atomic Site (Phase 30.4, 2026-05-06).
+#
+# Continuously streams the SQLite WAL of /app/data/atomicsite.db to a
+# Hetzner Object Storage bucket. Sub-1-second RPO: a host failure
+# loses at most ~1 second of writes. Replication is per-WAL-segment
+# (~10s default snapshot interval, with finer-grained writes in
+# between).
+#
+# All replica targets are EU-sovereign. The default replica is
+# Hetzner Object Storage (Falkenstein); operators can swap in any
+# S3-compatible endpoint via the LITESTREAM_REPLICA_URL env (used
+# below as the only template variable so this file stays static
+# across deploys).
+#
+# To run as a sidecar process inside the existing atomicsite
+# container, the entrypoint wraps the server with:
+#
+#   exec litestream replicate -exec "/app/server"
+#
+# Litestream then forwards SIGTERM to the server on shutdown so a
+# `docker stop` flushes the final WAL frames before the container
+# dies.
+#
+# Restore (one-shot, manual):
+#
+#   litestream restore -o /app/data/atomicsite.db \
+#     "${LITESTREAM_REPLICA_URL}"
+#
+# Run from a fresh container with the same env. The DB file appears
+# at the target path with all data through the last replicated frame.
+#
+# Local dev: leave LITESTREAM_REPLICA_URL unset and the server starts
+# without litestream wrapping (the entrypoint detects the empty var
+# and execs the server directly). No replication, no cost.
+
+dbs:
+  - path: /app/data/atomicsite.db
+    replicas:
+      - url: ${LITESTREAM_REPLICA_URL}
+        # Snapshot every 6 hours (4/day). WAL segments stream
+        # continuously; snapshots are the GC point so the bucket
+        # doesn't grow unbounded.
+        snapshot-interval: 6h
+        # Keep snapshots for 30 days. After that, the retention
+        # sweep prunes them. WAL segments older than the oldest
+        # surviving snapshot also get pruned. 30 days is the
+        # GDPR-friendly retention default; operators can extend
+        # via LITESTREAM_RETENTION env if needed.
+        retention: 720h
+        retention-check-interval: 24h
+        # Validate the replica every hour so a silent S3 outage
+        # surfaces in the logs before the next restore.
+        validation-interval: 1h
