@@ -141,12 +141,20 @@ func RenderNginxConfig(ctx context.Context, queries *store.Queries, siteID strin
 		b.WriteString("  '\"ref\":\"$http_referer\",'\n")
 		// CF-IPCountry is the standard ISO 3166-1 alpha-2 country code
 		// Cloudflare adds to every request when the site is fronted by CF.
-		// Empty for non-CF deployments — the analytics parser drops empties
+		// Empty for non-CF deployments. The analytics parser drops empties
 		// rather than poisoning the country breakdown.
 		b.WriteString("  '\"country\":\"$http_cf_ipcountry\"'\n")
 		b.WriteString("'}';\n")
 		b.WriteString(fmt.Sprintf("access_log %s atomicsite_json;\n\n", nginxLogPath(site.Slug)))
 	}
+
+	// Redirects emit BEFORE cache locations: nginx evaluates regex `location`
+	// blocks in source order and the first match wins. A redirect rule like
+	// `~ ^/old-path/(.*)$` must be checked before `~* \.html$` or the redirect
+	// would never fire on /old-path/page.html. Exact matches (`location =`)
+	// take absolute priority regardless of order so this is harmless for them.
+	redirects, _ := queries.ListRedirectsBySite(ctx, siteID)
+	b.WriteString(BuildRedirectBlock(redirects))
 
 	// Hashed assets: long-cache immutable
 	b.WriteString("location /_assets/ {\n")
