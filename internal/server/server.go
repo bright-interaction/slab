@@ -27,6 +27,7 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/handlers"
 	"github.com/brightinteraction/atomicsite/internal/mcp"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	"github.com/brightinteraction/atomicsite/internal/migration"
 	"github.com/brightinteraction/atomicsite/internal/retention"
 	"github.com/brightinteraction/atomicsite/internal/storage"
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -58,6 +59,17 @@ type Server struct {
 	// admin endpoints functional but no edge changes occur. Wired in
 	// cmd/server/main.go after Server is constructed.
 	DomainReconciler *domains.Reconciler
+	// verifyJobMgr drives the async verify-live worker (Sprint 4 of the
+	// migration system, 2026-05-06). Wired in cmd/server/main.go after
+	// Server construction; nil makes VerifyLive return 503 so the
+	// process is observably misconfigured rather than silently sync.
+	verifyJobMgr *migration.JobManager
+}
+
+// SetVerifyJobManager wires the async verify-live worker. Called from
+// cmd/server/main.go after the JobManager is constructed and Started.
+func (s *Server) SetVerifyJobManager(m *migration.JobManager) {
+	s.verifyJobMgr = m
 }
 
 // New creates a Server.
@@ -532,6 +544,12 @@ func (s *Server) Router() http.Handler {
 		// guarantees automatically.
 		migrationMediaH := handlers.NewMediaHandler(s.cfg, s.queries, s.storage, quotaH)
 		migrH := handlers.NewMigrationHandler(s.cfg, s.queries, handlers.NewProductionMediaUploader(migrationMediaH))
+		// Sprint 4 (2026-05-06): inject the process-wide async verify-job
+		// manager constructed in cmd/server/main.go. Without it,
+		// VerifyLive returns 503; production always wires it.
+		if s.verifyJobMgr != nil {
+			migrH.SetVerifyJobManager(s.verifyJobMgr)
+		}
 		siteR.Get("/api/sites/{siteID}/migrations", migrH.List)
 		siteR.Post("/api/sites/{siteID}/migrations", migrH.Start)
 		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}", migrH.Get)
@@ -546,6 +564,12 @@ func (s *Server) Router() http.Handler {
 		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/verify-coverage", migrH.VerifyCoverage)
 		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/verify-live", migrH.VerifyLive)
 		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}/verifications", migrH.ListVerifications)
+		// Sprint 4 (2026-05-06): async verify-live job lifecycle. Run
+		// status + cancel endpoints back the polling progress bar in
+		// the migration UI.
+		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}/verify-jobs", migrH.ListVerifyJobs)
+		siteR.Get("/api/sites/{siteID}/migrations/{migrationID}/verify-jobs/{jobID}", migrH.GetVerifyJob)
+		siteR.Post("/api/sites/{siteID}/migrations/{migrationID}/verify-jobs/{jobID}/cancel", migrH.CancelVerifyJob)
 		siteR.Delete("/api/sites/{siteID}/migrations/{migrationID}", migrH.Delete)
 
 		// Missing URLs (Sprint 2 of the migration system, 2026-05-06).

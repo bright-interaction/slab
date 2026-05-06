@@ -120,6 +120,36 @@ func (q *Queries) GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAnd
 	return i, err
 }
 
+const listExistingPageSlugsBySite = `-- name: ListExistingPageSlugsBySite :many
+SELECT slug FROM pages WHERE site_id = ?
+`
+
+// Sprint 4 (2026-05-06): used by the migration upsert path so the
+// plan-quota gate can subtract pages whose slug already exists from
+// the projected addition. Returns slugs without leading slash.
+func (q *Queries) ListExistingPageSlugsBySite(ctx context.Context, siteID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listExistingPageSlugsBySite, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPagesBySite = `-- name: ListPagesBySite :many
 SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE site_id = ? ORDER BY sort_order ASC
 `
@@ -279,4 +309,82 @@ type UpdatePageOrderParams struct {
 func (q *Queries) UpdatePageOrder(ctx context.Context, arg UpdatePageOrderParams) error {
 	_, err := q.db.ExecContext(ctx, updatePageOrder, arg.SortOrder, arg.ID)
 	return err
+}
+
+const upsertPage = `-- name: UpsertPage :one
+INSERT INTO pages
+    (id, site_id, title, slug, status, meta_title, meta_description,
+     og_image_id, layout, sort_order, show_in_nav, no_index,
+     canonical_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(site_id, slug) DO UPDATE SET
+    title            = excluded.title,
+    status           = excluded.status,
+    meta_title       = excluded.meta_title,
+    meta_description = excluded.meta_description,
+    og_image_id      = excluded.og_image_id,
+    layout           = excluded.layout,
+    sort_order       = excluded.sort_order,
+    no_index         = excluded.no_index,
+    canonical_url    = excluded.canonical_url,
+    updated_at       = datetime('now')
+RETURNING id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at
+`
+
+type UpsertPageParams struct {
+	ID              string `json:"id"`
+	SiteID          string `json:"site_id"`
+	Title           string `json:"title"`
+	Slug            string `json:"slug"`
+	Status          string `json:"status"`
+	MetaTitle       string `json:"meta_title"`
+	MetaDescription string `json:"meta_description"`
+	OgImageID       string `json:"og_image_id"`
+	Layout          string `json:"layout"`
+	SortOrder       int64  `json:"sort_order"`
+	ShowInNav       int64  `json:"show_in_nav"`
+	NoIndex         int64  `json:"no_index"`
+	CanonicalUrl    string `json:"canonical_url"`
+}
+
+// Sprint 4 (2026-05-06): re-import upsert mode. INSERTs fresh, UPDATEs
+// on (site_id, slug) conflict. RETURNING * lets the porter detect the
+// outcome by comparing returned row.ID to the candidate ID it passed.
+func (q *Queries) UpsertPage(ctx context.Context, arg UpsertPageParams) (Page, error) {
+	row := q.db.QueryRowContext(ctx, upsertPage,
+		arg.ID,
+		arg.SiteID,
+		arg.Title,
+		arg.Slug,
+		arg.Status,
+		arg.MetaTitle,
+		arg.MetaDescription,
+		arg.OgImageID,
+		arg.Layout,
+		arg.SortOrder,
+		arg.ShowInNav,
+		arg.NoIndex,
+		arg.CanonicalUrl,
+	)
+	var i Page
+	err := row.Scan(
+		&i.ID,
+		&i.SiteID,
+		&i.Title,
+		&i.Slug,
+		&i.Status,
+		&i.MetaTitle,
+		&i.MetaDescription,
+		&i.OgImageID,
+		&i.Layout,
+		&i.SortOrder,
+		&i.ShowInNav,
+		&i.NavLabel,
+		&i.NoIndex,
+		&i.CanonicalUrl,
+		&i.HideGlobalBlocks,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

@@ -305,6 +305,34 @@ func (q *Queries) ListEvaluationsBySite(ctx context.Context, arg ListEvaluations
 	return items, nil
 }
 
+const listExistingRedirectFromPathsBySite = `-- name: ListExistingRedirectFromPathsBySite :many
+SELECT from_path FROM redirects WHERE site_id = ?
+`
+
+// Sprint 4 (2026-05-06): mirror of ListExistingPageSlugsBySite.
+func (q *Queries) ListExistingRedirectFromPathsBySite(ctx context.Context, siteID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listExistingRedirectFromPathsBySite, siteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var from_path string
+		if err := rows.Scan(&from_path); err != nil {
+			return nil, err
+		}
+		items = append(items, from_path)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFormSubmissions = `-- name: ListFormSubmissions :many
 SELECT id, form_id, site_id, data_json, ip_hash, created_at FROM form_submissions WHERE form_id = ? ORDER BY created_at DESC
 `
@@ -495,4 +523,48 @@ func (q *Queries) UpdateRedirect(ctx context.Context, arg UpdateRedirectParams) 
 		arg.ID,
 	)
 	return err
+}
+
+const upsertRedirect = `-- name: UpsertRedirect :one
+INSERT INTO redirects (id, site_id, from_path, to_path, status_code, is_auto, created_at)
+VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+ON CONFLICT(site_id, from_path) DO UPDATE SET
+    to_path     = excluded.to_path,
+    status_code = excluded.status_code,
+    is_auto     = excluded.is_auto
+RETURNING id, site_id, from_path, to_path, status_code, is_auto, created_at
+`
+
+type UpsertRedirectParams struct {
+	ID         string `json:"id"`
+	SiteID     string `json:"site_id"`
+	FromPath   string `json:"from_path"`
+	ToPath     string `json:"to_path"`
+	StatusCode int64  `json:"status_code"`
+	IsAuto     int64  `json:"is_auto"`
+}
+
+// Sprint 4 (2026-05-06): re-import upsert. ON CONFLICT(site_id, from_path)
+// DO UPDATE leaves created_at alone and returns the existing row's id, so
+// the porter detects insert-vs-update by comparing returned ID.
+func (q *Queries) UpsertRedirect(ctx context.Context, arg UpsertRedirectParams) (Redirect, error) {
+	row := q.db.QueryRowContext(ctx, upsertRedirect,
+		arg.ID,
+		arg.SiteID,
+		arg.FromPath,
+		arg.ToPath,
+		arg.StatusCode,
+		arg.IsAuto,
+	)
+	var i Redirect
+	err := row.Scan(
+		&i.ID,
+		&i.SiteID,
+		&i.FromPath,
+		&i.ToPath,
+		&i.StatusCode,
+		&i.IsAuto,
+		&i.CreatedAt,
+	)
+	return i, err
 }

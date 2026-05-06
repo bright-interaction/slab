@@ -48,14 +48,33 @@ func NewPorter(q *store.Queries, m MediaUploader) *Porter {
 // ApplyResult is what the migration handler returns to the operator after
 // a successful Apply. Counts are post-rollback so partial-failure Apply
 // calls don't lie about progress.
+//
+// Sprint 4 (2026-05-06): re-import upsert mode adds PagesUpdated /
+// ItemsUpdated / RedirectsUpdated so the response distinguishes a fresh
+// import from a refresh. In create-mode (Upsert=false) the *Updated
+// counts stay zero.
 type ApplyResult struct {
 	CollectionsCreated int      `json:"collections_created"`
 	ItemsCreated       int      `json:"items_created"`
+	ItemsUpdated       int      `json:"items_updated,omitempty"`
 	PagesCreated       int      `json:"pages_created"`
+	PagesUpdated       int      `json:"pages_updated,omitempty"`
 	RedirectsCreated   int      `json:"redirects_created"`
+	RedirectsUpdated   int      `json:"redirects_updated,omitempty"`
 	MediaUploaded      int      `json:"media_uploaded"`
 	MediaFailed        int      `json:"media_failed"`
 	Warnings           []string `json:"warnings,omitempty"`
+}
+
+// ApplyOptions tunes a porter run. Sprint 4 (2026-05-06) introduced
+// Upsert mode for the annual-content-refresh use case: a re-import on
+// the same site overwrites existing rows by their natural key instead
+// of erroring on the unique-index conflict.
+type ApplyOptions struct {
+	// Upsert toggles INSERT vs INSERT ... ON CONFLICT DO UPDATE for
+	// pages, redirects, and collection items. Default false preserves
+	// the create-only behaviour every previous Sprint depended on.
+	Upsert bool
 }
 
 // Apply commits the plan + manifest. Order is fixed:
@@ -67,7 +86,18 @@ type ApplyResult struct {
 // On any fatal step the porter walks the IDs it created in reverse and
 // deletes them. Media failures are warnings (the source URL stays in
 // data_json) so a single broken image doesn't block the migration.
+//
+// Wraps ApplyWithOptions for backwards compatibility with callers that
+// don't need upsert mode.
 func (p *Porter) Apply(ctx context.Context, siteID string, manifest *MigrationManifest, plan URLPlan) (*ApplyResult, error) {
+	return p.ApplyWithOptions(ctx, siteID, manifest, plan, ApplyOptions{})
+}
+
+// ApplyWithOptions is Apply plus knobs. Sprint 4 (2026-05-06) added
+// ApplyOptions.Upsert for re-imports: existing pages / redirects /
+// collection items are UPDATED in place rather than failing on the
+// unique-index conflict the single Create path raises today.
+func (p *Porter) ApplyWithOptions(ctx context.Context, siteID string, manifest *MigrationManifest, plan URLPlan, opts ApplyOptions) (*ApplyResult, error) {
 	if manifest == nil {
 		return nil, fmt.Errorf("manifest is required")
 	}
@@ -124,17 +154,36 @@ func (p *Porter) Apply(ctx context.Context, siteID string, manifest *MigrationMa
 			if !item.PublishedAt.IsZero() {
 				pubAt = item.PublishedAt.UTC().Format("2006-01-02 15:04:05")
 			}
-			if err := p.queries.CreateItem(ctx, store.CreateItemParams{
-				ID: itemID, CollectionID: collID, SiteID: siteID,
-				Slug: item.Slug, Title: item.Title, DataJson: string(dj),
-				Locale: item.Locale, Status: "published",
-				PublishedAt: pubAt, SortOrder: int64(i),
-			}); err != nil {
-				p.rollback(ctx, createdRedirects, createdPages, createdItems, createdColls)
-				return nil, fmt.Errorf("create item %q in %q: %w", item.Slug, coll.Slug, err)
+			if opts.Upsert {
+				row, err := p.queries.UpsertItem(ctx, store.UpsertItemParams{
+					ID: itemID, CollectionID: collID, SiteID: siteID,
+					Slug: item.Slug, Title: item.Title, DataJson: string(dj),
+					Locale: item.Locale, Status: "published",
+					PublishedAt: pubAt, SortOrder: int64(i),
+				})
+				if err != nil {
+					p.rollback(ctx, createdRedirects, createdPages, createdItems, createdColls)
+					return nil, fmt.Errorf("upsert item %q in %q: %w", item.Slug, coll.Slug, err)
+				}
+				if row.ID == itemID {
+					createdItems = append(createdItems, row.ID)
+					res.ItemsCreated++
+				} else {
+					res.ItemsUpdated++
+				}
+			} else {
+				if err := p.queries.CreateItem(ctx, store.CreateItemParams{
+					ID: itemID, CollectionID: collID, SiteID: siteID,
+					Slug: item.Slug, Title: item.Title, DataJson: string(dj),
+					Locale: item.Locale, Status: "published",
+					PublishedAt: pubAt, SortOrder: int64(i),
+				}); err != nil {
+					p.rollback(ctx, createdRedirects, createdPages, createdItems, createdColls)
+					return nil, fmt.Errorf("create item %q in %q: %w", item.Slug, coll.Slug, err)
+				}
+				createdItems = append(createdItems, itemID)
+				res.ItemsCreated++
 			}
-			createdItems = append(createdItems, itemID)
-			res.ItemsCreated++
 		}
 	}
 
@@ -155,6 +204,44 @@ func (p *Porter) Apply(ctx context.Context, siteID string, manifest *MigrationMa
 		if slug == "" {
 			slug = "index"
 		}
+		ogImageID := ""
+		if mp.OGImageURL != "" {
+			ogImageID = mediaIDByURL[mp.OGImageURL]
+		}
+		noIndex := int64(0)
+		if mp.NoIndex {
+			noIndex = 1
+		}
+
+		if opts.Upsert {
+			row, err := p.queries.UpsertPage(ctx, store.UpsertPageParams{
+				ID:              pageID,
+				SiteID:          siteID,
+				Title:           pp.Title,
+				Slug:            slug,
+				Status:          "published",
+				MetaTitle:       truncateMeta(pp.Title, 70),
+				MetaDescription: truncateMeta(mp.MetaDescription, 200),
+				OgImageID:       ogImageID,
+				Layout:          "default",
+				SortOrder:       int64(sortIdx),
+				ShowInNav:       0,
+				NoIndex:         noIndex,
+				CanonicalUrl:    mp.CanonicalURL,
+			})
+			if err != nil {
+				p.rollback(ctx, createdRedirects, createdPages, createdItems, createdColls)
+				return nil, fmt.Errorf("upsert page %q: %w", pp.NewSlug, err)
+			}
+			if row.ID == pageID {
+				createdPages = append(createdPages, row.ID)
+				res.PagesCreated++
+			} else {
+				res.PagesUpdated++
+			}
+			continue
+		}
+
 		if err := p.queries.CreatePage(ctx, store.CreatePageParams{
 			ID: pageID, SiteID: siteID, Title: pp.Title, Slug: slug,
 			Layout: "default", SortOrder: int64(sortIdx), ShowInNav: 0,
@@ -168,14 +255,6 @@ func (p *Porter) Apply(ctx context.Context, siteID string, manifest *MigrationMa
 		// Apply meta + canonical via UpdatePage. We re-fetch first to
 		// get the existing values for fields we don't touch (matches
 		// the agent.go pattern at handlers/agent.go:200+).
-		ogImageID := ""
-		if mp.OGImageURL != "" {
-			ogImageID = mediaIDByURL[mp.OGImageURL]
-		}
-		noIndex := int64(0)
-		if mp.NoIndex {
-			noIndex = 1
-		}
 		_ = p.queries.UpdatePage(ctx, store.UpdatePageParams{
 			ID:               pageID,
 			Title:            pp.Title,
@@ -221,6 +300,29 @@ func (p *Porter) Apply(ctx context.Context, siteID string, manifest *MigrationMa
 		statusCode := int64(r.StatusCode)
 		if statusCode == 0 {
 			statusCode = 301
+		}
+		if opts.Upsert {
+			row, err := p.queries.UpsertRedirect(ctx, store.UpsertRedirectParams{
+				ID: rid, SiteID: siteID, FromPath: r.FromPath, ToPath: r.ToPath,
+				StatusCode: statusCode, IsAuto: 1,
+			})
+			if err != nil {
+				res.Warnings = append(res.Warnings,
+					fmt.Sprintf("upsert redirect %s -> %s: %v", r.FromPath, r.ToPath, err))
+				continue
+			}
+			// CreatedAt is the only timestamp column on redirects, but
+			// the upsert UPDATE clause leaves created_at alone. There's
+			// no updated_at column to compare; track via a presence
+			// pre-check instead. Cheap: at most one extra SELECT per
+			// redirect, only on the upsert path.
+			if row.ID == rid {
+				createdRedirects = append(createdRedirects, row.ID)
+				res.RedirectsCreated++
+			} else {
+				res.RedirectsUpdated++
+			}
+			continue
 		}
 		if err := p.queries.CreateRedirect(ctx, store.CreateRedirectParams{
 			ID: rid, SiteID: siteID, FromPath: r.FromPath, ToPath: r.ToPath,
@@ -383,3 +485,4 @@ func newPorterID() string {
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
 }
+

@@ -548,6 +548,22 @@ type User struct {
 	UpdatedAt        string `json:"updated_at"`
 }
 
+type VerifyJob struct {
+	ID             string `json:"id"`
+	SiteID         string `json:"site_id"`
+	MigrationID    string `json:"migration_id"`
+	Status         string `json:"status"`
+	TotalUrls      int64  `json:"total_urls"`
+	ProcessedUrls  int64  `json:"processed_urls"`
+	OkCount        int64  `json:"ok_count"`
+	FailCount      int64  `json:"fail_count"`
+	DeployedDomain string `json:"deployed_domain"`
+	Error          string `json:"error"`
+	CreatedAt      string `json:"created_at"`
+	StartedAt      string `json:"started_at"`
+	CompletedAt    string `json:"completed_at"`
+}
+
 type VisitEngagement struct {
 	ID                   string `json:"id"`
 	SiteID               string `json:"site_id"`

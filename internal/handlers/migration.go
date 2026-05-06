@@ -35,6 +35,7 @@ type MigrationHandler struct {
 	queries    *store.Queries
 	media      migration.MediaUploader
 	verifyOpts migration.VerifyOptions
+	jobMgr     *migration.JobManager
 }
 
 // NewMigrationHandler returns a handler. uploader is the production media
@@ -56,6 +57,17 @@ func NewMigrationHandler(cfg *config.Config, queries *store.Queries, uploader mi
 // against httptest.Server.
 func (h *MigrationHandler) SetVerifyOptionsForTest(opts migration.VerifyOptions) {
 	h.verifyOpts = opts
+	if h.jobMgr != nil {
+		h.jobMgr.SetVerifyOptionsForTest(opts)
+	}
+}
+
+// SetVerifyJobManager wires the async verify-live worker. Production
+// boot in server.go constructs one process-wide JobManager and injects
+// it here. Tests that exercise the synchronous test fixture pass nil
+// or a unit-scoped manager.
+func (h *MigrationHandler) SetVerifyJobManager(m *migration.JobManager) {
+	h.jobMgr = m
 }
 
 // migrationStartRequest is the input for POST /migrations.
@@ -240,9 +252,17 @@ func (h *MigrationHandler) Plan(w http.ResponseWriter, r *http.Request) {
 // flag the operator must flip when conflicts are non-zero (currently the
 // porter refuses to apply a plan with conflicts at all; this flag is
 // reserved for a future "force-apply" override).
+//
+// Sprint 4 (2026-05-06): Upsert toggles re-import mode. When true the
+// porter UPDATEs pages / redirects / collection_items by their natural
+// key instead of erroring on the unique-index conflict. Plan-quota
+// subtracts already-existing slugs / from_paths from the projected
+// addition, so a refresh that overwrites every existing page costs zero
+// against the cap.
 type migrationApplyRequest struct {
 	migrationPlanRequest
 	ConfirmConflicts bool `json:"confirm_conflicts,omitempty"`
+	Upsert           bool `json:"upsert,omitempty"`
 }
 
 // Apply runs the porter against the current plan. On success the migration
@@ -270,10 +290,19 @@ func (h *MigrationHandler) Apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pages, _ := h.queries.ListPagesBySite(r.Context(), siteID)
-	existing := make(map[string]bool, len(pages))
-	for _, p := range pages {
-		existing[strings.TrimPrefix(p.Slug, "/")] = true
+	// Sprint 4 (2026-05-06): under upsert, treat the existing-slug set
+	// as empty so PlanURLs does NOT generate conflicts and re-namings.
+	// The porter's UpsertPage clause writes to the same row by natural
+	// key. Without this branch, the planner would auto-rename overlap
+	// slugs to "post-2", "post-3" and the upsert mode would no-op
+	// (creating new rows instead of overwriting).
+	existing := map[string]bool{}
+	if !req.Upsert {
+		pages, _ := h.queries.ListPagesBySite(r.Context(), siteID)
+		existing = make(map[string]bool, len(pages))
+		for _, p := range pages {
+			existing[strings.TrimPrefix(p.Slug, "/")] = true
+		}
 	}
 	opts := migration.DefaultPlanOptions()
 	if req.CollapseDateArchives != nil {
@@ -293,7 +322,7 @@ func (h *MigrationHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	// own (CreatePage doesn't see the workspace) so the gate has to
 	// live at the handler boundary. OSS / unknown plans return -1 from
 	// the EE provider so OSS users keep unlimited access.
-	if status, msg := h.checkPagesQuotaForApply(r, siteID, plan); status != 0 {
+	if status, msg := h.checkPagesQuotaForApply(r, siteID, plan, req.Upsert); status != 0 {
 		_ = h.queries.UpdateMigrationStatus(r.Context(), store.UpdateMigrationStatusParams{
 			ID: id, Status: "ready", Error: "",
 		})
@@ -302,7 +331,8 @@ func (h *MigrationHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	porter := migration.NewPorter(h.queries, h.media)
-	result, err := porter.Apply(r.Context(), siteID, &manifest, plan)
+	result, err := porter.ApplyWithOptions(r.Context(), siteID, &manifest, plan,
+		migration.ApplyOptions{Upsert: req.Upsert})
 	if err != nil {
 		_ = h.queries.UpdateMigrationStatus(r.Context(), store.UpdateMigrationStatusParams{
 			ID: id, Status: "failed", Error: err.Error(),
@@ -313,10 +343,19 @@ func (h *MigrationHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	_ = h.queries.UpdateMigrationStatus(r.Context(), store.UpdateMigrationStatusParams{
 		ID: id, Status: "applied", Error: "",
 	})
-	AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "migration_apply", id, map[string]any{
-		"pages": result.PagesCreated, "items": result.ItemsCreated,
-		"redirects": result.RedirectsCreated, "media_uploaded": result.MediaUploaded,
-		"media_failed": result.MediaFailed,
+	auditAction := "migration_apply"
+	if req.Upsert {
+		auditAction = "migration_apply_upsert"
+	}
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, auditAction, id, map[string]any{
+		"pages_created":     result.PagesCreated,
+		"pages_updated":     result.PagesUpdated,
+		"items_created":     result.ItemsCreated,
+		"items_updated":     result.ItemsUpdated,
+		"redirects_created": result.RedirectsCreated,
+		"redirects_updated": result.RedirectsUpdated,
+		"media_uploaded":    result.MediaUploaded,
+		"media_failed":      result.MediaFailed,
 	})
 	writeJSON(w, http.StatusOK, result)
 }
@@ -518,18 +557,39 @@ type verifyLiveRequest struct {
 	DeployedDomain string `json:"deployed_domain"`
 }
 
-// VerifyLive runs migration.VerifyLive against the deployed site and
-// stores per-URL results. Returns summary counts; the full per-row
-// detail is available via ListVerifications. Capped at 1,000 URLs per
-// run because each URL can take seconds (network + politeness delay)
-// and the request runs synchronously in this layer; async + queue is
-// Sprint 4.
+// verifyLiveMaxURLs caps the per-job URL count. Sprint 2 set this at
+// 1,000 because verify-live ran synchronously in the request handler;
+// Sprint 4 lifts the wall by making the run async, but a hard ceiling
+// still protects the worker pool from a runaway 100k-URL upload. 25k
+// matches the realistic upper bound: agency tier (10k redirects per
+// site) * a 1.5x ratio for source-URL coverage + ~50% headroom.
+const verifyLiveMaxURLs = 25000
+
+// VerifyLive (Sprint 4 of the migration system, 2026-05-06): kicks off
+// an async verify-live crawl. Writes a verify_jobs row with
+// status='queued', returns 202 Accepted with the job id, and the worker
+// in the JobManager runs migration.VerifyLive in the background.
+// Per-URL results land in migration_verifications (same table the
+// synchronous Sprint 2 implementation used); the verify_jobs row
+// aggregates total + processed + ok/fail so the UI can render a
+// progress bar without re-counting per-URL rows on every poll.
+//
+// Auth required: anonymous calls return 401 (resolveUserWorkspace
+// gates this endpoint the same way it gates Apply).
 func (h *MigrationHandler) VerifyLive(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
 	id := urlParam(r, "migrationID")
 	row, err := h.queries.GetMigrationByID(r.Context(), id)
 	if err != nil || row.SiteID != siteID {
 		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	if _, werr := resolveUserWorkspace(r, h.queries); werr != nil {
+		writeError(w, http.StatusUnauthorized, werr.Error())
+		return
+	}
+	if h.jobMgr == nil {
+		writeError(w, http.StatusServiceUnavailable, "verify job manager not configured")
 		return
 	}
 	var req verifyLiveRequest
@@ -545,51 +605,135 @@ func (h *MigrationHandler) VerifyLive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "urls is required")
 		return
 	}
-	if len(req.URLs) > 1000 {
-		writeError(w, http.StatusRequestEntityTooLarge, "verify-live capped at 1,000 URLs per run")
+	if len(req.URLs) > verifyLiveMaxURLs {
+		writeError(w, http.StatusRequestEntityTooLarge,
+			"verify-live capped at 25,000 URLs per run; split the input set")
 		return
 	}
 
-	results, err := migration.VerifyLive(r.Context(), req.URLs, req.DeployedDomain, h.verifyOpts)
+	jobID, err := h.jobMgr.Enqueue(r.Context(), siteID, id, req.URLs, req.DeployedDomain)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	okCount := 0
-	failCount := 0
-	for _, vr := range results {
-		ok := int64(0)
-		if vr.OK {
-			ok = 1
-			okCount++
-		} else {
-			failCount++
-		}
-		_ = h.queries.CreateMigrationVerification(r.Context(), store.CreateMigrationVerificationParams{
-			ID:         newID(),
-			SiteID:     siteID,
-			MigrationID: id,
-			SourceUrl:  vr.SourceURL,
-			StatusCode: int64(vr.StatusCode),
-			FinalUrl:   vr.FinalURL,
-			Hops:       int64(vr.Hops),
-			Ok:         ok,
-			Error:      vr.Error,
-		})
-	}
-	AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "migration_verify_live", id, map[string]any{
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "migration_verify_live_enqueued", jobID, map[string]any{
+		"migration_id":    id,
 		"deployed_domain": req.DeployedDomain,
-		"checked":         len(results),
-		"ok":              okCount,
-		"failed":          failCount,
+		"total_urls":      len(req.URLs),
 	})
-	writeJSON(w, http.StatusOK, map[string]any{
-		"checked": len(results),
-		"ok":      okCount,
-		"failed":  failCount,
-		"results": results,
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"job_id":     jobID,
+		"status":     "queued",
+		"total_urls": len(req.URLs),
 	})
+}
+
+// GetVerifyJob returns the current state of a verify-live job. The UI
+// polls this every 2-5s while the job is non-terminal so a progress bar
+// can advance. Cross-tenant guards: the job's site_id and migration_id
+// must both match the URL params.
+func (h *MigrationHandler) GetVerifyJob(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	migID := urlParam(r, "migrationID")
+	jobID := urlParam(r, "jobID")
+	row, err := h.queries.GetMigrationByID(r.Context(), migID)
+	if err != nil || row.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	job, err := h.queries.GetVerifyJob(r.Context(), jobID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Verify job not found")
+		return
+	}
+	if job.SiteID != siteID || job.MigrationID != migID {
+		writeError(w, http.StatusNotFound, "Verify job not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, verifyJobToMap(job))
+}
+
+// ListVerifyJobs returns every verify-live job for a migration, newest
+// first. Used by the migration UI to surface past run history alongside
+// the per-URL verifications panel.
+func (h *MigrationHandler) ListVerifyJobs(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	migID := urlParam(r, "migrationID")
+	row, err := h.queries.GetMigrationByID(r.Context(), migID)
+	if err != nil || row.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	jobs, err := h.queries.ListVerifyJobsByMigration(r.Context(), migID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "List verify jobs")
+		return
+	}
+	out := make([]map[string]any, 0, len(jobs))
+	for _, j := range jobs {
+		out = append(out, verifyJobToMap(j))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+// CancelVerifyJob signals the worker to stop. Returns 200 on a
+// successful cancel signal, 409 if the job is already terminal, 404 if
+// the job is unknown. Auth required.
+func (h *MigrationHandler) CancelVerifyJob(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	migID := urlParam(r, "migrationID")
+	jobID := urlParam(r, "jobID")
+	row, err := h.queries.GetMigrationByID(r.Context(), migID)
+	if err != nil || row.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Migration not found")
+		return
+	}
+	if _, werr := resolveUserWorkspace(r, h.queries); werr != nil {
+		writeError(w, http.StatusUnauthorized, werr.Error())
+		return
+	}
+	job, err := h.queries.GetVerifyJob(r.Context(), jobID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Verify job not found")
+		return
+	}
+	if job.SiteID != siteID || job.MigrationID != migID {
+		writeError(w, http.StatusNotFound, "Verify job not found")
+		return
+	}
+	switch job.Status {
+	case "done", "failed", "cancelled":
+		writeError(w, http.StatusConflict, "Verify job already terminal")
+		return
+	}
+	if h.jobMgr == nil || !h.jobMgr.Cancel(jobID) {
+		writeError(w, http.StatusNotFound, "Verify job not running on this server")
+		return
+	}
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionUpdate, "migration_verify_live_cancelled", jobID, map[string]any{
+		"migration_id": migID,
+	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelling"})
+}
+
+// verifyJobToMap is the wire shape for verify_jobs rows. Centralised so
+// Get + List + the polling store all see the same field names.
+func verifyJobToMap(j store.VerifyJob) map[string]any {
+	return map[string]any{
+		"id":              j.ID,
+		"site_id":         j.SiteID,
+		"migration_id":    j.MigrationID,
+		"status":          j.Status,
+		"total_urls":      j.TotalUrls,
+		"processed_urls":  j.ProcessedUrls,
+		"ok_count":        j.OkCount,
+		"fail_count":      j.FailCount,
+		"deployed_domain": j.DeployedDomain,
+		"error":           j.Error,
+		"created_at":      j.CreatedAt,
+		"started_at":      j.StartedAt,
+		"completed_at":    j.CompletedAt,
+	}
 }
 
 // ListVerifications returns the stored per-URL verification history for a
@@ -638,7 +782,12 @@ func (h *MigrationHandler) ListVerifications(w http.ResponseWriter, r *http.Requ
 //
 // Auth context is REQUIRED: an anonymous Apply call returns 401 here.
 // This matches SiteHandler.Seed which already gates on authentication.
-func (h *MigrationHandler) checkPagesQuotaForApply(r *http.Request, siteID string, plan migration.URLPlan) (int, string) {
+//
+// Sprint 4 (2026-05-06): under upsert mode, pages whose slug already
+// exists are updates not insertions, so they're subtracted from the
+// projected addition. A full-overlap refresh costs zero against the
+// cap and an at-cap site can re-apply forever.
+func (h *MigrationHandler) checkPagesQuotaForApply(r *http.Request, siteID string, plan migration.URLPlan, upsert bool) (int, string) {
 	workspaceID, err := resolveUserWorkspace(r, h.queries)
 	if err != nil {
 		return http.StatusUnauthorized, err.Error()
@@ -654,10 +803,32 @@ func (h *MigrationHandler) checkPagesQuotaForApply(r *http.Request, siteID strin
 		// own integrity guarantees. Log via audit on the apply success.
 		return 0, ""
 	}
+	candidateSlugs := make(map[string]bool, len(plan.Pages))
 	projected := int64(0)
 	for _, pp := range plan.Pages {
-		if !pp.Skipped {
-			projected++
+		if pp.Skipped {
+			continue
+		}
+		projected++
+		if upsert {
+			candidateSlugs[strings.TrimPrefix(pp.NewSlug, "/")] = true
+		}
+	}
+	if upsert && projected > 0 {
+		// Subtract slugs that already exist - those are updates, not
+		// insertions. We pull the full slug set for the site (cheap:
+		// pages-per-site is in the thousands at the agency cap) and
+		// intersect against the candidate set rather than running N
+		// EXISTS queries.
+		existing, err := h.queries.ListExistingPageSlugsBySite(r.Context(), siteID)
+		if err == nil {
+			overlap := int64(0)
+			for _, s := range existing {
+				if candidateSlugs[s] {
+					overlap++
+				}
+			}
+			projected -= overlap
 		}
 	}
 	if current+projected > limit {
@@ -667,6 +838,7 @@ func (h *MigrationHandler) checkPagesQuotaForApply(r *http.Request, siteID strin
 			"projected":       projected,
 			"limit":           limit,
 			"workspace_id":    workspaceID,
+			"upsert":          upsert,
 		})
 		return http.StatusPaymentRequired, quotaPagesError(siteID, current, projected, limit)
 	}

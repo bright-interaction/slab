@@ -56,6 +56,21 @@ INSERT INTO collection_items
     (id, collection_id, site_id, slug, title, data_json, locale, status, published_at, sort_order)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+-- name: UpsertItem :one
+-- Sprint 4 (2026-05-06): re-import upsert. Conflict on the
+-- (collection_id, locale, slug) compound natural key.
+INSERT INTO collection_items
+    (id, collection_id, site_id, slug, title, data_json, locale, status, published_at, sort_order)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(collection_id, locale, slug) DO UPDATE SET
+    title        = excluded.title,
+    data_json    = excluded.data_json,
+    status       = excluded.status,
+    published_at = excluded.published_at,
+    sort_order   = excluded.sort_order,
+    updated_at   = datetime('now')
+RETURNING *;
+
 -- name: UpdateItem :exec
 UPDATE collection_items
 SET slug = ?,
