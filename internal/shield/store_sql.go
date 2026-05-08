@@ -62,8 +62,13 @@ func (s *SQLStore) SweepExpiredSessions(ctx context.Context, before time.Time) e
 }
 
 func (s *SQLStore) InsertToken(ctx context.Context, sessionID, token, kind, hint, ciphertext string) error {
+	// INSERT OR IGNORE makes the call idempotent: the same (kind,
+	// value) tuple within a session yields a deterministic token id,
+	// so a re-tokenize is a no-op rather than a PRIMARY KEY conflict.
+	// The existing row's ciphertext is correct (HMAC over the same
+	// inputs produced the same id), so we don't need REPLACE.
 	_, err := s.DB.ExecContext(ctx,
-		`INSERT INTO shield_tokens (token, session_id, kind, hint, ciphertext) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT OR IGNORE INTO shield_tokens (token, session_id, kind, hint, ciphertext) VALUES (?, ?, ?, ?, ?)`,
 		token, sessionID, kind, hint, ciphertext)
 	return err
 }

@@ -83,14 +83,14 @@ func runOnAllStores(t *testing.T, fn func(t *testing.T, store Store)) {
 func TestNewSessionCreatesAndTouches(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s1, err := NewSession(ctx, store, "session-A", testKey(), 10*time.Minute)
+		s1, err := NewSession(ctx, store, "session-A", testKey(), 10*time.Minute, HintFull)
 		if err != nil {
 			t.Fatalf("create: %v", err)
 		}
 		if s1.ID != "session-A" {
 			t.Fatalf("wrong id: %s", s1.ID)
 		}
-		s2, err := NewSession(ctx, store, "session-A", testKey(), 10*time.Minute)
+		s2, err := NewSession(ctx, store, "session-A", testKey(), 10*time.Minute, HintFull)
 		if err != nil {
 			t.Fatalf("touch: %v", err)
 		}
@@ -103,7 +103,7 @@ func TestNewSessionCreatesAndTouches(t *testing.T) {
 func TestNewSessionRejectsBadKey(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		if _, err := NewSession(ctx, store, "id", []byte("short"), time.Minute); err == nil {
+		if _, err := NewSession(ctx, store, "id", []byte("short"), time.Minute, HintFull); err == nil {
 			t.Fatal("expected error for short key")
 		}
 	})
@@ -112,7 +112,7 @@ func TestNewSessionRejectsBadKey(t *testing.T) {
 func TestTokenizeAndResolveRoundTrip(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, err := NewSession(ctx, store, "session-1", testKey(), time.Minute)
+		s, err := NewSession(ctx, store, "session-1", testKey(), time.Minute, HintFull)
 		if err != nil {
 			t.Fatalf("session: %v", err)
 		}
@@ -158,8 +158,8 @@ func TestTokenizeAndResolveRoundTrip(t *testing.T) {
 func TestResolveRejectsCrossSessionToken(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		a, _ := NewSession(ctx, store, "session-A", testKey(), time.Minute)
-		b, _ := NewSession(ctx, store, "session-B", testKey(), time.Minute)
+		a, _ := NewSession(ctx, store, "session-A", testKey(), time.Minute, HintFull)
+		b, _ := NewSession(ctx, store, "session-B", testKey(), time.Minute, HintFull)
 		marker, err := a.Tokenize(ctx, KindEmail, "x@y.z", "")
 		if err != nil {
 			t.Fatalf("tokenize: %v", err)
@@ -174,7 +174,7 @@ func TestResolveRejectsCrossSessionToken(t *testing.T) {
 func TestTokenizeRejectsUnknownKind(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		if _, err := s.Tokenize(ctx, Kind("bogus"), "x", ""); err != ErrUnknownKind {
 			t.Fatalf("got %v, want ErrUnknownKind", err)
 		}
@@ -184,7 +184,7 @@ func TestTokenizeRejectsUnknownKind(t *testing.T) {
 func TestTokenizeRejectsNonWhitelistedHint(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		if _, err := s.Tokenize(ctx, KindEmail, "x@y.z", "raw=x@y.z"); err == nil {
 			t.Fatal("expected hint validation error")
 		}
@@ -231,7 +231,7 @@ type lead struct {
 func TestShieldStructWalk(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		c := contact{
 			ID:      "c-1",
 			Email:   "anna@andersson-law.se",
@@ -272,7 +272,7 @@ func TestShieldStructWalk(t *testing.T) {
 func TestShieldThenUnshieldRoundTrip(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		original := contact{
 			ID:    "c-1",
 			Email: "x@y.z",
@@ -295,7 +295,7 @@ func TestShieldThenUnshieldRoundTrip(t *testing.T) {
 func TestShieldNestedSlice(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		l := lead{
 			ID: "l-1",
 			Contacts: []contact{
@@ -317,7 +317,7 @@ func TestShieldNestedSlice(t *testing.T) {
 func TestUnshieldStringHandlesMultipleMarkers(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		a, _ := s.Tokenize(ctx, KindEmail, "x@y.z", "")
 		b, _ := s.Tokenize(ctx, KindName, "Bob", "")
 		in := "Send to " + a + " and CC " + b + " please"
@@ -337,7 +337,7 @@ func TestUnshieldStringHandlesMultipleMarkers(t *testing.T) {
 func TestUnshieldJSONNestedStrings(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		m1, _ := s.Tokenize(ctx, KindEmail, "anna@x.se", "")
 		m2, _ := s.Tokenize(ctx, KindName, "Anna", "")
 		body := `{"to": "` + m1 + `", "cc": ["` + m2 + `"], "subject": "Hi ` + m2 + `"}`
@@ -362,8 +362,131 @@ func TestSessionExpiredOnRevisit(t *testing.T) {
 		if err := store.InsertSession(ctx, "id-expired", time.Now().Add(-1*time.Minute)); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := NewSession(ctx, store, "id-expired", testKey(), time.Minute); err != ErrSessionExpired {
+		if _, err := NewSession(ctx, store, "id-expired", testKey(), time.Minute, HintFull); err != ErrSessionExpired {
 			t.Fatalf("got %v, want ErrSessionExpired", err)
+		}
+	})
+}
+
+func TestTokenIsDeterministicWithinSession(t *testing.T) {
+	runOnAllStores(t, func(t *testing.T, store Store) {
+		ctx := context.Background()
+		s, _ := NewSession(ctx, store, "session-X", testKey(), time.Minute, HintFull)
+
+		m1, err := s.Tokenize(ctx, KindEmail, "anna@example.se", "")
+		if err != nil {
+			t.Fatalf("first tokenize: %v", err)
+		}
+		m2, err := s.Tokenize(ctx, KindEmail, "anna@example.se", "")
+		if err != nil {
+			t.Fatalf("second tokenize: %v", err)
+		}
+		if m1 != m2 {
+			t.Fatalf("same value in same session must produce same marker:\nm1=%q\nm2=%q", m1, m2)
+		}
+		// Different value in the same session must produce different marker.
+		m3, _ := s.Tokenize(ctx, KindEmail, "bob@example.se", "")
+		if m3 == m1 {
+			t.Fatalf("different values produced the same marker: %q", m1)
+		}
+	})
+}
+
+func TestTokenIsUnlinkableAcrossSessions(t *testing.T) {
+	runOnAllStores(t, func(t *testing.T, store Store) {
+		ctx := context.Background()
+		a, _ := NewSession(ctx, store, "session-A", testKey(), time.Minute, HintFull)
+		b, _ := NewSession(ctx, store, "session-B", testKey(), time.Minute, HintFull)
+
+		mA, _ := a.Tokenize(ctx, KindEmail, "anna@example.se", "")
+		mB, _ := b.Tokenize(ctx, KindEmail, "anna@example.se", "")
+		if mA == mB {
+			t.Fatalf("same value across sessions produced linkable markers:\nA=%q\nB=%q", mA, mB)
+		}
+	})
+}
+
+func TestHintLevelMinimalDropsValueDerivedHints(t *testing.T) {
+	runOnAllStores(t, func(t *testing.T, store Store) {
+		ctx := context.Background()
+		s, _ := NewSession(ctx, store, "session-min", testKey(), time.Minute, HintMinimal)
+
+		var c contact
+		c = contact{
+			ID:      "c-1",
+			Email:   "anna@andersson-law.se",
+			Name:    "Anna Andersson",
+			Stage:   "open",
+			Company: "Andersson Advokat",
+		}
+		if err := s.Shield(ctx, &c); err != nil {
+			t.Fatalf("Shield: %v", err)
+		}
+		// Markers must NOT carry the identifying values (no domain,
+		// no initials, no exact length).
+		for _, marker := range []string{c.Email, c.Name, c.Company} {
+			if strings.Contains(marker, "andersson-law.se") {
+				t.Errorf("HintMinimal leaked domain: %q", marker)
+			}
+			if strings.Contains(marker, "initials=AA") {
+				t.Errorf("HintMinimal leaked initials: %q", marker)
+			}
+			if strings.Contains(marker, "len=22") || strings.Contains(marker, "len=14") {
+				t.Errorf("HintMinimal leaked exact length: %q", marker)
+			}
+			if !strings.Contains(marker, "len_bucket=") {
+				t.Errorf("HintMinimal should still carry len_bucket=: %q", marker)
+			}
+		}
+	})
+}
+
+func TestHintLevelNoneStripsAllHints(t *testing.T) {
+	runOnAllStores(t, func(t *testing.T, store Store) {
+		ctx := context.Background()
+		s, _ := NewSession(ctx, store, "session-none", testKey(), time.Minute, HintNone)
+		c := contact{
+			ID:      "c-1",
+			Email:   "anna@andersson-law.se",
+			Name:    "Anna Andersson",
+			Stage:   "open",
+			Company: "Andersson Advokat",
+		}
+		if err := s.Shield(ctx, &c); err != nil {
+			t.Fatalf("Shield: %v", err)
+		}
+		// Markers under HintNone are pure "[shield:<kind>:tok_<hex>]"
+		// with no trailing :hint segment.
+		want := MarkerPattern.FindStringSubmatch(c.Email)
+		if len(want) < 4 {
+			t.Fatalf("marker did not parse: %q", c.Email)
+		}
+		// Group 3 is the hint; should be empty under HintNone.
+		if want[3] != "" {
+			t.Errorf("HintNone leaked hint segment: hint=%q full=%q", want[3], c.Email)
+		}
+	})
+}
+
+func TestHintLevelBucketedCoarsensDomain(t *testing.T) {
+	runOnAllStores(t, func(t *testing.T, store Store) {
+		ctx := context.Background()
+		s, _ := NewSession(ctx, store, "session-bk", testKey(), time.Minute, HintBucketed)
+		// Personal-domain email -> "industry=personal" not "domain=gmail.com".
+		marker, _ := s.Tokenize(ctx, KindEmail, "user@example.com", "")
+		// Tokenize is the low-level path; bucketed mode is applied
+		// in shieldField via buildHintAtLevel, so call Shield on a
+		// tagged struct instead.
+		_ = marker
+		c := contact{ID: "c", Email: "user@example.com", Name: "Tom"}
+		if err := s.Shield(ctx, &c); err != nil {
+			t.Fatalf("Shield: %v", err)
+		}
+		if !strings.Contains(c.Email, "industry=personal") {
+			t.Errorf("bucketed mode should map gmail.com -> industry=personal: %q", c.Email)
+		}
+		if strings.Contains(c.Email, "gmail.com") {
+			t.Errorf("bucketed mode leaked the raw domain: %q", c.Email)
 		}
 	})
 }
