@@ -2,15 +2,19 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/migration"
+	"github.com/brightinteraction/atomicsite/internal/shield"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -64,6 +68,15 @@ type Server struct {
 	// still applies, the human just gets to retry media later.
 	media migration.MediaUploader
 
+	// shieldStore + shieldKey wire LLM-boundary tokenization (Shield).
+	// When shieldEnabled is true, tool responses are redacted on the way
+	// out and tool-call arguments are unshielded on the way in. Off by
+	// default; flipped on by WithShield() at server construction.
+	shieldStore   shield.Store
+	shieldKey     []byte
+	shieldEnabled bool
+	shieldTTL     time.Duration
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -105,6 +118,66 @@ func (s *Server) WithVerifyJobManager(m *migration.JobManager) *Server {
 func (s *Server) WithMediaUploader(m migration.MediaUploader) *Server {
 	s.media = m
 	return s
+}
+
+// WithShield enables LLM-boundary tokenization. store and key are
+// required; key must be 32 bytes (the same ATOMICSITE_SHIELD_KEY env
+// var consumed at startup). ttl defaults to 30 minutes when zero.
+//
+// When enabled: every tool result + resource read passes through
+// Session.ShieldJSON before reaching the agent (regex-based PII
+// redaction as a safety net), and every tool-call argument blob passes
+// through Session.UnshieldJSON before reaching the handler (token
+// resolution). Tool handlers can fetch the per-request *shield.Session
+// from ctx via shield.SessionFromContext for explicit struct-tag
+// shielding of typed responses (preferred over the regex safety net
+// when the response shape is known).
+//
+// Off by default so existing tests + dev installs without a
+// SHIELD_KEY do not break.
+func (s *Server) WithShield(store shield.Store, key []byte, ttl time.Duration) *Server {
+	if store == nil || len(key) != 32 {
+		return s
+	}
+	s.shieldStore = store
+	s.shieldKey = key
+	s.shieldEnabled = true
+	if ttl > 0 {
+		s.shieldTTL = ttl
+	} else {
+		s.shieldTTL = 30 * time.Minute
+	}
+	return s
+}
+
+// ShieldEnabled reports whether tokenization is active. Used by the
+// admin AgentSurface to surface the privacy invariant to operators.
+func (s *Server) ShieldEnabled() bool { return s.shieldEnabled }
+
+// beginShieldSession returns the per-request shield Session keyed by
+// the Mcp-Session-Id header (preferred) or a stable hash of the
+// X-Agent-Key when no MCP session id is present. Returns nil + nil
+// when shield is disabled. Returns nil + err on driver / crypto
+// failure; callers should fall back to passthrough on error so a
+// shield outage does not block legitimate MCP traffic (the alternative
+// is silently leaking PII, which is worse).
+func (s *Server) beginShieldSession(r *http.Request) (*shield.Session, error) {
+	if !s.shieldEnabled {
+		return nil, nil
+	}
+	id := r.Header.Get("Mcp-Session-Id")
+	if id == "" {
+		// Fall back to a hash of the agent key so the same caller gets
+		// a stable session across requests within the TTL window.
+		// SHA-256 of the raw key keeps the lookup id non-reversible.
+		key := r.Header.Get("X-Agent-Key")
+		if key == "" {
+			return nil, errors.New("shield: no Mcp-Session-Id and no X-Agent-Key")
+		}
+		sum := sha256.Sum256([]byte(key))
+		id = "agent-" + hex.EncodeToString(sum[:8])
+	}
+	return shield.NewSession(r.Context(), s.shieldStore, id, s.shieldKey, s.shieldTTL)
 }
 
 // NewServer constructs an MCP server with every registered tool /
@@ -307,13 +380,53 @@ func (s *Server) handleToolsCall(r *http.Request, identity *authmw.AgentIdentity
 			Content: []Content{{Type: "text", Text: "tool " + args.Name + " requires the 'write' capability; ask the human to mint a write-enabled key"}},
 		}, nil
 	}
-	body, err := tool.Handler(r.Context(), identity, args.Arguments)
+
+	ctx := r.Context()
+	session, sessErr := s.beginShieldSession(r)
+	if sessErr != nil {
+		return ToolCallResult{
+			IsError: true,
+			Content: []Content{{Type: "text", Text: "shield session error: " + sessErr.Error()}},
+		}, nil
+	}
+	if session != nil {
+		ctx = shield.WithSession(ctx, session)
+		// Resolve any tokens in the agent's tool-call arguments back to
+		// plaintext before the handler runs against the store. A token
+		// that doesn't exist in this session (replay or expiry) bubbles
+		// up as an application error so the agent can recover.
+		if len(args.Arguments) > 0 {
+			resolved, err := session.UnshieldJSON(ctx, args.Arguments)
+			if err != nil {
+				return ToolCallResult{
+					IsError: true,
+					Content: []Content{{Type: "text", Text: "shield: failed to resolve tool arguments: " + err.Error()}},
+				}, nil
+			}
+			args.Arguments = resolved
+		}
+	}
+
+	body, err := tool.Handler(ctx, identity, args.Arguments)
 	if err != nil {
 		return ToolCallResult{
 			IsError: true,
 			Content: []Content{{Type: "text", Text: err.Error()}},
 		}, nil
 	}
+
+	if session != nil && body != "" {
+		shielded, sErr := session.ShieldJSON(ctx, []byte(body))
+		if sErr == nil {
+			body = string(shielded)
+		}
+		// On ShieldJSON parse error, fall through with the raw body.
+		// This typically means the handler returned non-JSON (e.g. a
+		// plain "ok"), which is safe because the redact pass was the
+		// safety net; tagged-struct shielding is the primary path and
+		// happens inside the handler.
+	}
+
 	return ToolCallResult{
 		Content: []Content{{Type: "text", Text: body}},
 	}, nil
@@ -345,10 +458,25 @@ func (s *Server) handleResourcesRead(r *http.Request, identity *authmw.AgentIden
 	if !ok {
 		return nil, &ResponseError{Code: ErrInvalidParams, Message: "unknown resource URI: " + args.URI}
 	}
-	body, err := res.Reader(r.Context(), identity)
+
+	ctx := r.Context()
+	session, _ := s.beginShieldSession(r)
+	if session != nil {
+		ctx = shield.WithSession(ctx, session)
+	}
+
+	body, err := res.Reader(ctx, identity)
 	if err != nil {
 		return nil, &ResponseError{Code: ErrInternal, Message: err.Error()}
 	}
+
+	if session != nil && body != "" {
+		shielded, sErr := session.ShieldJSON(ctx, []byte(body))
+		if sErr == nil {
+			body = string(shielded)
+		}
+	}
+
 	mime := res.MimeType
 	if mime == "" {
 		mime = "application/json"

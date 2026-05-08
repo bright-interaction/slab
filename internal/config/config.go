@@ -112,6 +112,28 @@ type Config struct {
 	// search; the tool returns a "not configured" error.
 	// Read from DESIGN_REFERENCES_DIR.
 	DesignReferencesDir string
+
+	// ShieldKey is the 32-byte AES-256-GCM master key for the shield
+	// LLM-boundary tokenizer. Read from ATOMICSITE_SHIELD_KEY. When empty
+	// (no key set, or len != 32), shield is disabled and the MCP server
+	// returns plaintext responses + accepts plaintext arguments. When
+	// set, every PII field crossing the MCP boundary is tokenized.
+	ShieldKey string
+
+	// TrustedProxies is the comma-separated list of CIDRs (or bare IPs,
+	// auto-widened to /32 or /128) whose X-Forwarded-For / X-Real-IP
+	// headers the server should honor. When empty, those headers are
+	// ignored entirely and audit logs / rate limiters see r.RemoteAddr
+	// (the actual TCP peer), which is the safe default for OSS deploys
+	// directly exposed to the internet. When set, only proxy peers in
+	// the list can rewrite the client IP via XFF: every other peer's
+	// header is discarded.
+	//
+	// Read from ATOMICSITE_TRUSTED_PROXIES. Common values:
+	//   - "127.0.0.1/32,::1/128" for a single-host nginx + atomicsite
+	//   - "10.0.0.0/8" for a private VPC fronted by a managed LB
+	//   - "172.16.0.0/12" for Docker's default bridge network
+	TrustedProxies string
 }
 
 func Load() *Config {
