@@ -10,7 +10,7 @@ import (
 func TestRedactStringPatterns(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		cases := []struct {
 			name     string
 			in       string
@@ -60,7 +60,7 @@ func TestRedactStringPatterns(t *testing.T) {
 func TestRedactStringResolves(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		in := "ping anna@example.se when ready"
 		redacted, err := s.RedactString(ctx, in)
 		if err != nil {
@@ -79,7 +79,7 @@ func TestRedactStringResolves(t *testing.T) {
 func TestRedactStringIdempotent(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
-		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute)
+		s, _ := NewSession(ctx, store, "id", testKey(), time.Minute, HintFull)
 		in := "Email anna@example.se about the deal"
 		once, err := s.RedactString(ctx, in)
 		if err != nil {

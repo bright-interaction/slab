@@ -120,6 +120,44 @@ type Config struct {
 	// set, every PII field crossing the MCP boundary is tokenized.
 	ShieldKey string
 
+	// ShieldHintLevel dials how much value-derived metadata appears in
+	// shield markers. Read from ATOMICSITE_SHIELD_HINT_LEVEL. Values:
+	//
+	//   ""         (default) -> HintFull: domain, initials, len, etc.
+	//   "bucketed" -> HintBucketed: industry buckets, length buckets
+	//   "minimal"  -> HintMinimal: only len_bucket
+	//   "none"     -> HintNone: kind only, no value-derived metadata
+	//
+	// Combined with deterministic per-session token ids, "minimal" or
+	// "none" lets the agent recognise the same entity across turns
+	// without learning which entity it is.
+	ShieldHintLevel string
+
+	// RequireMFA enforces TOTP enrollment policy. Read from
+	// ATOMICSITE_REQUIRE_MFA. Values:
+	//
+	//   ""       (default) -> optional MFA; users may enroll but it's
+	//                         not gated.
+	//   "admin"           -> users with role=admin must enroll. Login
+	//                         succeeds but the dashboard receives
+	//                         enroll_required=true and the
+	//                         enforcement middleware blocks writes
+	//                         until the user enrolls (the TOTP setup
+	//                         + verify endpoints stay accessible so
+	//                         the user can complete enrollment).
+	//   "all"             -> every authenticated user must enroll.
+	//
+	// Validate rejects unknown values so a typo can't silently
+	// downgrade the policy.
+	RequireMFA string
+
+	// AuditLogRetentionDays caps how long rows stay in audit_log
+	// before the daily retention sweep purges them. Read from
+	// ATOMICSITE_AUDIT_LOG_RETENTION_DAYS. Zero (or unset) uses the
+	// retention package's DefaultAuditLogDays (365). Clamped to
+	// [MinRetentionDays, MaxRetentionDays] inside the manager.
+	AuditLogRetentionDays int
+
 	// TrustedProxies is the comma-separated list of CIDRs (or bare IPs,
 	// auto-widened to /32 or /128) whose X-Forwarded-For / X-Real-IP
 	// headers the server should honor. When empty, those headers are
@@ -205,6 +243,13 @@ func (c *Config) Validate() error {
 		}
 	default:
 		return fmt.Errorf("ATOMICSITE_DEPLOYMENT_MODE=%q is not a recognised value; use %q or %q", mode, DeploymentModeSingle, DeploymentModeCloud)
+	}
+
+	switch c.RequireMFA {
+	case MFAOptional, MFAAdminsOnly, MFAAllUsers:
+		// always fine
+	default:
+		return fmt.Errorf("ATOMICSITE_REQUIRE_MFA=%q is not a recognised value; use %q, %q, or %q", c.RequireMFA, MFAOptional, MFAAdminsOnly, MFAAllUsers)
 	}
 
 	if c.IsLocalDev() {

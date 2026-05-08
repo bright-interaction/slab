@@ -3,7 +3,9 @@ package shield
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -68,15 +70,41 @@ func decrypt(encoded string, key []byte) (string, error) {
 	return string(pt), nil
 }
 
-// newTokenID returns "tok_<8hex>" using crypto/rand. Collision space is
-// 2^32 per session which is fine for the token vault scope (one MCP
-// connection, max ~minutes lifetime). Two collisions in the same
-// session would surface as a CreateShieldToken primary-key conflict
-// the caller can retry.
+// newTokenID returns "tok_<8hex>" using crypto/rand. Kept for tests
+// that intentionally want random ids; production Tokenize uses
+// deterministicTokenID so the same value within a session always
+// yields the same marker (recognise-but-don't-deanonymise).
 func newTokenID() (string, error) {
 	b := make([]byte, 4)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
 		return "", err
 	}
 	return "tok_" + hex.EncodeToString(b), nil
+}
+
+// derivedSessionKey computes a per-session subkey from the master so
+// rotating the master invalidates every session, and per-session
+// HMACs (used for deterministic token-id derivation) cannot be
+// replayed across sessions.
+func derivedSessionKey(master []byte, sessionID string) []byte {
+	h := hmac.New(sha256.New, master)
+	h.Write([]byte("shield/session/" + sessionID))
+	return h.Sum(nil) // 32 bytes
+}
+
+// deterministicTokenID computes the marker id for (kind, value) such
+// that the same input within the same session always produces the
+// same id. 12 hex (48 bits) is collision-safe up to ~16M tokens per
+// session at <1% birthday-collision risk. The HMAC PRF makes the id
+// uncorrelated with the value, and per-session keying makes ids
+// across sessions unlinkable, so an LLM seeing "tok_X" in session A
+// and "tok_Y" in session B cannot tell whether they reference the
+// same person.
+func deterministicTokenID(sessionKey []byte, kind Kind, value string) string {
+	h := hmac.New(sha256.New, sessionKey)
+	h.Write([]byte(string(kind)))
+	h.Write([]byte{0x00})
+	h.Write([]byte(value))
+	sum := h.Sum(nil)
+	return "tok_" + hex.EncodeToString(sum[:6])
 }

@@ -73,6 +73,11 @@ func (m *MemoryStore) SweepExpiredSessions(_ context.Context, before time.Time) 
 func (m *MemoryStore) InsertToken(_ context.Context, sessionID, token, kind, hint, ciphertext string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Idempotent on (token, session_id): a repeat tokenize of the
+	// same value (deterministic id) returns the existing row.
+	if existing, ok := m.tokens[token]; ok && existing.sessionID == sessionID {
+		return nil
+	}
 	m.tokens[token] = memoryToken{sessionID: sessionID, kind: kind, hint: hint, ciphertext: ciphertext}
 	if m.bySess[sessionID] == nil {
 		m.bySess[sessionID] = make(map[string]struct{})

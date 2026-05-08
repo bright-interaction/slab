@@ -49,17 +49,24 @@ type Store interface {
 // Session is one MCP connection's token vault. Safe for concurrent
 // use; the Store implementation is responsible for its own locking.
 type Session struct {
-	ID    string
-	store Store
-	key   []byte
-	ttl   time.Duration
+	ID         string
+	store      Store
+	key        []byte // master key (used for value encryption)
+	subkey     []byte // per-session HMAC key (used for deterministic token ids)
+	ttl        time.Duration
+	hintLevel  HintLevel
 }
 
 // NewSession looks up an existing session and touches expires_at, or
 // creates a fresh row when the id is unknown. Returns an active
 // Session bound to the given store + key. Caller is expected to have
 // authenticated the MCP request (X-Agent-Key, etc.) before calling.
-func NewSession(ctx context.Context, store Store, sessionID string, key []byte, ttl time.Duration) (*Session, error) {
+//
+// hintLevel controls how much value-derived metadata appears on
+// markers. HintFull is the default; pass HintMinimal/HintNone for
+// stricter deployments where the moat needs to deny the agent
+// the ability to reason about who a token represents.
+func NewSession(ctx context.Context, store Store, sessionID string, key []byte, ttl time.Duration, hintLevel HintLevel) (*Session, error) {
 	if sessionID == "" {
 		return nil, fmt.Errorf("shield: empty session id")
 	}
@@ -88,7 +95,14 @@ func NewSession(ctx context.Context, store Store, sessionID string, key []byte, 
 			return nil, fmt.Errorf("shield: create session: %w", err)
 		}
 	}
-	return &Session{ID: sessionID, store: store, key: key, ttl: ttl}, nil
+	return &Session{
+		ID:        sessionID,
+		store:     store,
+		key:       key,
+		subkey:    derivedSessionKey(key, sessionID),
+		ttl:       ttl,
+		hintLevel: hintLevel,
+	}, nil
 }
 
 // SweepExpired deletes session rows past their expires_at. Cascading
@@ -98,9 +112,16 @@ func SweepExpired(ctx context.Context, store Store) error {
 }
 
 // Tokenize records one new token and returns its full marker string.
-// hint may be empty. Returns ErrUnknownKind for unsupported kinds and a
-// wrapped error for non-whitelisted hint keys. The plaintext is
-// AES-256-GCM-encrypted before hitting the row.
+// hint may be empty. Returns ErrUnknownKind for unsupported kinds and
+// a wrapped error for non-whitelisted hint keys.
+//
+// Determinism: the token id is HMAC-SHA256(per-session-subkey, kind +
+// value), truncated to 12 hex. The same input within the same session
+// always produces the same marker, so the agent can recognise a
+// recurring entity across turns; different sessions produce different
+// markers, so cross-session linkability is broken. InsertToken is
+// idempotent: a second call with the same id is a no-op (the row
+// already maps to the right ciphertext).
 func (s *Session) Tokenize(ctx context.Context, kind Kind, value, hint string) (string, error) {
 	if _, ok := HintRules[kind]; !ok {
 		return "", ErrUnknownKind
@@ -108,10 +129,7 @@ func (s *Session) Tokenize(ctx context.Context, kind Kind, value, hint string) (
 	if err := validateHint(kind, hint); err != nil {
 		return "", err
 	}
-	tokenID, err := newTokenID()
-	if err != nil {
-		return "", fmt.Errorf("shield: generate token id: %w", err)
-	}
+	tokenID := deterministicTokenID(s.subkey, kind, value)
 	ct, err := encrypt(value, s.key)
 	if err != nil {
 		return "", err
@@ -228,7 +246,7 @@ func (s *Session) shieldField(ctx context.Context, fv reflect.Value, kind Kind, 
 		if raw == "" {
 			return nil
 		}
-		hint := buildHint(kind, raw, hintKeys)
+		hint := buildHintAtLevel(kind, raw, hintKeys, s.hintLevel)
 		marker, err := s.Tokenize(ctx, kind, raw, hint)
 		if err != nil {
 			return err
@@ -457,11 +475,30 @@ func parseShieldTag(tag string) (Kind, []string, error) {
 	return kind, hintKeys, nil
 }
 
-// buildHint extracts the hint keys named in the tag from the raw
-// value. Unknown keys (not in HintRules[kind]) are skipped silently
-// so a typo in a tag does not block the response. Returns "" when no
-// keys produce a value.
+// buildHint is buildHintAtLevel(HintFull). Kept for free-form-text
+// callers (RedactString) that don't carry a per-call level.
 func buildHint(kind Kind, raw string, keys []string) string {
+	return buildHintAtLevel(kind, raw, keys, HintFull)
+}
+
+// buildHintAtLevel extracts the hint keys named in the tag from the
+// raw value, then filters/coarsens based on level.
+//
+//   - HintFull: every whitelisted key passes through verbatim.
+//   - HintBucketed: domain -> industry-bucket, len -> short|medium|long,
+//     initials -> first-letter-only. Lets the agent reason in coarse
+//     categories without leaking the specific identifier.
+//   - HintMinimal: only `len_bucket` survives (small/medium/large).
+//   - HintNone: empty string. Combined with deterministic per-session
+//     token ids, the agent gets stable identity without any value-
+//     derived metadata at all.
+func buildHintAtLevel(kind Kind, raw string, keys []string, level HintLevel) string {
+	if level == HintNone {
+		return ""
+	}
+	if level == HintMinimal {
+		return "len_bucket=" + lengthBucket(raw)
+	}
 	if len(keys) == 0 {
 		return ""
 	}
@@ -472,11 +509,91 @@ func buildHint(kind Kind, raw string, keys []string) string {
 			continue
 		}
 		v := extractHint(kind, raw, k)
-		if v != "" {
-			pairs = append(pairs, k+"="+v)
+		if v == "" {
+			continue
 		}
+		if level == HintBucketed {
+			v = bucketHintValue(kind, k, v)
+			if v == "" {
+				continue
+			}
+			k = bucketHintKey(k)
+		}
+		pairs = append(pairs, k+"="+v)
 	}
 	return strings.Join(pairs, ",")
+}
+
+// lengthBucket coarsens a raw value's length into small/medium/large
+// so the agent can tell two markers apart by rough size without
+// learning the exact count of characters.
+func lengthBucket(raw string) string {
+	switch n := len(raw); {
+	case n <= 8:
+		return "small"
+	case n <= 32:
+		return "medium"
+	default:
+		return "large"
+	}
+}
+
+// bucketHintValue rewrites a full-mode hint value into a coarser
+// HintBucketed equivalent. Returns "" to suppress entirely (the
+// caller drops the pair).
+func bucketHintValue(kind Kind, key, full string) string {
+	switch key {
+	case "len":
+		return lengthBucket(full)
+	case "domain":
+		return domainIndustry(full)
+	case "initials":
+		if full == "" {
+			return ""
+		}
+		return string(full[0])
+	case "country":
+		return full
+	case "century":
+		return full
+	}
+	return ""
+}
+
+// bucketHintKey renames a key when its semantics change between
+// HintFull and HintBucketed (len -> len_bucket, domain -> industry).
+func bucketHintKey(key string) string {
+	switch key {
+	case "len":
+		return "len_bucket"
+	case "domain":
+		return "industry"
+	}
+	return key
+}
+
+// domainIndustry maps a known TLD or 2nd-level pattern to a coarse
+// category. Unknown domains return "other" so the agent can
+// distinguish "personal-ish" from "business" without learning the
+// specific firm name.
+func domainIndustry(domain string) string {
+	d := strings.ToLower(domain)
+	switch {
+	case strings.HasSuffix(d, ".gov"), strings.HasSuffix(d, ".gov.se"):
+		return "government"
+	case strings.HasSuffix(d, ".edu"), strings.HasSuffix(d, ".ac.uk"):
+		return "academic"
+	case strings.HasSuffix(d, "gmail.com"),
+		strings.HasSuffix(d, "outlook.com"),
+		strings.HasSuffix(d, "icloud.com"),
+		strings.HasSuffix(d, "yahoo.com"),
+		strings.HasSuffix(d, "hotmail.com"),
+		strings.HasSuffix(d, "proton.me"),
+		strings.HasSuffix(d, "protonmail.com"):
+		return "personal"
+	default:
+		return "business"
+	}
 }
 
 // extractHint returns the value of one whitelisted hint key for the

@@ -51,15 +51,19 @@ const (
 // HintRules is the whitelist of metadata keys allowed per kind. Any key
 // not present in this map is rejected at Shield time so mistakes like
 // hint="value=anna@example.com" cannot ship.
+//
+// `len_bucket` + `industry` are the HintBucketed/HintMinimal coarsened
+// variants the buildHintAtLevel() pipeline emits; whitelisted on every
+// kind so the bucketed pipeline doesn't get rejected.
 var HintRules = map[Kind]map[string]bool{
-	KindEmail:        {"domain": true, "len": true},
-	KindName:         {"initials": true, "len": true},
-	KindPhone:        {"country": true, "len": true},
-	KindCompany:      {"industry": true, "country": true, "len": true},
-	KindPersonnummer: {"century": true},
-	KindIBAN:         {"country": true},
-	KindOrgNumber:    {"country": true},
-	KindFreeform:     {"len": true},
+	KindEmail:        {"domain": true, "len": true, "industry": true, "len_bucket": true},
+	KindName:         {"initials": true, "len": true, "len_bucket": true},
+	KindPhone:        {"country": true, "len": true, "len_bucket": true},
+	KindCompany:      {"industry": true, "country": true, "len": true, "len_bucket": true},
+	KindPersonnummer: {"century": true, "len_bucket": true},
+	KindIBAN:         {"country": true, "len_bucket": true},
+	KindOrgNumber:    {"country": true, "len_bucket": true},
+	KindFreeform:     {"len": true, "len_bucket": true},
 }
 
 // MarkerPattern matches a [shield:...] marker for unshield + redact
@@ -103,3 +107,48 @@ var (
 	ErrTokenNotFound  = errors.New("shield: token not found in session")
 	ErrUnknownKind    = errors.New("shield: unknown kind")
 )
+
+// HintLevel dials how much value-derived metadata the agent sees in
+// markers. Pick per deployment based on the threat model.
+//
+// HintFull is the default and preserves backward-compat behavior:
+// every key the tag declared is extracted (domain, initials, len,
+// etc). Useful when the agent must reason about industry/role.
+//
+// HintBucketed coarsens specifics into ranges: domains map to
+// industry buckets, lengths to short/medium/long. Lets the agent
+// reason about category without leaking the exact identifier.
+//
+// HintMinimal exposes only `len_bucket` (or nothing) so two tokens
+// can be told apart by rough size only. The right pick when the
+// CRM is small enough that "domain=lawfirm.se" all but identifies
+// the firm.
+//
+// HintNone strips every value-derived hint. Combined with
+// deterministic token ids (Tokenize uses HMAC(session_key, value)),
+// the agent still gets a stable per-session identity it can refer
+// back to across turns, but no information about who that identity
+// belongs to.
+type HintLevel int
+
+const (
+	HintFull HintLevel = iota
+	HintBucketed
+	HintMinimal
+	HintNone
+)
+
+// ParseHintLevel maps env-var strings to a HintLevel. Unknown values
+// fall back to HintFull (safe default that preserves the v1 surface).
+func ParseHintLevel(s string) HintLevel {
+	switch s {
+	case "bucketed":
+		return HintBucketed
+	case "minimal":
+		return HintMinimal
+	case "none":
+		return HintNone
+	default:
+		return HintFull
+	}
+}

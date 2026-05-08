@@ -92,7 +92,7 @@ func TestShieldEndToEndOnToolCall(t *testing.T) {
 	// Wire shield with an in-memory store (no DB needed).
 	store := shield.NewMemoryStore()
 	key := []byte("01234567890123456789012345678901")
-	s.WithShield(store, key, time.Minute)
+	s.WithShield(store, key, time.Minute, shield.HintFull)
 
 	// Stub auth identity. The real middleware injects this; we set it
 	// directly on the request context for the test.

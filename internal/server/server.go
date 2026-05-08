@@ -39,12 +39,13 @@ var FrontendFS fs.FS
 
 // Server holds all dependencies.
 type Server struct {
-	cfg     *config.Config
-	db      *sql.DB
-	queries *store.Queries
-	storage storage.Store
-	authMW  *authmw.AuthMiddleware
-	agentMW *authmw.AgentAuthMiddleware
+	cfg            *config.Config
+	db             *sql.DB
+	queries        *store.Queries
+	storage        storage.Store
+	authMW         *authmw.AuthMiddleware
+	agentMW        *authmw.AgentAuthMiddleware
+	adminWriteLim  *authmw.AdminWriteLimiter
 	// AnalyticsDB is the read-only DuckDB ATTACH on the SQLite file.
 	// Optional: nil when DuckDB couldn't open at boot. Handlers that
 	// depend on it return 503 in that case rather than crashing.
@@ -446,14 +447,11 @@ func (s *Server) Router() http.Handler {
 		if s.DomainReconciler != nil {
 			reconcileSignal = s.DomainReconciler.Signal
 		}
-		reservedSuffix := s.cfg.BuiltSiteSuffix
-		if reservedSuffix == "" {
-			// Match the default in cmd/server/main.go so
-			// *.atomicsite.example.com stays reserved
-			// even when BUILT_SITE_SUFFIX is unset.
-			reservedSuffix = ".atomicsite.example.com"
-		}
-		domH := handlers.NewDomainHandler(s.queries, reconcileSignal, reservedSuffix)
+		// reservedSuffix prevents a custom hostname from shadowing the
+		// wildcard tenant vhost the deployment already terminates. Empty
+		// disables the check, which is the right behaviour for OSS
+		// single-tenant deploys with no wildcard subdomain.
+		domH := handlers.NewDomainHandler(s.queries, reconcileSignal, s.cfg.BuiltSiteSuffix)
 		siteR.Get("/api/sites/{siteID}/domains", domH.List)
 		siteR.Post("/api/sites/{siteID}/domains", domH.Create)
 		siteR.Post("/api/sites/{siteID}/domains/{domainID}/canonical", domH.SetCanonical)

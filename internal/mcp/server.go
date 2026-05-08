@@ -72,10 +72,16 @@ type Server struct {
 	// When shieldEnabled is true, tool responses are redacted on the way
 	// out and tool-call arguments are unshielded on the way in. Off by
 	// default; flipped on by WithShield() at server construction.
-	shieldStore   shield.Store
-	shieldKey     []byte
-	shieldEnabled bool
-	shieldTTL     time.Duration
+	//
+	// shieldHintLevel dials how much value-derived metadata appears on
+	// markers (HintFull preserves v1 behavior; HintMinimal/HintNone
+	// hide identifying hints when the moat needs the agent to know
+	// "same person across turns" but not "who that person is").
+	shieldStore     shield.Store
+	shieldKey       []byte
+	shieldEnabled   bool
+	shieldTTL       time.Duration
+	shieldHintLevel shield.HintLevel
 
 	tools     map[string]Tool
 	resources map[string]Resource
@@ -135,13 +141,19 @@ func (s *Server) WithMediaUploader(m migration.MediaUploader) *Server {
 //
 // Off by default so existing tests + dev installs without a
 // SHIELD_KEY do not break.
-func (s *Server) WithShield(store shield.Store, key []byte, ttl time.Duration) *Server {
+//
+// hintLevel defaults to HintFull when zero (the iota default). Pass
+// HintMinimal/HintNone to harden the moat: with deterministic per-
+// session token ids the agent still gets stable identity ("the same
+// lead across this conversation"), but no identifying hints leak.
+func (s *Server) WithShield(store shield.Store, key []byte, ttl time.Duration, hintLevel shield.HintLevel) *Server {
 	if store == nil || len(key) != 32 {
 		return s
 	}
 	s.shieldStore = store
 	s.shieldKey = key
 	s.shieldEnabled = true
+	s.shieldHintLevel = hintLevel
 	if ttl > 0 {
 		s.shieldTTL = ttl
 	} else {
@@ -177,7 +189,7 @@ func (s *Server) beginShieldSession(r *http.Request) (*shield.Session, error) {
 		sum := sha256.Sum256([]byte(key))
 		id = "agent-" + hex.EncodeToString(sum[:8])
 	}
-	return shield.NewSession(r.Context(), s.shieldStore, id, s.shieldKey, s.shieldTTL)
+	return shield.NewSession(r.Context(), s.shieldStore, id, s.shieldKey, s.shieldTTL, s.shieldHintLevel)
 }
 
 // NewServer constructs an MCP server with every registered tool /
