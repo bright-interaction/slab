@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import * as domainsApi from '$lib/api/domains';
+	import * as settingsApi from '$lib/api/settings';
 	import type { SiteDomain } from '$lib/api/domains';
 	import { ApiError } from '$lib/api/client';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -11,6 +12,7 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { confirm } from '$lib/components/ui/ConfirmDialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { categoryMap } from '$lib/settings/nginxPreview';
 	import type { Site } from '$lib/api/types';
 	import { Plus, Trash2, RefreshCw, Star, Globe, Copy } from 'lucide-svelte';
 
@@ -26,6 +28,42 @@
 	let formCanonical = $state(false);
 	let formError = $state<string | null>(null);
 	let submitting = $state(false);
+
+	// Aliases (settings.general.domain_aliases). 301-only redirect list
+	// for old hostnames you don't want to give a real TLS cert + vhost
+	// to. Distinct from the domains rows above (which provision certs).
+	let aliasesRaw = $state('');
+	let aliasesInitial = $state('');
+	let aliasesSaving = $state(false);
+	const aliasesDirty = $derived(aliasesRaw !== aliasesInitial);
+
+	async function loadAliases() {
+		try {
+			const general = await settingsApi.listByCategory(siteID, 'general');
+			const map = categoryMap(general);
+			aliasesRaw = map.domain_aliases || '';
+			aliasesInitial = aliasesRaw;
+		} catch {
+			aliasesRaw = '';
+			aliasesInitial = '';
+		}
+	}
+
+	async function saveAliases() {
+		if (aliasesSaving || !aliasesDirty) return;
+		aliasesSaving = true;
+		try {
+			await settingsApi.bulkUpsert(siteID, [
+				{ category: 'general', key: 'domain_aliases', value: aliasesRaw }
+			]);
+			aliasesInitial = aliasesRaw;
+			toast.success('Aliases saved.');
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : 'Failed to save aliases.');
+		} finally {
+			aliasesSaving = false;
+		}
+	}
 
 	// Strict hostname re. Lowercase letters, digits, hyphens; at least
 	// one dot; TLD >= 2 chars; no leading dot, no double-dots.
@@ -82,6 +120,7 @@
 
 	$effect(() => {
 		void load();
+		void loadAliases();
 	});
 
 	function openAddDialog() {
@@ -333,6 +372,40 @@
 			{/each}
 		</ul>
 	{/if}
+
+	<!-- Aliases. 301 redirects only; does NOT provision TLS. Moved from
+	     Settings > General in Sprint 4.7.3 because it's a hostname-routing
+	     concern, same as the rows above. -->
+	<Card padding="md" class="mt-6">
+		<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+			Redirect aliases
+		</h2>
+		<p class="mt-2 text-[12px] text-text-muted">
+			Old hostnames you only want to 301 to your canonical domain. No
+			TLS, no separate vhost: nginx returns a 301 with the path preserved.
+			Use this for legacy domains you don't want to maintain certs for.
+			For hostnames that should serve the site directly, add them to the
+			list above instead.
+		</p>
+		<div class="mt-4 flex flex-col gap-3">
+			<Input
+				label="Alias hostnames"
+				placeholder="www.example.com, example.org, old.example.net"
+				hint="Comma-separated. Each alias 301-redirects to the canonical hostname above."
+				bind:value={aliasesRaw}
+			/>
+			<div class="flex justify-end">
+				<Button
+					variant="primary"
+					onclick={saveAliases}
+					loading={aliasesSaving}
+					disabled={!aliasesDirty}
+				>
+					Save aliases
+				</Button>
+			</div>
+		</div>
+	</Card>
 </div>
 
 <Dialog bind:open={dialogOpen} title="Add custom domain">

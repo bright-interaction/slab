@@ -873,8 +873,11 @@
 						<EmptyState
 							title="No goals yet"
 							description="Define a goal to start measuring conversion rate."
-							icon={BarChart3}
-						/>
+						>
+							{#snippet icon()}
+								<BarChart3 size={20} strokeWidth={1.5} />
+							{/snippet}
+						</EmptyState>
 					{:else}
 						<table class="w-full text-[13px]">
 							<thead>

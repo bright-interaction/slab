@@ -141,40 +141,43 @@
 					</thead>
 					<tbody class="divide-y divide-border-light">
 						{#each rows as row (row.site_id)}
-							<tr>
-								<td class="px-4 py-3">
-									<div class="font-medium text-text-primary">{row.name}</div>
-									<div class="font-mono text-[11px] text-text-muted">/{row.slug}</div>
-								</td>
-								<td class="px-4 py-3">
-									<div class="text-text-primary">{fmtBytes(row.storage_used_bytes)}</div>
-									<div class="mt-1 h-1.5 w-32 overflow-hidden rounded-full bg-bg-elevated">
-										<div class="h-full {pctBarClass(row.storage_pct)}" style="width: {Math.min(100, row.storage_pct * 100)}%"></div>
-									</div>
-									<div class="mt-0.5 font-mono text-[10px] text-text-muted">{fmtPct(row.storage_pct)}</div>
-								</td>
-								<td class="px-4 py-3">
-									<Input type="number" bind:value={edits[row.site_id].storage_quota_bytes} hint={fmtBytes(edits[row.site_id]?.storage_quota_bytes ?? 0)} />
-								</td>
-								<td class="px-4 py-3">
-									<div class="text-text-primary">{row.build_minutes_used}</div>
-									<div class="mt-1 h-1.5 w-32 overflow-hidden rounded-full bg-bg-elevated">
-										<div class="h-full {pctBarClass(row.build_minutes_pct)}" style="width: {Math.min(100, row.build_minutes_pct * 100)}%"></div>
-									</div>
-									<div class="mt-0.5 font-mono text-[10px] text-text-muted">{fmtPct(row.build_minutes_pct)}</div>
-								</td>
-								<td class="px-4 py-3">
-									<Input type="number" bind:value={edits[row.site_id].build_minutes_quota} />
-								</td>
-								<td class="px-4 py-3">
-									<Switch bind:checked={edits[row.site_id].quota_overage_blocked} />
-								</td>
-								<td class="px-4 py-3">
-									<Button variant="secondary" size="sm" loading={savingID === row.site_id} disabled={savingID === row.site_id} onclick={() => save(row.site_id)}>
-										<Save size={12} strokeWidth={1.75} />Save
-									</Button>
-								</td>
-							</tr>
+							{@const edit = edits[row.site_id]!}
+							{#if edit}
+								<tr>
+									<td class="px-4 py-3">
+										<div class="font-medium text-text-primary">{row.name}</div>
+										<div class="font-mono text-[11px] text-text-muted">/{row.slug}</div>
+									</td>
+									<td class="px-4 py-3">
+										<div class="text-text-primary">{fmtBytes(row.storage_used_bytes)}</div>
+										<div class="mt-1 h-1.5 w-32 overflow-hidden rounded-full bg-bg-elevated">
+											<div class="h-full {pctBarClass(row.storage_pct)}" style="width: {Math.min(100, row.storage_pct * 100)}%"></div>
+										</div>
+										<div class="mt-0.5 font-mono text-[10px] text-text-muted">{fmtPct(row.storage_pct)}</div>
+									</td>
+									<td class="px-4 py-3">
+										<Input type="number" bind:value={edit.storage_quota_bytes} hint={fmtBytes(edit.storage_quota_bytes)} />
+									</td>
+									<td class="px-4 py-3">
+										<div class="text-text-primary">{row.build_minutes_used}</div>
+										<div class="mt-1 h-1.5 w-32 overflow-hidden rounded-full bg-bg-elevated">
+											<div class="h-full {pctBarClass(row.build_minutes_pct)}" style="width: {Math.min(100, row.build_minutes_pct * 100)}%"></div>
+										</div>
+										<div class="mt-0.5 font-mono text-[10px] text-text-muted">{fmtPct(row.build_minutes_pct)}</div>
+									</td>
+									<td class="px-4 py-3">
+										<Input type="number" bind:value={edit.build_minutes_quota} />
+									</td>
+									<td class="px-4 py-3">
+										<Switch bind:checked={edit.quota_overage_blocked} />
+									</td>
+									<td class="px-4 py-3">
+										<Button variant="secondary" size="sm" loading={savingID === row.site_id} disabled={savingID === row.site_id} onclick={() => save(row.site_id)}>
+											<Save size={12} strokeWidth={1.75} />Save
+										</Button>
+									</td>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				</table>

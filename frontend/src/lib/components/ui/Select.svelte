@@ -6,6 +6,8 @@
 		value = $bindable(),
 		placeholder = 'Select an option',
 		disabled = false,
+		label,
+		required = false,
 		onchange,
 		class: className = ''
 	}: {
@@ -13,6 +15,8 @@
 		value?: string;
 		placeholder?: string;
 		disabled?: boolean;
+		label?: string;
+		required?: boolean;
 		onchange?: (value: string) => void;
 		class?: string;
 	} = $props();
@@ -20,7 +24,13 @@
 	const selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? '');
 </script>
 
-<BitsSelect.Root
+<div class="flex flex-col gap-1.5">
+	{#if label}
+		<span class="text-[12px] font-medium text-text-secondary">
+			{label}{required ? ' *' : ''}
+		</span>
+	{/if}
+	<BitsSelect.Root
 	type="single"
 	bind:value
 	items={options}
@@ -74,6 +84,7 @@
 					{/snippet}
 				</BitsSelect.Item>
 			{/each}
-		</BitsSelect.Content>
-	</BitsSelect.Portal>
-</BitsSelect.Root>
+			</BitsSelect.Content>
+		</BitsSelect.Portal>
+	</BitsSelect.Root>
+</div>

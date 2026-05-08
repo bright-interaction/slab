@@ -39,7 +39,6 @@
 	let metaTitleTemplate = $state('');
 	let metaDescriptionTemplate = $state('');
 	let canonicalBase = $state('');
-	let domainAliases = $state('');
 	let additionalLangs = $state('');
 	let hreflangStrategy = $state<'path' | 'subdomain' | 'off'>('path');
 
@@ -67,7 +66,6 @@
 		metaTitleTemplate: '',
 		metaDescriptionTemplate: '',
 		canonicalBase: '',
-		domainAliases: '',
 		additionalLangs: '',
 		hreflangStrategy: 'path' as 'path' | 'subdomain' | 'off'
 	});
@@ -89,7 +87,6 @@
 			metaTitleTemplate = seoMap.meta_title_template || '';
 			metaDescriptionTemplate = seoMap.meta_description_template || '';
 			canonicalBase = seoMap.canonical_base || '';
-			domainAliases = genMap.domain_aliases || '';
 			additionalLangs = genMap.additional_langs || '';
 			const strat = (seoMap.hreflang_strategy || 'path') as
 				| 'path'
@@ -104,7 +101,6 @@
 				metaTitleTemplate,
 				metaDescriptionTemplate,
 				canonicalBase,
-				domainAliases,
 				additionalLangs,
 				hreflangStrategy
 			};
@@ -126,7 +122,6 @@
 			metaTitleTemplate !== initial.metaTitleTemplate ||
 			metaDescriptionTemplate !== initial.metaDescriptionTemplate ||
 			canonicalBase !== initial.canonicalBase ||
-			domainAliases !== initial.domainAliases ||
 			additionalLangs !== initial.additionalLangs ||
 			hreflangStrategy !== initial.hreflangStrategy
 	);
@@ -138,7 +133,6 @@
 		metaTitleTemplate = initial.metaTitleTemplate;
 		metaDescriptionTemplate = initial.metaDescriptionTemplate;
 		canonicalBase = initial.canonicalBase;
-		domainAliases = initial.domainAliases;
 		additionalLangs = initial.additionalLangs;
 		hreflangStrategy = initial.hreflangStrategy;
 	}
@@ -191,7 +185,6 @@
 				{ category: 'seo', key: 'meta_description_template', value: metaDescriptionTemplate },
 				{ category: 'seo', key: 'canonical_base', value: canonicalBase },
 				{ category: 'seo', key: 'hreflang_strategy', value: hreflangStrategy },
-				{ category: 'general', key: 'domain_aliases', value: domainAliases },
 				{ category: 'general', key: 'additional_langs', value: additionalLangs },
 				{ category: 'general', key: 'default_lang', value: lang }
 			];
@@ -204,7 +197,6 @@
 				metaTitleTemplate,
 				metaDescriptionTemplate,
 				canonicalBase,
-				domainAliases,
 				additionalLangs,
 				hreflangStrategy
 			};
@@ -241,7 +233,12 @@
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Identity</h2>
 				<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
 					<Input label="Site name" bind:value={name} />
-					<Input label="Primary domain" placeholder="example.com" bind:value={domain} />
+					<Input
+						label="Default canonical hostname"
+						placeholder="example.com"
+						hint="Legacy fallback. If you've added a hostname in Domains and marked it canonical, that wins."
+						bind:value={domain}
+					/>
 				</div>
 			</Card>
 
@@ -325,18 +322,6 @@
 						placeholder="https://example.com"
 						hint="Override the default URL prefix (https://your primary domain). Useful when the public URL differs from the build's domain (CDN, sub-path proxy, staging vs prod)."
 						bind:value={canonicalBase}
-					/>
-				</div>
-			</Card>
-
-			<Card padding="md">
-				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Aliases</h2>
-				<div class="mt-4">
-					<Input
-						label="Domain aliases"
-						placeholder="www.example.com, example.org"
-						hint="Comma-separated. Each alias 301-redirects to the primary domain."
-						bind:value={domainAliases}
 					/>
 				</div>
 			</Card>
