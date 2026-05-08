@@ -70,6 +70,19 @@ type AgentKnowledgeMeta struct {
 	Summary  string `json:"summary"`
 }
 
+// shieldInvariants prepends the LLM-boundary tokenization invariant
+// when shield is enabled. Kept in this file so the operator-facing
+// admin surface accurately reflects the live posture without re-
+// reading server.go.
+func shieldInvariants(enabled bool, base []string) []string {
+	if !enabled {
+		return base
+	}
+	out := make([]string, 0, len(base)+1)
+	out = append(out, "Every PII field crossing this MCP boundary is tokenized: the agent reads context + metadata only, never raw values.")
+	return append(out, base...)
+}
+
 // AgentSurface walks the live registries + the embedded curriculum
 // and returns the inventory in deterministic order. Cheap; the slices
 // have <=50 entries and are built once per request.
@@ -135,13 +148,13 @@ func (s *Server) AgentSurface() AgentSurface {
 		Resources: resources,
 		Prompts:   prompts,
 		Knowledge: docs,
-		PrivacyInvariants: []string{
+		PrivacyInvariants: shieldInvariants(s.shieldEnabled, []string{
 			"No tool reads visitor metadata, sessions, fingerprints, or identified-tier records.",
 			"consent/stats returns aggregates only.",
 			"raw_astro and security-category writes are admin-only.",
 			"search_design_corpus reads only the bundled MIT-licensed reference repos; no PII, no site state.",
 			"design_critique reads only the calling site's own evaluations rows; cross-site reads are blocked by AgentAuthMiddleware.",
-		},
+		}),
 		Endpoint:        "/api/agent/mcp",
 		ProtocolVersion: Protocol,
 		Version:         "1.0.0",

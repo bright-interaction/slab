@@ -29,6 +29,7 @@ import (
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/migration"
 	"github.com/bright-interaction/slab/internal/retention"
+	"github.com/bright-interaction/slab/internal/shield"
 	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -826,6 +827,15 @@ func (s *Server) Router() http.Handler {
 			WithDesignReferencesDir(s.cfg.DesignReferencesDir).
 			WithVerifyJobManager(s.verifyJobMgr).
 			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH))
+
+		if len(s.cfg.ShieldKey) == 32 {
+			mcpServer.WithShield(shield.NewSQLStore(s.db), []byte(s.cfg.ShieldKey), 30*time.Minute)
+			slog.Info("atomicsite: shield enabled on MCP boundary",
+				"key_id", "atomicsite", "ttl_min", 30)
+		} else if s.cfg.ShieldKey != "" {
+			slog.Warn("atomicsite: ATOMICSITE_SHIELD_KEY set but not 32 bytes; shield disabled",
+				"len", len(s.cfg.ShieldKey))
+		}
 		r.Mount("/mcp", mcpServer.Handler())
 
 		// Surface inventory: set the shared closure so the admin

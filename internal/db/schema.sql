@@ -1066,3 +1066,37 @@ CREATE TABLE IF NOT EXISTS conversion_events (
 CREATE INDEX IF NOT EXISTS idx_conversion_events_site_ts ON conversion_events(site_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_conversion_events_goal_ts ON conversion_events(goal_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_conversion_events_fingerprint ON conversion_events(site_id, fingerprint);
+
+-- ============================================================
+-- Shield: LLM-boundary tokenization (2026-05-08).
+--
+-- Per-MCP-connection token vault that backs internal/shield. PII
+-- fields exposed to the LLM are replaced with markers of the form
+-- [shield:<kind>:tok_<hex>:<hint>]. The agent reasons over the
+-- markers; tool calls referencing markers are resolved server-side
+-- via this table. Tokens are session-scoped, TTL-expired, and
+-- cleaned up by ON DELETE CASCADE when the session row is deleted.
+--
+-- ciphertext = base64(AES-256-GCM(value, ATOMICSITE_SHIELD_KEY)).
+-- Rotating the key invalidates live sessions (forces re-shield on
+-- the next MCP turn). hint is an optional whitelisted metadata
+-- string the agent reads ("domain=lawfirm.se,len=22") that must
+-- never leak the value.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS shield_sessions (
+    id          TEXT PRIMARY KEY,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen   TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shield_sessions_expires ON shield_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS shield_tokens (
+    token       TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL REFERENCES shield_sessions(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    hint        TEXT NOT NULL DEFAULT '',
+    ciphertext  TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shield_tokens_session ON shield_tokens(session_id);
