@@ -74,6 +74,30 @@
 	// stop polling once everything is settled to avoid wasting cycles.
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+	// Sprint 4.7.4 (2026-05-09): help payload from the server so the UI
+	// shows the actual edge IP + Cloudflare zones we auto-update,
+	// instead of a "[your edge IP]" placeholder.
+	let edgeIP = $state('');
+	let cloudflareZones = $state<string[]>([]);
+
+	async function loadHelp() {
+		try {
+			const help = await domainsApi.help(siteID);
+			edgeIP = help.edge_ip || '';
+			cloudflareZones = help.cloudflare_zones || [];
+		} catch {
+			edgeIP = '';
+			cloudflareZones = [];
+		}
+	}
+
+	function isAutoZone(host: string): boolean {
+		const lower = host.toLowerCase();
+		return cloudflareZones.some(
+			(zone) => lower === zone.toLowerCase() || lower.endsWith('.' + zone.toLowerCase())
+		);
+	}
+
 	async function load() {
 		loading = true;
 		loadError = null;
@@ -121,6 +145,7 @@
 	$effect(() => {
 		void load();
 		void loadAliases();
+		void loadHelp();
 	});
 
 	function openAddDialog() {
@@ -149,7 +174,11 @@
 		submitting = true;
 		try {
 			await domainsApi.create(siteID, host, formCanonical);
-			toast.success(`Added ${host}. Point DNS at the edge IP and we'll verify it.`);
+			toast.success(
+				edgeIP
+					? `Added ${host}. Point DNS A record at ${edgeIP} and we'll verify it within a minute.`
+					: `Added ${host}. Point DNS at the edge IP and we'll verify it.`
+			);
 			dialogOpen = false;
 			await load();
 		} catch (err) {
@@ -250,14 +279,28 @@
 				<p class="text-[13px] font-medium text-text-primary">How it works</p>
 				<ol class="mt-1 list-decimal pl-5 space-y-0.5">
 					<li>Add the hostname here. We mint a one-time verify token.</li>
-					<li>Point an <code class="font-mono text-[11px]">A</code> record at our
-						edge IP. We auto-create the record on Cloudflare zones we control.</li>
+					<li>
+						Point an <code class="font-mono text-[11px]">A</code> record at
+						{#if edgeIP}
+							<code class="font-mono text-[11px] text-text-primary">{edgeIP}</code>.
+						{:else}
+							your edge IP (ask your operator; <code class="font-mono text-[11px]">ATOMICSITE_EDGE_IP</code> isn't configured on this server).
+						{/if}
+						{#if cloudflareZones.length > 0}
+							For zones we control ({cloudflareZones.join(', ')}) we auto-create the record.
+						{/if}
+					</li>
 					<li>We probe <code class="font-mono text-[11px]">/.well-known/atomic-verify/&lt;token&gt;</code>
 						over plain HTTP. When it answers, the row flips to verified.</li>
 					<li>certbot HTTP-01 issues a Let's Encrypt certificate.</li>
 					<li>We render the per-domain nginx server block, reload, and the row
 						flips to live.</li>
 				</ol>
+				<p class="mt-2 text-[11.5px] text-text-muted">
+					Works with any DNS provider (Namecheap, GoDaddy, Cloudflare, Route 53,
+					etc): the verify probe is plain HTTP, so all that matters is the A
+					record points here. CNAME works too for non-apex hostnames.
+				</p>
 			</div>
 		</div>
 	</Card>
@@ -297,13 +340,24 @@
 								</div>
 
 								{#if d.status === 'pending'}
-									<p class="mt-2 text-[12px] text-text-secondary">
-										Add an <code class="font-mono text-[11px]">A</code> record:
-										<code class="font-mono text-[11px] text-text-primary">{d.hostname}</code>
-										&nbsp;→&nbsp;
-										<code class="font-mono text-[11px] text-text-primary">[your edge IP]</code>.
-										DNS propagation usually takes a minute or two.
-									</p>
+									{#if isAutoZone(d.hostname)}
+										<p class="mt-2 text-[12px] text-text-secondary">
+											We're auto-creating the A record on Cloudflare. Should
+											flip to verified within a minute.
+										</p>
+									{:else}
+										<p class="mt-2 text-[12px] text-text-secondary">
+											Add an <code class="font-mono text-[11px]">A</code> record:
+											<code class="font-mono text-[11px] text-text-primary">{d.hostname}</code>
+											&nbsp;→&nbsp;
+											{#if edgeIP}
+												<code class="font-mono text-[11px] text-text-primary">{edgeIP}</code>.
+											{:else}
+												your edge IP (operator hasn't configured one yet).
+											{/if}
+											DNS propagation usually takes a minute or two.
+										</p>
+									{/if}
 								{:else if d.status === 'error' && d.last_error}
 									<p class="mt-2 text-[12px] text-danger">
 										{d.last_error}
