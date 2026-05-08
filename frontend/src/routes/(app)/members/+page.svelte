@@ -59,8 +59,8 @@
 		inviteOpen = true;
 	}
 
-	async function createInvite(e: SubmitEvent) {
-		e.preventDefault();
+	async function createInvite(e?: SubmitEvent) {
+		e?.preventDefault();
 		if (creating) return;
 		creating = true;
 		try {
@@ -182,7 +182,7 @@
 											{ value: 'admin', label: 'Admin' }
 										]}
 										value={m.role}
-										onValueChange={(v: string) => changeRole(m, v as 'admin' | 'editor')}
+										onchange={(v: string) => changeRole(m, v as 'admin' | 'editor')}
 									/>
 								</div>
 								<button
@@ -279,7 +279,16 @@
 			{lastInviteUrl ? 'Done' : 'Cancel'}
 		</Button>
 		{#if !lastInviteUrl}
-			<Button variant="primary" loading={creating} onclick={createInvite}>Create invite</Button>
+			<Button
+				variant="primary"
+				loading={creating}
+				onclick={(e) => {
+					e.preventDefault();
+					void createInvite();
+				}}
+			>
+				Create invite
+			</Button>
 		{/if}
 	{/snippet}
 </Dialog>

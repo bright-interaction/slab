@@ -9,7 +9,7 @@
 	import type { InviteInfo } from '$lib/api/auth';
 	import { setUser } from '$lib/stores/auth.svelte';
 
-	const token = $derived($page.params.token);
+	const token: string = $derived($page.params.token ?? '');
 
 	let info = $state<InviteInfo | null>(null);
 	let loadError = $state('');
@@ -22,6 +22,12 @@
 	let submitting = $state(false);
 
 	$effect(() => {
+		if (!token) {
+			loadError = 'Missing invite token.';
+			loading = false;
+			info = null;
+			return;
+		}
 		void load(token);
 	});
 
@@ -43,6 +49,10 @@
 		e.preventDefault();
 		if (submitting) return;
 		submitError = '';
+		if (!token) {
+			submitError = 'Missing invite token.';
+			return;
+		}
 		if (password.length < 12) {
 			submitError = 'Password must be at least 12 characters.';
 			return;

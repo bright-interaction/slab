@@ -101,11 +101,15 @@
 					<Input label="Title" required bind:value={title} onblur={autoSlug} />
 					<Input label="Slug" required bind:value={slug} hint="Lowercase, kebab-case." />
 					<Input label="Locale" bind:value={locale} placeholder="(default site lang)" />
-					<Select label="Status" bind:value={status}>
-						<option value="draft">Draft</option>
-						<option value="published">Published</option>
-						<option value="scheduled">Scheduled</option>
-					</Select>
+					<Select
+						label="Status"
+						bind:value={status}
+						options={[
+							{ value: 'draft', label: 'Draft' },
+							{ value: 'published', label: 'Published' },
+							{ value: 'scheduled', label: 'Scheduled' }
+						]}
+					/>
 				</div>
 			</Card>
 
@@ -130,12 +134,12 @@
 									{f.label || f.name}
 								</label>
 							{:else if f.type === 'select'}
-								<Select label={f.label || f.name} bind:value={fieldData[f.name] as string} required={f.required}>
-									<option value=""></option>
-									{#each f.options ?? [] as opt (opt)}
-										<option value={opt}>{opt}</option>
-									{/each}
-								</Select>
+								<Select
+									label={f.label || f.name}
+									bind:value={fieldData[f.name] as string}
+									required={f.required}
+									options={[{ value: '', label: '' }, ...(f.options ?? []).map((opt) => ({ value: opt, label: opt }))]}
+								/>
 							{:else if f.type === 'number'}
 								<Input label={f.label || f.name} type="number" bind:value={fieldData[f.name] as number} required={f.required} />
 							{:else}

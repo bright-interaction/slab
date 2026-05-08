@@ -106,11 +106,11 @@
 		<Card padding="md">
 			<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">Settings</h2>
 			<div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<Select label="Schema.org type" bind:value={schemaOrgType}>
-					{#each schemaOrgTypes as t (t)}
-						<option value={t}>{t || '(none)'}</option>
-					{/each}
-				</Select>
+				<Select
+					label="Schema.org type"
+					bind:value={schemaOrgType}
+					options={schemaOrgTypes.map((t) => ({ value: t, label: t || '(none)' }))}
+				/>
 				<div class="flex flex-col gap-1.5">
 					<span class="text-[12px] font-medium text-text-secondary">Render as pages</span>
 					<div class="flex items-center gap-3 rounded-lg border border-border-light bg-bg-elevated px-3 py-2">
@@ -142,11 +142,11 @@
 								<Input label="Label" bind:value={f.label} placeholder="Headline" />
 							</div>
 							<div class="sm:col-span-3">
-								<Select label="Type" bind:value={f.type}>
-									{#each fieldTypes as t (t)}
-										<option value={t}>{t}</option>
-									{/each}
-								</Select>
+								<Select
+									label="Type"
+									bind:value={f.type}
+									options={fieldTypes.map((t) => ({ value: t, label: t }))}
+								/>
 							</div>
 							<div class="sm:col-span-2 flex items-end">
 								<label class="flex items-center gap-2 pb-2 text-[12px] text-text-secondary">

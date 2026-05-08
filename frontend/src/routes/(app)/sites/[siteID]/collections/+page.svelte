@@ -63,10 +63,13 @@
 			</Card>
 		{:else if collections.length === 0}
 			<EmptyState
-				icon={Database}
 				title="No collections yet"
 				description="Create one to start modelling content beyond pages: case studies, products, team members, anything you'd add new entries to over time."
-			/>
+			>
+				{#snippet icon()}
+					<Database size={20} strokeWidth={1.5} />
+				{/snippet}
+			</EmptyState>
 		{:else}
 			{#each collections as col (col.id)}
 				<Card padding="md">

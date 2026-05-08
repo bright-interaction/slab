@@ -61,10 +61,13 @@
 			</Card>
 		{:else if forms.length === 0}
 			<EmptyState
-				icon={FormInput}
 				title="No forms yet"
 				description="Forms appear here once you add a form block to a page or create one via the agent API."
-			/>
+			>
+				{#snippet icon()}
+					<FormInput size={20} strokeWidth={1.5} />
+				{/snippet}
+			</EmptyState>
 		{:else}
 			{#each forms as form (form.id)}
 				<Card padding="md">
