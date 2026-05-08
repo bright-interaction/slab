@@ -207,11 +207,12 @@
 >
 	<div class="space-y-3">
 		<div>
-			<label for="to_path" class="block text-xs text-text-muted mb-1.5">Destination path</label>
-			<Input bind:value={toPath} placeholder="/new-location" />
-			<p class="text-xs text-text-muted mt-1.5">
-				Must start with <code>/</code>. Off-site, open-redirect, and no-op redirects are rejected.
-			</p>
+			<Input
+				label="Destination path"
+				bind:value={toPath}
+				placeholder="/new-location"
+				hint="Must start with /. Off-site, open-redirect, and no-op redirects are rejected."
+			/>
 		</div>
 		<div>
 			<label for="status_code" class="block text-xs text-text-muted mb-1.5">Status code</label>

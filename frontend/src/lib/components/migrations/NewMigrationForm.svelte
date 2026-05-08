@@ -73,9 +73,8 @@
 				<Select bind:value={sourceType} options={sourceTypes} />
 			</div>
 			<div class="md:col-span-2">
-				<label for="source_url" class="block text-xs text-text-muted mb-1.5">Source URL</label>
 				<Input
-
+					label="Source URL"
 					bind:value={sourceURL}
 					placeholder={sourceType === 'sitemap'
 						? 'https://example.com/sitemap.xml'
@@ -90,53 +89,35 @@
 		</div>
 
 		{#if sourceType === 'wordpress'}
-			<div>
-				<label for="wp_auth" class="block text-xs text-text-muted mb-1.5">
-					WordPress Application Password (optional, for drafts + private posts)
-				</label>
-				<Input
-
-					bind:value={wpAuthHeader}
-					placeholder="Basic base64(user:apppass)"
-					autocomplete="off"
-				/>
-			</div>
+			<Input
+				label="WordPress Application Password (optional, for drafts + private posts)"
+				bind:value={wpAuthHeader}
+				placeholder="Basic base64(user:apppass)"
+				autocomplete="off"
+			/>
 		{/if}
 
 		{#if sourceType === 'webflow'}
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-				<div>
-					<label for="wf_site" class="block text-xs text-text-muted mb-1.5">Webflow site_id</label>
-					<Input bind:value={webflowSiteID} required />
-				</div>
-				<div>
-					<label for="wf_token" class="block text-xs text-text-muted mb-1.5">
-						Webflow auth token
-					</label>
-					<Input
-
-						bind:value={webflowAuthToken}
-						type="password"
-						autocomplete="off"
-						required
-					/>
-				</div>
-			</div>
-		{/if}
-
-		{#if sourceType === 'ghost'}
-			<div>
-				<label for="ghost_key" class="block text-xs text-text-muted mb-1.5">
-					Ghost Content API key
-				</label>
+				<Input label="Webflow site_id" bind:value={webflowSiteID} required />
 				<Input
-
-					bind:value={ghostContentKey}
+					label="Webflow auth token"
+					bind:value={webflowAuthToken}
 					type="password"
 					autocomplete="off"
 					required
 				/>
 			</div>
+		{/if}
+
+		{#if sourceType === 'ghost'}
+			<Input
+				label="Ghost Content API key"
+				bind:value={ghostContentKey}
+				type="password"
+				autocomplete="off"
+				required
+			/>
 		{/if}
 
 		{#if lastError}
