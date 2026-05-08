@@ -28,6 +28,30 @@ const (
 	DeploymentModeCloud  = "cloud"
 )
 
+// RequireMFA values. Read from ATOMICSITE_REQUIRE_MFA. Empty string is
+// the default (users may enroll, not gated). "admin" forces every user
+// with role=admin to enroll. "all" forces every authenticated user.
+// Validate() rejects any other value at boot.
+const (
+	MFAOptional   = ""
+	MFAAdminsOnly = "admin"
+	MFAAllUsers   = "all"
+)
+
+// MustEnrollMFA reports whether a user with the given role must enroll
+// in TOTP under the current RequireMFA policy. Pure function so the
+// auth handler + the enforcement middleware share one source of truth.
+func (c *Config) MustEnrollMFA(role string) bool {
+	switch c.RequireMFA {
+	case MFAAllUsers:
+		return true
+	case MFAAdminsOnly:
+		return role == "admin"
+	default:
+		return false
+	}
+}
+
 type Config struct {
 	Port          int
 	DataDir       string
