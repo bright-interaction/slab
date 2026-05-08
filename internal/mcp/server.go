@@ -423,7 +423,7 @@ func (s *Server) handleToolsCall(r *http.Request, identity *authmw.AgentIdentity
 	if err != nil {
 		return ToolCallResult{
 			IsError: true,
-			Content: []Content{{Type: "text", Text: err.Error()}},
+			Content: []Content{{Type: "text", Text: scrubError(ctx, session, err)}},
 		}, nil
 	}
 
@@ -527,14 +527,58 @@ func (s *Server) handlePromptsGet(r *http.Request, identity *authmw.AgentIdentit
 	if !ok {
 		return nil, &ResponseError{Code: ErrInvalidParams, Message: "unknown prompt: " + args.Name}
 	}
-	msgs, err := pr.Render(r.Context(), identity, args.Arguments)
-	if err != nil {
-		return nil, &ResponseError{Code: ErrInternal, Message: err.Error()}
+
+	ctx := r.Context()
+	session, _ := s.beginShieldSession(r)
+	if session != nil {
+		ctx = shield.WithSession(ctx, session)
 	}
+
+	msgs, err := pr.Render(ctx, identity, args.Arguments)
+	if err != nil {
+		return nil, &ResponseError{Code: ErrInternal, Message: scrubError(ctx, session, err)}
+	}
+
+	if session != nil {
+		// Prompt messages are free-form text the agent receives as
+		// system/user context. Run the redact pass over each one so
+		// any embedded PII (entity ids, emails inlined into a
+		// playbook) becomes a marker before reaching the LLM.
+		for i := range msgs {
+			if msgs[i].Content.Text == "" {
+				continue
+			}
+			redacted, rerr := session.RedactString(ctx, msgs[i].Content.Text)
+			if rerr == nil {
+				msgs[i].Content.Text = redacted
+			}
+		}
+	}
+
 	return map[string]any{
 		"description": pr.Description,
 		"messages":    msgs,
 	}, nil
+}
+
+// scrubError runs an error message through the regex redact pass when
+// shield is enabled, so a "lead 'anna@andersson-law.se' not found"
+// surfaces to the agent as "lead '[shield:email:tok_X]' not found"
+// rather than leaking the email. Returns the original message when
+// shield is off or the redact pass itself errors.
+func scrubError(ctx context.Context, session *shield.Session, err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if session == nil {
+		return msg
+	}
+	scrubbed, rerr := session.RedactString(ctx, msg)
+	if rerr != nil {
+		return msg
+	}
+	return scrubbed
 }
 
 // writeJSONRPCError sends a JSON-RPC error envelope with the given fields.
