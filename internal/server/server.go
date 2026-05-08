@@ -82,12 +82,13 @@ func New(cfg *config.Config, db *sql.DB, queries *store.Queries, st storage.Stor
 		slog.Warn("brightcrm integration DISABLED (BRIGHTCRM_WEBHOOK_URL or BRIGHTCRM_WEBHOOK_SECRET unset)")
 	}
 	return &Server{
-		cfg:     cfg,
-		db:      db,
-		queries: queries,
-		storage: st,
-		authMW:  authmw.NewAuthMiddleware(cfg, queries),
-		agentMW: authmw.NewAgentAuthMiddleware(queries),
+		cfg:           cfg,
+		db:            db,
+		queries:       queries,
+		storage:       st,
+		authMW:        authmw.NewAuthMiddleware(cfg, queries),
+		agentMW:       authmw.NewAgentAuthMiddleware(queries),
+		adminWriteLim: authmw.NewAdminWriteLimiter(20, 1, 30*time.Minute),
 	}
 }
 
@@ -104,7 +105,12 @@ func (s *Server) Router() http.Handler {
 	var mcpSurfaceFn func() any
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// Trusted-proxy XFF middleware (replaces chi.middleware.RealIP).
+	// Honours X-Forwarded-For / X-Real-IP only when the immediate TCP
+	// peer is in the configured ATOMICSITE_TRUSTED_PROXIES list. Empty
+	// list = ignore those headers entirely (the safe default for OSS
+	// deploys directly exposed to the internet).
+	r.Use(authmw.TrustedProxyRealIP(s.cfg.TrustedProxies))
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware(s.cfg))
@@ -274,6 +280,17 @@ func (s *Server) Router() http.Handler {
 	// Authenticated admin routes
 	r.Group(func(r chi.Router) {
 		r.Use(s.authMW.Middleware)
+		// Per-(user, peer-IP) write throttle. Applies only to
+		// POST/PUT/PATCH/DELETE; reads are unaffected. Mounted right
+		// after authMW so GetUser(r) is populated. Capacity 20,
+		// refill 1/s = 60 writes/min sustained per (user, IP).
+		r.Use(authmw.AdminWriteRateLimit(s.adminWriteLim))
+		// MFA enrollment enforcement (feature #14). Pass-through when
+		// ATOMICSITE_REQUIRE_MFA is empty; otherwise blocks writes
+		// from users who haven't enrolled. Whitelists the TOTP setup
+		// + change-password + logout flows so an unenrolled user can
+		// still complete enrollment.
+		r.Use(authmw.EnforceMFAEnrollment(s.cfg, s.queries))
 
 		// Auth
 		r.Get("/api/auth/me", ah.Me)
@@ -451,8 +468,26 @@ func (s *Server) Router() http.Handler {
 		// wildcard tenant vhost the deployment already terminates. Empty
 		// disables the check, which is the right behaviour for OSS
 		// single-tenant deploys with no wildcard subdomain.
-		domH := handlers.NewDomainHandler(s.queries, reconcileSignal, s.cfg.BuiltSiteSuffix)
+		// Sprint 4.7.4 (2026-05-09): expose edge IP + Cloudflare zone
+		// list to the admin UI so the "Add an A record" instructions
+		// show real values instead of "[your edge IP]" placeholder.
+		// ATOMICSITE_CLOUDFLARE_ZONES is a comma-separated apex=zone_id
+		// list (matches the format parseZoneMap in cmd/server/main.go uses).
+		cfZoneApexes := []string{}
+		for _, pair := range strings.Split(os.Getenv("ATOMICSITE_CLOUDFLARE_ZONES"), ",") {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			if eq := strings.Index(pair, "="); eq > 0 {
+				cfZoneApexes = append(cfZoneApexes, strings.TrimSpace(pair[:eq]))
+			}
+		}
+		domH := handlers.NewDomainHandler(s.queries, reconcileSignal, s.cfg.BuiltSiteSuffix).
+			WithEdgeIP(s.cfg.EdgeIP).
+			WithCloudflareZones(cfZoneApexes)
 		siteR.Get("/api/sites/{siteID}/domains", domH.List)
+		siteR.Get("/api/sites/{siteID}/domains/help", domH.Help)
 		siteR.Post("/api/sites/{siteID}/domains", domH.Create)
 		siteR.Post("/api/sites/{siteID}/domains/{domainID}/canonical", domH.SetCanonical)
 		siteR.Post("/api/sites/{siteID}/domains/{domainID}/refresh", domH.Refresh)
@@ -647,6 +682,11 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/builds/{buildID}/status", buildH.BuildStatusAdmin)
 		siteR.Post("/api/sites/{siteID}/builds/{buildID}/cancel", buildH.CancelBuild)
 		siteR.Post("/api/sites/{siteID}/deploy", buildH.Deploy)
+		// Static export of the built dist/ tree as a ZIP. Members of
+		// the site can download the latest successful build (or
+		// pass build_id=...) so operators can archive snapshots or
+		// hand the bundle to a static host.
+		siteR.Get("/api/sites/{siteID}/dist.zip", buildH.ExportDistZip)
 
 		// Deploy targets (admin)
 		dh := handlers.NewDeployHandler(s.cfg, s.queries, s.db)
@@ -827,9 +867,10 @@ func (s *Server) Router() http.Handler {
 			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH))
 
 		if len(s.cfg.ShieldKey) == 32 {
-			mcpServer.WithShield(shield.NewSQLStore(s.db), []byte(s.cfg.ShieldKey), 30*time.Minute)
+			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)
+			mcpServer.WithShield(shield.NewSQLStore(s.db), []byte(s.cfg.ShieldKey), 30*time.Minute, level)
 			slog.Info("atomicsite: shield enabled on MCP boundary",
-				"key_id", "atomicsite", "ttl_min", 30)
+				"key_id", "atomicsite", "ttl_min", 30, "hint_level", s.cfg.ShieldHintLevel)
 		} else if s.cfg.ShieldKey != "" {
 			slog.Warn("atomicsite: ATOMICSITE_SHIELD_KEY set but not 32 bytes; shield disabled",
 				"len", len(s.cfg.ShieldKey))

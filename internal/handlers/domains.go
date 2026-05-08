@@ -57,11 +57,24 @@ type DomainHandler struct {
 	// on its own cadence.
 	reconcile func()
 	// reservedSuffix is the wildcard tenant suffix the deployment
-	// already routes (e.g. ".atomicsite.example.com").
-	// Custom hostnames ending in this suffix would create a vhost that
-	// shadows the wildcard server block, so we reject up front.
-	// Empty disables the check (single-tenant deployments).
+	// already routes (e.g. ".tenants.example.com"). Set via the
+	// BUILT_SITE_SUFFIX env var. Custom hostnames ending in this
+	// suffix would create a vhost that shadows the wildcard server
+	// block, so we reject up front. Empty disables the check
+	// (single-tenant deployments).
 	reservedSuffix string
+	// edgeIP is the public A-record target the admin shows when an
+	// operator adds a custom hostname. Read once at boot from
+	// ATOMICSITE_EDGE_IP. Empty falls back to "[your edge IP]" placeholder
+	// in the UI so single-tenant dev runs without an edge surface stay
+	// honest about what's missing.
+	edgeIP string
+	// cloudflareZones is the list of zone apex hostnames whose DNS we
+	// auto-update via the Cloudflare API. Read from
+	// ATOMICSITE_CLOUDFLARE_ZONES (comma-separated apex=zone_id list).
+	// Empty means "manual A records only", which is the default
+	// experience for customer-owned domains.
+	cloudflareZones []string
 }
 
 // NewDomainHandler builds the handler. reconcile may be nil during boot
@@ -69,6 +82,59 @@ type DomainHandler struct {
 // the wildcard tenant suffix that custom hostnames must NOT end with.
 func NewDomainHandler(queries *store.Queries, reconcile func(), reservedSuffix string) *DomainHandler {
 	return &DomainHandler{queries: queries, reconcile: reconcile, reservedSuffix: strings.ToLower(strings.TrimSpace(reservedSuffix))}
+}
+
+// WithEdgeIP wires the public A-record target. Called once at boot
+// from server.New so the admin UI can show the actual IP instead of a
+// placeholder.
+func (h *DomainHandler) WithEdgeIP(ip string) *DomainHandler {
+	h.edgeIP = strings.TrimSpace(ip)
+	return h
+}
+
+// WithCloudflareZones wires the list of zone apex hostnames whose DNS
+// we auto-update. The admin UI uses this to show "auto-creating record"
+// vs "add A record manually" hints up front.
+func (h *DomainHandler) WithCloudflareZones(zones []string) *DomainHandler {
+	h.cloudflareZones = zones
+	return h
+}
+
+// HelpResponse is the shape returned by GET /api/sites/{siteID}/domains/help.
+// Frontend reads it once on the Domains page so the "Add an A record"
+// instructions show real values instead of placeholders.
+type HelpResponse struct {
+	// EdgeIP is the public A-record target. Empty when ATOMICSITE_EDGE_IP
+	// is unset on the server (dev / single-tenant).
+	EdgeIP string `json:"edge_ip"`
+	// CloudflareZones is the list of zone apex hostnames whose DNS we
+	// auto-update via the Cloudflare API. Empty when not configured.
+	// The frontend uses this to hint "we'll auto-create the record"
+	// when the new hostname falls under one of these zones.
+	CloudflareZones []string `json:"cloudflare_zones"`
+	// VerifyURL is the path the reconciler probes for ownership. The
+	// admin can curl this once DNS propagates to confirm wiring before
+	// waiting for the next sweep.
+	VerifyURLTemplate string `json:"verify_url_template"`
+}
+
+// Help returns the edge IP + Cloudflare zones the admin needs to know
+// to point their DNS provider at us. Public-ish (any authenticated
+// member of the site can read) - no secrets, just instructions.
+//
+// GET /api/sites/{siteID}/domains/help
+func (h *DomainHandler) Help(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+		writeError(w, http.StatusNotFound, "Site not found")
+		return
+	}
+	resp := HelpResponse{
+		EdgeIP:            h.edgeIP,
+		CloudflareZones:   h.cloudflareZones,
+		VerifyURLTemplate: "http://{hostname}/.well-known/atomic-verify/{token}",
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *DomainHandler) signal() {
