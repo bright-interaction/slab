@@ -908,6 +908,12 @@ func (s *Server) Router() http.Handler {
 			slog.Warn("atomicsite: ATOMICSITE_SHIELD_KEY set but not 32 bytes; shield disabled",
 				"len", len(s.cfg.ShieldKey))
 		}
+		// Wire the MCP shield-key updater into the admin reload handler
+		// AFTER mcpServer exists. ReloadSecrets reads h.mcp at request
+		// time (not at route registration), so this late binding is safe
+		// and lets us keep the route registered earlier in the file with
+		// the rest of the auth-bypass surface.
+		adminReloadH.WithMCP(mcpServer)
 		r.Mount("/mcp", mcpServer.Handler())
 
 		// Surface inventory: set the shared closure so the admin

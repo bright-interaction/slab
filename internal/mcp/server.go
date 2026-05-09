@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
@@ -78,6 +80,7 @@ type Server struct {
 	// hide identifying hints when the moat needs the agent to know
 	// "same person across turns" but not "who that person is").
 	shieldStore     shield.Store
+	shieldMu        sync.RWMutex // guards shieldKey so /admin/reload-secrets can hot-swap
 	shieldKey       []byte
 	shieldEnabled   bool
 	shieldTTL       time.Duration
@@ -151,7 +154,9 @@ func (s *Server) WithShield(store shield.Store, key []byte, ttl time.Duration, h
 		return s
 	}
 	s.shieldStore = store
+	s.shieldMu.Lock()
 	s.shieldKey = key
+	s.shieldMu.Unlock()
 	s.shieldEnabled = true
 	s.shieldHintLevel = hintLevel
 	if ttl > 0 {
@@ -160,6 +165,42 @@ func (s *Server) WithShield(store shield.Store, key []byte, ttl time.Duration, h
 		s.shieldTTL = 30 * time.Minute
 	}
 	return s
+}
+
+// UpdateShieldKey hot-swaps the in-memory AES-256 key the MCP server
+// hands to every new shield.Session. Safe for concurrent use; existing
+// Sessions hold their own key by value (snapshot at NewSession time)
+// and keep working until they expire, so PII tokenized with the prior
+// key remains resolvable for that session's lifetime. Tokens are
+// session-scoped so cross-session reads cannot occur.
+//
+// Returns an error when shield was never enabled, the new key is the
+// wrong length, or the value is byte-identical to the current key. The
+// rotation engine treats a returned error as a phase-1 failure and
+// records it in the entry's last_rotation_error.
+func (s *Server) UpdateShieldKey(newKey []byte) error {
+	if !s.shieldEnabled {
+		return fmt.Errorf("shield: not enabled, cannot rotate key")
+	}
+	if len(newKey) != 32 {
+		return fmt.Errorf("shield: key must be 32 bytes, got %d", len(newKey))
+	}
+	s.shieldMu.Lock()
+	defer s.shieldMu.Unlock()
+	if len(s.shieldKey) == 32 && string(s.shieldKey) == string(newKey) {
+		// Same-value updates are a no-op rather than an error so the
+		// rotation engine's dual-phase delivery (open-grace then
+		// close-grace, both sending the new value) lands cleanly. The
+		// allowlist drops SHIELD_KEY_PREVIOUS, so phase-2 looks
+		// identical to phase-1 by the time we see it.
+		return nil
+	}
+	// Make a defensive copy so the caller cannot zero the buffer underneath
+	// concurrent NewSession reads that capture this slice header.
+	dup := make([]byte, 32)
+	copy(dup, newKey)
+	s.shieldKey = dup
+	return nil
 }
 
 // ShieldEnabled reports whether tokenization is active. Used by the
@@ -189,7 +230,10 @@ func (s *Server) beginShieldSession(r *http.Request) (*shield.Session, error) {
 		sum := sha256.Sum256([]byte(key))
 		id = "agent-" + hex.EncodeToString(sum[:8])
 	}
-	return shield.NewSession(r.Context(), s.shieldStore, id, s.shieldKey, s.shieldTTL, s.shieldHintLevel)
+	s.shieldMu.RLock()
+	key := s.shieldKey
+	s.shieldMu.RUnlock()
+	return shield.NewSession(r.Context(), s.shieldStore, id, key, s.shieldTTL, s.shieldHintLevel)
 }
 
 // NewServer constructs an MCP server with every registered tool /
