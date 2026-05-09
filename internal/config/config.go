@@ -232,6 +232,15 @@ func Load() *Config {
 		EdgeIP:             envOr("ATOMICSITE_EDGE_IP", ""),
 
 		DesignReferencesDir: envOr("DESIGN_REFERENCES_DIR", ""),
+
+		ShieldKey:       envOr("ATOMICSITE_SHIELD_KEY", ""),
+		ShieldHintLevel: envOr("ATOMICSITE_SHIELD_HINT_LEVEL", ""),
+
+		RequireMFA: strings.ToLower(strings.TrimSpace(envOr("ATOMICSITE_REQUIRE_MFA", ""))),
+
+		AuditLogRetentionDays: envInt("ATOMICSITE_AUDIT_LOG_RETENTION_DAYS", 0),
+
+		TrustedProxies: envOr("ATOMICSITE_TRUSTED_PROXIES", ""),
 	}
 }
 
