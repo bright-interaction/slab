@@ -87,7 +87,7 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 }
 
 const getPageBySiteAndSlug = `-- name: GetPageBySiteAndSlug :one
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE site_id = ? AND slug = ?
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE site_id = ?1 AND (slug = ?2 OR slug = LTRIM(?2, '/'))
 `
 
 type GetPageBySiteAndSlugParams struct {
