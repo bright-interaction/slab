@@ -354,6 +354,36 @@ func (h *PageHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "deleted": deleted})
 }
 
+// PageDraftPreview renders the page's current DB state to a complete HTML
+// document the admin app embeds via iframe srcdoc for live in-app preview.
+// NOT a build: skips bun + astro, writes nothing to disk. Reuses the same
+// renderBlock + global-block + CSS pipeline production uses, so layout
+// fidelity is high; component blocks render as placeholders since they
+// need Astro compilation. The response sets noindex + same-origin headers
+// because the URL is admin-only and not meant to be linkable externally.
+func (h *PageHandler) PageDraftPreview(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	pageID := urlParam(r, "pageID")
+
+	page, err := h.queries.GetPageByID(r.Context(), pageID)
+	if err != nil || page.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Page not found")
+		return
+	}
+
+	html, err := builder.RenderPageDraft(r.Context(), h.queries, siteID, pageID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to render preview")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, must-revalidate")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	_, _ = w.Write([]byte(html))
+}
+
 // PreviewSource returns the assembled .astro source for a single page so the
 // admin can show "View source" without triggering a full build. Uses the
 // same renderPage routine the build pipeline writes to disk; output is the

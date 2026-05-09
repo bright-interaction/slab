@@ -13,8 +13,9 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import BlockEditor from '$lib/components/pages/BlockEditor.svelte';
 	import PageSourceDialog from '$lib/components/pages/PageSourceDialog.svelte';
+	import PagePreviewPanel from '$lib/components/pages/PagePreviewPanel.svelte';
 	import TextMode from '$lib/components/pages/TextMode.svelte';
-	import { ChevronDown, ArrowLeft, Code, Type, LayoutPanelTop } from 'lucide-svelte';
+	import { ChevronDown, ArrowLeft, Code, Type, LayoutPanelTop, Eye } from 'lucide-svelte';
 	import type { Block, Page } from '$lib/api/types';
 
 	const siteID = $derived(pageState.params.siteID as string);
@@ -63,7 +64,11 @@
 	// Editing surface. "Blocks" is the canonical full editor, "Text" is the
 	// content-writer view (inline-editable text fields per block, autosave on
 	// blur). The </> source dialog is opened on demand and works in both.
-	let editorMode = $state<'blocks' | 'text'>('blocks');
+	let editorMode = $state<'blocks' | 'text' | 'preview'>('blocks');
+	// Bumped after every successful block save so the preview panel
+	// refetches the rendered HTML. Cheaper than mounting/unmounting the
+	// iframe on every mode switch.
+	let previewNonce = $state(0);
 	let sourceOpen = $state(false);
 	// Per-block inline-text save state for the Text Mode UI. Keyed by block id.
 	let textSaving = $state<Record<string, boolean>>({});
@@ -210,6 +215,7 @@
 			// Preserve the expanded block across the round-trip so saving
 			// while editing one block does not collapse it.
 			editorRef?.syncFrom(next);
+			previewNonce++;
 			toast.success('Page saved.');
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Failed to save page';
@@ -252,6 +258,7 @@
 			const updated = await blocksApi.update(siteID, pageID, blockID, { data: nextData });
 			blocks = blocks.map((b) => (b.id === blockID ? updated : b));
 			editorRef?.syncFrom(blocks);
+			previewNonce++;
 			toast.success(`Saved ${fieldKey}`);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to save text');
@@ -527,6 +534,19 @@
 						<Type class="h-3.5 w-3.5" />
 						Text mode
 					</button>
+					<button
+						type="button"
+						aria-pressed={editorMode === 'preview'}
+						onclick={() => (editorMode = 'preview')}
+						title="Render the current draft against the site's CSS. Not a build, not published."
+						class="inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11.5px] font-medium transition-colors {editorMode ===
+						'preview'
+							? 'bg-bg-surface text-text-primary shadow-sm'
+							: 'text-text-muted hover:text-text-primary'}"
+					>
+						<Eye class="h-3.5 w-3.5" />
+						Preview
+					</button>
 				</div>
 				<span class="text-[11px] text-text-muted">
 					{blocks.length} block(s){editorMode === 'blocks' && editorState.dirty ? ' · unsaved' : ''}
@@ -545,8 +565,10 @@
 						editorState = state;
 					}}
 				/>
-			{:else}
+			{:else if editorMode === 'text'}
 				<TextMode {blocks} {textSaving} onFieldChange={handleTextField} />
+			{:else}
+				<PagePreviewPanel {siteID} {pageID} refreshNonce={previewNonce} />
 			{/if}
 		</section>
 	{/if}

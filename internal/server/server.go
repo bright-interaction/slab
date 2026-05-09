@@ -510,6 +510,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Post("/api/sites/{siteID}/pages", ph.Create)
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}", ph.Get)
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}/preview", ph.PreviewSource)
+		siteR.Get("/api/sites/{siteID}/pages/{pageID}/draft-preview", ph.PageDraftPreview)
 		siteR.Patch("/api/sites/{siteID}/pages/{pageID}", ph.Update)
 		siteR.Delete("/api/sites/{siteID}/pages/{pageID}", ph.Delete)
 		siteR.Post("/api/sites/{siteID}/pages/bulk-delete", ph.BulkDelete)
