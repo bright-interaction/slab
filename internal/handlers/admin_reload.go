@@ -69,7 +69,7 @@ type reloadRequest struct {
 var atomicsiteReloadAllowlist = map[string]struct{}{
 	"BRIGHTCRM_WEBHOOK_SECRET":          {},
 	"BRIGHTCRM_WEBHOOK_SECRET_PREVIOUS": {},
-	"SHIELD_KEY":                        {},
+	"ATOMICSITE_SHIELD_KEY":              {},
 }
 
 func (h *AdminReloadHandler) ReloadSecrets(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +128,7 @@ func (h *AdminReloadHandler) ReloadSecrets(w http.ResponseWriter, r *http.Reques
 	// SHIELD_KEY that fails to land must produce a 4xx so the rotation
 	// engine records it as last_rotation_error and does not advance
 	// last_rotated_at.
-	if shieldKey, ok := staged["SHIELD_KEY"]; ok {
+	if shieldKey, ok := staged["ATOMICSITE_SHIELD_KEY"]; ok {
 		if h.mcp == nil || !h.mcp.ShieldEnabled() {
 			writeError(w, http.StatusServiceUnavailable, "shield not enabled on this instance")
 			return
