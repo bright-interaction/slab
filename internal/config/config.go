@@ -215,6 +215,23 @@ type Config struct {
 	//   - "10.0.0.0/8" for a private VPC fronted by a managed LB
 	//   - "172.16.0.0/12" for Docker's default bridge network
 	TrustedProxies string
+
+	// OIDC SSO (#5, 2026-05-10). Optional: when OIDCEnabled is false,
+	// /auth/oidc/login + callback return 404 and the existing password
+	// flow is the only path. Production stack uses Zitadel at
+	// auth.example.com per [[zitadel]] in Hive; the same code
+	// works against any OIDC-compliant issuer (Authentik, Auth0, Keycloak)
+	// because we go through /.well-known/openid-configuration.
+	//
+	// OIDCAllowDomains is a comma-separated list of email domains that
+	// are allowed to log in via SSO when no matching local user exists.
+	// Empty = SSO requires a pre-existing user (shipping default).
+	OIDCEnabled       bool
+	OIDCIssuerURL     string
+	OIDCClientID      string
+	OIDCClientSecret  string
+	OIDCRedirectURL   string
+	OIDCAllowDomains  string
 }
 
 func Load() *Config {
@@ -265,6 +282,13 @@ func Load() *Config {
 		GDPRDeleteCoolingDays: envInt("ATOMICSITE_GDPR_DELETE_COOLING_DAYS", 0),
 
 		TrustedProxies: envOr("ATOMICSITE_TRUSTED_PROXIES", ""),
+
+		OIDCEnabled:      strings.EqualFold(strings.TrimSpace(envOr("OIDC_ENABLED", "")), "true"),
+		OIDCIssuerURL:    strings.TrimSpace(envOr("OIDC_ISSUER_URL", "")),
+		OIDCClientID:     strings.TrimSpace(envOr("OIDC_CLIENT_ID", "")),
+		OIDCClientSecret: strings.TrimSpace(envOr("OIDC_CLIENT_SECRET", "")),
+		OIDCRedirectURL:  strings.TrimSpace(envOr("OIDC_REDIRECT_URL", "")),
+		OIDCAllowDomains: strings.TrimSpace(envOr("OIDC_ALLOW_DOMAINS", "")),
 	}
 }
 

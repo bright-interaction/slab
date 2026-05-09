@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import { ApiError } from '$lib/api/client';
 	import * as authApi from '$lib/api/auth';
 	import { setUser } from '$lib/stores/auth.svelte';
+	import { page } from '$app/state';
 
 	let email = $state('');
 	let password = $state('');
@@ -12,6 +14,32 @@
 	let totpRequired = $state(false);
 	let error = $state('');
 	let loading = $state(false);
+	let oidcEnabled = $state(false);
+
+	const ssoErrorMessages: Record<string, string> = {
+		sso_denied: 'SSO sign-in was cancelled.',
+		sso_invalid: 'SSO session expired. Please try again.',
+		sso_no_email: 'SSO provider did not return an email address.',
+		sso_no_account: 'No matching account for this SSO email.',
+		sso_inactive: 'Account is inactive.',
+		sso_error: 'SSO sign-in failed. Please try again.'
+	};
+
+	onMount(async () => {
+		const ssoError = page.url.searchParams.get('error');
+		if (ssoError && ssoErrorMessages[ssoError]) {
+			error = ssoErrorMessages[ssoError];
+		}
+		try {
+			const r = await fetch('/api/auth/oidc/config');
+			if (r.ok) {
+				const data = await r.json();
+				oidcEnabled = !!data.oidc_enabled;
+			}
+		} catch {
+			// SSO probe failure is non-fatal; password login still works.
+		}
+	});
 
 	async function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
@@ -93,4 +121,18 @@
 			</a>
 		</p>
 	</form>
+
+	{#if oidcEnabled}
+		<div class="mt-6 flex items-center gap-3">
+			<div class="h-px flex-1 bg-border-light"></div>
+			<span class="text-[11px] uppercase tracking-wider text-text-muted">or</span>
+			<div class="h-px flex-1 bg-border-light"></div>
+		</div>
+		<a
+			href="/auth/oidc/login"
+			class="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-border-light bg-bg-elevated px-4 py-2.5 text-[13px] font-medium text-text-primary transition-colors hover:bg-bg-hover"
+		>
+			Sign in with SSO
+		</a>
+	{/if}
 </div>
