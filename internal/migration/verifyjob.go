@@ -199,13 +199,19 @@ func (m *JobManager) Cancel(jobID string) bool {
 // OnResult callback that writes per-URL rows + bumps the in-memory
 // counters, flushes counters to the verify_jobs row periodically, and
 // finally writes a terminal status (done | cancelled | failed).
+//
+// Context discipline: in-flight DB writes use the worker ctx so that a
+// user-initiated Cancel halts further writes once observed. The
+// terminal FinishVerifyJob write uses a separate context.Background()-
+// derived ctx with a short timeout so cancellation can't prevent the
+// final state row from landing (otherwise a cancelled job would stay
+// 'running' until the next boot's reaper marks it stale).
 func (m *JobManager) runWorker(ctx context.Context, cancel context.CancelFunc, jobID, siteID, migrationID string, urls []string, deployedDomain string) {
 	defer m.wg.Done()
 	defer m.cancels.Delete(jobID)
 	defer cancel()
 
-	bg := context.Background()
-	if err := m.queries.MarkVerifyJobRunning(bg, jobID); err != nil {
+	if err := m.queries.MarkVerifyJobRunning(ctx, jobID); err != nil {
 		slog.Warn("verify_job mark running", "job", jobID, "err", err)
 	}
 
@@ -222,7 +228,7 @@ func (m *JobManager) runWorker(ctx context.Context, cancel context.CancelFunc, j
 			return
 		}
 		lastFlush = now
-		_ = m.queries.UpdateVerifyJobProgress(bg, store.UpdateVerifyJobProgressParams{
+		_ = m.queries.UpdateVerifyJobProgress(ctx, store.UpdateVerifyJobProgressParams{
 			ID:            jobID,
 			ProcessedUrls: p,
 			OkCount:       okCount.Load(),
@@ -239,7 +245,7 @@ func (m *JobManager) runWorker(ctx context.Context, cancel context.CancelFunc, j
 		} else {
 			failCount.Add(1)
 		}
-		_ = m.queries.CreateMigrationVerification(bg, store.CreateMigrationVerificationParams{
+		_ = m.queries.CreateMigrationVerification(ctx, store.CreateMigrationVerificationParams{
 			ID:          newVerifyJobID(),
 			SiteID:      siteID,
 			MigrationID: migrationID,
@@ -268,7 +274,9 @@ func (m *JobManager) runWorker(ctx context.Context, cancel context.CancelFunc, j
 		errStr = runErr.Error()
 	}
 
-	if err := m.queries.FinishVerifyJob(bg, store.FinishVerifyJobParams{
+	finishCtx, finishCancel := context.WithTimeout(context.Background(), terminalWriteTimeout)
+	defer finishCancel()
+	if err := m.queries.FinishVerifyJob(finishCtx, store.FinishVerifyJobParams{
 		ID:            jobID,
 		Status:        status,
 		ProcessedUrls: processed.Load(),
@@ -283,6 +291,10 @@ func (m *JobManager) runWorker(ctx context.Context, cancel context.CancelFunc, j
 		"processed", processed.Load(),
 		"ok", okCount.Load(), "fail", failCount.Load())
 }
+
+// terminalWriteTimeout bounds the FinishVerifyJob write so a hung DB
+// can't keep a worker goroutine alive forever after cancellation.
+const terminalWriteTimeout = 10 * time.Second
 
 // newVerifyJobID returns a 24-char hex id, same shape as newPorterID
 // (kept local so verifyjob doesn't depend on the porter).

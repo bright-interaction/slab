@@ -16,13 +16,14 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
 	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/brightinteraction/atomicsite/internal/webhook"
 )
 
 func newCollectionHandlerForTest(t *testing.T) (*CollectionHandler, *store.Queries, string) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "collections.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,6 +279,113 @@ func TestCollectionItems_LocaleVariantsUniqueness(t *testing.T) {
 	rows, _ := q.ListItemsByCollection(context.Background(), colID)
 	if len(rows) != 2 {
 		t.Errorf("expected 2 rows, got %d", len(rows))
+	}
+}
+
+func TestCollectionItems_BulkDelete_HappyPath(t *testing.T) {
+	h, q, siteID := newCollectionHandlerForTest(t)
+	colID := seedCollection(t, h, q, siteID)
+	for _, slug := range []string{"a", "b", "c"} {
+		postJSONCol(withColParams(siteID, colID, h.CreateItem), map[string]any{
+			"slug": slug, "title": slug, "data": map[string]any{"headline": slug},
+		})
+	}
+	rows, _ := q.ListItemsByCollection(context.Background(), colID)
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 seed rows, got %d", len(rows))
+	}
+	ids := []string{rows[0].ID, rows[1].ID}
+	rr := postJSONCol(withColParams(siteID, colID, h.BulkDeleteItems), map[string]any{"ids": ids})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("bulk-delete expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	after, _ := q.ListItemsByCollection(context.Background(), colID)
+	if len(after) != 1 {
+		t.Errorf("expected 1 row after bulk-delete, got %d", len(after))
+	}
+}
+
+func TestCollectionItems_BulkDelete_EmitsWebhookPerRow(t *testing.T) {
+	h, q, siteID := newCollectionHandlerForTest(t)
+	colID := seedCollection(t, h, q, siteID)
+	for _, slug := range []string{"a", "b"} {
+		postJSONCol(withColParams(siteID, colID, h.CreateItem), map[string]any{
+			"slug": slug, "title": slug, "data": map[string]any{"headline": slug},
+		})
+	}
+	rows, _ := q.ListItemsByCollection(context.Background(), colID)
+
+	if err := q.CreateWebhookSubscription(context.Background(), store.CreateWebhookSubscriptionParams{
+		ID: "sub-bulk-del-1", SiteID: siteID,
+		TargetUrl:      "https://example.invalid/hook",
+		Secret:         "shh",
+		EventTypesJson: `["collection_item.deleted"]`,
+		Active:         1,
+	}); err != nil {
+		t.Fatalf("seed sub: %v", err)
+	}
+
+	prev := activeEmitter
+	SetWebhookEmitter(webhook.NewEmitter(q))
+	t.Cleanup(func() { activeEmitter = prev })
+
+	rr := postJSONCol(withColParams(siteID, colID, h.BulkDeleteItems), map[string]any{
+		"ids": []string{rows[0].ID, rows[1].ID},
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("bulk-delete expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	deliveries, err := q.ListWebhookDeliveriesBySite(context.Background(), store.ListWebhookDeliveriesBySiteParams{
+		SiteID: siteID, Limit: 50,
+	})
+	if err != nil {
+		t.Fatalf("list deliveries: %v", err)
+	}
+	count := 0
+	for _, d := range deliveries {
+		if d.EventType == "collection_item.deleted" {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Errorf("expected 2 collection_item.deleted deliveries, got %d", count)
+	}
+}
+
+func TestCollectionItems_BulkDelete_CrossCollectionForbidden(t *testing.T) {
+	h, q, siteID := newCollectionHandlerForTest(t)
+	colA := seedCollection(t, h, q, siteID)
+	rrCol := postJSONCol(withColParams(siteID, "", h.CreateCollection), map[string]any{
+		"name": "Other", "slug": "other",
+		"schema": []map[string]any{{"name": "headline", "type": "text", "required": true}},
+	})
+	if rrCol.Code != http.StatusCreated {
+		t.Fatalf("seed colB expected 201, got %d", rrCol.Code)
+	}
+	var colBObj map[string]any
+	_ = json.Unmarshal(rrCol.Body.Bytes(), &colBObj)
+	colB, _ := colBObj["id"].(string)
+
+	postJSONCol(withColParams(siteID, colA, h.CreateItem), map[string]any{
+		"slug": "in-a", "title": "A", "data": map[string]any{"headline": "A"},
+	})
+	postJSONCol(withColParams(siteID, colB, h.CreateItem), map[string]any{
+		"slug": "in-b", "title": "B", "data": map[string]any{"headline": "B"},
+	})
+	rowsA, _ := q.ListItemsByCollection(context.Background(), colA)
+	rowsB, _ := q.ListItemsByCollection(context.Background(), colB)
+
+	rr := postJSONCol(withColParams(siteID, colA, h.BulkDeleteItems), map[string]any{
+		"ids": []string{rowsA[0].ID, rowsB[0].ID},
+	})
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 cross-collection, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	stillA, _ := q.ListItemsByCollection(context.Background(), colA)
+	stillB, _ := q.ListItemsByCollection(context.Background(), colB)
+	if len(stillA) != 1 || len(stillB) != 1 {
+		t.Errorf("rows must be untouched on abort, got A=%d B=%d", len(stillA), len(stillB))
 	}
 }
 

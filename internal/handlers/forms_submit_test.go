@@ -48,7 +48,7 @@ func newFormHandlerForTest(t *testing.T, mail MailSender) (*FormHandler, *store.
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "forms.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestFormSubmit_AutoIdentifiesVisitor(t *testing.T) {
 	// recorder wired.
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "forms.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ func newBuilderTestDB(t *testing.T) (*sql.DB, *store.Queries, string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "build.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

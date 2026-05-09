@@ -167,6 +167,35 @@ func (q *Queries) GetSiteQuota(ctx context.Context, id string) (GetSiteQuotaRow,
 	return i, err
 }
 
+const getWorkspaceLastActivity = `-- name: GetWorkspaceLastActivity :one
+SELECT COALESCE(MAX(activity), '') AS last_activity FROM (
+    SELECT w.updated_at AS activity FROM workspaces w WHERE w.id = ?1
+    UNION ALL
+    SELECT s.updated_at AS activity FROM sites s WHERE s.workspace_id = ?1
+    UNION ALL
+    SELECT s.last_build_at AS activity FROM sites s WHERE s.workspace_id = ?1 AND s.last_build_at != ''
+    UNION ALL
+    SELECT s.last_deploy_at AS activity FROM sites s WHERE s.workspace_id = ?1 AND s.last_deploy_at != ''
+    UNION ALL
+    SELECT d.created_at AS activity FROM deployments d
+        JOIN sites s ON s.id = d.site_id
+        WHERE s.workspace_id = ?1
+)
+`
+
+// Returns the most recent activity timestamp across the workspace:
+// the workspace itself, any of its sites' updated_at / last_build_at /
+// last_deploy_at, and any recent deployment created_at. Used by the
+// lifecycle sweep to decide if a workspace has been idle long enough
+// to pause / delete. Empty workspace returns the workspace's own
+// updated_at.
+func (q *Queries) GetWorkspaceLastActivity(ctx context.Context, id string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getWorkspaceLastActivity, id)
+	var last_activity interface{}
+	err := row.Scan(&last_activity)
+	return last_activity, err
+}
+
 const listSites = `-- name: ListSites :many
 SELECT id, workspace_id, name, slug, domain, status, primary_color, secondary_color, surface_color, border_color, muted_color, accent_color, on_primary_color, bg_color, text_color, font_heading, font_body, meta_title, meta_description, og_image_id, favicon_id, ga4_id, umami_id, umami_url, cookieproof_domain, lang, last_build_at, last_build_status, last_build_error, last_deploy_at, storage_quota_bytes, build_minutes_quota, quota_overage_blocked, created_at, updated_at FROM sites ORDER BY updated_at DESC
 `
@@ -275,6 +304,57 @@ func (q *Queries) ListSitesForQuotaAudit(ctx context.Context) ([]ListSitesForQuo
 	return items, nil
 }
 
+const listWorkspacesForLifecycleSweep = `-- name: ListWorkspacesForLifecycleSweep :many
+SELECT id, name, slug, plan, status, created_at, updated_at
+FROM workspaces
+WHERE status != 'deleted'
+ORDER BY id
+`
+
+type ListWorkspacesForLifecycleSweepRow struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Plan      string `json:"plan"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// Returns every workspace except those already in the deleted state
+// (terminal). The sweep uses each row's id to query
+// GetWorkspaceLastActivity and decide whether to pause / delete.
+func (q *Queries) ListWorkspacesForLifecycleSweep(ctx context.Context) ([]ListWorkspacesForLifecycleSweepRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspacesForLifecycleSweep)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspacesForLifecycleSweepRow{}
+	for rows.Next() {
+		var i ListWorkspacesForLifecycleSweepRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Plan,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sumBuildMinutesBySiteSinceCutoff = `-- name: SumBuildMinutesBySiteSinceCutoff :one
 SELECT COALESCE(SUM(duration_ms), 0) AS duration_ms_total
 FROM deployments
@@ -293,12 +373,52 @@ func (q *Queries) SumBuildMinutesBySiteSinceCutoff(ctx context.Context, arg SumB
 	return duration_ms_total, err
 }
 
+const sumBuildMinutesByWorkspaceSinceCutoff = `-- name: SumBuildMinutesByWorkspaceSinceCutoff :one
+SELECT COALESCE(SUM(d.duration_ms), 0) AS duration_ms_total
+FROM deployments d
+JOIN sites s ON s.id = d.site_id
+WHERE s.workspace_id = ? AND d.created_at >= ?
+`
+
+type SumBuildMinutesByWorkspaceSinceCutoffParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// Workspace-level rolling build-minutes rollup. Same shape as the
+// per-site query but joined through sites so the cutoff applies
+// to every deployment under the workspace.
+func (q *Queries) SumBuildMinutesByWorkspaceSinceCutoff(ctx context.Context, arg SumBuildMinutesByWorkspaceSinceCutoffParams) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, sumBuildMinutesByWorkspaceSinceCutoff, arg.WorkspaceID, arg.CreatedAt)
+	var duration_ms_total interface{}
+	err := row.Scan(&duration_ms_total)
+	return duration_ms_total, err
+}
+
 const sumStorageBytesBySite = `-- name: SumStorageBytesBySite :one
 SELECT COALESCE(SUM(file_size), 0) AS bytes FROM media WHERE site_id = ?
 `
 
 func (q *Queries) SumStorageBytesBySite(ctx context.Context, siteID string) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, sumStorageBytesBySite, siteID)
+	var bytes interface{}
+	err := row.Scan(&bytes)
+	return bytes, err
+}
+
+const sumStorageBytesByWorkspace = `-- name: SumStorageBytesByWorkspace :one
+SELECT COALESCE(SUM(m.file_size), 0) AS bytes
+FROM media m
+JOIN sites s ON s.id = m.site_id
+WHERE s.workspace_id = ?
+`
+
+// Workspace-level storage rollup. Joins media -> sites by workspace_id
+// so a single SUM covers every site in the workspace. Used by the
+// plan-ladder enforcement (solo plan = 1 GB workspace-wide regardless
+// of how many sites exist or how their per-site caps are configured).
+func (q *Queries) SumStorageBytesByWorkspace(ctx context.Context, workspaceID string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, sumStorageBytesByWorkspace, workspaceID)
 	var bytes interface{}
 	err := row.Scan(&bytes)
 	return bytes, err
@@ -454,5 +574,19 @@ func (q *Queries) UpdateSiteQuota(ctx context.Context, arg UpdateSiteQuotaParams
 		arg.QuotaOverageBlocked,
 		arg.ID,
 	)
+	return err
+}
+
+const updateWorkspaceStatus = `-- name: UpdateWorkspaceStatus :exec
+UPDATE workspaces SET status = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type UpdateWorkspaceStatusParams struct {
+	Status string `json:"status"`
+	ID     string `json:"id"`
+}
+
+func (q *Queries) UpdateWorkspaceStatus(ctx context.Context, arg UpdateWorkspaceStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateWorkspaceStatus, arg.Status, arg.ID)
 	return err
 }

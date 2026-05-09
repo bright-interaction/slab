@@ -23,7 +23,7 @@ func newMissingURLsHandlerForTest(t *testing.T) (*MissingURLsHandler, *store.Que
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "miss.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

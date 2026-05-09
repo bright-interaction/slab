@@ -13,6 +13,16 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
+// PasswordBcryptCost is the cost factor used for every bcrypt hash of a
+// user-supplied password (initial seed, change-password, reset, invite
+// redemption). Held above bcrypt.DefaultCost (10) because the default
+// was tuned for 2014 hardware; cost 12 lands at ~250ms on a 2024 server
+// CPU, which is the right tradeoff between login latency and offline
+// crack cost. CompareHashAndPassword auto-handles older hashes, so
+// raising the cost is safe without a migration: existing logins still
+// work, and they get re-hashed at the new cost on next change-password.
+const PasswordBcryptCost = 12
+
 type AuthHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
@@ -135,14 +145,25 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authmw.SetTokenCookie(w, h.cfg, tokenStr)
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"user": map[string]any{
 			"id":    user.ID,
 			"email": user.Email,
 			"name":  user.Name,
 			"role":  user.Role,
 		},
-	})
+	}
+	// MFA enforcement signal (Phase: feature #14, 2026-05-09). When
+	// the policy demands enrollment for this user's role and the
+	// user has not yet enrolled, the SPA receives enroll_required:
+	// true and is expected to redirect to the TOTP setup screen.
+	// The session cookie is still issued so the user can complete
+	// enrollment; AdminWriteEnforceMFA in the middleware blocks
+	// every other write until totp_enrolled_at is non-empty.
+	if h.cfg.MustEnrollMFA(user.Role) && user.TotpEnrolledAt == "" {
+		resp["enroll_required"] = true
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +182,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to load user")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"user": map[string]any{
 			"id":         row.ID,
 			"email":      row.Email,
@@ -170,7 +191,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 			"created_at": row.CreatedAt,
 			"updated_at": row.UpdatedAt,
 		},
-	})
+	}
+	if h.cfg.MustEnrollMFA(row.Role) && row.TotpEnrolledAt == "" {
+		resp["enroll_required"] = true
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +234,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), PasswordBcryptCost)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to hash password")
 		return

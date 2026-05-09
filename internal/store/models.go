@@ -392,10 +392,34 @@ type SchemaVersion struct {
 	Note      string `json:"note"`
 }
 
+type SearchIndex struct {
+	SiteID     string `json:"site_id"`
+	Kind       string `json:"kind"`
+	ResourceID string `json:"resource_id"`
+	Title      string `json:"title"`
+	Body       string `json:"body"`
+}
+
 type Setting struct {
 	Key       string `json:"key"`
 	Value     string `json:"value"`
 	UpdatedAt string `json:"updated_at"`
+}
+
+type ShieldSession struct {
+	ID        string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	LastSeen  string `json:"last_seen"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+type ShieldToken struct {
+	Token      string `json:"token"`
+	SessionID  string `json:"session_id"`
+	Kind       string `json:"kind"`
+	Hint       string `json:"hint"`
+	Ciphertext string `json:"ciphertext"`
+	CreatedAt  string `json:"created_at"`
 }
 
 type Site struct {
@@ -535,17 +559,18 @@ type Subscription struct {
 }
 
 type User struct {
-	ID               string `json:"id"`
-	Email            string `json:"email"`
-	PasswordHash     string `json:"password_hash"`
-	Name             string `json:"name"`
-	Role             string `json:"role"`
-	TokenVersion     int64  `json:"token_version"`
-	TotpSecret       string `json:"totp_secret"`
-	TotpEnrolledAt   string `json:"totp_enrolled_at"`
-	TotpRecoveryJson string `json:"totp_recovery_json"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+	ID                  string `json:"id"`
+	Email               string `json:"email"`
+	PasswordHash        string `json:"password_hash"`
+	Name                string `json:"name"`
+	Role                string `json:"role"`
+	TokenVersion        int64  `json:"token_version"`
+	TotpSecret          string `json:"totp_secret"`
+	TotpEnrolledAt      string `json:"totp_enrolled_at"`
+	TotpRecoveryJson    string `json:"totp_recovery_json"`
+	DeletionRequestedAt string `json:"deletion_requested_at"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
 }
 
 type VerifyJob struct {
@@ -629,6 +654,34 @@ type Waitlist struct {
 	InviteToken string `json:"invite_token"`
 	Notes       string `json:"notes"`
 	CreatedAt   string `json:"created_at"`
+}
+
+type WebhookDelivery struct {
+	ID                 string `json:"id"`
+	SubscriptionID     string `json:"subscription_id"`
+	SiteID             string `json:"site_id"`
+	EventType          string `json:"event_type"`
+	PayloadJson        string `json:"payload_json"`
+	Status             string `json:"status"`
+	Attempts           int64  `json:"attempts"`
+	NextAttemptAt      string `json:"next_attempt_at"`
+	LastResponseStatus int64  `json:"last_response_status"`
+	LastError          string `json:"last_error"`
+	CreatedAt          string `json:"created_at"`
+	CompletedAt        string `json:"completed_at"`
+}
+
+type WebhookSubscription struct {
+	ID              string `json:"id"`
+	SiteID          string `json:"site_id"`
+	TargetUrl       string `json:"target_url"`
+	Secret          string `json:"secret"`
+	EventTypesJson  string `json:"event_types_json"`
+	Active          int64  `json:"active"`
+	LastDeliveredAt string `json:"last_delivered_at"`
+	LastError       string `json:"last_error"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 type Workspace struct {

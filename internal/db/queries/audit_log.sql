@@ -29,3 +29,6 @@ FROM audit_log
 WHERE resource_type = ? AND resource_id = ?
 ORDER BY created_at DESC
 LIMIT ?;
+
+-- name: DeleteAuditLogOlderThan :execrows
+DELETE FROM audit_log WHERE created_at < ?;

@@ -182,6 +182,25 @@ type Config struct {
 	// [MinRetentionDays, MaxRetentionDays] inside the manager.
 	AuditLogRetentionDays int
 
+	// LifecyclePauseDays / LifecycleDeleteDays drive the daily
+	// workspace lifecycle sweep. When a workspace has no activity
+	// (no site updates, no builds, no deployments) for N days, the
+	// sweep flips status: active -> paused at LifecyclePauseDays,
+	// any -> deleted at LifecycleDeleteDays. Both default to 0 =
+	// disabled. Self-host operators almost never want this; cloud
+	// installs set both via ATOMICSITE_LIFECYCLE_PAUSE_DAYS /
+	// ATOMICSITE_LIFECYCLE_DELETE_DAYS. The 'deleted' transition
+	// is a SOFT state change; rows stay in the DB until an operator-
+	// initiated hard purge so a sweep mistake stays recoverable.
+	LifecyclePauseDays  int
+	LifecycleDeleteDays int
+
+	// GDPRDeleteCoolingDays is the cooling-off window between a
+	// user's POST /api/account/delete and the retention sweep's
+	// hard cascade. 0 falls back to retention.DefaultGDPRDeleteCoolingDays
+	// (7). Read from ATOMICSITE_GDPR_DELETE_COOLING_DAYS.
+	GDPRDeleteCoolingDays int
+
 	// TrustedProxies is the comma-separated list of CIDRs (or bare IPs,
 	// auto-widened to /32 or /128) whose X-Forwarded-For / X-Real-IP
 	// headers the server should honor. When empty, those headers are
@@ -239,6 +258,11 @@ func Load() *Config {
 		RequireMFA: strings.ToLower(strings.TrimSpace(envOr("ATOMICSITE_REQUIRE_MFA", ""))),
 
 		AuditLogRetentionDays: envInt("ATOMICSITE_AUDIT_LOG_RETENTION_DAYS", 0),
+
+		LifecyclePauseDays:  envInt("ATOMICSITE_LIFECYCLE_PAUSE_DAYS", 0),
+		LifecycleDeleteDays: envInt("ATOMICSITE_LIFECYCLE_DELETE_DAYS", 0),
+
+		GDPRDeleteCoolingDays: envInt("ATOMICSITE_GDPR_DELETE_COOLING_DAYS", 0),
 
 		TrustedProxies: envOr("ATOMICSITE_TRUSTED_PROXIES", ""),
 	}

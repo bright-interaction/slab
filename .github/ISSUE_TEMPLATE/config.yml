@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:security@brightinteraction.com
+    about: Report security issues privately. Do NOT file a public issue.
+  - name: Code of Conduct concern
+    url: mailto:conduct@brightinteraction.com
+    about: Report behaviour that violates our Code of Conduct.
+  - name: General questions
+    url: https://github.com/brightinteraction/atomicsite/discussions
+    about: Use Discussions for usage questions, design ideas, or "how do I...".

@@ -3,6 +3,16 @@ import type { AuthUser } from './types';
 
 export interface AuthResponse {
 	user: AuthUser;
+	/**
+	 * Set to true by login + /auth/me when the deployment's MFA
+	 * enforcement policy demands enrollment for this user's role and
+	 * the user has not yet enrolled in TOTP. The session cookie is
+	 * still issued (so the user can complete enrollment); writes to
+	 * everything except the TOTP setup + change-password + logout
+	 * paths return 403 + error_code=mfa_enroll_required until the
+	 * user enrolls.
+	 */
+	enroll_required?: boolean;
 }
 
 export interface StatusResponse {

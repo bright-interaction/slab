@@ -47,9 +47,8 @@ var identifiedKeys = map[string]bool{
 // Visitor returns the per-visitor metadata bound to the request's fingerprint.
 // Cross-origin friendly: the server re-derives the fingerprint from request
 // headers (IP + UA + Accept-Language + AnalyticsSalt), so the built site can
-// fetch from <slug>.atomicsite.example.com to
-// app.atomicsite.example.com without needing the SameSite=Lax
-// fingerprint cookie to round-trip cross-site.
+// fetch from <slug><BUILT_SITE_SUFFIX> to the admin host without needing the
+// SameSite=Lax fingerprint cookie to round-trip cross-site.
 //
 // Identity is bound via the IP+UA derivation; only the actual visitor can
 // satisfy it. The CORS layer echoes the requesting origin (never `*`) so a

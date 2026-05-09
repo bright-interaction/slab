@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS users (
     totp_secret         TEXT NOT NULL DEFAULT '',
     totp_enrolled_at    TEXT NOT NULL DEFAULT '',
     totp_recovery_json  TEXT NOT NULL DEFAULT '[]',
+    -- GDPR Article 17 erasure cooling-off window (2026-05-09). Set
+    -- when the user requests account deletion; the daily retention
+    -- sweep hard-deletes rows older than the cooling-off window.
+    -- Empty = not pending.
+    deletion_requested_at TEXT NOT NULL DEFAULT '',
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -1100,3 +1105,66 @@ CREATE TABLE IF NOT EXISTS shield_tokens (
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_shield_tokens_session ON shield_tokens(session_id);
+
+-- Outbound webhook subscriptions (2026-05-09). Per-site delivery
+-- targets that receive HMAC-signed POSTs for content events. Each
+-- subscription has a target URL, a shared HMAC secret (kept
+-- server-side; never returned in list/read responses after creation),
+-- and an optional event-types filter. Empty filter = subscribe to
+-- every event.
+CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+    id                TEXT PRIMARY KEY,
+    site_id           TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    target_url        TEXT NOT NULL,
+    secret            TEXT NOT NULL,
+    event_types_json  TEXT NOT NULL DEFAULT '[]',
+    active            INTEGER NOT NULL DEFAULT 1,
+    last_delivered_at TEXT NOT NULL DEFAULT '',
+    last_error        TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_subs_site ON webhook_subscriptions(site_id);
+
+-- Outbound webhook delivery attempts. One row per (subscription,
+-- event) pair; rows in 'pending' or 'retrying' state are picked up
+-- by the WebhookDeliveryManager goroutine on its 5-second tick. Hard
+-- cap at 5 attempts before flipping to 'dropped'.
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id                   TEXT PRIMARY KEY,
+    subscription_id      TEXT NOT NULL REFERENCES webhook_subscriptions(id) ON DELETE CASCADE,
+    site_id              TEXT NOT NULL,
+    event_type           TEXT NOT NULL,
+    payload_json         TEXT NOT NULL,
+    status               TEXT NOT NULL DEFAULT 'pending',
+    attempts             INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    last_response_status INTEGER NOT NULL DEFAULT 0,
+    last_error           TEXT NOT NULL DEFAULT '',
+    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_del_status ON webhook_deliveries(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_del_site ON webhook_deliveries(site_id, created_at DESC);
+
+-- Global search index (2026-05-09). FTS5 virtual table covering the
+-- operator-facing content surface: pages, collection_items,
+-- knowledgebase entries, and the site shell (name + slug). Populated
+-- by handler-side `Upsert` calls on every content mutation; the
+-- /api/sites/{siteID}/search/reindex endpoint rebuilds wholesale
+-- after bulk imports / migrations. Standalone (not external-content)
+-- so a row deletion in the underlying table doesn't orphan FTS rows
+-- without an explicit DELETE.
+--
+-- tokenize: unicode61 + remove_diacritics covers Swedish + most EU
+-- languages (Atomic Site is EU-sovereign by design); operators
+-- running CJK content can drop in their own tokenizer once SQLite
+-- supports them via build flags.
+CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+    site_id UNINDEXED,
+    kind UNINDEXED,
+    resource_id UNINDEXED,
+    title,
+    body,
+    tokenize = 'unicode61 remove_diacritics 2'
+);

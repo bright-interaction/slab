@@ -304,6 +304,17 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/auth/totp/verify", ah.TOTPVerify)
 		r.Post("/api/auth/totp/disable", ah.TOTPDisable)
 
+		// GDPR Article 17 (erasure) + Article 20 (portability).
+		// The export ZIPs every record we hold about the calling
+		// user; the delete soft-flags the user for hard cascade
+		// after a configurable cooling-off window (default 7 days)
+		// committed by the daily retention sweep. Cancel undoes
+		// the request before the window expires.
+		gdprH := handlers.NewAccountGDPRHandler(s.queries)
+		r.Get("/api/account/export", gdprH.Export)
+		r.Post("/api/account/delete", gdprH.Delete)
+		r.Post("/api/account/delete/cancel", gdprH.CancelDelete)
+
 		// Account profile + workspace member management.
 		memh := handlers.NewMembersHandler(s.cfg, s.queries)
 		r.Patch("/api/auth/me", memh.UpdateProfile)
@@ -501,6 +512,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}/preview", ph.PreviewSource)
 		siteR.Patch("/api/sites/{siteID}/pages/{pageID}", ph.Update)
 		siteR.Delete("/api/sites/{siteID}/pages/{pageID}", ph.Delete)
+		siteR.Post("/api/sites/{siteID}/pages/bulk-delete", ph.BulkDelete)
 		siteR.Post("/api/sites/{siteID}/pages/reorder", ph.Reorder)
 
 		// Blocks
@@ -548,6 +560,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.GetItem)
 		siteR.Patch("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.UpdateItem)
 		siteR.Delete("/api/sites/{siteID}/collections/{collectionID}/items/{itemID}", colH.DeleteItem)
+		siteR.Post("/api/sites/{siteID}/collections/{collectionID}/items/bulk-delete", colH.BulkDeleteItems)
 
 		// Redirects (Layer 2 of the migration system, 2026-05-05). CRUD +
 		// CSV bulk import + pre-launch verify. The slug-edit auto-301 path
@@ -675,6 +688,26 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/media/{mediaID}", mh.Get)
 		siteR.Patch("/api/sites/{siteID}/media/{mediaID}", mh.Update)
 		siteR.Delete("/api/sites/{siteID}/media/{mediaID}", mh.Delete)
+
+		// Outbound webhook subscriptions (#6). Site-scoped CRUD; the
+		// DeliveryManager goroutine in cmd/server/main.go handles
+		// the actual POSTs + retries. Listing the deliveries log
+		// helps the operator debug a misbehaving receiver.
+		webhookH := handlers.NewWebhookHandler(s.queries)
+		siteR.Get("/api/sites/{siteID}/webhooks", webhookH.List)
+		siteR.Post("/api/sites/{siteID}/webhooks", webhookH.Create)
+		siteR.Get("/api/sites/{siteID}/webhooks/deliveries", webhookH.Deliveries)
+		siteR.Get("/api/sites/{siteID}/webhooks/{webhookID}", webhookH.Get)
+		siteR.Patch("/api/sites/{siteID}/webhooks/{webhookID}", webhookH.Update)
+		siteR.Delete("/api/sites/{siteID}/webhooks/{webhookID}", webhookH.Delete)
+
+		// Global content search (FTS5). Site-scoped: every workspace
+		// member can query the search index for their own sites,
+		// nothing else. Reindex is mounted under the same gate so
+		// any member can trigger a rebuild after a bulk import.
+		searchH := handlers.NewSearchHandler(s.db, s.queries)
+		siteR.Get("/api/sites/{siteID}/search", searchH.Search)
+		siteR.Post("/api/sites/{siteID}/search/reindex", searchH.Reindex)
 
 		// Builds (admin)
 		buildH := handlers.NewBuildHandler(s.cfg, s.queries, quotaH)

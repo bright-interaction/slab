@@ -36,10 +36,11 @@ type EdgeWriter struct {
 	NginxSitesDir  string // /etc/nginx/sites-enabled
 	AcmeWebrootDir string // /var/www/acme
 	// SlugSuffix is the wildcard tenant suffix the existing nginx
-	// vhost terminates (e.g. ".atomicsite.example.com").
-	// Custom-domain proxy_pass uses Host: <slug><SlugSuffix> so the
-	// upstream Caddy's existing {labels.3} routing finds the right
-	// dist dir without a separate per-tenant Caddy block.
+	// vhost terminates (e.g. ".tenants.example.com"). Set via the
+	// BUILT_SITE_SUFFIX env var. Custom-domain proxy_pass uses
+	// Host: <slug><SlugSuffix> so the upstream Caddy's existing
+	// {labels.3} routing finds the right dist dir without a separate
+	// per-tenant Caddy block. Empty disables the rewrite.
 	SlugSuffix string
 	// HeadersSnippet is the include path for the global A+ headers
 	// fragment (e.g. /etc/nginx/snippets/atomicsite-headers.conf).

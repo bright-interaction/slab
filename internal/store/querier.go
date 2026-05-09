@@ -32,6 +32,9 @@ type Querier interface {
 	// exists, the workspace is skipped. Used by ensureDefaultWorkspace
 	// on first boot of a Phase 30+ binary against an existing DB.
 	BackfillWorkspaceMembersForAdmin(ctx context.Context, userID string) error
+	// Clears the pending deletion. Bumps token_version so any
+	// "deletion-pending" UI state in another tab refreshes.
+	CancelUserDeletion(ctx context.Context, id string) error
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
 	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
 	// Disables MFA and bumps token_version so any session that thought
@@ -59,6 +62,7 @@ type Querier interface {
 	CountMissingURLsBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
+	CountShieldTokensBySession(ctx context.Context, sessionID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
 	CountUniqueConvertersByGoal(ctx context.Context, arg CountUniqueConvertersByGoalParams) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
@@ -95,6 +99,8 @@ type Querier interface {
 	CreatePage(ctx context.Context, arg CreatePageParams) error
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
+	CreateShieldSession(ctx context.Context, arg CreateShieldSessionParams) error
+	CreateShieldToken(ctx context.Context, arg CreateShieldTokenParams) error
 	CreateSilo(ctx context.Context, arg CreateSiloParams) error
 	CreateSite(ctx context.Context, arg CreateSiteParams) error
 	CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error
@@ -102,11 +108,14 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	CreateVerifyJob(ctx context.Context, arg CreateVerifyJobParams) error
 	CreateWaitlistEntry(ctx context.Context, arg CreateWaitlistEntryParams) error
+	CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDeliveryParams) error
+	CreateWebhookSubscription(ctx context.Context, arg CreateWebhookSubscriptionParams) error
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error
 	CreateWorkspaceInvite(ctx context.Context, arg CreateWorkspaceInviteParams) error
 	DeactivateAgentKey(ctx context.Context, id string) error
 	DeleteAgentKey(ctx context.Context, id string) error
 	DeleteAllowedScript(ctx context.Context, id string) error
+	DeleteAuditLogOlderThan(ctx context.Context, createdAt string) (int64, error)
 	DeleteBlock(ctx context.Context, id string) error
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
@@ -141,6 +150,7 @@ type Querier interface {
 	DeleteRedirect(ctx context.Context, id string) error
 	DeleteSetting(ctx context.Context, id string) error
 	DeleteSettingsByCategory(ctx context.Context, arg DeleteSettingsByCategoryParams) error
+	DeleteShieldSession(ctx context.Context, id string) error
 	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
 	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
@@ -163,6 +173,7 @@ type Querier interface {
 	// contacts) -- only fully anonymous sessions older than the cutoff drop.
 	DeleteVisitSessionsBySiteOlderThan(ctx context.Context, arg DeleteVisitSessionsBySiteOlderThanParams) (int64, error)
 	DeleteWaitlistEntry(ctx context.Context, id string) error
+	DeleteWebhookSubscription(ctx context.Context, id string) error
 	DeleteWorkspace(ctx context.Context, id string) error
 	DeleteWorkspaceInvite(ctx context.Context, id string) error
 	EnsureMediaFolder(ctx context.Context, arg EnsureMediaFolderParams) error
@@ -207,6 +218,8 @@ type Querier interface {
 	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
 	GetSessionByFingerprint(ctx context.Context, arg GetSessionByFingerprintParams) (VisitSession, error)
 	GetSetting(ctx context.Context, arg GetSettingParams) (SiteSetting, error)
+	GetShieldSession(ctx context.Context, id string) (ShieldSession, error)
+	GetShieldToken(ctx context.Context, arg GetShieldTokenParams) (ShieldToken, error)
 	GetSiloByID(ctx context.Context, id string) (SiteSilo, error)
 	// Site architecture
 	GetSiteArchitecture(ctx context.Context, siteID string) (SiteArchitecture, error)
@@ -226,9 +239,17 @@ type Querier interface {
 	GetVisitorMetadataByFingerprint(ctx context.Context, arg GetVisitorMetadataByFingerprintParams) (VisitSession, error)
 	GetWaitlistByEmail(ctx context.Context, email string) (Waitlist, error)
 	GetWaitlistByID(ctx context.Context, id string) (Waitlist, error)
+	GetWebhookSubscription(ctx context.Context, id string) (WebhookSubscription, error)
 	GetWorkspaceByID(ctx context.Context, id string) (Workspace, error)
 	GetWorkspaceBySlug(ctx context.Context, slug string) (Workspace, error)
 	GetWorkspaceInviteByToken(ctx context.Context, token string) (WorkspaceInvite, error)
+	// Returns the most recent activity timestamp across the workspace:
+	// the workspace itself, any of its sites' updated_at / last_build_at /
+	// last_deploy_at, and any recent deployment created_at. Used by the
+	// lifecycle sweep to decide if a workspace has been idle long enough
+	// to pause / delete. Empty workspace returns the workspace's own
+	// updated_at.
+	GetWorkspaceLastActivity(ctx context.Context, id string) (interface{}, error)
 	GetWorkspaceMembership(ctx context.Context, arg GetWorkspaceMembershipParams) (WorkspaceMember, error)
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
@@ -240,6 +261,10 @@ type Querier interface {
 	ListActiveGoalsBySite(ctx context.Context, siteID string) ([]ConversionGoal, error)
 	ListActiveGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
 	ListActiveKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
+	// Used by the Emit hook to find every subscription on a site that
+	// should receive a given event. Filtering by event_types_json is
+	// done in Go because SQLite's JSON1 module isn't a hard dependency.
+	ListActiveWebhookSubscriptions(ctx context.Context, siteID string) ([]WebhookSubscription, error)
 	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
 	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
 	ListAllGoalsBySite(ctx context.Context, siteID string) ([]ConversionGoal, error)
@@ -309,6 +334,10 @@ type Querier interface {
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
 	ListPendingWaitlist(ctx context.Context) ([]Waitlist, error)
+	// Worker pull: picks up to N rows that are due for delivery (status
+	// pending or retrying AND next_attempt_at <= now). The status filter
+	// skips successful + dropped + in-flight rows.
+	ListPendingWebhookDeliveries(ctx context.Context, arg ListPendingWebhookDeliveriesParams) ([]WebhookDelivery, error)
 	ListPendingWorkspaceInvites(ctx context.Context, workspaceID string) ([]WorkspaceInvite, error)
 	ListPublishedItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
 	ListPublishedItemsByCollectionAndLocale(ctx context.Context, arg ListPublishedItemsByCollectionAndLocaleParams) ([]CollectionItem, error)
@@ -318,6 +347,7 @@ type Querier interface {
 	ListSchemaVersions(ctx context.Context) ([]SchemaVersion, error)
 	ListSettingsByCategory(ctx context.Context, arg ListSettingsByCategoryParams) ([]SiteSetting, error)
 	ListSettingsBySite(ctx context.Context, siteID string) ([]SiteSetting, error)
+	ListShieldTokensBySession(ctx context.Context, sessionID string) ([]ListShieldTokensBySessionRow, error)
 	// Silos
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont, error)
@@ -330,17 +360,30 @@ type Querier interface {
 	ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiledMediaPaginatedParams) ([]Medium, error)
 	ListUnprocessedBillingEvents(ctx context.Context) ([]BillingEvent, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Returns users whose deletion_requested_at is non-empty AND older
+	// than the supplied cutoff. The cutoff is computed in Go using the
+	// same "YYYY-MM-DD HH:MM:SS" format SQLite's datetime('now') writes.
+	ListUsersDueForDeletion(ctx context.Context, deletionRequestedAt string) ([]ListUsersDueForDeletionRow, error)
 	ListVerifyJobsByMigration(ctx context.Context, migrationID string) ([]VerifyJob, error)
 	ListVisitsBySite(ctx context.Context, arg ListVisitsBySiteParams) ([]VisitEvent, error)
 	ListWaitlist(ctx context.Context) ([]Waitlist, error)
+	ListWebhookDeliveriesBySite(ctx context.Context, arg ListWebhookDeliveriesBySiteParams) ([]WebhookDelivery, error)
+	ListWebhookSubscriptionsBySite(ctx context.Context, siteID string) ([]WebhookSubscription, error)
 	ListWorkspaceIDsForUser(ctx context.Context, userID string) ([]string, error)
 	ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]ListWorkspaceMembersRow, error)
+	// Returns every workspace except those already in the deleted state
+	// (terminal). The sweep uses each row's id to query
+	// GetWorkspaceLastActivity and decide whether to pause / delete.
+	ListWorkspacesForLifecycleSweep(ctx context.Context) ([]ListWorkspacesForLifecycleSweepRow, error)
 	ListWorkspacesForUser(ctx context.Context, userID string) ([]ListWorkspacesForUserRow, error)
 	MarkBillingEventProcessed(ctx context.Context, arg MarkBillingEventProcessedParams) error
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
 	MarkVerifyJobRunning(ctx context.Context, id string) error
 	MarkWaitlistInvited(ctx context.Context, arg MarkWaitlistInvitedParams) error
+	MarkWebhookDeliveryDropped(ctx context.Context, arg MarkWebhookDeliveryDroppedParams) error
+	MarkWebhookDeliveryRetrying(ctx context.Context, arg MarkWebhookDeliveryRetryingParams) error
+	MarkWebhookDeliverySucceeded(ctx context.Context, arg MarkWebhookDeliverySucceededParams) error
 	MarkWorkspaceInviteUsed(ctx context.Context, id string) error
 	// Pageviews per UTC day for the requested window. Returned as ISO-date
 	// buckets so the frontend can render a sparkline / bar chart directly.
@@ -364,6 +407,11 @@ type Querier interface {
 	RecordVisitEvent(ctx context.Context, arg RecordVisitEventParams) error
 	RemoveSiteMember(ctx context.Context, arg RemoveSiteMemberParams) error
 	RemoveWorkspaceMember(ctx context.Context, arg RemoveWorkspaceMemberParams) error
+	// Sets deletion_requested_at to now() and bumps token_version so
+	// existing sessions can react. Idempotent: re-requesting overwrites
+	// the timestamp (useful if the user wants to refresh the cooling-
+	// off window after partially undoing).
+	RequestUserDeletion(ctx context.Context, id string) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	// Flips this row to is_canonical=1 and clears the flag on every other
 	// domain row for the same site so exactly one canonical exists.
@@ -379,8 +427,18 @@ type Querier interface {
 	SetVisitSessionEmail(ctx context.Context, arg SetVisitSessionEmailParams) (int64, error)
 	StreamConsentBySite(ctx context.Context, arg StreamConsentBySiteParams) ([]ConsentRecord, error)
 	SumBuildMinutesBySiteSinceCutoff(ctx context.Context, arg SumBuildMinutesBySiteSinceCutoffParams) (interface{}, error)
+	// Workspace-level rolling build-minutes rollup. Same shape as the
+	// per-site query but joined through sites so the cutoff applies
+	// to every deployment under the workspace.
+	SumBuildMinutesByWorkspaceSinceCutoff(ctx context.Context, arg SumBuildMinutesByWorkspaceSinceCutoffParams) (interface{}, error)
 	SumStorageBytesBySite(ctx context.Context, siteID string) (interface{}, error)
+	// Workspace-level storage rollup. Joins media -> sites by workspace_id
+	// so a single SUM covers every site in the workspace. Used by the
+	// plan-ladder enforcement (solo plan = 1 GB workspace-wide regardless
+	// of how many sites exist or how their per-site caps are configured).
+	SumStorageBytesByWorkspace(ctx context.Context, workspaceID string) (interface{}, error)
 	SumValueByGoal(ctx context.Context, arg SumValueByGoalParams) (interface{}, error)
+	SweepExpiredShieldSessions(ctx context.Context) error
 	TopBrowsers(ctx context.Context, arg TopBrowsersParams) ([]TopBrowsersRow, error)
 	TopCountries(ctx context.Context, arg TopCountriesParams) ([]TopCountriesRow, error)
 	TopDevices(ctx context.Context, arg TopDevicesParams) ([]TopDevicesRow, error)
@@ -393,6 +451,7 @@ type Querier interface {
 	// Group by 100px-bucketed viewport width so we don't get a long tail of
 	// one-off sizes. ~16 buckets cover the realistic phone-to-4k range.
 	TopViewports(ctx context.Context, arg TopViewportsParams) ([]TopViewportsRow, error)
+	TouchShieldSession(ctx context.Context, arg TouchShieldSessionParams) error
 	UpdateAgentKeyLastUsed(ctx context.Context, id string) error
 	UpdateAllowedScript(ctx context.Context, arg UpdateAllowedScriptParams) error
 	UpdateBlock(ctx context.Context, arg UpdateBlockParams) error
@@ -434,8 +493,11 @@ type Querier interface {
 	// consumed during a recovery login).
 	UpdateUserTOTPRecovery(ctx context.Context, arg UpdateUserTOTPRecoveryParams) error
 	UpdateVerifyJobProgress(ctx context.Context, arg UpdateVerifyJobProgressParams) error
+	UpdateWebhookSubscription(ctx context.Context, arg UpdateWebhookSubscriptionParams) error
+	UpdateWebhookSubscriptionStatus(ctx context.Context, arg UpdateWebhookSubscriptionStatusParams) error
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) error
 	UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) error
+	UpdateWorkspaceStatus(ctx context.Context, arg UpdateWorkspaceStatusParams) error
 	UpdateWorkspaceStripe(ctx context.Context, arg UpdateWorkspaceStripeParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
 	// Sprint 4 (2026-05-06): re-import upsert. Conflict on the

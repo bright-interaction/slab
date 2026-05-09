@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/brightinteraction/atomicsite/internal/billing"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -198,9 +199,28 @@ func (h *DomainHandler) List(w http.ResponseWriter, r *http.Request) {
 // POST /api/sites/{siteID}/domains
 func (h *DomainHandler) Create(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
-	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+	site, err := h.queries.GetSiteByID(r.Context(), siteID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Site not found")
 		return
+	}
+	// Plan gate: workspace plan must allow custom domains. The "solo"
+	// tier doesn't (atomicsite-suffix subdomain only); studio + agency
+	// do. OSS workspaces always pass (Limit returns -1). Cloud builds
+	// hit this gate because every workspace lands on a paid plan after
+	// signup.
+	if site.WorkspaceID != "" {
+		if ws, err := h.queries.GetWorkspaceByID(r.Context(), site.WorkspaceID); err == nil {
+			if !billing.Allows(ws.Plan, "custom_domain") {
+				writeJSON(w, http.StatusPaymentRequired, map[string]any{
+					"error":     "plan_quota_exceeded",
+					"error_msg": "Custom domains are not available on the current plan; upgrade to add a custom hostname.",
+					"kind":      "plan_custom_domain",
+					"plan":      ws.Plan,
+				})
+				return
+			}
+		}
 	}
 	var req struct {
 		Hostname    string `json:"hostname"`

@@ -9,6 +9,18 @@ import (
 	"context"
 )
 
+const deleteAuditLogOlderThan = `-- name: DeleteAuditLogOlderThan :execrows
+DELETE FROM audit_log WHERE created_at < ?
+`
+
+func (q *Queries) DeleteAuditLogOlderThan(ctx context.Context, createdAt string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAuditLogOlderThan, createdAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listAuditLogByResource = `-- name: ListAuditLogByResource :many
 SELECT id, actor_user_id, actor_role, actor_ip,
        site_id, action, resource_type, resource_id, changes_json, created_at

@@ -36,7 +36,7 @@ func newAuthHandlerForReset(t *testing.T) (*AuthHandler, *store.Queries) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "auth.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

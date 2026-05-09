@@ -7,8 +7,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/brightinteraction/atomicsite/internal/billing"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
+
+// gigabyte is the unit billing.Plan.StorageGB encodes; the workspace
+// plan caps storage in GB-of-1024^3-bytes, so we multiply at the gate.
+const gigabyte int64 = 1024 * 1024 * 1024
 
 // QuotaHandler exposes per-tenant quota read + admin update endpoints
 // and provides shared helpers (CheckStorageQuota / CheckBuildMinutesQuota)
@@ -121,10 +126,104 @@ func (h *QuotaHandler) CheckBuildMinutesQuota(ctx context.Context, siteID string
 	}, nil
 }
 
+// CheckPlanStorageQuota returns the workspace-plan storage check for
+// the workspace owning siteID. Returns Allowed=true (and Limit=-1)
+// when the plan caps storage as unlimited (oss plan). Cap is
+// `plan.StorageGB * 1 GiB`.
+//
+// `additional` simulates the bytes a pending upload would add so the
+// gate fires BEFORE the bytes hit disk.
+func (h *QuotaHandler) CheckPlanStorageQuota(ctx context.Context, siteID string, additional int64) (QuotaCheck, error) {
+	site, err := h.queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return QuotaCheck{}, err
+	}
+	if site.WorkspaceID == "" {
+		return QuotaCheck{Allowed: true, Limit: -1}, nil
+	}
+	ws, err := h.queries.GetWorkspaceByID(ctx, site.WorkspaceID)
+	if err != nil {
+		return QuotaCheck{}, err
+	}
+	gb := billing.Limit(ws.Plan, "storage_gb")
+	if gb < 0 {
+		return QuotaCheck{Allowed: true, Limit: -1}, nil
+	}
+	used, err := h.queries.SumStorageBytesByWorkspace(ctx, site.WorkspaceID)
+	if err != nil {
+		return QuotaCheck{}, err
+	}
+	limitBytes := gb * gigabyte
+	usedBytes := asInt64(used) + additional
+	return QuotaCheck{
+		Used:    usedBytes,
+		Limit:   limitBytes,
+		Allowed: usedBytes <= limitBytes,
+		// Plan caps are always block-on-overage. Per-site soft warnings
+		// are a different layer (admin-set, customer-visible).
+		Blocked: true,
+	}, nil
+}
+
+// CheckPlanBuildMinutesQuota returns the workspace-plan build-minutes
+// rolling-30d check. Same Allowed/Limit/Blocked semantics as
+// CheckPlanStorageQuota.
+func (h *QuotaHandler) CheckPlanBuildMinutesQuota(ctx context.Context, siteID string) (QuotaCheck, error) {
+	site, err := h.queries.GetSiteByID(ctx, siteID)
+	if err != nil {
+		return QuotaCheck{}, err
+	}
+	if site.WorkspaceID == "" {
+		return QuotaCheck{Allowed: true, Limit: -1}, nil
+	}
+	ws, err := h.queries.GetWorkspaceByID(ctx, site.WorkspaceID)
+	if err != nil {
+		return QuotaCheck{}, err
+	}
+	limit := billing.Limit(ws.Plan, "build_minutes")
+	if limit < 0 {
+		return QuotaCheck{Allowed: true, Limit: -1}, nil
+	}
+	cutoff := time.Now().Add(-buildMinutesWindow).UTC().Format("2006-01-02 15:04:05")
+	durMs, err := h.queries.SumBuildMinutesByWorkspaceSinceCutoff(ctx, store.SumBuildMinutesByWorkspaceSinceCutoffParams{
+		WorkspaceID: site.WorkspaceID,
+		CreatedAt:   cutoff,
+	})
+	if err != nil {
+		return QuotaCheck{}, err
+	}
+	usedMinutes := asInt64(durMs) / 60000
+	return QuotaCheck{
+		Used:    usedMinutes,
+		Limit:   limit,
+		Allowed: usedMinutes <= limit,
+		Blocked: true,
+	}, nil
+}
+
 // EnforceStorageQuota is the inline gate the media upload handler
 // calls before persisting the file. Returns true if the request was
 // short-circuited (caller must return immediately); false to continue.
+//
+// The workspace-plan cap fires FIRST (so a free-tier customer never
+// gets to the per-site soft-warn layer just by raising their per-site
+// number), then the per-site quota.
 func (h *QuotaHandler) EnforceStorageQuota(w http.ResponseWriter, r *http.Request, siteID string, additional int64) bool {
+	plan, err := h.CheckPlanStorageQuota(r.Context(), siteID, additional)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to check plan storage quota")
+		return true
+	}
+	if !plan.Allowed {
+		writeJSON(w, http.StatusPaymentRequired, map[string]any{
+			"error":     "plan_quota_exceeded",
+			"error_msg": "Workspace plan storage cap reached; upgrade to add more.",
+			"kind":      "plan_storage",
+			"used":      plan.Used,
+			"limit":     plan.Limit,
+		})
+		return true
+	}
 	check, err := h.CheckStorageQuota(r.Context(), siteID, additional)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to check storage quota")
@@ -149,8 +248,24 @@ func (h *QuotaHandler) EnforceStorageQuota(w http.ResponseWriter, r *http.Reques
 
 // EnforceBuildMinutesQuota is the inline gate the build trigger handlers
 // call before kicking off a build goroutine. Same return contract as
-// EnforceStorageQuota.
+// EnforceStorageQuota: workspace-plan cap fires before the per-site
+// quota.
 func (h *QuotaHandler) EnforceBuildMinutesQuota(w http.ResponseWriter, r *http.Request, siteID string) bool {
+	plan, err := h.CheckPlanBuildMinutesQuota(r.Context(), siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to check plan build minutes quota")
+		return true
+	}
+	if !plan.Allowed {
+		writeJSON(w, http.StatusPaymentRequired, map[string]any{
+			"error":     "plan_quota_exceeded",
+			"error_msg": "Workspace plan build-minutes cap reached; upgrade to add more.",
+			"kind":      "plan_build_minutes",
+			"used":      plan.Used,
+			"limit":     plan.Limit,
+		})
+		return true
+	}
 	check, err := h.CheckBuildMinutesQuota(r.Context(), siteID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to check build minutes quota")

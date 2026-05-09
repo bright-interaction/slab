@@ -23,7 +23,11 @@
 	} = $props();
 
 	let iframeEl: HTMLIFrameElement | null = $state(null);
-	let height = $state(Math.max(160, minHeight));
+	// minHeight is a prop derived from the parent; reference it inside a
+	// $derived so changes propagate. Initial measurement still respects
+	// the prop value via the same derived expression.
+	let measuredHeight = $state(160);
+	const height = $derived(Math.max(measuredHeight, minHeight));
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let ready = $state(false);
@@ -115,8 +119,8 @@ ${'<'}/script>
 		const onMsg = (ev: MessageEvent) => {
 			const data = ev.data as { source?: string; height?: number } | null;
 			if (data && data.source === 'atomicsite-preview' && typeof data.height === 'number') {
-				const h = Math.max(Math.max(120, minHeight), Math.min(maxHeight, Math.ceil(data.height)));
-				if (Math.abs(h - height) > 4) height = h;
+				const h = Math.max(120, Math.min(maxHeight, Math.ceil(data.height)));
+				if (Math.abs(h - measuredHeight) > 4) measuredHeight = h;
 			}
 		};
 		window.addEventListener('message', onMsg);

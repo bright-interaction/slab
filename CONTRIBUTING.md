@@ -28,6 +28,17 @@ make dev                  # backend on :8080
 make frontend-dev         # SvelteKit dev server with proxy on :5173
 ```
 
+## Things that should never land in a commit
+
+- **Anything inside `data/`.** That directory is the local SQLite +
+  workspace cache. It is in `.gitignore` and `.gitattributes
+  export-ignore`. Don't `git add -f` past it, and don't put fixture
+  data there to make tests pass.
+- **Real secrets.** `.env` is gitignored; commit `.env.example` only,
+  with placeholder values such as `change-me-in-production`.
+- **Em dashes** in code, copy, or commit messages. A pre-commit hook
+  blocks them. Use a hyphen, parentheses, colon, or comma.
+
 ## Style
 
 ### Go

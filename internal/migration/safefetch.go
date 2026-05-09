@@ -13,8 +13,9 @@ import (
 
 // userAgent identifies our crawler so source-site operators can see it in
 // their logs. Same ethos as Googlebot: explicit, includes a contact channel
-// (the CMS the crawler is for so they can opt out via robots.txt).
-const userAgent = "AtomicSite-Migrator/1.0 (+https://atomicsite.example.com/migrator)"
+// (the project home, so operators can opt out via robots.txt and look up
+// what the crawler does).
+const userAgent = "AtomicSite-Migrator/1.0 (+https://github.com/brightinteraction/atomicsite)"
 
 // FetchOptions controls the SSRF-guarded HTTP fetch. Defaults via Default*
 // constants are sized for HTML pages, which is what every importer needs.

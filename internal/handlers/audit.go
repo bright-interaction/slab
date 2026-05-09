@@ -85,23 +85,15 @@ func AuditLog(
 	}
 }
 
-// auditClientIP returns the visitor's IP using the same priority
-// chain as the analytics tracker (CF-Connecting-IP first, then
-// X-Forwarded-For, then RemoteAddr) so audit and analytics never
-// disagree on the same request.
+// auditClientIP returns the visitor's IP for audit_log rows. Reads
+// only r.RemoteAddr because the trusted-proxy middleware
+// (TrustedProxyRealIP) at the top of the stack has already
+// canonicalized RemoteAddr: when the immediate peer is in
+// ATOMICSITE_TRUSTED_PROXIES, RemoteAddr was rewritten from XFF;
+// otherwise it stays as the actual TCP peer. Reading XFF or
+// CF-Connecting-IP directly here would let any direct peer spoof the
+// audit log.
 func auditClientIP(r *http.Request) string {
-	if v := r.Header.Get("CF-Connecting-IP"); v != "" {
-		return v
-	}
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		// First entry is the closest client.
-		for i, c := range v {
-			if c == ',' {
-				return v[:i]
-			}
-		}
-		return v
-	}
 	addr := r.RemoteAddr
 	for i := len(addr) - 1; i >= 0; i-- {
 		if addr[i] == ':' {

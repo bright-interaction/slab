@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/brightinteraction/atomicsite/internal/handlers"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -438,7 +439,65 @@ func (s *Server) registerCollectionTools() {
 			if err := s.queries.DeleteItem(ctx, args.ID); err != nil {
 				return "", err
 			}
+			handlers.EmitWebhook(ctx, agent.SiteID, "collection_item.deleted", map[string]string{
+				"id": args.ID, "site_id": agent.SiteID, "collection_id": existing.CollectionID,
+			})
 			return mustJSON(map[string]string{"id": args.ID, "status": "deleted"}), nil
+		},
+	})
+
+	register(Tool{
+		Name:        "bulk_delete_collection_items",
+		Description: "Deletes up to 200 Collection items by id in one call, all inside the same collection. Cross-collection or cross-tenant ids abort the entire batch (no partial deletes). Unknown ids are silently skipped. Irreversible. Confirm with the user before calling.",
+		InputSchema: schema(`{
+			"type":"object",
+			"properties":{
+				"collection_id":{"type":"string"},
+				"ids":{"type":"array","items":{"type":"string"}}
+			},
+			"required":["collection_id","ids"]
+		}`),
+		RequiresWrite: true,
+		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
+			var args struct {
+				CollectionID string   `json:"collection_id"`
+				IDs          []string `json:"ids"`
+			}
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+			if len(args.IDs) == 0 {
+				return "", errors.New("ids is required")
+			}
+			if len(args.IDs) > 200 {
+				return "", errors.New("too many ids (max 200 per call)")
+			}
+			c, err := s.queries.GetCollectionByID(ctx, args.CollectionID)
+			if err != nil || c.SiteID != agent.SiteID {
+				return "", errors.New("collection not found")
+			}
+			toDelete := make([]string, 0, len(args.IDs))
+			for _, id := range args.IDs {
+				item, err := s.queries.GetItemByID(ctx, id)
+				if err != nil {
+					continue
+				}
+				if item.CollectionID != args.CollectionID {
+					return "", fmt.Errorf("id %s belongs to another collection", id)
+				}
+				toDelete = append(toDelete, id)
+			}
+			deleted := 0
+			for _, id := range toDelete {
+				if err := s.queries.DeleteItem(ctx, id); err != nil {
+					return "", err
+				}
+				handlers.EmitWebhook(ctx, agent.SiteID, "collection_item.deleted", map[string]string{
+					"id": id, "site_id": agent.SiteID, "collection_id": args.CollectionID,
+				})
+				deleted++
+			}
+			return mustJSON(map[string]any{"status": "ok", "deleted": deleted}), nil
 		},
 	})
 
