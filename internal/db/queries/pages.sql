@@ -8,7 +8,13 @@ SELECT * FROM pages WHERE site_id = ? AND status = 'published' ORDER BY sort_ord
 SELECT * FROM pages WHERE id = ?;
 
 -- name: GetPageBySiteAndSlug :one
-SELECT * FROM pages WHERE site_id = ? AND slug = ?;
+-- Tolerates slug forms with and without a leading slash. The MCP layer
+-- normalizes incoming slugs to a leading-slash form, but the migration
+-- porter (and agent.UpdatePage when callers pass new_slug raw) stores
+-- slugs without the slash. This OR keeps both reachable.
+SELECT * FROM pages
+WHERE site_id = sqlc.arg(site_id)
+  AND (slug = sqlc.arg(slug) OR slug = LTRIM(sqlc.arg(slug), '/'));
 
 -- name: CreatePage :exec
 INSERT INTO pages (id, site_id, title, slug, layout, sort_order, show_in_nav)
