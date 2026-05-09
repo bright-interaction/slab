@@ -202,7 +202,7 @@ func (h *InvitesHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), PasswordBcryptCost)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to hash password")
 		return

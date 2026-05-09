@@ -24,7 +24,7 @@
 	} from '$lib/components/evaluations/ScoreHistoryChart.svelte';
 	import { type Grade as SharedGrade, asGrade as asGradeShared, compositeGrade as sharedComposite, gradeTone } from '$lib/evaluations/grade';
 	import type { Site, Evaluation, DeployTarget, DeployResult } from '$lib/api/types';
-	import { Copy as CopyIcon, ExternalLink } from 'lucide-svelte';
+	import { Copy as CopyIcon, ExternalLink, Download } from 'lucide-svelte';
 
 	let { data }: { data: { site: Site } } = $props();
 
@@ -560,14 +560,25 @@
 						class="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border-light bg-bg-elevated p-3"
 					>
 						<p class="text-[12px] text-text-muted">
-							No deploy targets configured. Add one to publish this build.
+							No deploy targets configured. Add one to publish this build, or
+							download the static <code class="font-mono">dist/</code> bundle and
+							ship it anywhere yourself.
 						</p>
-						<a
-							href={`/sites/${siteID}/settings/deployment`}
-							class="text-[12px] font-medium text-accent hover:underline"
-						>
-							Add target
-						</a>
+						<div class="flex items-center gap-2">
+							<a
+								href={`/api/sites/${siteID}/dist.zip`}
+								class="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border-light bg-bg-surface px-2 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+							>
+								<Download size={12} strokeWidth={1.75} />
+								Download ZIP
+							</a>
+							<a
+								href={`/sites/${siteID}/settings/deployment`}
+								class="text-[12px] font-medium text-accent hover:underline"
+							>
+								Add target
+							</a>
+						</div>
 					</div>
 				{:else}
 					<div class="mt-4 flex flex-wrap items-end gap-3">
@@ -587,6 +598,14 @@
 						>
 							Deploy
 						</Button>
+						<a
+							href={`/api/sites/${siteID}/dist.zip`}
+							class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-light bg-bg-surface px-3 text-[12px] font-medium text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+							title="Download the latest dist/ as a ZIP archive"
+						>
+							<Download size={12} strokeWidth={1.75} />
+							Download ZIP
+						</a>
 					</div>
 
 					{#if deployResult}

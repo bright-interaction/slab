@@ -18,7 +18,13 @@
 	const user = $derived(auth.value);
 	const isAdmin = $derived(user?.role === 'admin');
 
-	let name = $state(user?.name ?? '');
+	// Initial value tracks the auth user when it first arrives. Manual
+	// edits to the field after that point stay local until save (which
+	// pushes the new name back into auth.value, no re-sync needed).
+	let name = $state('');
+	$effect(() => {
+		if (user?.name && !name) name = user.name;
+	});
 	let savingProfile = $state(false);
 
 	let currentPassword = $state('');

@@ -30,11 +30,13 @@ import (
 	"github.com/bright-interaction/slab/internal/config"
 	dbpkg "github.com/bright-interaction/slab/internal/db"
 	"github.com/bright-interaction/slab/internal/domains"
+	"github.com/bright-interaction/slab/internal/handlers"
 	"github.com/bright-interaction/slab/internal/migration"
 	"github.com/bright-interaction/slab/internal/retention"
 	"github.com/bright-interaction/slab/internal/server"
 	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
+	"github.com/bright-interaction/slab/internal/webhook"
 )
 
 //go:embed all:frontend/build
@@ -71,6 +73,13 @@ func main() {
 	// setting; falls back to cfg.BaseURL otherwise.
 	builder.DefaultAdminBaseURL = cfg.BaseURL
 
+	// Screenshot SSRF allow-list: bind to the configured public domain(s)
+	// at boot. Loopback always passes inside validateScreenshotURL so
+	// local dev works regardless. An empty list (no env vars set) is
+	// fine in dev; in production cfg.Validate() above already required
+	// at least one of PrimaryDomain / BuiltSiteSuffix to be set.
+	handlers.ConfigureScreenshotAllowList(cfg.PrimaryDomain, cfg.BuiltSiteSuffix)
+
 	// Ensure data directory exists
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		slog.Error("create data dir", "error", err)
@@ -78,7 +87,7 @@ func main() {
 	}
 
 	// Open SQLite DB
-	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)")
 	if err != nil {
 		slog.Error("open db", "error", err)
 		os.Exit(1)
@@ -164,6 +173,9 @@ func main() {
 	// daily sweep can reap orphans (workspaces dirs whose siteID is no
 	// longer in the DB).
 	retentionMgr.SetDataDir(cfg.DataDir)
+	retentionMgr.SetAuditLogRetentionDays(cfg.AuditLogRetentionDays)
+	retentionMgr.SetLifecyclePolicy(cfg.LifecyclePauseDays, cfg.LifecycleDeleteDays)
+	retentionMgr.SetGDPRDeleteCoolingDays(cfg.GDPRDeleteCoolingDays)
 	retentionMgr.Start(mgrCtx)
 
 	// Stitched cookie-analytics layer: DuckDB ATTACHes the live SQLite file
@@ -189,6 +201,17 @@ func main() {
 	verifyJobMgr := migration.NewJobManager(queries)
 	verifyJobMgr.Start(mgrCtx)
 
+	// Outbound webhook delivery worker (#6). Ticks every 5s,
+	// pulls pending+retrying deliveries due for delivery, and
+	// POSTs each with an HMAC-SHA256 signature. Hard cap at 5
+	// attempts before flipping a delivery to 'dropped'. The
+	// package-level emitter is wired into handlers so the
+	// content-mutation paths (pages, items, builds, forms) can
+	// fire events without growing each handler's constructor.
+	webhookDeliveryMgr := webhook.NewDeliveryManager(queries)
+	webhookDeliveryMgr.Start(mgrCtx)
+	handlers.SetWebhookEmitter(webhook.NewEmitter(queries))
+
 	srv := server.New(cfg, sqlDB, queries, st)
 	srv.AnalyticsDB = analyticsMgrConn
 	srv.RetentionMgr = retentionMgr
@@ -212,7 +235,7 @@ func main() {
 		NginxConfDir:   cfg.NginxConfDir,
 		NginxSitesDir:  cfg.NginxSitesDir,
 		AcmeWebrootDir: cfg.AcmeWebrootDir,
-		SlugSuffix:     ifEmpty(cfg.BuiltSiteSuffix, ".slab.example.com"),
+		SlugSuffix:     cfg.BuiltSiteSuffix,
 		HeadersSnippet: "/etc/nginx/snippets/atomicsite-headers.conf",
 		CaddyUpstream:  "127.0.0.1:8080",
 	}
@@ -276,6 +299,7 @@ func main() {
 	analyticsMgr.Stop(shutCtx)
 	retentionMgr.Stop(shutCtx)
 	verifyJobMgr.Stop(shutCtx)
+	webhookDeliveryMgr.Stop(shutCtx)
 	if analyticsMgrConn != nil {
 		_ = analyticsMgrConn.Close()
 	}
@@ -366,6 +390,12 @@ func applySchema(sqlDB *sql.DB) error {
 		{"sites", "storage_quota_bytes", "INTEGER NOT NULL DEFAULT 1073741824"},
 		{"sites", "build_minutes_quota", "INTEGER NOT NULL DEFAULT 600"},
 		{"sites", "quota_overage_blocked", "INTEGER NOT NULL DEFAULT 1"},
+		// GDPR Article 17 erasure (2026-05-09). When a user requests
+		// account deletion, the timestamp lands here; the daily
+		// retention sweep finds rows older than the cooling-off
+		// window and hard-deletes them. Empty default keeps existing
+		// rows untouched.
+		{"users", "deletion_requested_at", "TEXT NOT NULL DEFAULT ''"},
 		// Workspace ownership (Phase 30, Cloud Tier MVP, 2026-05-05).
 		// Every site is owned by a workspace; OSS installs auto-bootstrap
 		// one workspace at boot (ensureDefaultWorkspace) and backfill
@@ -479,7 +509,7 @@ func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 		slog.Warn("seeded admin with documented default password , local dev only", "email", email)
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), handlers.PasswordBcryptCost)
 	if err != nil {
 		slog.Error("seed admin: hash password", "error", err)
 		return
@@ -610,7 +640,7 @@ func resetPasswordCLI(args []string) {
 		fmt.Fprintln(os.Stderr, "create data dir:", err)
 		os.Exit(1)
 	}
-	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "open db:", err)
 		os.Exit(1)
@@ -640,7 +670,7 @@ func resetPasswordCLI(args []string) {
 		os.Exit(1)
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPwd), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPwd), handlers.PasswordBcryptCost)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "hash:", err)
 		os.Exit(1)
@@ -653,15 +683,6 @@ func resetPasswordCLI(args []string) {
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stderr, "password reset for %s (active sessions invalidated)\n", email)
-}
-
-// ifEmpty returns fallback when s is the empty string. Used at boot to
-// pick deployment-friendly defaults when an env var is unset.
-func ifEmpty(s, fallback string) string {
-	if s == "" {
-		return fallback
-	}
-	return s
 }
 
 // parseZoneMap reads ATOMICSITE_CLOUDFLARE_ZONES, formatted as

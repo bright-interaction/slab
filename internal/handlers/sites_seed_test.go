@@ -54,7 +54,7 @@ func setupSeedTestDB(t *testing.T) (*sql.DB, *store.Queries) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.sqlite")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

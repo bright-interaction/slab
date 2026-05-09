@@ -14,6 +14,7 @@ import (
 
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
+	"github.com/bright-interaction/slab/internal/webhook"
 )
 
 // CollectionHandler exposes the AI-native Custom Collections CRUD
@@ -399,7 +400,73 @@ func (h *CollectionHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 	AuditLog(r.Context(), h.queries, r, siteID, AuditActionDelete, "collection_item", itemID, map[string]any{
 		"collection_id": collectionID, "slug": existing.Slug,
 	})
+	emitWebhook(r.Context(), siteID, webhook.EventItemDeleted, map[string]string{
+		"id": itemID, "site_id": siteID, "collection_id": collectionID,
+	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// BulkDeleteItems deletes multiple items inside one collection. Same
+// cross-tenant guard as the single-item delete: each ID must belong
+// to (siteID, collectionID); a mismatch aborts the entire batch with
+// 403. Unknown IDs are silently skipped so a stale operator list
+// doesn't fail the whole call.
+//
+// POST /api/sites/{siteID}/collections/{collectionID}/items/bulk-delete
+//   body: {"ids":[...]}
+func (h *CollectionHandler) BulkDeleteItems(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	collectionID := urlParam(r, "collectionID")
+	c, err := h.queries.GetCollectionByID(r.Context(), collectionID)
+	if err != nil || c.SiteID != siteID {
+		writeError(w, http.StatusNotFound, "Collection not found")
+		return
+	}
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		writeError(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+	if len(req.IDs) > bulkDeleteMaxIDs {
+		writeError(w, http.StatusBadRequest, "too many ids (max 200 per call)")
+		return
+	}
+	// Two-pass: validate ownership of every id BEFORE any delete.
+	// Otherwise a mixed-tenant batch lets the first valid delete
+	// land before the cross-tenant id rejects, leaving a partial
+	// delete state.
+	toDelete := make([]string, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		item, err := h.queries.GetItemByID(r.Context(), id)
+		if err != nil {
+			continue
+		}
+		if item.CollectionID != collectionID {
+			writeError(w, http.StatusForbidden, "id "+id+" belongs to another collection")
+			return
+		}
+		toDelete = append(toDelete, id)
+	}
+	deleted := 0
+	for _, id := range toDelete {
+		if err := h.queries.DeleteItem(r.Context(), id); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to delete item "+id+": "+err.Error())
+			return
+		}
+		emitWebhook(r.Context(), siteID, webhook.EventItemDeleted, map[string]string{
+			"id": id, "site_id": siteID, "collection_id": collectionID,
+		})
+		deleted++
+	}
+	AuditLog(r.Context(), h.queries, r, siteID, AuditActionDelete, "collection_item_bulk_delete", collectionID,
+		map[string]any{"ids": req.IDs, "deleted": deleted})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "deleted": deleted})
 }
 
 // BulkImport accepts a JSON array of item inputs and creates them

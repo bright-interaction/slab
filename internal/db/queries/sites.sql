@@ -71,6 +71,58 @@ SELECT COALESCE(SUM(duration_ms), 0) AS duration_ms_total
 FROM deployments
 WHERE site_id = ? AND created_at >= ?;
 
+-- name: SumStorageBytesByWorkspace :one
+-- Workspace-level storage rollup. Joins media -> sites by workspace_id
+-- so a single SUM covers every site in the workspace. Used by the
+-- plan-ladder enforcement (solo plan = 1 GB workspace-wide regardless
+-- of how many sites exist or how their per-site caps are configured).
+SELECT COALESCE(SUM(m.file_size), 0) AS bytes
+FROM media m
+JOIN sites s ON s.id = m.site_id
+WHERE s.workspace_id = ?;
+
+-- name: SumBuildMinutesByWorkspaceSinceCutoff :one
+-- Workspace-level rolling build-minutes rollup. Same shape as the
+-- per-site query but joined through sites so the cutoff applies
+-- to every deployment under the workspace.
+SELECT COALESCE(SUM(d.duration_ms), 0) AS duration_ms_total
+FROM deployments d
+JOIN sites s ON s.id = d.site_id
+WHERE s.workspace_id = ? AND d.created_at >= ?;
+
+-- name: GetWorkspaceLastActivity :one
+-- Returns the most recent activity timestamp across the workspace:
+-- the workspace itself, any of its sites' updated_at / last_build_at /
+-- last_deploy_at, and any recent deployment created_at. Used by the
+-- lifecycle sweep to decide if a workspace has been idle long enough
+-- to pause / delete. Empty workspace returns the workspace's own
+-- updated_at.
+SELECT COALESCE(MAX(activity), '') AS last_activity FROM (
+    SELECT w.updated_at AS activity FROM workspaces w WHERE w.id = ?1
+    UNION ALL
+    SELECT s.updated_at AS activity FROM sites s WHERE s.workspace_id = ?1
+    UNION ALL
+    SELECT s.last_build_at AS activity FROM sites s WHERE s.workspace_id = ?1 AND s.last_build_at != ''
+    UNION ALL
+    SELECT s.last_deploy_at AS activity FROM sites s WHERE s.workspace_id = ?1 AND s.last_deploy_at != ''
+    UNION ALL
+    SELECT d.created_at AS activity FROM deployments d
+        JOIN sites s ON s.id = d.site_id
+        WHERE s.workspace_id = ?1
+);
+
+-- name: UpdateWorkspaceStatus :exec
+UPDATE workspaces SET status = ?, updated_at = datetime('now') WHERE id = ?;
+
+-- name: ListWorkspacesForLifecycleSweep :many
+-- Returns every workspace except those already in the deleted state
+-- (terminal). The sweep uses each row's id to query
+-- GetWorkspaceLastActivity and decide whether to pause / delete.
+SELECT id, name, slug, plan, status, created_at, updated_at
+FROM workspaces
+WHERE status != 'deleted'
+ORDER BY id;
+
 -- name: ListSitesForQuotaAudit :many
 SELECT id, name, slug, storage_quota_bytes, build_minutes_quota, quota_overage_blocked
 FROM sites

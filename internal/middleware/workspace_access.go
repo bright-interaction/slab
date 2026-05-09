@@ -172,19 +172,12 @@ func newAuditID() string {
 	return hex.EncodeToString(b)
 }
 
-// auditClientIP picks the best-effort visitor IP for audit_log.
-// Mirrors handlers.clientIP without the import-cycle. Standard
-// X-Forwarded-For first entry → X-Real-IP → r.RemoteAddr.
+// auditClientIP returns the visitor IP for audit_log. Reads only
+// r.RemoteAddr because TrustedProxyRealIP at the top of the
+// middleware stack has already canonicalized it (resolving XFF only
+// when the immediate peer is in ATOMICSITE_TRUSTED_PROXIES). Reading
+// XFF directly here would let an untrusted peer spoof the audit log.
 func auditClientIP(r *http.Request) string {
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		if comma := indexByte(v, ','); comma > 0 {
-			return trimSpace(v[:comma])
-		}
-		return trimSpace(v)
-	}
-	if v := r.Header.Get("X-Real-IP"); v != "" {
-		return trimSpace(v)
-	}
 	addr := r.RemoteAddr
 	if colon := lastIndexByte(addr, ':'); colon > 0 {
 		return addr[:colon]
@@ -192,17 +185,9 @@ func auditClientIP(r *http.Request) string {
 	return addr
 }
 
-// Tiny string helpers to avoid importing strings just for these. Keeps
-// the middleware free of optional dependencies.
-func indexByte(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
-
+// lastIndexByte locates the last occurrence of c in s, returning its
+// index or -1. Used by auditClientIP to split host:port without
+// importing the strings package (keeps this middleware dependency-free).
 func lastIndexByte(s string, c byte) int {
 	for i := len(s) - 1; i >= 0; i-- {
 		if s[i] == c {
@@ -210,17 +195,6 @@ func lastIndexByte(s string, c byte) int {
 		}
 	}
 	return -1
-}
-
-func trimSpace(s string) string {
-	start, end := 0, len(s)
-	for start < end && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-		end--
-	}
-	return s[start:end]
 }
 
 // RequireWorkspaceRole gates handlers that need a specific role

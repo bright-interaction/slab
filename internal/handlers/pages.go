@@ -11,6 +11,7 @@ import (
 	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
+	"github.com/bright-interaction/slab/internal/webhook"
 )
 
 func encodeWarnings(vs []agent.Violation) string {
@@ -143,6 +144,7 @@ func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page, _ := h.queries.GetPageByID(r.Context(), id)
+	emitWebhook(r.Context(), siteID, webhook.EventPageCreated, page)
 	writeJSON(w, http.StatusCreated, page)
 }
 
@@ -271,6 +273,7 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if len(violations) > 0 {
 		w.Header().Set("X-Atomicsite-Warnings", encodeWarnings(violations))
 	}
+	emitWebhook(r.Context(), siteID, webhook.EventPageUpdated, page)
 	writeJSON(w, http.StatusOK, page)
 }
 
@@ -285,7 +288,70 @@ func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to delete page")
 		return
 	}
+	emitWebhook(r.Context(), siteID, webhook.EventPageDeleted, map[string]string{"id": pageID, "site_id": siteID})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// bulkDeleteMaxIDs caps the number of IDs accepted in a single
+// bulk-delete call. 200 keeps the per-call transaction bounded (one
+// SQLite connection is the bottleneck) while covering "select every
+// page in this folder + delete" workflows.
+const bulkDeleteMaxIDs = 200
+
+// BulkDelete deletes multiple pages in one call. Cross-tenant guard:
+// each page must belong to siteID; mismatches return 403 and abort
+// the entire batch (no partial deletes when an attacker is trying
+// to delete other tenants' rows). Unknown IDs are silently skipped
+// because operators may post a stale list and we don't want to fail
+// the whole batch over one missing row.
+//
+// POST /api/sites/{siteID}/pages/bulk-delete   body: {"ids":[...]}
+func (h *PageHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		writeError(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+	if len(req.IDs) > bulkDeleteMaxIDs {
+		writeError(w, http.StatusBadRequest, "too many ids (max 200 per call)")
+		return
+	}
+	// Two-pass: validate every id first so a single cross-tenant id
+	// aborts the batch BEFORE any row is deleted. Without this, an
+	// attacker could mix one of their own ids with one of another
+	// tenant's and the first delete would land before we reject.
+	toDelete := make([]string, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		page, err := h.queries.GetPageByID(r.Context(), id)
+		if err != nil {
+			continue
+		}
+		if page.SiteID != siteID {
+			writeError(w, http.StatusForbidden, "id "+id+" belongs to another site")
+			return
+		}
+		toDelete = append(toDelete, id)
+	}
+	deleted := 0
+	for _, id := range toDelete {
+		if err := h.queries.DeletePage(r.Context(), id); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to delete page "+id+": "+err.Error())
+			return
+		}
+		emitWebhook(r.Context(), siteID, webhook.EventPageDeleted, map[string]string{"id": id, "site_id": siteID})
+		deleted++
+	}
+	AuditLog(r.Context(), h.queries, r,
+		siteID, AuditActionDelete, "page_bulk_delete", siteID,
+		map[string]any{"ids": req.IDs, "deleted": deleted})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "deleted": deleted})
 }
 
 // PreviewSource returns the assembled .astro source for a single page so the

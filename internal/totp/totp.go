@@ -28,7 +28,16 @@ const (
 	// recoveryCodeCount is how many recovery codes to generate.
 	recoveryCodeCount = 8
 	// recoveryCodeBytes is the number of random bytes per recovery code.
-	recoveryCodeBytes = 4
+	// 16 bytes = 128 bits, matching the NIST SP 800-63B floor for a
+	// single-use authenticator. Older codes (4 bytes / 32 bits) are still
+	// honored on the verify path because bcrypt.CompareHashAndPassword
+	// doesn't care about the cleartext length.
+	recoveryCodeBytes = 16
+	// recoveryCodeBcryptCost is the bcrypt cost factor for the hash of
+	// each recovery code. Mirrors handlers.PasswordBcryptCost (12) so
+	// recovery codes get the same offline-crack budget as passwords.
+	// We don't import handlers here to avoid a layering inversion.
+	recoveryCodeBcryptCost = 12
 )
 
 // modulus is 10^codeDigits, used to truncate the HMAC result.
@@ -102,9 +111,9 @@ func GenerateOTPAuthURI(email, issuer, secret string) string {
 }
 
 // GenerateRecoveryCodes creates 8 single-use recovery codes. Each
-// code is 8 hex characters (4 random bytes). Both the plaintext and
-// bcrypt-hashed versions are returned so the caller can display the
-// plaintext once and store only the hashes.
+// code is 32 hex characters (16 random bytes = 128 bits of entropy).
+// Both the plaintext and bcrypt-hashed versions are returned so the
+// caller can display the plaintext once and store only the hashes.
 func GenerateRecoveryCodes() (plaintextCodes []string, hashedCodes []string, err error) {
 	plaintextCodes = make([]string, 0, recoveryCodeCount)
 	hashedCodes = make([]string, 0, recoveryCodeCount)
@@ -116,7 +125,7 @@ func GenerateRecoveryCodes() (plaintextCodes []string, hashedCodes []string, err
 		}
 
 		plain := hex.EncodeToString(buf)
-		hashed, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+		hashed, err := bcrypt.GenerateFromPassword([]byte(plain), recoveryCodeBcryptCost)
 		if err != nil {
 			return nil, nil, fmt.Errorf("totp: hashing recovery code: %w", err)
 		}

@@ -17,7 +17,7 @@ func openAuditTestDB(t *testing.T) *store.Queries {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "audit.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,12 +30,18 @@ func openAuditTestDB(t *testing.T) *store.Queries {
 }
 
 // TestAuditLog_HappyPath confirms a row lands with every expected
-// field and JSON-encoded changes.
+// field and JSON-encoded changes. The IP comes from r.RemoteAddr,
+// which the trusted-proxy middleware (TrustedProxyRealIP, mounted at
+// the top of the request stack in production) has already rewritten
+// from XFF when the immediate peer is in
+// ATOMICSITE_TRUSTED_PROXIES. auditClientIP intentionally does NOT
+// read XFF / CF-Connecting-IP directly; that would let any direct
+// peer spoof the audit log.
 func TestAuditLog_HappyPath(t *testing.T) {
 	t.Parallel()
 	queries := openAuditTestDB(t)
 	r := httptest.NewRequest("DELETE", "/api/sites/x", nil)
-	r.Header.Set("CF-Connecting-IP", "203.0.113.7")
+	r.RemoteAddr = "203.0.113.7:55432"
 	AuditLog(context.Background(), queries, r,
 		"site-id-abc",
 		AuditActionDelete,

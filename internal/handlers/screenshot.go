@@ -26,13 +26,52 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/chromedp/chromedp"
 )
+
+// screenshotAllowedSuffixes is the SSRF allow-list for screenshot URLs.
+// Set once at boot via ConfigureScreenshotAllowList from the loaded
+// config (cfg.PrimaryDomain + cfg.BuiltSiteSuffix). Loopback always
+// passes regardless so dev environments work out of the box.
+//
+// atomic.Pointer keeps the lookup lock-free at request time; the slice
+// is replaced wholesale on reconfigure.
+var screenshotAllowedSuffixes atomic.Pointer[[]string]
+
+// ConfigureScreenshotAllowList sets the public hostnames + suffix
+// matches the screenshot tool will accept. Called from cmd/server with
+// cfg.PrimaryDomain + cfg.BuiltSiteSuffix. Empty entries are ignored.
+// Calling with an empty list disables non-loopback screenshots.
+func ConfigureScreenshotAllowList(entries ...string) {
+	cleaned := make([]string, 0, len(entries))
+	for _, e := range entries {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		cleaned = append(cleaned, e)
+	}
+	screenshotAllowedSuffixes.Store(&cleaned)
+}
+
+// ScreenshotAllowedSuffixes returns a copy of the current allow-list
+// for diagnostic / admin endpoints.
+func ScreenshotAllowedSuffixes() []string {
+	cur := screenshotAllowedSuffixes.Load()
+	if cur == nil {
+		return nil
+	}
+	out := make([]string, len(*cur))
+	copy(out, *cur)
+	return out
+}
 
 // ScreenshotHandler executes a headless Chromium navigation + screenshot
 // for an agent-supplied URL. Site-scoped: the URL must belong to the
@@ -176,9 +215,11 @@ func (h *ScreenshotHandler) Screenshot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// validateScreenshotURL rejects anything that's not a public atomicsite
-// tenant URL (locks the endpoint down so it can't be turned into an
-// SSRF probe of internal infrastructure).
+// validateScreenshotURL rejects anything that's not on the configured
+// allow-list (locks the endpoint down so it can't be turned into an
+// SSRF probe of internal infrastructure). The allow-list is set once
+// at boot from the loaded config (PrimaryDomain + BuiltSiteSuffix);
+// loopback always passes so local dev works without any env vars.
 func validateScreenshotURL(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -191,13 +232,41 @@ func validateScreenshotURL(raw string) error {
 	if host == "" {
 		return errors.New("url missing host")
 	}
-	allowed := host == "app.slab.example.com" ||
-		host == "brightinteraction.com" ||
-		host == "www.brightinteraction.com" ||
-		strings.HasSuffix(host, ".slab.example.com") ||
-		strings.HasSuffix(host, ".brightinteraction.com")
-	if !allowed {
-		return fmt.Errorf("host %q not allowed; only atomicsite tenant subdomains + brightinteraction.com are screenshot-able", host)
+	if isLoopbackScreenshotHost(host) {
+		return nil
 	}
-	return nil
+	cur := screenshotAllowedSuffixes.Load()
+	if cur == nil || len(*cur) == 0 {
+		return errors.New("screenshot disabled: configure ATOMICSITE_PRIMARY_DOMAIN or BUILT_SITE_SUFFIX to enable public-domain screenshots")
+	}
+	for _, entry := range *cur {
+		// Suffix-style entries (".tenants.example.com") match any
+		// hostname that ends with the suffix; bare entries
+		// ("example.com") match the apex AND any subdomain
+		// (foo.example.com) without bleeding into siblings
+		// (sister-example.com).
+		if strings.HasPrefix(entry, ".") {
+			if strings.HasSuffix(host, entry) {
+				return nil
+			}
+			continue
+		}
+		if host == entry || strings.HasSuffix(host, "."+entry) {
+			return nil
+		}
+	}
+	return fmt.Errorf("host %q not in screenshot allow-list", host)
+}
+
+// isLoopbackScreenshotHost returns true for localhost / 127.x / ::1.
+// Lets dev contributors point the screenshot tool at their local
+// `make dev` server without any env-var setup.
+func isLoopbackScreenshotHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return true
+	}
+	return false
 }

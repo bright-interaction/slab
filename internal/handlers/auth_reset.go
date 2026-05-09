@@ -190,7 +190,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Reset link is invalid or expired")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), PasswordBcryptCost)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to set password")
 		return

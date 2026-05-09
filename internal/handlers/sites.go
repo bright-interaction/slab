@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/slab/ee"
 	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/billing"
 	"github.com/bright-interaction/slab/internal/config"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/perfectfoundation"
@@ -849,16 +849,18 @@ func (h *SiteHandler) resolveWorkspaceForCreate(r *http.Request, requested strin
 }
 
 // checkSiteQuota enforces the workspace's plan cap on site count.
-// OSS Provider returns -1 (unlimited) for max_sites so this is a
-// no-op in single-deploy installs. Cloud installs return the plan
-// limit and the handler refuses with 402.
+// Reads directly from billing.Limit so even an OSS deployment that
+// configures a paid plan value on a workspace gets the cap enforced
+// (the EE Provider's OSS implementation returns -1 for everything by
+// design, but this gate must fire whenever the workspace plan
+// resolves to a numeric cap). Mirrors the Sprint 3 migration plan
+// quota pattern in plan_quota.go.
 func (h *SiteHandler) checkSiteQuota(r *http.Request, workspaceID string) error {
 	ws, err := h.queries.GetWorkspaceByID(r.Context(), workspaceID)
 	if err != nil {
 		return errors.New("workspace not found")
 	}
-	provider := ee.NewProvider()
-	limit := provider.PlanLimits(ws.Plan, "max_sites")
+	limit := billing.Limit(ws.Plan, "max_sites")
 	if limit < 0 {
 		return nil
 	}

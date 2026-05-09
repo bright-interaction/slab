@@ -9,6 +9,20 @@ import (
 	"context"
 )
 
+const cancelUserDeletion = `-- name: CancelUserDeletion :exec
+UPDATE users SET deletion_requested_at = '',
+                 token_version = token_version + 1,
+                 updated_at = datetime('now')
+WHERE id = ?
+`
+
+// Clears the pending deletion. Bumps token_version so any
+// "deletion-pending" UI state in another tab refreshes.
+func (q *Queries) CancelUserDeletion(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, cancelUserDeletion, id)
+	return err
+}
+
 const clearUserTOTP = `-- name: ClearUserTOTP :exec
 UPDATE users SET totp_secret = '',
                  totp_enrolled_at = '',
@@ -80,7 +94,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, created_at, updated_at FROM users WHERE email = ?
+SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, deletion_requested_at, created_at, updated_at FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -96,6 +110,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.TotpSecret,
 		&i.TotpEnrolledAt,
 		&i.TotpRecoveryJson,
+		&i.DeletionRequestedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -103,7 +118,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, created_at, updated_at FROM users WHERE id = ?
+SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, deletion_requested_at, created_at, updated_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -119,6 +134,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.TotpSecret,
 		&i.TotpEnrolledAt,
 		&i.TotpRecoveryJson,
+		&i.DeletionRequestedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -136,7 +152,7 @@ func (q *Queries) IncrementTokenVersion(ctx context.Context, id string) error {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, created_at, updated_at FROM users ORDER BY created_at DESC
+SELECT id, email, password_hash, name, role, token_version, totp_secret, totp_enrolled_at, totp_recovery_json, deletion_requested_at, created_at, updated_at FROM users ORDER BY created_at DESC
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -158,6 +174,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.TotpSecret,
 			&i.TotpEnrolledAt,
 			&i.TotpRecoveryJson,
+			&i.DeletionRequestedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -172,6 +189,60 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUsersDueForDeletion = `-- name: ListUsersDueForDeletion :many
+SELECT id, email, deletion_requested_at FROM users
+WHERE deletion_requested_at != '' AND deletion_requested_at < ?
+ORDER BY deletion_requested_at ASC
+`
+
+type ListUsersDueForDeletionRow struct {
+	ID                  string `json:"id"`
+	Email               string `json:"email"`
+	DeletionRequestedAt string `json:"deletion_requested_at"`
+}
+
+// Returns users whose deletion_requested_at is non-empty AND older
+// than the supplied cutoff. The cutoff is computed in Go using the
+// same "YYYY-MM-DD HH:MM:SS" format SQLite's datetime('now') writes.
+func (q *Queries) ListUsersDueForDeletion(ctx context.Context, deletionRequestedAt string) ([]ListUsersDueForDeletionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersDueForDeletion, deletionRequestedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersDueForDeletionRow{}
+	for rows.Next() {
+		var i ListUsersDueForDeletionRow
+		if err := rows.Scan(&i.ID, &i.Email, &i.DeletionRequestedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const requestUserDeletion = `-- name: RequestUserDeletion :exec
+UPDATE users SET deletion_requested_at = datetime('now'),
+                 token_version = token_version + 1,
+                 updated_at = datetime('now')
+WHERE id = ?
+`
+
+// Sets deletion_requested_at to now() and bumps token_version so
+// existing sessions can react. Idempotent: re-requesting overwrites
+// the timestamp (useful if the user wants to refresh the cooling-
+// off window after partially undoing).
+func (q *Queries) RequestUserDeletion(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, requestUserDeletion, id)
+	return err
 }
 
 const setUserTOTPSecret = `-- name: SetUserTOTPSecret :exec

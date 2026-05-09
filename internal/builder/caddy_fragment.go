@@ -4,13 +4,14 @@
 // so a host Caddy can import the fragment and apply the right
 // security headers without re-deriving them.
 //
-// Usage on the host (one of these patterns):
+// Usage on the host (one of these patterns; replace <BUILT_SITE_SUFFIX>
+// with whatever you set in env, e.g. ".tenants.example.com"):
 //
 //   1. Wildcard subdomain server with per-tenant fragment import:
 //
-//        *.slab.example.com {
+//        *<BUILT_SITE_SUFFIX> {
 //            tls { on_demand }
-//            @tenant header_regexp host Host ^([^.]+)\.atomicsite\.brightinteraction\.com$
+//            @tenant header_regexp host Host ^([^.]+)<BUILT_SITE_SUFFIX_ESCAPED>$
 //            handle @tenant {
 //                root * /srv/atomicsite/{re.host.1}/dist
 //                import /srv/atomicsite/{re.host.1}/dist/Caddyfile

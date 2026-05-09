@@ -1,0 +1,15 @@
+# Files excluded from `git archive` tarballs (release downloads, GitHub
+# source archives). Keeps developer-machine artifacts out of the public
+# release without touching the working tree.
+data/                  export-ignore
+data/**                export-ignore
+.github/               export-ignore
+tests/e2e/test-results/ export-ignore
+tests/e2e/playwright-report/ export-ignore
+
+# Always treat shell scripts and Go files as LF, even on contributors
+# pushing from Windows.
+*.sh    text eol=lf
+*.go    text eol=lf
+*.sql   text eol=lf
+Makefile text eol=lf

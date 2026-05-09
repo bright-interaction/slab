@@ -244,7 +244,55 @@ func (s *Server) registerTools() {
 			if err := s.queries.DeletePage(ctx, page.ID); err != nil {
 				return "", err
 			}
+			handlers.EmitWebhook(ctx, agent.SiteID, "page.deleted",
+				map[string]string{"id": page.ID, "site_id": agent.SiteID, "slug": page.Slug})
 			return `{"status":"deleted"}`, nil
+		},
+	})
+
+	register(Tool{
+		Name:        "bulk_delete_pages",
+		Description: "Deletes up to 200 pages by id in one call. Cross-tenant guard: any id that belongs to another site aborts the entire batch (no partial deletes). Unknown ids are silently skipped. Irreversible. Confirm with the user before calling.",
+		InputSchema: schema(`{
+			"type":"object",
+			"properties":{"ids":{"type":"array","items":{"type":"string"}}},
+			"required":["ids"]
+		}`),
+		RequiresWrite: true,
+		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
+			var args struct {
+				IDs []string `json:"ids"`
+			}
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+			if len(args.IDs) == 0 {
+				return "", errors.New("ids is required")
+			}
+			if len(args.IDs) > 200 {
+				return "", errors.New("too many ids (max 200 per call)")
+			}
+			toDelete := make([]string, 0, len(args.IDs))
+			for _, id := range args.IDs {
+				page, err := s.queries.GetPageByID(ctx, id)
+				if err != nil {
+					continue
+				}
+				if page.SiteID != agent.SiteID {
+					return "", fmt.Errorf("id %s belongs to another site", id)
+				}
+				toDelete = append(toDelete, id)
+			}
+			deleted := 0
+			for _, id := range toDelete {
+				if err := s.queries.DeletePage(ctx, id); err != nil {
+					return "", err
+				}
+				handlers.EmitWebhook(ctx, agent.SiteID, "page.deleted",
+					map[string]string{"id": id, "site_id": agent.SiteID})
+				deleted++
+			}
+			return mustJSON(map[string]any{"status": "ok", "deleted": deleted}), nil
 		},
 	})
 
@@ -717,8 +765,8 @@ func (s *Server) registerTools() {
 
 	register(Tool{
 		Name:          "screenshot",
-		Description:   "Captures a headless Chromium screenshot of a deployed page and returns base64-encoded PNG. Use after trigger_build success to visually verify the rendered output. The agent should decode the image and reason about pixels — that's how you tell whether a layout looks right vs. needs another iteration. Defaults: 1440x900 viewport, full_page=true, wait_ms=800. SSRF-locked to atomicsite tenant subdomains + brightinteraction.com.",
-		InputSchema:   schema(`{"type":"object","properties":{"url":{"type":"string","description":"https://<slug>.slab.example.com/<path>"},"viewport_width":{"type":"integer","minimum":320,"maximum":3840},"viewport_height":{"type":"integer","minimum":240,"maximum":2160},"full_page":{"type":"boolean","description":"Capture entire scrollable page; false = only the viewport."},"wait_ms":{"type":"integer","minimum":0,"maximum":10000,"description":"Ms to wait after navigation before capturing (lets fonts + JS islands settle)."}},"required":["url"]}`),
+		Description:   "Captures a headless Chromium screenshot of a deployed page and returns base64-encoded PNG. Use after trigger_build success to visually verify the rendered output. The agent should decode the image and reason about pixels: that's how you tell whether a layout looks right vs. needs another iteration. Defaults: 1440x900 viewport, full_page=true, wait_ms=800. SSRF-locked to the configured public domain(s) for this deployment; loopback hosts always pass.",
+		InputSchema:   schema(`{"type":"object","properties":{"url":{"type":"string","description":"Full URL of the deployed page to screenshot (must be on the configured public domain or loopback)."},"viewport_width":{"type":"integer","minimum":320,"maximum":3840},"viewport_height":{"type":"integer","minimum":240,"maximum":2160},"full_page":{"type":"boolean","description":"Capture entire scrollable page; false = only the viewport."},"wait_ms":{"type":"integer","minimum":0,"maximum":10000,"description":"Ms to wait after navigation before capturing (lets fonts + JS islands settle)."}},"required":["url"]}`),
 		RequiresWrite: true,
 		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
 			var args handlers.ScreenshotRequest

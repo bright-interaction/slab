@@ -22,8 +22,9 @@ func nginxLogDir() string {
 
 // nginxLogPath returns the canonical JSON access log path for a site, keyed by
 // slug because that's what the host nginx can derive from $host (the leftmost
-// label of *.slab.example.com). The parser tails this file and
-// writes visit_events rows scoped to the matching site_id.
+// label of the configured wildcard tenant suffix, e.g. *<BUILT_SITE_SUFFIX>).
+// The parser tails this file and writes visit_events rows scoped to the
+// matching site_id.
 func nginxLogPath(slug string) string {
 	return filepath.Join(nginxLogDir(), slug+".json.log")
 }

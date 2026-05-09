@@ -24,7 +24,7 @@ func newRedirectHandlerForTest(t *testing.T) (*RedirectHandler, *store.Queries, 
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "redirects.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,7 +415,7 @@ func newRedirectStackOnPlan(t *testing.T, plan string) (*RedirectHandler, *store
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "redirq.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

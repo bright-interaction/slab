@@ -58,3 +58,29 @@ WHERE id = ?;
 -- Rewrites the recovery code list (e.g. after a single-use code is
 -- consumed during a recovery login).
 UPDATE users SET totp_recovery_json = ?, updated_at = datetime('now') WHERE id = ?;
+
+-- name: RequestUserDeletion :exec
+-- Sets deletion_requested_at to now() and bumps token_version so
+-- existing sessions can react. Idempotent: re-requesting overwrites
+-- the timestamp (useful if the user wants to refresh the cooling-
+-- off window after partially undoing).
+UPDATE users SET deletion_requested_at = datetime('now'),
+                 token_version = token_version + 1,
+                 updated_at = datetime('now')
+WHERE id = ?;
+
+-- name: CancelUserDeletion :exec
+-- Clears the pending deletion. Bumps token_version so any
+-- "deletion-pending" UI state in another tab refreshes.
+UPDATE users SET deletion_requested_at = '',
+                 token_version = token_version + 1,
+                 updated_at = datetime('now')
+WHERE id = ?;
+
+-- name: ListUsersDueForDeletion :many
+-- Returns users whose deletion_requested_at is non-empty AND older
+-- than the supplied cutoff. The cutoff is computed in Go using the
+-- same "YYYY-MM-DD HH:MM:SS" format SQLite's datetime('now') writes.
+SELECT id, email, deletion_requested_at FROM users
+WHERE deletion_requested_at != '' AND deletion_requested_at < ?
+ORDER BY deletion_requested_at ASC;

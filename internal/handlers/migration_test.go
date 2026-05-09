@@ -42,7 +42,7 @@ func newMigrationHandlerForTest(t *testing.T) (*MigrationHandler, *store.Queries
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "migr.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -735,7 +735,7 @@ func newPaidPlanMigrationStack(t *testing.T, plan string) (*MigrationHandler, *s
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "migr-quota.db")
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_foreign_keys=on")
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
 	}

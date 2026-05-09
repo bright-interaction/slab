@@ -71,6 +71,18 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 	}
 	pageCount += collectionPageCount
 
+	// 5b. Per-collection Atom feeds. One feed.xml per opted-in
+	// collection at public/{collection.slug}/feed.xml. Auto-emits
+	// when schema_org_type is article-like (BlogPosting / Article /
+	// NewsArticle); explicit settings.feed_enabled overrides.
+	feedCount, err := RenderCollectionFeeds(ctx, queries, siteID, wsDir)
+	if err != nil {
+		return fail("render collection feeds: " + err.Error())
+	}
+	if feedCount > 0 {
+		slog.Info("build: collection feeds emitted", "site_id", siteID, "feeds", feedCount)
+	}
+
 	// 6. Config
 	if err := RenderConfig(ctx, queries, siteID, wsDir); err != nil {
 		return fail("render config: " + err.Error())

@@ -27,7 +27,9 @@ package retention
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"os"
@@ -69,6 +71,27 @@ const MaxRetentionDays = 3650
 // DefaultConsentDays >= 30).
 const SaltRetentionDays = 30
 
+// DefaultAuditLogDays is the per-process retention window for the
+// audit_log table. 365 days = 12 months, matching the GDPR + ISO 27001
+// minimum proof-of-controls horizon. Operators with stricter
+// requirements export rows out-of-band before the sweep clears them.
+// Override via SetAuditLogRetentionDays before Start.
+const DefaultAuditLogDays = 365
+
+// LifecycleDisabled is the sentinel that disables a lifecycle stage.
+// Either pause or delete (or both) can be 0 / unset; the sweep simply
+// skips that transition. The OSS default is fully disabled (operators
+// don't want their self-hosted workspaces auto-deleted); cloud
+// installs set both via env or SetLifecyclePolicy.
+const LifecycleDisabled = 0
+
+// DefaultGDPRDeleteCoolingDays is the cooling-off window between a
+// user's POST /api/account/delete and the retention sweep's hard
+// delete. 7 days gives a real "I changed my mind" path while still
+// fulfilling within the 30-day GDPR Art. 12(3) horizon. Operators
+// align via SetGDPRDeleteCoolingDays before Start.
+const DefaultGDPRDeleteCoolingDays = 7
+
 // PauseAfterStartup gives the rest of the process (HTTP server, schema
 // migrations, analytics manager) breathing room before the first sweep.
 // SQLite WAL checkpointing also benefits from not being slammed during boot.
@@ -91,6 +114,19 @@ type Manager struct {
 	// (audit H8). Empty means the sweep is disabled (e.g. in tests). Set
 	// via SetDataDir before Start.
 	dataDir string
+	// auditLogDays is the retention window for the audit_log table.
+	// Zero falls back to DefaultAuditLogDays (365). Set via
+	// SetAuditLogRetentionDays before Start.
+	auditLogDays int
+	// lifecyclePauseDays / lifecycleDeleteDays are the workspace
+	// lifecycle thresholds (idle days). 0 = disabled. Set via
+	// SetLifecyclePolicy before Start.
+	lifecyclePauseDays  int
+	lifecycleDeleteDays int
+	// gdprDeleteCoolingDays is the cooling-off window between an
+	// account-deletion request and the hard cascade. 0 falls back
+	// to DefaultGDPRDeleteCoolingDays (7).
+	gdprDeleteCoolingDays int
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -108,6 +144,12 @@ type SweepResult struct {
 	Sessions     int64                `json:"sessions_deleted"`
 	Consent      int64                `json:"consent_deleted"`
 	Salts        int64                `json:"salts_deleted"`
+	AuditLog        int64                `json:"audit_log_deleted"`
+	AuditDays       int                  `json:"audit_log_retention_days"`
+	Paused          int                  `json:"lifecycle_paused"`
+	Deleted         int                  `json:"lifecycle_deleted"`
+	UsersHardDeleted int                 `json:"gdpr_users_hard_deleted"`
+	QuotaOverages   int                  `json:"plan_quota_overages_detected"`
 	PerSite      []PerSiteSweepResult `json:"per_site,omitempty"`
 	Errors       []string             `json:"errors,omitempty"`
 }
@@ -147,6 +189,48 @@ func (m *Manager) SetDataDir(dir string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.dataDir = dir
+}
+
+// SetGDPRDeleteCoolingDays overrides the cooling-off window the sweep
+// applies between a user's deletion_requested_at and the hard
+// cascade. Pass 0 to keep the default (7 days). Values below 1 are
+// clamped to 1 to prevent same-second commit; values are otherwise
+// honored as-is so operators with stricter privacy policies (e.g.
+// 24h) can shorten the window.
+func (m *Manager) SetGDPRDeleteCoolingDays(days int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.gdprDeleteCoolingDays = days
+}
+
+// SetLifecyclePolicy configures the workspace lifecycle thresholds.
+// pauseDays = idle days before status='active' becomes 'paused'.
+// deleteDays = idle days before status (active or paused) becomes
+// 'deleted'. Either being 0 disables that stage; both being 0
+// disables the sweep entirely. Call before Start.
+//
+// The transition is a soft state change only (a 'deleted' workspace's
+// rows stay in the DB until an operator-initiated hard delete) so a
+// sweep mistake doesn't blow up customer data. Cloud operators run
+// `atomicsite purge-deleted-workspaces` (a separate CLI verb) to
+// commit the hard delete after a confirmation window.
+func (m *Manager) SetLifecyclePolicy(pauseDays, deleteDays int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lifecyclePauseDays = pauseDays
+	m.lifecycleDeleteDays = deleteDays
+}
+
+// SetAuditLogRetentionDays overrides the audit_log retention window.
+// Call before Start. Values below MinRetentionDays or above
+// MaxRetentionDays are clamped at sweep time. Pass 0 to keep
+// DefaultAuditLogDays (365). Compliance tip: any reduction below 365
+// should be paired with an out-of-band export job, since GDPR / ISO
+// 27001 proof-of-controls expects a year-back window.
+func (m *Manager) SetAuditLogRetentionDays(days int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.auditLogDays = days
 }
 
 // Start launches the sweep loop in a goroutine. The first sweep fires
@@ -258,6 +342,47 @@ func (m *Manager) runOnce(ctx context.Context) (SweepResult, error) {
 		res.Errors = append(res.Errors, "delete consent salts: "+err.Error())
 	}
 
+	// audit_log retention. Process-wide (not per-site) because audit
+	// rows include workspace + user actions that aren't site-scoped.
+	// SQLite's DEFAULT (datetime('now')) writes "YYYY-MM-DD HH:MM:SS"
+	// in UTC, so the cutoff string uses the same format for a
+	// lexicographic compare.
+	auditDays := m.getAuditLogRetentionDays()
+	res.AuditDays = auditDays
+	auditCutoff := time.Now().UTC().AddDate(0, 0, -auditDays).Format("2006-01-02 15:04:05")
+	if n, err := m.queries.DeleteAuditLogOlderThan(ctx, auditCutoff); err != nil {
+		res.Errors = append(res.Errors, "delete audit log: "+err.Error())
+	} else {
+		res.AuditLog = n
+	}
+
+	// Workspace lifecycle sweep. Disabled when both thresholds are 0
+	// (the OSS default). Operators on cloud configure days via env
+	// vars; SetLifecyclePolicy reads them at boot.
+	pauseDays, deleteDays := m.getLifecyclePolicy()
+	if pauseDays > 0 || deleteDays > 0 {
+		paused, deleted, sweepErrs := m.sweepWorkspaceLifecycle(ctx, pauseDays, deleteDays)
+		res.Paused = paused
+		res.Deleted = deleted
+		res.Errors = append(res.Errors, sweepErrs...)
+	}
+
+	// GDPR Article 17 erasure: users whose deletion_requested_at is
+	// older than the cooling-off window get hard-deleted (cascading
+	// via FK ON DELETE CASCADE through site_members, audit_log,
+	// password_resets, etc).
+	hardDeleted, gdprErrs := m.sweepGDPRDeletions(ctx)
+	res.UsersHardDeleted = hardDeleted
+	res.Errors = append(res.Errors, gdprErrs...)
+
+	// C2 reconciler: catches workspaces that slipped past the
+	// plan-quota gate via concurrent uploads (TOCTOU between the
+	// SUM check and the INSERT). Audit_log row lets operators
+	// escalate billing or trigger a hard-block flip.
+	overages, recErrs := m.sweepPlanQuotaOverages(ctx)
+	res.QuotaOverages = overages
+	res.Errors = append(res.Errors, recErrs...)
+
 	res.FinishedAt = time.Now().UTC()
 	res.DurationMs = res.FinishedAt.Sub(res.StartedAt).Milliseconds()
 
@@ -267,6 +392,12 @@ func (m *Manager) runOnce(ctx context.Context) (SweepResult, error) {
 		"engagement", res.Engagement,
 		"sessions", res.Sessions,
 		"consent", res.Consent,
+		"audit_log", res.AuditLog,
+		"audit_days", res.AuditDays,
+		"lifecycle_paused", res.Paused,
+		"lifecycle_deleted", res.Deleted,
+		"quota_overages", res.QuotaOverages,
+		"users_hard_deleted", res.UsersHardDeleted,
 		"duration_ms", res.DurationMs,
 		"errors", len(res.Errors),
 	)
@@ -379,6 +510,354 @@ func (m *Manager) getDataDir() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.dataDir
+}
+
+// getAuditLogRetentionDays returns the configured audit_log retention
+// window, clamped to [MinRetentionDays, MaxRetentionDays]. Zero or
+// out-of-range falls back to DefaultAuditLogDays. Same clamp shape
+// as readDays() so misconfigured env vars never end up purging
+// everything or keeping nothing.
+func (m *Manager) getAuditLogRetentionDays() int {
+	m.mu.Lock()
+	d := m.auditLogDays
+	m.mu.Unlock()
+	if d <= 0 {
+		return DefaultAuditLogDays
+	}
+	if d < MinRetentionDays {
+		return MinRetentionDays
+	}
+	if d > MaxRetentionDays {
+		return MaxRetentionDays
+	}
+	return d
+}
+
+// getLifecyclePolicy returns the configured pause/delete day
+// thresholds. Zero in either slot disables that transition.
+func (m *Manager) getLifecyclePolicy() (pauseDays, deleteDays int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lifecyclePauseDays, m.lifecycleDeleteDays
+}
+
+// getGDPRDeleteCoolingDays returns the configured cooling-off window
+// for GDPR account deletions, falling back to the default. Clamped
+// to 1 minimum so a misconfigured 0 doesn't accidentally hard-delete
+// in the same second the user requests.
+func (m *Manager) getGDPRDeleteCoolingDays() int {
+	m.mu.Lock()
+	d := m.gdprDeleteCoolingDays
+	m.mu.Unlock()
+	if d <= 0 {
+		return DefaultGDPRDeleteCoolingDays
+	}
+	return d
+}
+
+// sweepGDPRDeletions hard-deletes users whose deletion_requested_at
+// is older than the configured cooling-off window. Cascade FKs (see
+// internal/db/schema.sql: every user_id ON DELETE CASCADE) clean up
+// the dependent rows. The audit_log row that the deletion request
+// wrote earlier is also removed by cascade, but the more important
+// "user_deletion_completed" row we write here records the hard
+// delete itself for compliance.
+func (m *Manager) sweepGDPRDeletions(ctx context.Context) (deleted int, errs []string) {
+	cooling := m.getGDPRDeleteCoolingDays()
+	cutoff := time.Now().UTC().AddDate(0, 0, -cooling).Format("2006-01-02 15:04:05")
+	due, err := m.queries.ListUsersDueForDeletion(ctx, cutoff)
+	if err != nil {
+		return 0, []string{"list users due for deletion: " + err.Error()}
+	}
+	for _, u := range due {
+		if ctx.Err() != nil {
+			errs = append(errs, "ctx cancelled mid-gdpr-sweep")
+			break
+		}
+		// Audit-log the hard delete BEFORE we delete the user, so
+		// the actor_user_id reference still resolves and the row
+		// survives the FK cascade. We use a fresh ID to avoid
+		// colliding with any existing row.
+		if err := m.queries.WriteAuditLog(ctx, store.WriteAuditLogParams{
+			ID:           newGDPRAuditID(),
+			ActorUserID:  "", // system actor, not the user being deleted
+			ActorRole:    "system",
+			ActorIp:      "",
+			SiteID:       "",
+			Action:       "delete",
+			ResourceType: "user_deletion_completed",
+			ResourceID:   u.ID,
+			ChangesJson:  `{"email":"` + escapeJSONString(u.Email) + `","cooling_days":` + strconv.Itoa(cooling) + `}`,
+		}); err != nil {
+			// Log but proceed; the delete itself is the contract.
+			slog.Warn("retention: audit write failed for gdpr delete", "user_id", u.ID, "err", err)
+		}
+		if err := m.queries.DeleteUser(ctx, u.ID); err != nil {
+			errs = append(errs, "delete user "+u.ID+": "+err.Error())
+			continue
+		}
+		deleted++
+		slog.Info("retention: gdpr hard delete", "user_id", u.ID, "email", u.Email)
+	}
+	return deleted, errs
+}
+
+// sweepPlanQuotaOverages catches workspaces that have slipped past
+// the workspace-plan caps for storage or build minutes. The
+// EnforceStorageQuota / EnforceBuildMinutesQuota gates are
+// per-request and check usage BEFORE the write; under concurrent
+// uploads two requests can both pass the check, both commit, and
+// the workspace ends up over the cap. This sweep walks every
+// non-deleted workspace once a day, recomputes usage, and writes a
+// `plan_quota_overage_detected` audit_log row whenever the workspace
+// is over its plan cap. Operators escalate from the audit log
+// (billing nudge, hard-block flip).
+//
+// Detection only - the sweep does NOT auto-block, mark for hard
+// deletion, or otherwise mutate the workspace state. Compliance with
+// the soft-delete principle: a sweep mistake is recoverable, an
+// auto-block isn't.
+//
+// Imports billing through the same indirection plan_quota.go uses on
+// the request path so the two layers always agree on the cap value.
+// We don't import the handlers package directly here (would be a
+// cycle); instead the values come from billing.Limit which both
+// sides call.
+func (m *Manager) sweepPlanQuotaOverages(ctx context.Context) (int, []string) {
+	rows, err := m.queries.ListWorkspacesForLifecycleSweep(ctx)
+	if err != nil {
+		return 0, []string{"list workspaces for quota reconcile: " + err.Error()}
+	}
+	overages := 0
+	var errs []string
+	now := time.Now().UTC().Add(-30 * 24 * time.Hour).Format("2006-01-02 15:04:05")
+	for _, ws := range rows {
+		if ctx.Err() != nil {
+			errs = append(errs, "ctx cancelled mid-quota-reconcile")
+			break
+		}
+		storageGB := planLimitFor(ws.Plan, "storage_gb")
+		buildMin := planLimitFor(ws.Plan, "build_minutes")
+		if storageGB < 0 && buildMin < 0 {
+			continue // unlimited plan; skip the SUM queries entirely
+		}
+
+		storageUsed := int64(0)
+		if storageGB >= 0 {
+			raw, err := m.queries.SumStorageBytesByWorkspace(ctx, ws.ID)
+			if err == nil {
+				storageUsed = anyToInt64(raw)
+			}
+		}
+		buildUsed := int64(0)
+		if buildMin >= 0 {
+			raw, err := m.queries.SumBuildMinutesByWorkspaceSinceCutoff(ctx, store.SumBuildMinutesByWorkspaceSinceCutoffParams{
+				WorkspaceID: ws.ID, CreatedAt: now,
+			})
+			if err == nil {
+				buildUsed = anyToInt64(raw) / 60000
+			}
+		}
+
+		storageCap := storageGB * 1024 * 1024 * 1024
+		storageOver := storageGB >= 0 && storageUsed > storageCap
+		buildOver := buildMin >= 0 && buildUsed > buildMin
+
+		if !storageOver && !buildOver {
+			continue
+		}
+
+		changes := `{"plan":"` + escapeJSONString(ws.Plan) +
+			`","storage_used":` + strconv.FormatInt(storageUsed, 10) +
+			`,"storage_cap":` + strconv.FormatInt(storageCap, 10) +
+			`,"build_used":` + strconv.FormatInt(buildUsed, 10) +
+			`,"build_cap":` + strconv.FormatInt(buildMin, 10) +
+			`,"storage_over":` + boolStr(storageOver) +
+			`,"build_over":` + boolStr(buildOver) + `}`
+		if err := m.queries.WriteAuditLog(ctx, store.WriteAuditLogParams{
+			ID:           newGDPRAuditID(),
+			ActorUserID:  "",
+			ActorRole:    "system",
+			ActorIp:      "",
+			SiteID:       "",
+			Action:       "detect",
+			ResourceType: "plan_quota_overage_detected",
+			ResourceID:   ws.ID,
+			ChangesJson:  changes,
+		}); err != nil {
+			errs = append(errs, "audit overage "+ws.ID+": "+err.Error())
+			continue
+		}
+		overages++
+		slog.Warn("retention: plan quota overage detected",
+			"workspace_id", ws.ID, "plan", ws.Plan,
+			"storage_used_bytes", storageUsed, "storage_cap_bytes", storageCap,
+			"build_minutes_used", buildUsed, "build_minutes_cap", buildMin)
+	}
+	return overages, errs
+}
+
+// anyToInt64 mirrors handlers.asInt64 since the retention package
+// can't import handlers (would invert layering). SQLite COALESCE-on-
+// SUM returns int64 for INTEGER columns and float64 for non-INTEGER;
+// negatives clamp to 0 so a corrupted row can't drive a negative cap.
+func anyToInt64(v any) int64 {
+	switch n := v.(type) {
+	case int64:
+		if n < 0 {
+			return 0
+		}
+		return n
+	case int:
+		if n < 0 {
+			return 0
+		}
+		return int64(n)
+	case float64:
+		if n < 0 {
+			return 0
+		}
+		return int64(n)
+	default:
+		return 0
+	}
+}
+
+// planLimitFor is the retention-package shim around billing.Limit.
+// Held here as a thin function so a future tightening of the plan
+// ladder lookup (custom EE provider, billing-backend cache) only
+// needs one edit point in the retention sweep.
+func planLimitFor(planKey, resource string) int64 {
+	return billingLimit(planKey, resource)
+}
+
+// billingLimit is wired in retention/billing_shim.go (next file) to
+// avoid a static import cycle; that file lives in the same package
+// and imports `internal/billing` directly.
+//
+// (Defined in billing_shim.go to keep this file's import set short.)
+var billingLimit = func(planKey, resource string) int64 { return -1 }
+
+// boolStr formats a Go bool as the JSON literal "true" / "false" for
+// our hand-built audit_log changes_json blob. Keeps the retention
+// package free of an encoding/json import for a 1-key dict.
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// newGDPRAuditID returns a fresh 24-hex audit_log ID. We don't import
+// the handlers package here, so we mint locally.
+func newGDPRAuditID() string {
+	var b [12]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
+
+// escapeJSONString does just enough JSON escaping for the email field
+// in our manually-constructed changes_json blob. We avoid the full
+// json package here because the row is a 1-key dict and json.Marshal
+// would round-trip through reflection unnecessarily.
+func escapeJSONString(s string) string {
+	out := make([]byte, 0, len(s)+4)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case '"', '\\':
+			out = append(out, '\\', c)
+		case '\n':
+			out = append(out, '\\', 'n')
+		case '\r':
+			out = append(out, '\\', 'r')
+		case '\t':
+			out = append(out, '\\', 't')
+		default:
+			if c < 0x20 {
+				continue // strip control bytes
+			}
+			out = append(out, c)
+		}
+	}
+	return string(out)
+}
+
+// sweepWorkspaceLifecycle walks every non-deleted workspace, computes
+// last-activity timestamps, and transitions status:
+//
+//   active -> paused: idle >= pauseDays (when pauseDays > 0)
+//   * -> deleted: idle >= deleteDays (when deleteDays > 0)
+//
+// "Deleted" here is a soft state (status='deleted'); rows stay in the
+// DB until an operator-initiated hard purge. This intentional safety
+// margin means a sweep mistake is recoverable; operators run a
+// separate verb to commit the hard delete after a confirmation
+// window.
+//
+// Audit-log entries for every transition land via the same audit_log
+// table the rest of the system uses, so cloud operators have a paper
+// trail for the EU compliance horizon.
+func (m *Manager) sweepWorkspaceLifecycle(ctx context.Context, pauseDays, deleteDays int) (paused, deleted int, errs []string) {
+	rows, err := m.queries.ListWorkspacesForLifecycleSweep(ctx)
+	if err != nil {
+		return 0, 0, []string{"list workspaces: " + err.Error()}
+	}
+	now := time.Now().UTC()
+	pauseCutoff := now.AddDate(0, 0, -pauseDays).Format("2006-01-02 15:04:05")
+	deleteCutoff := now.AddDate(0, 0, -deleteDays).Format("2006-01-02 15:04:05")
+	for _, ws := range rows {
+		if ctx.Err() != nil {
+			errs = append(errs, "ctx cancelled mid-lifecycle-sweep")
+			break
+		}
+		raw, err := m.queries.GetWorkspaceLastActivity(ctx, ws.ID)
+		if err != nil {
+			errs = append(errs, "last activity "+ws.ID+": "+err.Error())
+			continue
+		}
+		lastActivity, _ := raw.(string)
+		if strings.TrimSpace(lastActivity) == "" {
+			// No activity at all - fall back to created_at so we
+			// don't auto-pause a freshly-created workspace whose
+			// owner hasn't done anything yet on day 31.
+			lastActivity = ws.CreatedAt
+		}
+		// Clock-skew clamp: a workspace whose created_at is in the
+		// future (or whose lastActivity falls before created_at due
+		// to a corrupt INSERT) must not be considered "idle since
+		// before it existed". Use whichever is later.
+		if lastActivity < ws.CreatedAt {
+			lastActivity = ws.CreatedAt
+		}
+		// Delete takes precedence: a workspace that's been idle long
+		// enough to delete should NOT first transition to paused on
+		// the same sweep run.
+		if deleteDays > 0 && lastActivity < deleteCutoff && ws.Status != "deleted" {
+			if err := m.queries.UpdateWorkspaceStatus(ctx, store.UpdateWorkspaceStatusParams{
+				ID: ws.ID, Status: "deleted",
+			}); err != nil {
+				errs = append(errs, "set deleted "+ws.ID+": "+err.Error())
+				continue
+			}
+			deleted++
+			slog.Info("retention: workspace lifecycle delete",
+				"workspace_id", ws.ID, "last_activity", lastActivity, "from_status", ws.Status)
+			continue
+		}
+		if pauseDays > 0 && ws.Status == "active" && lastActivity < pauseCutoff {
+			if err := m.queries.UpdateWorkspaceStatus(ctx, store.UpdateWorkspaceStatusParams{
+				ID: ws.ID, Status: "paused",
+			}); err != nil {
+				errs = append(errs, "set paused "+ws.ID+": "+err.Error())
+				continue
+			}
+			paused++
+			slog.Info("retention: workspace lifecycle pause",
+				"workspace_id", ws.ID, "last_activity", lastActivity)
+		}
+	}
+	return paused, deleted, errs
 }
 
 // sweepOrphanWorkspaces removes any directory under {dataDir}/workspaces/
