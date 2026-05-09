@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/store"
@@ -113,6 +114,33 @@ func (h *AgentHandler) Context(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- Pages ---
+
+// DraftPreview renders the named page (by slug) as a self-contained HTML
+// document that mirrors what the production builder would emit, without
+// triggering bun + astro. Lets agents verify their authoring changes in
+// isolation and lets the admin app embed the same surface via session
+// auth. Cross-site safe because resolvePageBySlug forces site_id on the
+// query.
+func (h *AgentHandler) DraftPreview(w http.ResponseWriter, r *http.Request) {
+	a := requireAgent(w, r)
+	if a == nil {
+		return
+	}
+	page, ok := h.resolvePageBySlug(w, r, a.SiteID)
+	if !ok {
+		return
+	}
+	html, err := builder.RenderPageDraft(r.Context(), h.queries, a.SiteID, page.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to render preview")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store, must-revalidate")
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	_, _ = w.Write([]byte(html))
+}
 
 // CreatePage creates a new page via the agent API.
 func (h *AgentHandler) CreatePage(w http.ResponseWriter, r *http.Request) {

@@ -846,6 +846,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/agent/pages", agentH.CreatePage)
 		r.Patch("/api/agent/pages/{slug}", agentH.UpdatePage)
 		r.Delete("/api/agent/pages/{slug}", agentH.DeletePage)
+		r.Get("/api/agent/pages/{slug}/draft-preview", agentH.DraftPreview)
 
 		// Blocks (page slug via ?page= query param)
 		r.Post("/api/agent/blocks", agentH.CreateBlock)
