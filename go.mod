@@ -1,6 +1,6 @@
 module github.com/bright-interaction/slab
 
-go 1.26.0
+go 1.26.3
 
 require (
 	github.com/HugoSmits86/nativewebp v1.2.1
