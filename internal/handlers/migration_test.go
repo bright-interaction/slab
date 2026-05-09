@@ -1254,3 +1254,59 @@ func TestUpsertItem_InsertThenUpdate(t *testing.T) {
 		t.Errorf("row count post-upsert: %d", count)
 	}
 }
+
+// TestGetPageBySiteAndSlug_ToleratesBothSlugForms locks in the dual-form
+// slug lookup. The migration porter stores slugs without a leading slash
+// (e.g. "index", "privacy") while the MCP layer normalizes slugs to a
+// leading-slash form before lookup ("/index", "/privacy"). Without the
+// LTRIM fallback in the SELECT, every porter-created page is unreachable
+// through the MCP and agent surfaces despite existing in the DB.
+func TestGetPageBySiteAndSlug_ToleratesBothSlugForms(t *testing.T) {
+	_, q, siteID := newMigrationHandlerForTest(t)
+
+	if err := q.CreatePage(context.Background(), store.CreatePageParams{
+		ID:        "page-noslash-0001",
+		SiteID:    siteID,
+		Title:     "Privacy",
+		Slug:      "privacy",
+		Layout:    "default",
+		SortOrder: 0,
+		ShowInNav: 0,
+	}); err != nil {
+		t.Fatalf("seed no-slash page: %v", err)
+	}
+
+	for _, lookup := range []string{"privacy", "/privacy"} {
+		got, err := q.GetPageBySiteAndSlug(context.Background(), store.GetPageBySiteAndSlugParams{
+			SiteID: siteID, Slug: lookup,
+		})
+		if err != nil {
+			t.Fatalf("lookup with slug %q: %v", lookup, err)
+		}
+		if got.ID != "page-noslash-0001" {
+			t.Errorf("lookup with slug %q: got id=%q want page-noslash-0001", lookup, got.ID)
+		}
+	}
+
+	if err := q.CreatePage(context.Background(), store.CreatePageParams{
+		ID:        "page-slash-0001",
+		SiteID:    siteID,
+		Title:     "EN Privacy",
+		Slug:      "/en/privacy",
+		Layout:    "default",
+		SortOrder: 1,
+		ShowInNav: 0,
+	}); err != nil {
+		t.Fatalf("seed slash page: %v", err)
+	}
+
+	got, err := q.GetPageBySiteAndSlug(context.Background(), store.GetPageBySiteAndSlugParams{
+		SiteID: siteID, Slug: "/en/privacy",
+	})
+	if err != nil {
+		t.Fatalf("lookup canonical slash slug: %v", err)
+	}
+	if got.ID != "page-slash-0001" {
+		t.Errorf("canonical lookup matched wrong row: %q", got.ID)
+	}
+}
