@@ -246,6 +246,16 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/auth/reset-password/{token}", ah.ResetPasswordInfo)
 	r.Post("/api/auth/reset-password/{token}", ah.ResetPassword)
 
+	// OIDC SSO (#5, 2026-05-10). All three endpoints are public: Config
+	// just exposes whether SSO is enabled so the SPA can render the
+	// "Sign in with SSO" button; Login redirects to the issuer; Callback
+	// is the redirect-back target. State + PKCE verifier ride a single
+	// HMAC-signed cookie, so no server-side session storage is needed.
+	oidcH := handlers.NewOIDCHandler(s.cfg, s.queries)
+	r.Get("/api/auth/oidc/config", oidcH.Config)
+	r.Get("/auth/oidc/login", oidcH.Login)
+	r.Get("/auth/oidc/callback", oidcH.Callback)
+
 	// Sprint 3 (2026-05-04): public form-submission endpoint.
 	// Cross-origin from `*.<BuiltSiteSuffix>` inherits the existing
 	// CORS allowance for /t/* paths. Spam defense lives inside the
