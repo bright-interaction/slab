@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -214,4 +215,39 @@ func (h *GlobalBlockHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Render returns the HTML the builder would emit for a block given the
+// provided (block_type, slot, data_json). Used by the admin UI's
+// "Rendered" tab so editors see the actual output without saving first.
+// Output is byte-for-byte the same as what lands in the deployed site
+// because we share the renderer with internal/builder.
+//
+// Accepts an unsaved payload (not a block_id lookup) so the preview
+// reflects in-progress edits in the JSON textarea.
+func (h *GlobalBlockHandler) Render(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BlockType string `json:"block_type"`
+		Slot      string `json:"slot"`
+		DataJSON  string `json:"data_json"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if !allowedGlobalSlots[req.Slot] {
+		writeError(w, http.StatusBadRequest, "Invalid slot")
+		return
+	}
+	gb := store.GlobalBlock{
+		BlockType: req.BlockType,
+		Slot:      req.Slot,
+		DataJson:  req.DataJSON,
+	}
+	html := builder.ExtractHTMLFromGlobalBlock(gb)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"html":       html,
+		"block_type": req.BlockType,
+		"slot":       req.Slot,
+	})
 }

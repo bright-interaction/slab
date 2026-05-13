@@ -545,6 +545,10 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/global-blocks/{blockID}", gbh.Get)
 		siteR.Patch("/api/sites/{siteID}/global-blocks/{blockID}", gbh.Update)
 		siteR.Delete("/api/sites/{siteID}/global-blocks/{blockID}", gbh.Delete)
+		// Render an arbitrary block payload to HTML for the admin UI's
+		// "Rendered" tab. Operates on the supplied data so editors can
+		// preview unsaved edits.
+		siteR.Post("/api/sites/{siteID}/global-blocks/render", gbh.Render)
 
 		// Knowledgebase
 		kbh := handlers.NewKnowledgebaseHandler(s.cfg, s.queries)
