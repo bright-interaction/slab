@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "astro": "^5.10.1",
-    "@astrojs/sitemap": "^3.4.1"
+    "@astrojs/sitemap": "^3.4.1",
+    "@astrojs/svelte": "^7.0.0",
+    "svelte": "^5.0.0"
   }
 }
