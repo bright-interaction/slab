@@ -498,6 +498,15 @@ func buildOrganizationJSONLD(site store.Site, profile store.SiteProfile, setting
 	return string(out)
 }
 
+// ExtractHTMLFromGlobalBlock is the exported wrapper around the package-
+// internal renderer. Callers outside builder (the admin Preview endpoint,
+// the agent) use this to render a single block without going through the
+// full layout pipeline. Same logic the builder runs at deploy time so
+// preview HTML is byte-for-byte identical to what lands in production.
+func ExtractHTMLFromGlobalBlock(gb store.GlobalBlock) string {
+	return extractHTMLFromGlobalBlock(gb)
+}
+
 func extractHTMLFromGlobalBlock(gb store.GlobalBlock) string {
 	var data map[string]any
 	if err := json.Unmarshal([]byte(gb.DataJson), &data); err != nil {

@@ -47,3 +47,23 @@ export function update(
 export function remove(siteID: string, blockID: string): Promise<{ status: string }> {
 	return apiDelete<{ status: string }>(`/sites/${siteID}/global-blocks/${blockID}`);
 }
+
+export interface RenderInput {
+	block_type: string;
+	slot: 'header' | 'footer';
+	data_json: string;
+}
+
+export interface RenderResponse {
+	html: string;
+	block_type: string;
+	slot: string;
+}
+
+// render asks the server for the HTML that block (block_type, slot, data_json)
+// would produce. Operates on unsaved data so editors see live previews of
+// in-progress changes; output is byte-for-byte the same the builder writes
+// at deploy time.
+export function render(siteID: string, input: RenderInput): Promise<RenderResponse> {
+	return apiPost<RenderResponse>(`/sites/${siteID}/global-blocks/render`, input);
+}

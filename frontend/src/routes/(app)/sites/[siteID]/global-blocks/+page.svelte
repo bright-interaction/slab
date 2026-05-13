@@ -30,6 +30,15 @@
 	let savingId = $state<Record<string, boolean>>({});
 	let expandedId = $state<string | null>(null);
 
+	// Per-block editor tab + lazy-loaded rendered HTML. The "Rendered" and
+	// "Preview" tabs ask the server to render the CURRENT (possibly unsaved)
+	// data_json so the operator sees live previews without committing.
+	type ViewTab = 'data' | 'rendered' | 'preview';
+	let viewTab = $state<Record<string, ViewTab>>({});
+	let renderedHTML = $state<Record<string, string>>({});
+	let renderingId = $state<Record<string, boolean>>({});
+	let renderError = $state<Record<string, string | null>>({});
+
 	const slotOptions = [
 		{ value: 'header', label: 'Header' },
 		{ value: 'footer', label: 'Footer' }
@@ -206,6 +215,84 @@
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to delete');
 		}
+	}
+
+	// Fetches the rendered HTML for the block's CURRENT draft state. Falls
+	// back to the saved data_json when no draft exists (the create path
+	// doesn't seed drafts immediately).
+	async function refreshRendered(block: GlobalBlock) {
+		const draft = drafts[block.id];
+		const data_json = draft?.data_json ?? block.data_json ?? '{}';
+		// Validate JSON before round-tripping; render server will return
+		// empty HTML for a broken payload, which we surface as an inline
+		// error so the editor knows what's wrong.
+		try {
+			JSON.parse(data_json || '{}');
+		} catch (err) {
+			renderError = { ...renderError, [block.id]: 'data_json is not valid' };
+			renderedHTML = { ...renderedHTML, [block.id]: '' };
+			return;
+		}
+		renderingId = { ...renderingId, [block.id]: true };
+		renderError = { ...renderError, [block.id]: null };
+		try {
+			const res = await globalBlocksApi.render(siteID, {
+				block_type: block.block_type,
+				slot: block.slot as 'header' | 'footer',
+				data_json
+			});
+			renderedHTML = { ...renderedHTML, [block.id]: res.html ?? '' };
+		} catch (err) {
+			renderError = {
+				...renderError,
+				[block.id]: err instanceof Error ? err.message : 'Failed to render'
+			};
+			renderedHTML = { ...renderedHTML, [block.id]: '' };
+		} finally {
+			const next = { ...renderingId };
+			delete next[block.id];
+			renderingId = next;
+		}
+	}
+
+	function switchTab(block: GlobalBlock, tab: ViewTab) {
+		viewTab = { ...viewTab, [block.id]: tab };
+		if (tab === 'rendered' || tab === 'preview') {
+			void refreshRendered(block);
+		}
+	}
+
+	// Pretty-print HTML with two-space indent + a newline after every
+	// closing tag. Not a full HTML formatter (skips edge cases around
+	// inline content + self-closing void elements with attributes); good
+	// enough for the structured nav/footer output the renderer emits.
+	function prettyHTML(html: string): string {
+		if (!html) return '';
+		// Insert linebreaks between adjacent tags so the indenter has
+		// something to work with.
+		let s = html.replace(/></g, '>\n<');
+		const lines = s.split('\n');
+		let depth = 0;
+		const VOID = new Set([
+			'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+			'link', 'meta', 'source', 'track', 'wbr'
+		]);
+		return lines
+			.map((line) => {
+				const t = line.trim();
+				if (!t) return '';
+				const isClose = /^<\//.test(t);
+				const tagMatch = t.match(/^<\/?([a-zA-Z][a-zA-Z0-9-]*)/);
+				const tag = tagMatch && tagMatch[1] ? tagMatch[1].toLowerCase() : '';
+				const isVoid = VOID.has(tag) || /\/>$/.test(t);
+				const isSelfContained = /^<([a-zA-Z][a-zA-Z0-9-]*)[^>]*>.*<\/\1>$/.test(t);
+				if (isClose) depth = Math.max(0, depth - 1);
+				const out = '  '.repeat(depth) + t;
+				if (!isClose && !isVoid && !isSelfContained) depth += 1;
+				return out;
+			})
+			.filter(Boolean)
+			.join('\n');
 	}
 
 	async function createOne() {
@@ -396,6 +483,7 @@
 								</div>
 							</div>
 							{#if expandedId === block.id && draft}
+								{@const tab = viewTab[block.id] ?? 'data'}
 								<div class="flex flex-col gap-4 border-t border-border-light px-4 py-4">
 									<Input
 										label="Name"
@@ -405,41 +493,139 @@
 												name: (e.currentTarget as HTMLInputElement).value
 											})}
 									/>
-									<div class="flex flex-col gap-1.5">
-										<div class="flex items-center justify-between">
-											<label
-												for="data-json-{block.id}"
-												class="text-[12px] font-medium text-text-secondary"
-											>
-												Block data (JSON)
-											</label>
+
+									<!-- Tabbed editor: structured data (JSON) on the left,
+									     rendered HTML output in the middle, sandboxed preview
+									     on the right. Data is the editable surface; Rendered
+									     and Preview are read-only views of what the builder
+									     would emit at deploy time. -->
+									<div class="flex items-center gap-1 border-b border-border-light">
+										{#each [{ id: 'data', label: 'Data (JSON)' }, { id: 'rendered', label: 'Rendered HTML' }, { id: 'preview', label: 'Preview' }] as t (t.id)}
 											<button
 												type="button"
-												class="text-[11px] text-text-muted hover:text-text-primary"
-												onclick={() => formatDraft(block.id)}
-												title="Re-indent JSON"
+												onclick={() => switchTab(block, t.id as ViewTab)}
+												class="relative px-3 py-1.5 text-[12px] transition-colors {tab === t.id
+													? 'text-text-primary'
+													: 'text-text-muted hover:text-text-primary'}"
 											>
-												Format
+												{t.label}
+												{#if tab === t.id}
+													<span class="absolute inset-x-0 -bottom-px h-0.5 bg-text-primary"></span>
+												{/if}
 											</button>
-										</div>
-										<textarea
-											id="data-json-{block.id}"
-											rows={20}
-											class="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 font-mono text-[12.5px] leading-[1.55] text-text-primary outline-none transition-colors focus:border-text-primary"
-											value={draft.data_json}
-											oninput={(e) =>
-												setDraft(block.id, {
-													data_json: (e.currentTarget as HTMLTextAreaElement).value
-												})}
-											spellcheck="false"
-										></textarea>
-										<p class="text-[11px] text-text-muted">
-											{dataJsonHint}. Tip: header blocks accept brand
-											({`{badge, wordmark, accent_from, href}`}) and links
-											({`[{label, href, cta?}]`}); footer blocks accept columns,
-											tagline, copyright, theme.
-										</p>
+										{/each}
 									</div>
+
+									{#if tab === 'data'}
+										<div class="flex flex-col gap-1.5">
+											<div class="flex items-center justify-between">
+												<label
+													for="data-json-{block.id}"
+													class="text-[12px] font-medium text-text-secondary"
+												>
+													Block data (JSON)
+												</label>
+												<button
+													type="button"
+													class="text-[11px] text-text-muted hover:text-text-primary"
+													onclick={() => formatDraft(block.id)}
+													title="Re-indent JSON"
+												>
+													Format
+												</button>
+											</div>
+											<textarea
+												id="data-json-{block.id}"
+												rows={20}
+												class="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 font-mono text-[12.5px] leading-[1.55] text-text-primary outline-none transition-colors focus:border-text-primary"
+												value={draft.data_json}
+												oninput={(e) =>
+													setDraft(block.id, {
+														data_json: (e.currentTarget as HTMLTextAreaElement).value
+													})}
+												spellcheck="false"
+											></textarea>
+											<p class="text-[11px] text-text-muted">
+												{dataJsonHint}. Tip: header blocks accept brand
+												({`{badge, wordmark, accent_from, href}`}) and links
+												({`[{label, href, cta?}]`}); footer blocks accept columns,
+												tagline, copyright, theme.
+											</p>
+										</div>
+									{:else if tab === 'rendered'}
+										<div class="flex flex-col gap-1.5">
+											<div class="flex items-center justify-between">
+												<span class="text-[12px] font-medium text-text-secondary">
+													Rendered HTML (read-only)
+												</span>
+												<button
+													type="button"
+													class="text-[11px] text-text-muted hover:text-text-primary"
+													onclick={() => refreshRendered(block)}
+													disabled={Boolean(renderingId[block.id])}
+													title="Re-render with current draft data"
+												>
+													{renderingId[block.id] ? 'Rendering…' : 'Refresh'}
+												</button>
+											</div>
+											{#if renderError[block.id]}
+												<p class="text-[12px] text-danger">{renderError[block.id]}</p>
+											{:else if renderingId[block.id] && !renderedHTML[block.id]}
+												<p class="text-[12px] text-text-muted">Rendering…</p>
+											{:else if !renderedHTML[block.id]}
+												<p class="text-[12px] text-text-muted">
+													(empty - the renderer returned no output for this data)
+												</p>
+											{:else}
+												{@const html = prettyHTML(renderedHTML[block.id] ?? '')}
+												{@const lines = html.split('\n')}
+												<div class="overflow-auto rounded-md border border-border bg-bg-elevated">
+													<pre class="m-0 px-3 py-2 font-mono text-[12.5px] leading-[1.55]"><code>{#each lines as line, i (i)}<span class="block"><span class="mr-3 inline-block w-8 select-none text-right text-text-muted">{i + 1}</span><span class="text-text-primary">{line || ' '}</span></span>{/each}</code></pre>
+												</div>
+												<p class="text-[11px] text-text-muted">
+													This is exactly what the builder writes into the deployed Astro layout.
+													Edit the Data tab to change it; this view re-renders on Refresh and on tab switch.
+												</p>
+											{/if}
+										</div>
+									{:else if tab === 'preview'}
+										<div class="flex flex-col gap-1.5">
+											<div class="flex items-center justify-between">
+												<span class="text-[12px] font-medium text-text-secondary">
+													Visual preview (sandboxed iframe)
+												</span>
+												<button
+													type="button"
+													class="text-[11px] text-text-muted hover:text-text-primary"
+													onclick={() => refreshRendered(block)}
+													disabled={Boolean(renderingId[block.id])}
+												>
+													{renderingId[block.id] ? 'Rendering…' : 'Refresh'}
+												</button>
+											</div>
+											{#if renderError[block.id]}
+												<p class="text-[12px] text-danger">{renderError[block.id]}</p>
+											{:else if renderingId[block.id] && !renderedHTML[block.id]}
+												<p class="text-[12px] text-text-muted">Rendering…</p>
+											{:else if !renderedHTML[block.id]}
+												<p class="text-[12px] text-text-muted">
+													(empty - no HTML to preview)
+												</p>
+											{:else}
+												<iframe
+													title="Block preview"
+													sandbox=""
+													class="h-[260px] w-full rounded-md border border-border bg-white"
+													srcdoc={`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:Inter,system-ui,sans-serif;color:#0a0a0a;background:#fafafa;padding:16px}.site-header,.site-footer{background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:12px 16px}.site-header .container,.site-footer .container{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}a{color:#0a0a0a;text-decoration:none;font-size:14px}a:hover{text-decoration:underline}.brand-mark{display:inline-flex;align-items:center;gap:8px;font-weight:600}.brand-badge{background:#171717;color:#fff;width:24px;height:24px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}</style></head><body>${renderedHTML[block.id]}</body></html>`}
+												></iframe>
+												<p class="text-[11px] text-text-muted">
+													Approximates the deployed site's styling. Final appearance depends on the
+													site's CSS theme; this preview uses a neutral baseline.
+												</p>
+											{/if}
+										</div>
+									{/if}
+
 									<div class="flex justify-end gap-2 border-t border-border-light pt-3">
 										<Button
 											variant="ghost"
