@@ -41,9 +41,9 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 	}
 
 	componentList, _ := queries.ListComponentsBySite(ctx, siteID)
-	componentNames := make(map[string]bool, len(componentList))
+	componentExts := make(map[string]string, len(componentList))
 	for _, c := range componentList {
-		componentNames[c.Name] = true
+		componentExts[c.Name] = pickComponentExt(c.Template)
 	}
 
 	mediaByID := loadBlockMedia(ctx, queries, blocks)
@@ -53,12 +53,12 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 		if bl.IsVisible == 0 {
 			continue
 		}
-		raw := renderBlock(bl, componentNames, mediaByID)
+		raw := renderBlock(bl, componentExts, mediaByID)
 		// Component blocks emit Astro `<PascalName ... />` which the browser
 		// can't render. Detect and replace with an inline notice so the
 		// preview stays useful instead of swallowing the block silently.
-		if isComponentBlockOutput(raw, componentNames) {
-			blocksHTML.WriteString(componentBlockPlaceholder(bl, componentNames))
+		if isComponentBlockOutput(raw, componentExts) {
+			blocksHTML.WriteString(componentBlockPlaceholder(bl, componentExts))
 			continue
 		}
 		blocksHTML.WriteString(raw)
@@ -127,8 +127,8 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 // isComponentBlockOutput recognises renderBlock output that begins with
 // `  <PascalName` for any component the site has registered. Component
 // blocks need Astro to compile and aren't browser-renderable as-is.
-func isComponentBlockOutput(raw string, componentNames map[string]bool) bool {
-	if len(componentNames) == 0 {
+func isComponentBlockOutput(raw string, componentExts map[string]string) bool {
+	if len(componentExts) == 0 {
 		return false
 	}
 	trimmed := strings.TrimLeft(raw, " \t\n")
@@ -144,7 +144,7 @@ func isComponentBlockOutput(raw string, componentNames map[string]bool) bool {
 	if tag == "" || !isUpperASCII(tag[0]) {
 		return false
 	}
-	for name := range componentNames {
+	for name := range componentExts {
 		if pascalCase(name) == tag {
 			return true
 		}
@@ -152,7 +152,7 @@ func isComponentBlockOutput(raw string, componentNames map[string]bool) bool {
 	return false
 }
 
-func componentBlockPlaceholder(bl store.Block, componentNames map[string]bool) string {
+func componentBlockPlaceholder(bl store.Block, componentExts map[string]string) string {
 	compName := extractComponentName(bl)
 	if compName == "" {
 		compName = bl.BlockType

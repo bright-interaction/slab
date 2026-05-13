@@ -21,12 +21,12 @@ func RenderSingleBlock(ctx context.Context, queries *store.Queries, siteID, bloc
 		return "", fmt.Errorf("get block: %w", err)
 	}
 	components, _ := queries.ListComponentsBySite(ctx, siteID)
-	componentNames := make(map[string]bool, len(components))
+	componentExts := make(map[string]string, len(components))
 	for _, c := range components {
-		componentNames[c.Name] = true
+		componentExts[c.Name] = pickComponentExt(c.Template)
 	}
 	mediaByID := loadBlockMedia(ctx, queries, []store.Block{block})
-	return renderBlock(block, componentNames, mediaByID), nil
+	return renderBlock(block, componentExts, mediaByID), nil
 }
 
 // RenderBlockDraft renders a block using draft data (not the saved
@@ -38,9 +38,9 @@ func RenderBlockDraft(ctx context.Context, queries *store.Queries, siteID, block
 		dataJSON = "{}"
 	}
 	components, _ := queries.ListComponentsBySite(ctx, siteID)
-	componentNames := make(map[string]bool, len(components))
+	componentExts := make(map[string]string, len(components))
 	for _, c := range components {
-		componentNames[c.Name] = true
+		componentExts[c.Name] = pickComponentExt(c.Template)
 	}
 	draft := store.Block{
 		BlockType: blockType,
@@ -49,7 +49,7 @@ func RenderBlockDraft(ctx context.Context, queries *store.Queries, siteID, block
 		IsVisible: 1,
 	}
 	mediaByID := loadBlockMedia(ctx, queries, []store.Block{draft})
-	return renderBlock(draft, componentNames, mediaByID), nil
+	return renderBlock(draft, componentExts, mediaByID), nil
 }
 
 // RenderPagePreview returns the rendered Astro source for a single page.
@@ -71,9 +71,9 @@ func RenderPagePreview(ctx context.Context, queries *store.Queries, siteID, page
 		return "", fmt.Errorf("list blocks: %w", err)
 	}
 	components, _ := queries.ListComponentsBySite(ctx, siteID)
-	componentNames := make(map[string]bool, len(components))
+	componentExts := make(map[string]string, len(components))
 	for _, c := range components {
-		componentNames[c.Name] = true
+		componentExts[c.Name] = pickComponentExt(c.Template)
 	}
 	site, err := queries.GetSiteByID(ctx, siteID)
 	if err != nil {
@@ -91,7 +91,7 @@ func RenderPagePreview(ctx context.Context, queries *store.Queries, siteID, page
 		titleTpl: sm["seo.meta_title_template"],
 		descTpl:  sm["seo.meta_description_template"],
 	}
-	return renderPageWithContext(page, blocks, componentNames, pageCtx), nil
+	return renderPageWithContext(page, blocks, componentExts, pageCtx), nil
 }
 
 // RenderPages generates .astro page files from published pages and their blocks.
@@ -102,9 +102,9 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 	}
 
 	components, _ := queries.ListComponentsBySite(ctx, siteID)
-	componentNames := make(map[string]bool)
+	componentExts := make(map[string]string)
 	for _, c := range components {
-		componentNames[c.Name] = true
+		componentExts[c.Name] = pickComponentExt(c.Template)
 	}
 
 	site, err := queries.GetSiteByID(ctx, siteID)
@@ -151,7 +151,7 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		// renderer access live data.
 		resolveCollectionListBlocks(ctx, queries, site, blocks)
 
-		content := renderPageWithContext(page, blocks, componentNames, pageCtx)
+		content := renderPageWithContext(page, blocks, componentExts, pageCtx)
 		pagePath := slugToFilePath(page.Slug, wsDir)
 
 		if err := WriteFile(pagePath, content); err != nil {
@@ -202,7 +202,7 @@ type pageRenderContext struct {
 // helpers (RenderSingleBlock / RenderPagePreview). It renders a page
 // without site-level context (no meta-template expansion, no hreflang).
 // The build pipeline calls renderPageWithContext for the full output.
-func renderPage(page store.Page, blocks []store.Block, components map[string]bool) string {
+func renderPage(page store.Page, blocks []store.Block, components map[string]string) string {
 	return renderPageWithContext(page, blocks, components, pageRenderContext{})
 }
 
@@ -210,7 +210,7 @@ func renderPage(page store.Page, blocks []store.Block, components map[string]boo
 // site-level rendering context: meta-title/description templates,
 // hreflang alternates, canonical override. Empty pageRenderContext
 // degrades to the legacy behaviour for the preview helpers.
-func renderPageWithContext(page store.Page, blocks []store.Block, components map[string]bool, ctx pageRenderContext) string {
+func renderPageWithContext(page store.Page, blocks []store.Block, components map[string]string, ctx pageRenderContext) string {
 	var b strings.Builder
 
 	// Depth-aware import prefix. Pages live under src/pages/{slug}.astro;
@@ -224,19 +224,24 @@ func renderPageWithContext(page store.Page, blocks []store.Block, components map
 	b.WriteString("---\n")
 	b.WriteString(fmt.Sprintf("import Base from '%slayouts/Base.astro';\n", prefix))
 
-	// Collect component imports
-	imports := make(map[string]bool)
+	// Collect component imports. Map value is the component's file extension
+	// (".astro" or ".svelte") so the import statement points at the right
+	// file. Svelte components compile via @astrojs/svelte at build time.
+	imports := make(map[string]string)
 	for _, bl := range blocks {
 		if bl.IsVisible == 0 {
 			continue
 		}
 		compName := extractComponentName(bl)
-		if compName != "" && components[compName] {
-			imports[compName] = true
+		if compName == "" {
+			continue
+		}
+		if ext, ok := components[compName]; ok {
+			imports[compName] = ext
 		}
 	}
-	for name := range imports {
-		b.WriteString(fmt.Sprintf("import %s from '%scomponents/%s.astro';\n", pascalCase(name), prefix, name))
+	for name, ext := range imports {
+		b.WriteString(fmt.Sprintf("import %s from '%scomponents/%s%s';\n", pascalCase(name), prefix, name, ext))
 	}
 
 	b.WriteString("---\n\n")
@@ -302,7 +307,7 @@ func renderPageWithContext(page store.Page, blocks []store.Block, components map
 	return b.String()
 }
 
-func renderBlock(bl store.Block, components map[string]bool, mediaByID map[string]store.Medium) string {
+func renderBlock(bl store.Block, components map[string]string, mediaByID map[string]store.Medium) string {
 	var data map[string]any
 	if err := json.Unmarshal([]byte(bl.DataJson), &data); err != nil {
 		return fmt.Sprintf("  <!-- block %s: invalid data -->\n", bl.ID)
@@ -311,8 +316,9 @@ func renderBlock(bl store.Block, components map[string]bool, mediaByID map[strin
 	var inner string
 	// Check if this block uses a component
 	compName := extractComponentName(bl)
+	_, hasComp := components[compName]
 	switch {
-	case compName != "" && components[compName]:
+	case compName != "" && hasComp:
 		inner = renderComponentBlock(compName, data)
 	case dataHasHTML(data):
 		// Check for raw HTML

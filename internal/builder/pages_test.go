@@ -25,7 +25,7 @@ func TestRenderBlock_DataBlock(t *testing.T) {
 			"secondary_url": "/about"
 		}`,
 	}
-	out := renderBlock(bl, map[string]bool{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil)
 
 	wantSubstrings := []string{
 		`class="block block--hero"`,
@@ -54,7 +54,7 @@ func TestRenderBlock_HTMLPassthrough(t *testing.T) {
 		BlockType: "raw",
 		DataJson:  `{"html": "<aside class=\"banner\">hello</aside>"}`,
 	}
-	out := renderBlock(bl, map[string]bool{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil)
 	if !strings.Contains(out, `<aside class="banner">hello</aside>`) {
 		t.Errorf("expected raw HTML passthrough, got: %q", out)
 	}
@@ -72,7 +72,7 @@ func TestRenderBlock_ComponentBlock(t *testing.T) {
 			"props": {"title": "Fast", "icon": "bolt", "highlight": true}
 		}`,
 	}
-	out := renderBlock(bl, map[string]bool{"feature-card": true}, nil)
+	out := renderBlock(bl, map[string]string{"feature-card": ".astro"}, nil)
 	if !strings.Contains(out, "<FeatureCard") {
 		t.Errorf("expected PascalCase component tag, got: %q", out)
 	}
@@ -94,7 +94,7 @@ func TestRenderBlock_PersonalizationCondition(t *testing.T) {
 		BlockType: "hero",
 		DataJson:  `{"heading": "Welcome back", "condition": "lifecycle == \"customer\""}`,
 	}
-	out := renderBlock(wrapped, map[string]bool{}, nil)
+	out := renderBlock(wrapped, map[string]string{}, nil)
 	if !strings.Contains(out, `data-asp-when=`) {
 		t.Errorf("expected condition wrapper when data.condition is set, got: %q", out)
 	}
@@ -107,7 +107,7 @@ func TestRenderBlock_PersonalizationCondition(t *testing.T) {
 		BlockType: "hero",
 		DataJson:  `{"heading": "Welcome", "condition": ""}`,
 	}
-	out2 := renderBlock(plain, map[string]bool{}, nil)
+	out2 := renderBlock(plain, map[string]string{}, nil)
 	if strings.Contains(out2, `data-asp-when=`) {
 		t.Errorf("expected no wrapper when condition is empty, got: %q", out2)
 	}
@@ -122,7 +122,7 @@ func TestRenderBlock_HTMLEscape(t *testing.T) {
 		BlockType: "text",
 		DataJson:  `{"heading": "<script>alert(1)</script>", "text": "AT&T"}`,
 	}
-	out := renderBlock(bl, map[string]bool{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil)
 	if strings.Contains(out, "<script>") {
 		t.Errorf("renderBlock leaked unescaped <script> tag: %q", out)
 	}
@@ -143,7 +143,7 @@ func TestRenderBlock_RejectsDangerousScheme(t *testing.T) {
 		BlockType: "cta",
 		DataJson:  `{"cta_text": "Click", "cta_url": "javascript:alert(1)"}`,
 	}
-	out := renderBlock(bl, map[string]bool{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil)
 	if strings.Contains(out, "javascript:") {
 		t.Errorf("dangerous javascript: URL leaked: %q", out)
 	}
@@ -187,7 +187,7 @@ func TestRenderPage_Wrapping(t *testing.T) {
 			DataJson:  `{"heading": "Second"}`,
 		},
 	}
-	out := renderPage(page, blocks, map[string]bool{})
+	out := renderPage(page, blocks, map[string]string{})
 
 	// Frontmatter + Base wrapper + props
 	if !strings.Contains(out, "import Base from '../layouts/Base.astro'") {
@@ -224,7 +224,7 @@ func TestRenderPage_NoIndexEmitsRobots(t *testing.T) {
 		Title: "Draft",
 		NoIndex: 1,
 	}
-	out := renderPage(page, []store.Block{}, map[string]bool{})
+	out := renderPage(page, []store.Block{}, map[string]string{})
 	if !strings.Contains(out, `robots="noindex, nofollow"`) {
 		t.Errorf("expected robots prop on noindex page: %q", out)
 	}
@@ -235,7 +235,7 @@ func TestRenderPage_NoIndexEmitsRobots(t *testing.T) {
 // `../../layouts/Base.astro`. A regression here breaks astro build.
 func TestRenderPage_ImportPathDepth(t *testing.T) {
 	page := store.Page{ID: "pg-3", Slug: "tjanster/avtal", Title: "Avtal"}
-	out := renderPage(page, []store.Block{}, map[string]bool{})
+	out := renderPage(page, []store.Block{}, map[string]string{})
 	if !strings.Contains(out, "import Base from '../../layouts/Base.astro'") {
 		t.Errorf("expected ../../layouts/Base.astro for depth-1 slug, got: %q", out)
 	}
