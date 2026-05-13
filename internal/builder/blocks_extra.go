@@ -8,6 +8,68 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
+// renderHeroGraphic emits the markup for one of the curated hero
+// graphics (mesh, pulse, monogram, audit-receipt). Each graphic ships
+// pre-tuned CSS in css.go so the agent picks a coherent visual
+// instead of inventing one via the custom block. All graphics are
+// inspector-pre-vetted: A+ performance, WCAG-coloured, prefers-reduced-
+// motion honored. circuit is the legacy bg mode (not handled here).
+//
+// Empty name = no graphic. Caller decides where the wrapper lives
+// (positioned background for centered hero, right-column slot for
+// split-hero).
+func renderHeroGraphic(name string, data map[string]any) string {
+	if name == "" {
+		return ""
+	}
+	cls := "hero-graphic hero-graphic--" + escapeAttr(name)
+	switch name {
+	case "mesh", "pulse":
+		return fmt.Sprintf(`<div class="%s" aria-hidden="true"></div>`, cls)
+	case "monogram":
+		char := strings.TrimSpace(dataString(data, "monogram_char"))
+		if char == "" {
+			// Fall back to first letter of headline so the graphic never blanks.
+			if h := strings.TrimSpace(dataString(data, "headline")); h != "" {
+				char = string([]rune(h)[0])
+			} else {
+				char = "A"
+			}
+		}
+		return fmt.Sprintf(`<div class="%s" aria-hidden="true"><span>%s</span></div>`,
+			cls, escapeHTML(char))
+	case "audit-receipt":
+		label := dataString(data, "audit_label")
+		if label == "" {
+			label = "Live site audit"
+		}
+		score := dataString(data, "audit_score")
+		if score == "" {
+			score = "100"
+		}
+		max := dataString(data, "audit_score_max")
+		if max == "" {
+			max = "100"
+		}
+		baseline := dataString(data, "audit_baseline")
+		if baseline == "" {
+			baseline = "62"
+		}
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf(`<div class="%s" role="img" aria-label="%s, %s out of %s. Industry average %s.">`,
+			cls, escapeAttr(label), escapeAttr(score), escapeAttr(max), escapeAttr(baseline)))
+		b.WriteString(`<div class="hero-graphic__chrome"><span></span><span></span><span></span></div>`)
+		b.WriteString(`<p class="hero-graphic__label">` + escapeHTML(label) + `</p>`)
+		b.WriteString(fmt.Sprintf(`<p class="hero-graphic__score"><strong>%s</strong><span>/%s</span></p>`,
+			escapeHTML(score), escapeHTML(max)))
+		b.WriteString(fmt.Sprintf(`<p class="hero-graphic__baseline">Industry average %s</p>`,
+			escapeHTML(baseline)))
+		b.WriteString(`</div>`)
+		return b.String()
+	}
+	return ""
+}
+
 // renderSplitHeroBlock renders a side-by-side hero (image right + text left
 // on desktop, stacked on mobile). Use when the page wants a SaaS-marketing
 // shape rather than the centered hero. Layout flips to centered when the
@@ -69,7 +131,10 @@ func renderSplitHeroBlock(data map[string]any, mediaByID map[string]store.Medium
 	}
 	b.WriteString("    </div>\n")
 	b.WriteString("    <div class=\"split-hero-image\">\n")
-	if imageID := dataString(data, "image_id"); imageID != "" {
+	graphic := dataString(data, "hero_graphic")
+	if graphic != "" {
+		b.WriteString("      " + renderHeroGraphic(graphic, data) + "\n")
+	} else if imageID := dataString(data, "image_id"); imageID != "" {
 		b.WriteString("      " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "split-hero-img", mediaByID) + "\n")
 	}
 	b.WriteString("    </div>\n")
@@ -521,7 +586,7 @@ func renderReplacementGridBlock(data map[string]any) string {
 
 // renderCalculatorBlock is intentionally NOT registered in renderDataBlock's
 // switch. Calculators are bespoke per customer (the cost formula, the
-// services list, the currency, the layout — all site-specific). Atomicsite
+// services list, the currency, the layout, all site-specific). Atomicsite
 // provides the general primitives (form, feature_grid, replacement_grid,
 // embed, raw) so an agent or developer can hand-build the calculator for
 // the customer who needs one. This function is kept as a reference shape
@@ -735,7 +800,7 @@ func renderRawAstroBlock(data map[string]any) string {
 
 // renderProcessStepsBlock renders a numbered 4-up grid of process steps.
 // Each step shows a big primary-coloured number + h3 title + body. Use for
-// "How it works" / "Our process" / "How to get started" sections — the
+// "How it works" / "Our process" / "How to get started" sections, the
 // canonical 4-step marketing pattern.
 //
 // Each item: {number, title, description}. Number is a string (e.g. "01",
@@ -782,7 +847,7 @@ func renderProcessStepsBlock(data map[string]any) string {
 // renderAboutSplitBlock renders a side-by-side about / founder section
 // with content on the left + photo on the right (stacks on mobile, photo
 // above content). Includes optional stats row + secondary text link CTA
-// underneath. Use for founder bios, "About us", team intros — anywhere
+// underneath. Use for founder bios, "About us", team intros, anywhere
 // you want a personal photo paired with narrative.
 //
 // Data: {eyebrow, heading, paragraphs[], image_id, image_alt, image_position,

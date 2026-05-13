@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/eval"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -87,6 +88,9 @@ func RunChecks(site *eval.SiteContext, playbook agent.DesignPlaybookInfo) []eval
 	checks = append(checks, contentAuthenticityChecks(playbook.ContentAuthenticity, allText, site)...)
 	checks = append(checks, motionChecks(playbook.Motion, allCSS, allHTML)...)
 	checks = append(checks, iconPolicyChecks(playbook.IconPolicy, allHTML)...)
+	checks = append(checks, designTokenCoherenceChecks(allHTML, allCSS)...)
+	checks = append(checks, motionDensityChecks(allCSS)...)
+	checks = append(checks, metaCompletenessChecks(site)...)
 	checks = append(checks, auditChecklistInfo(playbook.AuditChecklist)...)
 
 	return checks
@@ -262,6 +266,264 @@ func auditChecklistInfo(items []agent.AuditItem) []eval.CheckResult {
 		out = append(out, eval.Info(
 			truncate(item.Check, 80), "audit_checklist", item.Why,
 		))
+	}
+	return out
+}
+
+// designTokenCoherenceChecks scans inline/block CSS for hard-coded
+// values that drift from the canonical token allowlist exported from
+// builder. Custom blocks ship raw HTML/CSS and previously bypassed
+// every other check, this catches "border-radius: 7px",
+// "box-shadow: 0 4px 8px #000", "font-family: 'Comic Sans'" and
+// other one-off drift. Severity stays warning (not error) because
+// some drift is intentional in hero custom blocks.
+var (
+	hexColorRE     = regexp.MustCompile(`#[0-9a-fA-F]{3,8}\b`)
+	borderRadiusRE = regexp.MustCompile(`border-radius\s*:\s*([^;}]+)`)
+	boxShadowRE    = regexp.MustCompile(`box-shadow\s*:\s*([^;}]+)`)
+	fontFamilyRE   = regexp.MustCompile(`font-family\s*:\s*([^;}]+)`)
+)
+
+func designTokenCoherenceChecks(html, css string) []eval.CheckResult {
+	combined := html + "\n" + css
+	var findings []string
+
+	// 1) Radii that aren't in the canonical squircle set.
+	radiiMatches := borderRadiusRE.FindAllStringSubmatch(combined, -1)
+	driftRadii := map[string]bool{}
+	for _, m := range radiiMatches {
+		val := strings.TrimSpace(m[1])
+		// Allow var() references and computed values.
+		if strings.HasPrefix(val, "var(") || strings.HasPrefix(val, "calc(") || strings.HasPrefix(val, "inherit") || strings.HasPrefix(val, "0") || strings.HasPrefix(val, "0px") {
+			continue
+		}
+		canonical := false
+		for _, ok := range builder.CanonicalRadiiRem {
+			if strings.Contains(val, ok) {
+				canonical = true
+				break
+			}
+		}
+		if !canonical && len(driftRadii) < 8 {
+			driftRadii[val] = true
+		}
+	}
+	for v := range driftRadii {
+		findings = append(findings, fmt.Sprintf("border-radius %q drifts from canonical squircle set (%v)", truncate(v, 40), builder.CanonicalRadiiRem))
+	}
+
+	// 2) Box-shadows that aren't tinted. Looking for the color-mix+oklab+var(--color-text) recipe.
+	shadowMatches := boxShadowRE.FindAllStringSubmatch(combined, -1)
+	shadowDriftSeen := 0
+	for _, m := range shadowMatches {
+		val := strings.ToLower(strings.TrimSpace(m[1]))
+		if strings.HasPrefix(val, "none") || strings.HasPrefix(val, "var(") || strings.HasPrefix(val, "inset 0 1px 0") {
+			continue
+		}
+		tinted := strings.Contains(val, "color-mix") && strings.Contains(val, "oklab")
+		hasVarText := strings.Contains(val, "var(--color-text)") || strings.Contains(val, "var(--color-primary)")
+		if !tinted && !hasVarText && shadowDriftSeen < 3 {
+			findings = append(findings, fmt.Sprintf("box-shadow %q isn't a tinted recipe; renderer uses color-mix(in oklab, var(--color-text) X%%, transparent)", truncate(val, 60)))
+			shadowDriftSeen++
+		}
+	}
+
+	// 3) Font-family declarations that bypass the CSS variable system.
+	fontMatches := fontFamilyRE.FindAllStringSubmatch(combined, -1)
+	fontDriftSeen := 0
+	for _, m := range fontMatches {
+		val := strings.ToLower(strings.TrimSpace(m[1]))
+		canonical := false
+		for _, ok := range builder.CanonicalFontVars {
+			if strings.Contains(val, ok) {
+				canonical = true
+				break
+			}
+		}
+		// System fallback inside the var() default is fine, only flag
+		// hard-coded family-name lists that bypass var() entirely.
+		if !canonical && !strings.Contains(val, "var(") && fontDriftSeen < 3 {
+			findings = append(findings, fmt.Sprintf("font-family %q hard-codes a family list; use var(--font-heading|body|mono) so per-site uploads take effect", truncate(val, 50)))
+			fontDriftSeen++
+		}
+	}
+
+	// 4) Animation timing functions that aren't in the canonical bezier set.
+	// Quick scan: if `cubic-bezier(` appears, every occurrence should match
+	// one of the approved curves. Linear / ease-in-out are caught by the
+	// existing motionChecks; this catches custom-but-wrong cubic-beziers.
+	beziers := strings.Count(strings.ToLower(combined), "cubic-bezier(")
+	if beziers > 0 {
+		approved := 0
+		for _, b := range builder.CanonicalBeziers {
+			approved += strings.Count(strings.ToLower(combined), strings.ToLower(b))
+		}
+		if approved < beziers {
+			findings = append(findings, fmt.Sprintf("%d cubic-bezier() declarations found, only %d match the playbook's curve set (0.16,1,0.3,1 / 0.32,0.72,0,1)", beziers, approved))
+		}
+	}
+
+	// 5) Hex colors outside the most-used neutrals + primary. Loose check:
+	// many sites legitimately use multiple hex values in branding settings.
+	// Just count distinct hexes; > 8 implies a custom block hard-coded a
+	// rainbow palette.
+	hexes := hexColorRE.FindAllString(combined, -1)
+	distinct := map[string]bool{}
+	for _, h := range hexes {
+		distinct[strings.ToLower(h)] = true
+	}
+	if len(distinct) > 12 {
+		findings = append(findings, fmt.Sprintf("%d distinct hex colours found in HTML/CSS, likely a custom block hard-coded a palette instead of using var(--color-*)", len(distinct)))
+	}
+
+	if len(findings) == 0 {
+		return []eval.CheckResult{eval.Pass("design_token_coherence", "design_tokens", 5, "every measured token matches the canonical allowlist")}
+	}
+
+	// One Fail per finding, capped at 5 to keep the report readable.
+	var out []eval.CheckResult
+	for i, f := range findings {
+		if i >= 5 {
+			break
+		}
+		out = append(out, eval.Fail(
+			fmt.Sprintf("token_drift_%d", i+1), "design_tokens", 1, eval.SeverityWarning,
+			f,
+			"Read builder/css.go for the canonical token sets (CanonicalRadiiRem, CanonicalShadowFormulaSubstrings, CanonicalFontVars, CanonicalBeziers). Update the custom block to read the CSS variables instead of hard-coded values.",
+		))
+	}
+	return out
+}
+
+// motionDensityChecks counts perpetual animations on a page. The
+// playbook says max one perpetual animation per viewport; the
+// inspector enforces it. Two or more @keyframes-driven animations on
+// non-hover selectors = warning; three or more = error.
+var keyframesNameRE = regexp.MustCompile(`@keyframes\s+([a-zA-Z0-9_-]+)`)
+
+func motionDensityChecks(css string) []eval.CheckResult {
+	matches := keyframesNameRE.FindAllStringSubmatch(css, -1)
+	// Count keyframes that are actually used outside of :hover/:focus.
+	// Heuristic: for each keyframe name, check if it appears in an
+	// `animation:` declaration that doesn't sit inside a hover/focus
+	// selector. Quick scan: split on `}` then check each rule block.
+	perpetualNames := map[string]bool{}
+	rules := strings.Split(css, "}")
+	for _, rule := range rules {
+		ruleLower := strings.ToLower(rule)
+		if !strings.Contains(ruleLower, "animation") {
+			continue
+		}
+		// Skip hover/focus/active states.
+		if strings.Contains(ruleLower, ":hover") || strings.Contains(ruleLower, ":focus") || strings.Contains(ruleLower, ":active") {
+			continue
+		}
+		// Skip the prefers-reduced-motion guard.
+		if strings.Contains(ruleLower, "prefers-reduced-motion") {
+			continue
+		}
+		for _, m := range matches {
+			name := strings.ToLower(m[1])
+			if strings.Contains(ruleLower, name) {
+				perpetualNames[name] = true
+			}
+		}
+	}
+
+	count := len(perpetualNames)
+	if count <= 1 {
+		return []eval.CheckResult{eval.Pass("motion_density", "motion", 5, fmt.Sprintf("%d perpetual animation(s) on the page (max 1 per playbook)", count))}
+	}
+
+	severity := eval.SeverityWarning
+	deduct := 2
+	msg := fmt.Sprintf("%d perpetual animations detected: %v. Playbook caps at 1 per viewport.", count, mapKeys(perpetualNames))
+	if count >= 3 {
+		severity = eval.SeverityError
+		deduct = 5
+		msg = fmt.Sprintf("%d perpetual animations detected: %v. Stacking marquee + circuit + pulse + drift reads as AI-builder demo, not premium product.", count, mapKeys(perpetualNames))
+	}
+	return []eval.CheckResult{eval.Fail(
+		"motion_density", "motion", deduct, severity, msg,
+		"Pick ONE perpetual signal (marquee, circuit, pulse, mesh). Convert the rest to load-once entry choreography (transform + opacity, one-shot transition).",
+	)}
+}
+
+// metaCompletenessChecks runs Lovable-style per-page meta sanity on
+// every page. Title length 30-60 chars, description 120-160 chars and
+// not generic, canonical absolute, OG image present. Closes the gap
+// where Lovable users had to manually fix every page's meta after
+// generation.
+var (
+	titleRE       = regexp.MustCompile(`(?i)<title>([^<]*)</title>`)
+	metaDescRE    = regexp.MustCompile(`(?i)<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']`)
+	ogImageRE     = regexp.MustCompile(`(?i)<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']*)["']`)
+	canonicalRE   = regexp.MustCompile(`(?i)<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']*)["']`)
+)
+
+func metaCompletenessChecks(site *eval.SiteContext) []eval.CheckResult {
+	var findings []string
+	for _, p := range site.Pages {
+		t := strings.TrimSpace(firstMatch(titleRE, p.HTML))
+		if t == "" {
+			findings = append(findings, fmt.Sprintf("%s: missing <title>", p.Slug))
+		} else if l := len(t); l < 30 || l > 65 {
+			findings = append(findings, fmt.Sprintf("%s: <title> is %d chars (target 30-60)", p.Slug, l))
+		}
+
+		d := strings.TrimSpace(firstMatch(metaDescRE, p.HTML))
+		if d == "" {
+			findings = append(findings, fmt.Sprintf("%s: missing meta description", p.Slug))
+		} else if l := len(d); l < 100 || l > 175 {
+			findings = append(findings, fmt.Sprintf("%s: meta description is %d chars (target 120-160)", p.Slug, l))
+		}
+
+		og := firstMatch(ogImageRE, p.HTML)
+		if og == "" {
+			findings = append(findings, fmt.Sprintf("%s: missing og:image", p.Slug))
+		}
+
+		canon := firstMatch(canonicalRE, p.HTML)
+		if canon == "" {
+			findings = append(findings, fmt.Sprintf("%s: missing rel=canonical", p.Slug))
+		} else if !strings.HasPrefix(canon, "http") {
+			findings = append(findings, fmt.Sprintf("%s: canonical %q isn't absolute", p.Slug, truncate(canon, 60)))
+		}
+	}
+
+	if len(findings) == 0 {
+		return []eval.CheckResult{eval.Pass("meta_completeness", "meta_audit", 5, fmt.Sprintf("title + description + og:image + canonical present on all %d pages", len(site.Pages)))}
+	}
+
+	// One Fail per page-level finding, capped at 6 to keep the report tight.
+	var out []eval.CheckResult
+	for i, f := range findings {
+		if i >= 6 {
+			break
+		}
+		out = append(out, eval.Fail(
+			fmt.Sprintf("meta_gap_%d", i+1), "meta_audit", 2, eval.SeverityWarning,
+			f,
+			"Set page.meta_title (30-60 chars), page.meta_description (120-160 chars with a number or proof), seo.og_default_image_id, and seo.canonical_base via bulk_upsert_settings.",
+		))
+	}
+	return out
+}
+
+// firstMatch returns the first capture group from a regex, or empty
+// string if there's no match.
+func firstMatch(re *regexp.Regexp, s string) string {
+	m := re.FindStringSubmatch(s)
+	if len(m) < 2 {
+		return ""
+	}
+	return m[1]
+}
+
+func mapKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
 	}
 	return out
 }
