@@ -1,0 +1,3 @@
+This file exists to trigger a deploy-atomicsite run via Hephaestus's
+webhook path matcher (atomicsite/**). Safe to delete on any subsequent
+deploy that has its own rationale.
