@@ -498,7 +498,7 @@ func buildOrganizationJSONLD(site store.Site, profile store.SiteProfile, setting
 	return string(out)
 }
 
-// ExtractHTMLFromGlobalBlock is the exported wrapper around the package-
+// ExtractHTMLFromGlobalBlock is the exported wrapper for external callers. around the package-
 // internal renderer. Callers outside builder (the admin Preview endpoint,
 // the agent) use this to render a single block without going through the
 // full layout pipeline. Same logic the builder runs at deploy time so
