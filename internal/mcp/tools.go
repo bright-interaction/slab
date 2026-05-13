@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/handlers"
@@ -488,6 +489,129 @@ func (s *Server) registerTools() {
 				"bg_color":        site.BgColor,
 				"font_heading":    site.FontHeading,
 				"font_body":       site.FontBody,
+			}), nil
+		},
+	})
+
+	register(Tool{
+		Name:          "update_branding",
+		Description:   "Partial update of the site branding row. Pass any of: primary_color, secondary_color, bg_color, text_color, surface_color, border_color, muted_color, accent_color, on_primary_color (all #RRGGBB or empty), font_heading, font_body (e.g. 'Space Grotesk', 'Inter'), meta_title, meta_description, og_image_id, favicon_id, lang. Mirrors PATCH /api/agent/branding.",
+		RequiresWrite: true,
+		InputSchema: schema(`{
+			"type":"object",
+			"properties":{
+				"primary_color":{"type":"string"},
+				"secondary_color":{"type":"string"},
+				"bg_color":{"type":"string"},
+				"text_color":{"type":"string"},
+				"surface_color":{"type":"string"},
+				"border_color":{"type":"string"},
+				"muted_color":{"type":"string"},
+				"accent_color":{"type":"string"},
+				"on_primary_color":{"type":"string"},
+				"font_heading":{"type":"string"},
+				"font_body":{"type":"string"},
+				"meta_title":{"type":"string"},
+				"meta_description":{"type":"string"},
+				"og_image_id":{"type":"string"},
+				"favicon_id":{"type":"string"},
+				"lang":{"type":"string"}
+			}
+		}`),
+		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
+			var args struct {
+				PrimaryColor    *string `json:"primary_color"`
+				SecondaryColor  *string `json:"secondary_color"`
+				BgColor         *string `json:"bg_color"`
+				TextColor       *string `json:"text_color"`
+				SurfaceColor    *string `json:"surface_color"`
+				BorderColor     *string `json:"border_color"`
+				MutedColor      *string `json:"muted_color"`
+				AccentColor     *string `json:"accent_color"`
+				OnPrimaryColor  *string `json:"on_primary_color"`
+				FontHeading     *string `json:"font_heading"`
+				FontBody        *string `json:"font_body"`
+				MetaTitle       *string `json:"meta_title"`
+				MetaDescription *string `json:"meta_description"`
+				OgImageID       *string `json:"og_image_id"`
+				FaviconID       *string `json:"favicon_id"`
+				Lang            *string `json:"lang"`
+			}
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+			row, err := s.queries.GetSiteByID(ctx, agent.SiteID)
+			if err != nil {
+				return "", fmt.Errorf("site not found")
+			}
+			hexRE := regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+			check := func(name string, v *string) error {
+				if v == nil || *v == "" {
+					return nil
+				}
+				if !hexRE.MatchString(*v) {
+					return fmt.Errorf("%s must be #RRGGBB hex or empty", name)
+				}
+				return nil
+			}
+			for _, c := range []struct {
+				name string
+				v    *string
+			}{
+				{"primary_color", args.PrimaryColor}, {"secondary_color", args.SecondaryColor},
+				{"bg_color", args.BgColor}, {"text_color", args.TextColor},
+				{"surface_color", args.SurfaceColor}, {"border_color", args.BorderColor},
+				{"muted_color", args.MutedColor}, {"accent_color", args.AccentColor},
+				{"on_primary_color", args.OnPrimaryColor},
+			} {
+				if err := check(c.name, c.v); err != nil {
+					return "", err
+				}
+			}
+			params := store.UpdateSiteParams{
+				Name: row.Name, Slug: row.Slug, Domain: row.Domain, Status: row.Status,
+				PrimaryColor: row.PrimaryColor, SecondaryColor: row.SecondaryColor,
+				BgColor: row.BgColor, TextColor: row.TextColor,
+				SurfaceColor: row.SurfaceColor, BorderColor: row.BorderColor,
+				MutedColor: row.MutedColor, AccentColor: row.AccentColor,
+				OnPrimaryColor: row.OnPrimaryColor,
+				FontHeading:    row.FontHeading, FontBody: row.FontBody,
+				MetaTitle: row.MetaTitle, MetaDescription: row.MetaDescription,
+				OgImageID: row.OgImageID, FaviconID: row.FaviconID,
+				Ga4ID: row.Ga4ID, UmamiID: row.UmamiID, UmamiUrl: row.UmamiUrl,
+				CookieproofDomain: row.CookieproofDomain, Lang: row.Lang,
+				ID: row.ID,
+			}
+			apply := func(field *string, target *string) {
+				if field != nil {
+					*target = *field
+				}
+			}
+			apply(args.PrimaryColor, &params.PrimaryColor)
+			apply(args.SecondaryColor, &params.SecondaryColor)
+			apply(args.BgColor, &params.BgColor)
+			apply(args.TextColor, &params.TextColor)
+			apply(args.SurfaceColor, &params.SurfaceColor)
+			apply(args.BorderColor, &params.BorderColor)
+			apply(args.MutedColor, &params.MutedColor)
+			apply(args.AccentColor, &params.AccentColor)
+			apply(args.OnPrimaryColor, &params.OnPrimaryColor)
+			apply(args.FontHeading, &params.FontHeading)
+			apply(args.FontBody, &params.FontBody)
+			apply(args.MetaTitle, &params.MetaTitle)
+			apply(args.MetaDescription, &params.MetaDescription)
+			apply(args.OgImageID, &params.OgImageID)
+			apply(args.FaviconID, &params.FaviconID)
+			apply(args.Lang, &params.Lang)
+			if err := s.queries.UpdateSite(ctx, params); err != nil {
+				return "", fmt.Errorf("failed to update branding")
+			}
+			updated, _ := s.queries.GetSiteByID(ctx, agent.SiteID)
+			return mustJSON(map[string]any{
+				"primary_color": updated.PrimaryColor, "secondary_color": updated.SecondaryColor,
+				"accent_color": updated.AccentColor, "text_color": updated.TextColor,
+				"bg_color": updated.BgColor, "font_heading": updated.FontHeading,
+				"font_body": updated.FontBody,
 			}), nil
 		},
 	})
