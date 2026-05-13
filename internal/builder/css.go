@@ -9,8 +9,43 @@ import (
 	"github.com/bright-interaction/slab/internal/store"
 )
 
+// CanonicalRadiiRem is the allowlist of border-radius values the
+// renderer emits, expressed in rem. The critique
+// designTokenCoherenceChecks() reads this slice to flag custom blocks
+// that drift outside the squircle family (e.g. shipping border-radius:
+// 7px directly). Edit here when adding a new shape primitive, the
+// check picks up the change automatically.
+var CanonicalRadiiRem = []string{"0.5rem", "0.625rem", "0.875rem", "1rem", "1.25rem", "1.5rem", "1.75rem", "9999px", "50%"}
+
+// CanonicalShadowFormula is the tinted-shadow recipe atomicsite uses
+// across renderer defaults. Custom blocks that emit raw rgba(0,0,0)
+// shadows are flagged by the critique. The substring match is loose
+// (color-mix + oklab + var(--color-text)) so any tinted variant passes.
+var CanonicalShadowFormulaSubstrings = []string{"color-mix(in oklab", "var(--color-text)"}
+
+// CanonicalBeziers is the allowlist of cubic-bezier curves used by the
+// renderer. Custom transitions that hard-code a linear or ease-in-out
+// curve drift away from the playbook's premium-feel motion. Renderer
+// defaults: 0.16, 1, 0.3, 1 (soft landing) and 0.32, 0.72, 0, 1
+// (premium overshoot).
+var CanonicalBeziers = []string{
+	"cubic-bezier(0.16, 1, 0.3, 1)",
+	"cubic-bezier(0.16,1,0.3,1)",
+	"cubic-bezier(0.32, 0.72, 0, 1)",
+	"cubic-bezier(0.32,0.72,0,1)",
+}
+
+// CanonicalFontVars is the set of CSS variable references the renderer
+// uses for typography. Custom blocks that hard-code a font-family
+// (e.g. "Inter, sans-serif") instead of var(--font-body) get flagged.
+var CanonicalFontVars = []string{
+	"var(--font-heading",
+	"var(--font-body",
+	"var(--font-mono",
+}
+
 // RenderCSS generates the global.css file from site branding and CSS classes.
-// Thin wrapper over BuildCSS — keeps file-write side effects out of the
+// Thin wrapper over BuildCSS, keeps file-write side effects out of the
 // string-builder so the per-block preview endpoint can serve the same
 // bytes without going through the workspace.
 func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir string) error {
@@ -22,7 +57,7 @@ func RenderCSS(ctx context.Context, queries *store.Queries, siteID string, wsDir
 }
 
 // BuildCSS returns the global stylesheet for one site as a string. Same
-// bytes the build pipeline writes to disk via RenderCSS — used by the
+// bytes the build pipeline writes to disk via RenderCSS, used by the
 // per-block preview-html endpoint so the iframe matches production.
 func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (string, error) {
 	site, err := queries.GetSiteByID(ctx, siteID)
@@ -184,7 +219,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 
 	// Visual rhythm: every other major content block gets a faint "elevated
 	// surface" tint so consecutive sections don't blur together. Tone is
-	// deliberately whisper-quiet — matches brightinteraction.com's #f5f5f4
+	// deliberately whisper-quiet, matches brightinteraction.com's #f5f5f4
 	// against #fafaf9, which is roughly a 2-3% step away from --color-bg.
 	// Heavier tints turn into stripes that fight the content.
 	b.WriteString(":root { --color-surface-elevated: color-mix(in oklab, var(--color-bg) 97.5%, var(--color-text)); }\n")
@@ -275,6 +310,48 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".block.has-circuit-bg > *:not(.block-circuit-canvas) { position: relative; z-index: 1; }\n")
 	b.WriteString(".block--split_hero.has-circuit-bg { display: grid; }\n\n")
 
+	// --- Curated hero graphics: four named visuals (mesh, pulse, monogram,
+	// audit-receipt) registered in the hero/split_hero schema as
+	// hero_graphic. Each is inspector-pre-vetted: A+ performance,
+	// transform+opacity only, prefers-reduced-motion respected. The
+	// shared .hero-graphic wrapper handles positioning; per-variant
+	// classes carry the visual. ---
+	b.WriteString(".block--hero.has-graphic { position: relative; overflow: hidden; }\n")
+	b.WriteString(".block--hero.has-graphic > *:not(.hero-graphic):not(.block-circuit-canvas) { position: relative; z-index: 1; }\n")
+	b.WriteString(".block--hero .hero-graphic { position: absolute; inset: 0; pointer-events: none; z-index: 0; }\n")
+	b.WriteString(".block--split_hero .split-hero-image .hero-graphic { position: relative; width: 100%; aspect-ratio: 4 / 3; pointer-events: none; }\n")
+
+	// mesh: three drifting oklab orbs, 22s perpetual cycle. ~3kb of CSS.
+	b.WriteString(".hero-graphic--mesh { background: radial-gradient(60% 60% at 22% 30%, color-mix(in oklab, var(--color-primary) 28%, transparent), transparent 60%), radial-gradient(50% 50% at 78% 70%, color-mix(in oklab, var(--color-text) 18%, transparent), transparent 65%), radial-gradient(70% 50% at 50% 90%, color-mix(in oklab, var(--color-primary) 14%, transparent), transparent 70%); animation: heroMeshDrift 22s ease-in-out infinite alternate; }\n")
+	b.WriteString("@keyframes heroMeshDrift { 0% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(-2%, 1%, 0) scale(1.04); } }\n")
+
+	// pulse: centered radial pulse breathing at 2.4s.
+	b.WriteString(".hero-graphic--pulse { background: radial-gradient(40% 40% at 50% 50%, color-mix(in oklab, var(--color-primary) 22%, transparent), transparent 70%); animation: heroPulseBreath 2.4s ease-in-out infinite alternate; }\n")
+	b.WriteString("@keyframes heroPulseBreath { 0% { opacity: 0.65; transform: scale(0.98); } 100% { opacity: 1; transform: scale(1.04); } }\n")
+
+	// monogram: huge letterform offset off-grid.
+	b.WriteString(".hero-graphic--monogram { display: flex; align-items: flex-end; justify-content: flex-end; padding: 0 4% 2% 0; }\n")
+	b.WriteString(".hero-graphic--monogram span { font-family: var(--font-heading, system-ui), serif; font-size: clamp(10rem, 28vw, 22rem); font-weight: 700; line-height: 0.85; letter-spacing: -0.05em; color: color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
+
+	// audit-receipt: mock browser frame with score chrome. Sized card,
+	// NOT a background, sits centered in split-hero column or floats
+	// bottom-right of centered hero.
+	b.WriteString(".block--hero .hero-graphic--audit-receipt { position: absolute; inset: auto 6% 8% auto; width: min(22rem, 38%); aspect-ratio: auto; padding: 1.25rem 1.5rem 1.5rem; }\n")
+	b.WriteString(".split-hero-image .hero-graphic--audit-receipt { display: block; padding: 1.5rem 1.75rem 1.75rem; aspect-ratio: auto; }\n")
+	b.WriteString(".hero-graphic--audit-receipt { background: var(--color-bg); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); border-radius: 1rem; box-shadow: 0 16px 48px color-mix(in oklab, var(--color-text) 12%, transparent); pointer-events: auto; }\n")
+	b.WriteString(".hero-graphic__chrome { display: flex; gap: 0.375rem; margin-block-end: 0.875rem; }\n")
+	b.WriteString(".hero-graphic__chrome span { width: 0.625rem; height: 0.625rem; border-radius: 50%; background: color-mix(in oklab, var(--color-text) 12%, transparent); }\n")
+	b.WriteString(".hero-graphic__label { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-primary); margin: 0 0 0.5rem; }\n")
+	b.WriteString(".hero-graphic__score { font-family: var(--font-heading, system-ui), sans-serif; font-size: 2.75rem; font-weight: 700; line-height: 1; letter-spacing: -0.03em; margin: 0 0 0.5rem; color: var(--color-text); }\n")
+	b.WriteString(".hero-graphic__score strong { font-weight: 700; }\n")
+	b.WriteString(".hero-graphic__score span { font-size: 1.25rem; color: color-mix(in oklab, var(--color-text) 55%, transparent); font-weight: 500; }\n")
+	b.WriteString(".hero-graphic__baseline { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.75rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin: 0; }\n")
+
+	// prefers-reduced-motion: freeze every perpetual animation.
+	b.WriteString("@media (prefers-reduced-motion: reduce) {\n")
+	b.WriteString("  .hero-graphic--mesh, .hero-graphic--pulse { animation: none; }\n")
+	b.WriteString("}\n\n")
+
 	// --- CTA buttons: BI-style dark primary + outline secondary + brand-coloured accent.
 	// Layout rules apply to all variants directly so authors can write
 	// `class="btn-primary"` without needing to co-apply `.btn`. The `.btn` class
@@ -304,7 +381,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	// matching brightinteraction.com / Linear / Vercel:
 	//   [brand-mark]  [primary nav (centred)]  [actions: lang + CTA]
 	// Renderer emits each zone as a separate child so the grid columns
-	// don't fight flex-wrap. Below 1024px the primary nav hides — only
+	// don't fight flex-wrap. Below 1024px the primary nav hides, only
 	// brand + CTA stay visible (mirrors BI's `hidden lg:flex`). ---
 	b.WriteString(".site-header { position: sticky; top: 0; z-index: 50; padding-block: 0; padding-inline: 1.5rem; background: color-mix(in oklab, var(--color-bg) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
 	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; height: 3.5rem; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; }\n")

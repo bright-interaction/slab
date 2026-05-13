@@ -24,6 +24,18 @@ func init() {
 				{Value: "circuit", Label: "Animated circuit"},
 				{Value: "circuit-static", Label: "Static circuit pattern"},
 			}},
+			{Key: "hero_graphic", Label: "Hero graphic", Kind: KindSelect, Help: "Curated visual library. Each option ships its own CSS, all inspector-pre-vetted. See DesignPlaybook.HeroGraphics for full guidance.", Options: []Option{
+				{Value: "", Label: "None"},
+				{Value: "mesh", Label: "Mesh gradient (AI/SaaS)"},
+				{Value: "pulse", Label: "Radial pulse (consumer/agency)"},
+				{Value: "monogram", Label: "Brand monogram (editorial)"},
+				{Value: "audit-receipt", Label: "Audit receipt (inspector/trust)"},
+			}},
+			{Key: "monogram_char", Label: "Monogram character", Kind: KindText, Help: "Single character used by hero_graphic=monogram. Defaults to first letter of site name."},
+			{Key: "audit_score", Label: "Audit score", Kind: KindText, Help: "Numerator shown by hero_graphic=audit-receipt (e.g. '100')."},
+			{Key: "audit_score_max", Label: "Audit score max", Kind: KindText, Help: "Denominator shown by hero_graphic=audit-receipt (e.g. '100')."},
+			{Key: "audit_baseline", Label: "Audit baseline", Kind: KindText, Help: "Industry-average comparison number shown by hero_graphic=audit-receipt (e.g. '62')."},
+			{Key: "audit_label", Label: "Audit label", Kind: KindText, Help: "Caption above the score on hero_graphic=audit-receipt (e.g. 'Live site audit')."},
 		},
 	})
 
@@ -46,6 +58,18 @@ func init() {
 				{Value: "circuit", Label: "Animated circuit"},
 				{Value: "circuit-static", Label: "Static circuit pattern"},
 			}},
+			{Key: "hero_graphic", Label: "Right-column graphic", Kind: KindSelect, Help: "Use one of the curated graphics instead of a photo for image_id. See DesignPlaybook.HeroGraphics.", Options: []Option{
+				{Value: "", Label: "None (use image_id)"},
+				{Value: "mesh", Label: "Mesh gradient (AI/SaaS)"},
+				{Value: "pulse", Label: "Radial pulse (consumer/agency)"},
+				{Value: "monogram", Label: "Brand monogram (editorial)"},
+				{Value: "audit-receipt", Label: "Audit receipt (inspector/trust)"},
+			}},
+			{Key: "monogram_char", Label: "Monogram character", Kind: KindText, Help: "Single character used by hero_graphic=monogram."},
+			{Key: "audit_score", Label: "Audit score", Kind: KindText},
+			{Key: "audit_score_max", Label: "Audit score max", Kind: KindText},
+			{Key: "audit_baseline", Label: "Audit baseline", Kind: KindText},
+			{Key: "audit_label", Label: "Audit label", Kind: KindText},
 			{Key: "layout", Label: "Layout", Kind: KindSelect, Options: []Option{
 				{Value: "", Label: "Side-by-side (default)"},
 				{Value: "centered", Label: "Centered"},

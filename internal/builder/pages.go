@@ -509,13 +509,20 @@ func renderTextParagraphs(b *strings.Builder, text string) {
 func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) string {
 	var b strings.Builder
 	bg := dataString(data, "bg")
+	graphic := dataString(data, "hero_graphic")
 	cls := "block block--hero"
 	if bg == "circuit" || bg == "circuit-static" {
 		cls += " has-circuit-bg"
 	}
+	if graphic != "" {
+		cls += " has-graphic has-graphic--" + escapeAttr(graphic)
+	}
 	b.WriteString(fmt.Sprintf("  <section class=\"%s\"", cls))
 	if bg == "circuit-static" {
 		b.WriteString(` data-bg="circuit"`)
+	}
+	if graphic != "" {
+		b.WriteString(fmt.Sprintf(` data-hero-graphic="%s"`, escapeAttr(graphic)))
 	}
 	b.WriteString(">\n")
 	if bg == "circuit" {
@@ -523,6 +530,9 @@ func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) str
 		b.WriteString("    <script>")
 		b.Write(CircuitBgScript)
 		b.WriteString("</script>\n")
+	}
+	if graphic != "" {
+		b.WriteString("    " + renderHeroGraphic(graphic, data) + "\n")
 	}
 	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
 		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
@@ -533,7 +543,7 @@ func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) str
 	if sub := dataString(data, "subheading"); sub != "" {
 		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
 	}
-	if imageID := dataString(data, "image_id"); imageID != "" {
+	if imageID := dataString(data, "image_id"); imageID != "" && graphic == "" {
 		b.WriteString("    " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "hero-image", mediaByID) + "\n")
 	}
 	ctaText := dataString(data, "cta_text")
