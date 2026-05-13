@@ -1,5 +1,1 @@
-This file exists to trigger a deploy-atomicsite run via Hephaestus's
-webhook path matcher (atomicsite/**). Safe to delete on any subsequent
-deploy that has its own rationale.
-# Re-trigger after SSH-less refactor 2026-05-13
-# Retry 2 with /opt/atomicsite-build chowned 2026-05-13
+# retrigger: deploy svelte import path fix for cost-calculator 2026-05-13T23:49:40Z
