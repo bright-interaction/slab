@@ -2,3 +2,4 @@ This file exists to trigger a deploy-atomicsite run via Hephaestus's
 webhook path matcher (atomicsite/**). Safe to delete on any subsequent
 deploy that has its own rationale.
 # Re-trigger after SSH-less refactor 2026-05-13
+# Retry 2 with /opt/atomicsite-build chowned 2026-05-13
