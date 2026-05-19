@@ -32,6 +32,9 @@ func (k *ecommerceKit) Description() string {
 func (k *ecommerceKit) TargetSiteTypes() []string { return []string{"ecommerce"} }
 
 func (k *ecommerceKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
+	if err := applyBranding(ctx, q, siteID, BrandPulse); err != nil {
+		return fmt.Errorf("ecommerce branding: %w", err)
+	}
 	if err := k.applyComponents(ctx, q, siteID); err != nil {
 		return fmt.Errorf("ecommerce components: %w", err)
 	}
@@ -189,8 +192,35 @@ func (k *ecommerceKit) applyPages(ctx context.Context, q *store.Queries, siteID 
 		return err
 	}
 	homeBlocks := []blockDef{
-		{BlockType: "hero", Data: `{"headline":"Built to last","subheadline":"Add a positioning statement that explains who this is for and why it's better than the obvious alternative.","primary_label":"Shop the collection","primary_href":"/products","secondary_label":"Read our story","secondary_href":"/about"}`},
+		HeroBlock(HeroPayload{
+			Eyebrow:        "MADE IN STOCKHOLM - SHIPS WORLDWIDE",
+			Headline:       "Built to outlast the trend cycle. Made for the people who already know what they want.",
+			Subheading:     "Small batches, honest materials, prices that include the cost of doing this properly. Free returns for 60 days because we'd rather you send it back than wear it three times and resent it.",
+			CTAText:        "Shop the collection",
+			CTAUrl:         "/products",
+			SecondaryLabel: "Read our story",
+			SecondaryUrl:   "/about",
+			HeroGraphic:    "pulse",
+		}),
+		LogoStripBlock("Featured in", []LogoItem{
+			{Label: "Monocle"}, {Label: "Kinfolk"}, {Label: "Vogue Scandinavia"},
+			{Label: "Drapers"}, {Label: "Hypebeast"}, {Label: "GQ"},
+		}),
+		StatGridBlock("By the numbers", []StatItem{
+			{Value: "4.7", Label: "Trustpilot rating", Context: "2,100+ verified reviews"},
+			{Value: "60 days", Label: "free returns window", Context: "We pay the postage either way"},
+			{Value: "11", Label: "factories on the supplier list", Context: "All published, all audited annually"},
+		}),
 		{BlockType: "feature_grid", Data: `{"component":"product-grid","heading":"Featured","products":[]}`},
+		{BlockType: "quote", Data: `{"quote":"I bought one piece three years ago. It still looks like the day it arrived and I have stopped buying anywhere else.","attribution":"Mira K, Copenhagen"}`},
+		AccordionFAQBlock("Questions we get all the time", []FAQItem{
+			{Question: "Where is this made?", Answer: "Sweden, Portugal, and Italy. The factory list is public on /factories with the year each one joined the supplier list and the most recent audit date. We don't move production for price; we move when a factory closes or fails audit."},
+			{Question: "What is the return policy?", Answer: "60 days, free both ways, with the original packaging. Refunds hit your card within 5 business days of us receiving the return. We don't ask why and we don't restock-fee. The only catch: no returns on swimwear or final-sale items."},
+			{Question: "How long does shipping take?", Answer: "EU: 2-4 business days, free over 100 euros. UK + Switzerland: 3-5 business days, no surprise customs (we pay duty). US: 5-8 business days. Rest of world: 7-14 days, customs depends on your country. Tracking emails fire as soon as the label prints."},
+			{Question: "Do you offer alterations?", Answer: "Hems on trousers, yes. Sleeves on shirts, by request via support. Tailoring is fulfilled by Tailor of Stockholm and ships back in 7-10 business days. Cost is at standard tailor rates; we don't mark it up."},
+			{Question: "How do I know what size to order?", Answer: "Every product page has a fit guide with measurements in cm and inches. If you're between sizes, our note recommends sizing down for fitted pieces and up for structured outerwear. Live chat is staffed Mon-Fri 09:00-18:00 CET with someone who has seen the product in person."},
+		}),
+		{BlockType: "cta", Data: `{"heading":"Worth it or worth less","text":"Browse the full collection. Free shipping over 100 EUR, free returns for 60 days, signed-off by us before it leaves the warehouse.","cta_text":"Shop everything","cta_url":"/products","variant":"primary"}`},
 	}
 	if err := seedBlocks(ctx, q, homeID, homeBlocks); err != nil {
 		return err

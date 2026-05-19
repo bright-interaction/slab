@@ -304,6 +304,28 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	// --- custom block: just the section wrapper + auto-id. Markup is rendered verbatim. ---
 	b.WriteString(".block--custom { max-width: var(--container-width); }\n\n")
 
+	// --- comparison_table: feature matrix comparing us against alternatives.
+	// Inherits canonical typography. The Us column gets a tinted background
+	// + accent left border so the eye reads "this is what we offer" first.
+	// Mobile: horizontal scroll inside .comparison-table-wrap, never breaks
+	// the cell content. Ticks are var(--color-primary), crosses are muted. ---
+	b.WriteString(".block--comparison_table { padding-block: 4rem; }\n")
+	b.WriteString(".block--comparison_table h2 { font-family: var(--font-heading, system-ui), sans-serif; font-size: clamp(1.75rem, 3vw, 2.5rem); margin: 0 0 0.5rem; }\n")
+	b.WriteString(".block--comparison_table .subheading { font-size: 1.0625rem; color: color-mix(in oklab, var(--color-text) 65%, transparent); margin: 0 0 2rem; max-width: 60ch; }\n")
+	b.WriteString(".comparison-table-wrap { overflow-x: auto; border-radius: 0.875rem; border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); }\n")
+	b.WriteString(".comparison-table { width: 100%; border-collapse: collapse; min-width: 32rem; }\n")
+	b.WriteString(".comparison-table th, .comparison-table td { padding: 1rem 1.25rem; text-align: left; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); vertical-align: middle; }\n")
+	b.WriteString(".comparison-table tbody tr:last-child th, .comparison-table tbody tr:last-child td { border-bottom: none; }\n")
+	b.WriteString(".comparison-table thead { background: color-mix(in oklab, var(--color-text) 4%, transparent); }\n")
+	b.WriteString(".comparison-table thead th { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.14em; color: color-mix(in oklab, var(--color-text) 70%, transparent); }\n")
+	b.WriteString(".comparison-table tbody th { font-weight: 500; color: var(--color-text); }\n")
+	b.WriteString(".comparison-table .comparison-us { background: color-mix(in oklab, var(--color-primary) 6%, transparent); border-left: 2px solid var(--color-primary); }\n")
+	b.WriteString(".comparison-table thead th.comparison-us { color: var(--color-primary); }\n")
+	b.WriteString(".comparison-cell--yes { color: var(--color-primary); font-size: 1.125rem; }\n")
+	b.WriteString(".comparison-cell--no { color: color-mix(in oklab, var(--color-text) 28%, transparent); font-size: 1.125rem; }\n")
+	b.WriteString(".comparison-cell--none { color: color-mix(in oklab, var(--color-text) 28%, transparent); }\n")
+	b.WriteString(".comparison-cell--text { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.875rem; }\n\n")
+
 	// --- Animated circuit canvas: sized absolutely behind the hero content. Hero/split-hero with bg=circuit set position:relative + z-index'd contents. ---
 	b.WriteString(".block.has-circuit-bg { position: relative; min-height: clamp(36rem, 65vh, 48rem); display: flex; align-items: center; justify-content: center; overflow: hidden; }\n")
 	b.WriteString(".block.has-circuit-bg .block-circuit-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }\n")
@@ -347,9 +369,30 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".hero-graphic__score span { font-size: 1.25rem; color: color-mix(in oklab, var(--color-text) 55%, transparent); font-weight: 500; }\n")
 	b.WriteString(".hero-graphic__baseline { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.75rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin: 0; }\n")
 
+	// gradient-orb: single large soft orb that drifts. Pure CSS, no
+	// JS. Reads as a Lovable-style "AI feel" without the marquee
+	// reading as AI-builder demo. Hardware-accelerated transform only.
+	b.WriteString(".hero-graphic--gradient-orb { background: radial-gradient(55% 55% at 65% 40%, color-mix(in oklab, var(--color-primary) 32%, transparent), transparent 70%); filter: blur(8px); animation: heroOrbDrift 26s ease-in-out infinite alternate; }\n")
+	b.WriteString("@keyframes heroOrbDrift { 0% { transform: translate3d(-3%, 2%, 0) scale(1); } 100% { transform: translate3d(4%, -3%, 0) scale(1.08); } }\n")
+
+	// globe-wire: 2D SVG globe + flowing arcs + breathing hub. Mirrors
+	// the marketing site's `/` hero at a smaller scale. Pure SVG +
+	// CSS, no canvas. Arcs use stroke-dasharray for the "data flow"
+	// loop; the Stockholm hub breathes via opacity. Stroke colors
+	// inherit from var(--color-primary).
+	b.WriteString(".hero-graphic--globe-wire { display: flex; align-items: center; justify-content: center; }\n")
+	b.WriteString(".hero-graphic__globe { width: 90%; max-width: 26rem; aspect-ratio: 1; }\n")
+	b.WriteString(".hero-graphic__grid ellipse { stroke: color-mix(in oklab, var(--color-text) 10%, transparent); stroke-width: 1; }\n")
+	b.WriteString(".hero-graphic__arcs path { stroke: var(--color-primary); stroke-width: 1.5; stroke-dasharray: 6 8; stroke-dashoffset: 0; animation: heroGlobeFlow 8s linear infinite; }\n")
+	b.WriteString("@keyframes heroGlobeFlow { to { stroke-dashoffset: -56; } }\n")
+	b.WriteString(".hero-graphic__cities circle { fill: var(--color-primary); }\n")
+	b.WriteString(".hero-graphic__hub { fill: var(--color-primary) !important; animation: heroGlobeHub 3.2s ease-in-out infinite alternate; transform-origin: 200px 200px; }\n")
+	b.WriteString("@keyframes heroGlobeHub { 0% { opacity: 0.7; transform: scale(1); } 100% { opacity: 1; transform: scale(1.35); } }\n")
+
 	// prefers-reduced-motion: freeze every perpetual animation.
 	b.WriteString("@media (prefers-reduced-motion: reduce) {\n")
-	b.WriteString("  .hero-graphic--mesh, .hero-graphic--pulse { animation: none; }\n")
+	b.WriteString("  .hero-graphic--mesh, .hero-graphic--pulse, .hero-graphic--gradient-orb { animation: none; }\n")
+	b.WriteString("  .hero-graphic__arcs path, .hero-graphic__hub { animation: none; }\n")
 	b.WriteString("}\n\n")
 
 	// --- CTA buttons: BI-style dark primary + outline secondary + brand-coloured accent.

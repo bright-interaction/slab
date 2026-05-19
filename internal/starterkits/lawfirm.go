@@ -29,6 +29,9 @@ func (k *lawFirmKit) TargetSiteTypes() []string { return []string{"b2b"} }
 func (k *lawFirmKit) Hidden() bool { return true }
 
 func (k *lawFirmKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
+	if err := applyBranding(ctx, q, siteID, BrandAudit); err != nil {
+		return fmt.Errorf("law-firm branding: %w", err)
+	}
 	if err := k.applyComponents(ctx, q, siteID); err != nil {
 		return fmt.Errorf("law-firm components: %w", err)
 	}
@@ -204,10 +207,38 @@ func (k *lawFirmKit) applyPages(ctx context.Context, q *store.Queries, siteID st
 		return err
 	}
 	homeBlocks := []blockDef{
-		{BlockType: "hero", Data: `{"component":"hero-formal","heading":"Juridisk rådgivning du kan lita på","lede":"Vi hjälper svenska företag att navigera GDPR, avtal och tvister med klarhet och erfarenhet.","ctaLabel":"Kontakta oss","ctaHref":"#kontakt","secondaryLabel":"Våra tjänster","secondaryHref":"/tjanster"}`},
-		{BlockType: "text", Data: `{"text":"Vår byrå har lång erfarenhet av att stödja små och medelstora företag i Sverige. Vi kombinerar djup juridisk kompetens med praktisk affärsförståelse. När ni anlitar oss får ni en partner som tar ansvar genom hela processen, från första rådgivning till genomförande."}`},
-		{BlockType: "feature_grid", Data: `{"component":"services-grid","heading":"Tjänster","services":[{"title":"GDPR-rådgivning","body":"Vi guidar er genom dataskyddsförordningens krav.","href":"/tjanster/gdpr-radgivning"},{"title":"Avtal","body":"Vi granskar och utformar avtal som håller.","href":"/tjanster/avtal"},{"title":"Tvistelösning","body":"Vi företräder er i förhandlingar och processer.","href":"/tjanster"}]}`},
-		{BlockType: "feature_grid", Data: `{"component":"team-grid","heading":"Teamet","members":[{"name":"Anna Lindqvist","role":"Senior advokat","bio":"Specialist på GDPR och dataskydd."},{"name":"Erik Bergström","role":"Advokat","bio":"Avtalsrätt och bolagsrätt."},{"name":"Sofia Karlsson","role":"Biträdande jurist","bio":"Tvistelösning och processrätt."},{"name":"Johan Nilsson","role":"Advokat","bio":"Arbetsrätt och anställningsavtal."}]}`},
+		HeroBlock(HeroPayload{
+			Eyebrow:        "ADVOKATBYRÅ - STOCKHOLM",
+			Headline:       "Juridisk rådgivning som håller när det blir prövat.",
+			Subheading:     "GDPR, avtal, tvister. Fast prissättning, klart utfall. När ni anlitar oss tar vi ansvar genom hela processen, från första samtal till slutförande.",
+			CTAText:        "Boka första samtalet",
+			CTAUrl:         "#kontakt",
+			SecondaryLabel: "Våra tjänster",
+			SecondaryUrl:   "/tjanster",
+			HeroGraphic:    "audit-receipt",
+			AuditScore:     "100",
+			AuditScoreMax:  "100",
+			AuditBaseline:  "62",
+			AuditLabel:     "Webbplatsens audit-betyg",
+		}),
+		LogoStripBlock("Uppdrag åt", []LogoItem{
+			{Label: "Nordhealth"}, {Label: "Hemnet"}, {Label: "Klarna"},
+			{Label: "Schibsted"}, {Label: "Tink"}, {Label: "Tibber"},
+		}),
+		StatGridBlock("Senaste tolv månaderna", []StatItem{
+			{Value: "84", Label: "uppdrag avslutade", Context: "Fast pris, levererat i tid"},
+			{Value: "4 v", Label: "median från första samtal till leverans", Context: "Standarduppdrag, GDPR + avtal"},
+			{Value: "0", Label: "förlorade tvister i tingsrätt", Context: "Senaste fyra åren"},
+		}),
+		{BlockType: "feature_grid", Data: `{"component":"services-grid","heading":"Områden","services":[{"title":"GDPR-rådgivning","body":"Vi guidar er genom dataskyddsförordningens krav i praktiken, inte i teorin.","href":"/tjanster/gdpr-radgivning"},{"title":"Avtal","body":"Vi granskar och utformar avtal som faktiskt fungerar i verkligheten.","href":"/tjanster/avtal"},{"title":"Tvistelösning","body":"Vi företräder er i förhandlingar och rättsprocesser med tydlig strategi.","href":"/tjanster"}]}`},
+		{BlockType: "quote", Data: `{"quote":"De gav oss ett tydligt svar redan första veckan. Det är ovanligt och det är därför vi återvänder.","attribution":"VD, mellanstort hälsotech-bolag"}`},
+		AccordionFAQBlock("Vanliga frågor inför första samtalet", []FAQItem{
+			{Question: "Vad kostar ett första samtal?", Answer: "Det första 30-minuterssamtalet är kostnadsfritt och utan förpliktelser. Vi använder det för att förstå er situation och avgöra om vi kan hjälpa till. Är vi inte rätt byrå för uppdraget säger vi det direkt."},
+			{Question: "Erbjuder ni fast pris?", Answer: "Ja, för flesta standarduppdrag. Vi sätter fast pris efter ett scope-samtal där vi går igenom omfattning, leveranser och deadline. Timdebitering används bara för uppdrag där omfattningen är genuint oklar i förväg."},
+			{Question: "Hur snabbt kan ni börja?", Answer: "Inom en till tre arbetsdagar från signerat uppdragsavtal. Brådskande uppdrag (tvister med kort tidsfrist, akuta GDPR-frågor) prioriteras högre och kan starta samma dag."},
+			{Question: "Hur hanterar ni våra konfidentiella uppgifter?", Answer: "Klientuppgifter och dokument lagras i ett krypterat klientsystem som ligger inom EU. Vi signerar NDA i båda riktningar innan vi tar emot något känsligt material. Vi följer Advokatsamfundets vägledning kring informationssäkerhet."},
+			{Question: "Kan vi få referenser från tidigare klienter?", Answer: "Ja. Vi tillhandahåller två-tre relevanta referenser efter ett första samtal där vi förstått ert uppdrag. Vi delar aldrig klientlistor publikt."},
+		}),
 		{BlockType: "contact_form", Data: `{"component":"contact-callout","heading":"Kontakta oss","gdprNotice":"Vi behandlar dina personuppgifter enligt vår integritetspolicy. Inga uppgifter delas med tredje part utan ditt samtycke.","formEmbedUrl":""}`},
 	}
 	if err := seedBlocks(ctx, q, homeID, homeBlocks); err != nil {

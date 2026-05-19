@@ -21,6 +21,9 @@ func (k *saasLandingKit) Description() string {
 func (k *saasLandingKit) TargetSiteTypes() []string { return []string{"b2b", "b2c"} }
 
 func (k *saasLandingKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
+	if err := applyBranding(ctx, q, siteID, BrandMesh); err != nil {
+		return fmt.Errorf("saas-landing branding: %w", err)
+	}
 	if err := k.applyComponents(ctx, q, siteID); err != nil {
 		return fmt.Errorf("saas-landing components: %w", err)
 	}
@@ -233,12 +236,37 @@ func (k *saasLandingKit) applyPages(ctx context.Context, q *store.Queries, siteI
 		return err
 	}
 	homeBlocks := []blockDef{
-		{BlockType: "hero", Data: `{"component":"hero-saas","eyebrow":"New","heading":"Ship features faster","subheading":"The platform that gets out of your way. Real APIs, predictable pricing, no fake demos.","ctaLabel":"Start free","ctaHref":"/pricing","secondaryLabel":"Read the docs","secondaryHref":"/docs"}`},
-		{BlockType: "feature_grid", Data: `{"component":"feature-grid","heading":"What you get","features":[{"title":"Typed SDKs","body":"First-class TypeScript and Go clients with full IntelliSense.","icon":"sdk"},{"title":"Predictable pricing","body":"Per-seat, no per-event surprises.","icon":"price"},{"title":"Open spec","body":"OpenAPI 3.1 schema published. Generate your own client.","icon":"spec"}]}`},
-		{BlockType: "feature_grid", Data: `{"component":"pricing-table","heading":"Pricing","tiers":[{"name":"Starter","price":"$0","features":["1 project","Community support"],"ctaLabel":"Start","ctaHref":"/signup"},{"name":"Team","price":"$29 / seat","features":["Unlimited projects","Slack support","SSO"],"ctaLabel":"Start trial","ctaHref":"/signup?plan=team","featured":true},{"name":"Enterprise","price":"Talk to us","features":["SLA","SOC 2 report","Dedicated CSM"],"ctaLabel":"Contact sales","ctaHref":"/contact"}]}`},
-		{BlockType: "feature_grid", Data: `{"component":"testimonial-carousel","items":[{"quote":"We replaced three vendors with this in a week.","author":"Sara P.","role":"CTO at Acme"},{"quote":"Pricing finally makes sense.","author":"Jonas K.","role":"Engineering Manager"}]}`},
-		{BlockType: "feature_grid", Data: `{"component":"faq-accordion","heading":"Frequently asked","items":[{"q":"Do you have a free tier?","a":"Yes. The Starter tier is free forever for one project."},{"q":"Where is data hosted?","a":"EU regions by default. US optional on request."}]}`},
-		{BlockType: "cta", Data: `{"component":"hero-saas","eyebrow":"Ready?","heading":"Start in two minutes","subheading":"No credit card. No demo call required.","ctaLabel":"Get started","ctaHref":"/signup"}`},
+		HeroBlock(HeroPayload{
+			Eyebrow:        "BUILT FOR ENGINEERS, NOT PROCUREMENT",
+			Headline:       "Ship the API your customers thought you already had.",
+			HeadlineAccent: "Typed clients, predictable pricing, zero meetings.",
+			Subheading:     "Drop in. Get a TypeScript or Go client with IntelliSense. Pay per seat, never per event. Audit the OpenAPI 3.1 schema before you sign anything.",
+			CTAText:        "Start free",
+			CTAUrl:         "/pricing",
+			SecondaryLabel: "Read the docs",
+			SecondaryUrl:   "/docs",
+			HeroGraphic:    "mesh",
+		}),
+		LogoStripBlock("In production at engineering teams who hate vendor demos", []LogoItem{
+			{Label: "Lattice"}, {Label: "Northwind"}, {Label: "Pylon"},
+			{Label: "Mux"}, {Label: "Spinnerly"}, {Label: "Korex"},
+		}),
+		StatGridBlock("Results from the first 90 days", []StatItem{
+			{Value: "47ms", Label: "p99 API latency", Context: "Frankfurt and Iowa regions, last 30 days"},
+			{Value: "11 min", Label: "Median time-to-first-request", Context: "From signup, no demo"},
+			{Value: "3 SDKs", Label: "Typed clients shipped", Context: "TypeScript, Go, Python; Rust next"},
+		}),
+		{BlockType: "feature_grid", Data: `{"component":"feature-grid","heading":"Three things every backend you ever bought failed at","features":[{"title":"Typed SDKs that match the spec","body":"First-class TypeScript and Go clients. The schema is the source of truth, not a Notion doc.","icon":"code"},{"title":"Pricing you can predict on a Friday","body":"Per-seat, never per-event. The bill on the 1st matches the bill on the 15th.","icon":"dollar-sign"},{"title":"OpenAPI 3.1 published, signed, dated","body":"Audit before you sign. Generate your own client. Mirror it to your private registry.","icon":"file-check"}]}`},
+		{BlockType: "quote", Data: `{"quote":"We replaced three vendors with this in a week. The bit that sold us was not the demo, it was the OpenAPI spec being public.","attribution":"Sara P, CTO at Lattice"}`},
+		{BlockType: "pricing", Data: `{"heading":"Predictable pricing","subheading":"No volume cliffs, no usage tax, no surprises.","tiers":[{"name":"Starter","price":"$0","price_period":"forever","description":"One project, community support, the same API as paid plans.","features":[{"":"1 active project"},{"":"50k requests / month"},{"":"Community Discord"},{"":"OpenAPI export"}],"cta_text":"Start free","cta_url":"/signup"},{"name":"Team","price":"$29","price_period":"per seat / month","description":"For teams that want SSO and a humans-in-the-loop support line.","features":[{"":"Unlimited projects"},{"":"500k requests / month / seat"},{"":"SSO + audit log"},{"":"Slack support"},{"":"Staging environment"}],"cta_text":"Start 14-day trial","cta_url":"/signup?plan=team","featured":true},{"name":"Enterprise","price":"Custom","description":"For when procurement gets involved.","features":[{"":"SLA + 24/7 oncall"},{"":"SOC 2 Type II report"},{"":"Dedicated CSM"},{"":"Private cloud option"},{"":"DPA + signed sub-processor list"}],"cta_text":"Contact sales","cta_url":"/contact"}]}`},
+		AccordionFAQBlock("Questions we get on every sales call", []FAQItem{
+			{Question: "Is there really a free tier or is it a 14-day trial?", Answer: "Free tier is forever. One project, 50,000 requests per month, full OpenAPI export. We make money from teams that need SSO, audit logs, and the staging environment, not from squeezing solo developers."},
+			{Question: "Where is the data stored?", Answer: "EU by default (Frankfurt). US (Iowa) is opt-in per project. Both regions run the same code and the same SLA. We publish the sub-processor list and update it within 7 days of any change."},
+			{Question: "Can I self-host?", Answer: "Enterprise plan only. The image is on Harbor, the Helm chart is versioned, and we sign every release with cosign. Self-host customers get the same OpenAPI spec the hosted version exposes."},
+			{Question: "Do you have a SOC 2 report?", Answer: "Type II, refreshed annually. We send it under NDA before the call so you can pre-read it. Penetration test summary is part of the same packet."},
+			{Question: "Will my pricing change as I grow?", Answer: "Only if you add seats. The per-seat price has not changed since launch. There is no per-event tax, no volume cliff. Per-seat is per-seat."},
+		}),
+		{BlockType: "cta", Data: `{"heading":"Start in eleven minutes","text":"No credit card. No demo call. Auth, billing, and SDKs are working in your terminal before the next standup.","cta_text":"Start free","cta_url":"/signup","variant":"primary"}`},
 	}
 	if err := seedBlocks(ctx, q, homeID, homeBlocks); err != nil {
 		return err

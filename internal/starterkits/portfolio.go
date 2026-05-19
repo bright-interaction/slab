@@ -21,6 +21,9 @@ func (k *portfolioKit) Description() string {
 func (k *portfolioKit) TargetSiteTypes() []string { return []string{"personal", "one-pager"} }
 
 func (k *portfolioKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
+	if err := applyBranding(ctx, q, siteID, BrandMonogram); err != nil {
+		return fmt.Errorf("portfolio branding: %w", err)
+	}
 	if err := k.applyComponents(ctx, q, siteID); err != nil {
 		return fmt.Errorf("portfolio components: %w", err)
 	}
@@ -178,10 +181,37 @@ func (k *portfolioKit) applyPages(ctx context.Context, q *store.Queries, siteID 
 		return err
 	}
 	blocks := []blockDef{
-		{BlockType: "hero", Data: `{"component":"hero-portrait","name":"Your Name","role":"Designer and Developer","bio":"I build calm, useful things on the web.","avatar":""}`},
-		{BlockType: "feature_grid", Data: `{"component":"project-grid","heading":"Selected work","projects":[{"title":"Project One","role":"Lead designer","href":"#","image":""},{"title":"Project Two","role":"Frontend engineer","href":"#","image":""},{"title":"Project Three","role":"Independent","href":"#","image":""}]}`},
-		{BlockType: "text", Data: `{"component":"about-block","heading":"About","body":"I have spent the last decade shipping product across consumer and B2B. I like clear typography, fast pages and shipping things people actually use.","skills":["Product design","Frontend engineering","Design systems","Accessibility"]}`},
-		{BlockType: "cta", Data: `{"component":"contact-block","email":"hello@example.com","socials":[{"label":"GitHub","href":"https://github.com/"},{"label":"LinkedIn","href":"https://linkedin.com/"}]}`},
+		HeroBlock(HeroPayload{
+			Eyebrow:        "INDEPENDENT DESIGN AND ENGINEERING - STOCKHOLM",
+			Headline:       "Calm interfaces. Fast pages. Work people actually use.",
+			Subheading:     "Ten years shipping product across consumer, fintech, and B2B. I take the messy work end-to-end: research, design, the engineering to ship it, and the analytics to know it worked.",
+			CTAText:        "See selected work",
+			CTAUrl:         "#work",
+			SecondaryLabel: "Email me",
+			SecondaryUrl:   "mailto:hello@example.com",
+			HeroGraphic:    "monogram",
+			MonogramChar:   "N",
+		}),
+		LogoStripBlock("Clients and collaborators", []LogoItem{
+			{Label: "Klarna"}, {Label: "Tibber"}, {Label: "Hemnet"},
+			{Label: "Spotify"}, {Label: "Northvolt"}, {Label: "Tink"},
+		}),
+		StatGridBlock("How I work", []StatItem{
+			{Value: "10 yr", Label: "shipping product", Context: "Consumer, fintech, B2B SaaS"},
+			{Value: "23", Label: "products in production", Context: "From discovery to active maintenance"},
+			{Value: "1", Label: "person on the project", Context: "I do the design AND the engineering"},
+		}),
+		{BlockType: "feature_grid", Data: `{"component":"project-grid","heading":"Selected work","projects":[{"title":"Reimagined the Tibber onboarding flow","role":"Lead designer + frontend engineer","href":"/work/tibber-onboarding","image":""},{"title":"Klarna merchant analytics dashboard","role":"Design system + dataviz","href":"/work/klarna-merchants","image":""},{"title":"Hemnet mobile search redesign","role":"Research + design + ship","href":"/work/hemnet-search","image":""}]}`},
+		{BlockType: "quote", Data: `{"quote":"She came in for two weeks of audit, stayed for six months of execution, and shipped three things that are now load-bearing for the team.","attribution":"Head of Product, Series C fintech"}`},
+		{BlockType: "text", Data: `{"component":"about-block","heading":"About","body":"I have spent the last decade shipping product across consumer, fintech, and B2B. I like clear typography, fast pages, and shipping things people actually use. Background in computer science, ten years on the design side, four of those running my own practice. Available for fractional CTO/CDO engagements and project-scope sprints.","skills":["Product design","Frontend engineering","Design systems","Accessibility (WCAG AA)","Research and discovery","Analytics and experimentation"]}`},
+		AccordionFAQBlock("Frequently asked", []FAQItem{
+			{Question: "Do you do both design AND engineering?", Answer: "Yes. That's the value proposition: one person closes the loop from research to merged PR. For larger engagements I bring in a trusted second designer or engineer; for solo sprints I cover both roles myself."},
+			{Question: "What kind of engagements do you take?", Answer: "Three shapes: (1) two-week audits with a written report and recommendations, (2) six-to-twelve-week project sprints with a defined deliverable, (3) fractional CTO/CDO for early-stage teams two days a week. Anything outside that I refer out."},
+			{Question: "What's your day rate?", Answer: "I don't sell hours. Audits are fixed-price (typically 60-90k SEK), sprints are scoped per project, and fractional retainers are monthly. Get in touch with the shape of the problem and I'll price it after a 30-minute scope call."},
+			{Question: "Where are you based?", Answer: "Stockholm, but I work primarily remote across European timezones. I travel to clients in Europe roughly once a quarter for kickoffs and major reviews. North America possible for the right project."},
+			{Question: "Can I see longer case studies?", Answer: "Yes, send me an email and I'll share two or three case studies relevant to your stage and industry. The public site shows the surface; the longer reads are NDA-friendly and walk through the messy parts."},
+		}),
+		{BlockType: "cta", Data: `{"component":"contact-block","email":"hello@example.com","socials":[{"label":"Read CV","href":"/cv"},{"label":"GitHub","href":"https://github.com/"},{"label":"LinkedIn","href":"https://linkedin.com/"}]}`},
 	}
 	return seedBlocks(ctx, q, homeID, blocks)
 }

@@ -24,6 +24,9 @@ func (k *b2cLocalKit) Description() string {
 func (k *b2cLocalKit) TargetSiteTypes() []string { return []string{"b2c"} }
 
 func (k *b2cLocalKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
+	if err := applyBranding(ctx, q, siteID, BrandPulse); err != nil {
+		return fmt.Errorf("b2c-local branding: %w", err)
+	}
 	if err := k.applyComponents(ctx, q, siteID); err != nil {
 		return fmt.Errorf("b2c-local components: %w", err)
 	}
@@ -173,10 +176,35 @@ func (k *b2cLocalKit) applyPages(ctx context.Context, q *store.Queries, siteID s
 		return err
 	}
 	homeBlocks := []blockDef{
-		{BlockType: "hero", Data: `{"component":"hero-local","heading":"Welcome","lede":"Add a one-line value proposition that says what you do, where, and for whom.","primaryLabel":"Book a table","primaryHref":"/book","phone":"+46 76 297 80 35","address":"Storgatan 1, Stockholm"}`},
+		HeroBlock(HeroPayload{
+			Eyebrow:        "STORGATAN 1 - STOCKHOLM",
+			Headline:       "Booked in 30 seconds. In and out before lunch.",
+			Subheading:     "Walk-in friendly, online booking that actually works, fair prices on the menu. Open six days a week and a real human picks up when you call.",
+			CTAText:        "Book online",
+			CTAUrl:         "/book",
+			SecondaryLabel: "Call +46 76 297 80 35",
+			SecondaryUrl:   "tel:+46762978035",
+			HeroGraphic:    "pulse",
+		}),
+		LogoStripBlock("Featured in", []LogoItem{
+			{Label: "DN Stockholm"}, {Label: "Aftonbladet"}, {Label: "City Guide"},
+			{Label: "Time Out"}, {Label: "Visit Stockholm"}, {Label: "The Local"},
+		}),
+		StatGridBlock("Numbers from the last year", []StatItem{
+			{Value: "4.8", Label: "Google rating", Context: "1,247 verified reviews"},
+			{Value: "12 min", Label: "median walk-in wait", Context: "Excluding peak Friday evening"},
+			{Value: "11", Label: "years on this street", Context: "Same family, same recipe"},
+		}),
 		{BlockType: "feature_grid", Data: `{"component":"hours-card","heading":"Opening hours","days":[{"day":"Mon-Fri","hours":"08:00 - 17:00"},{"day":"Saturday","hours":"10:00 - 16:00"},{"day":"Sunday","hours":"Closed"}]}`},
-		{BlockType: "feature_grid", Data: `{"component":"review-grid","heading":"What customers say","reviews":[{"author":"Anna L.","quote":"Friendly staff, quick service, fair prices. Will be back.","rating":5},{"author":"Erik B.","quote":"Best in town for what they do.","rating":5},{"author":"Sofia K.","quote":"Booked online, in and out in 30 minutes. Easy.","rating":4}]}`},
-		{BlockType: "cta", Data: `{"primary_label":"Book online","primary_href":"/book","headline":"Ready to visit?","body":"Tap below to book a slot or call us directly."}`},
+		{BlockType: "feature_grid", Data: `{"component":"review-grid","heading":"Recent reviews","reviews":[{"author":"Anna L.","quote":"Booked online, in and out in 30 minutes. Staff remembered my name on the second visit.","rating":5},{"author":"Erik B.","quote":"Best in town for what they do, and the only place I trust on Storgatan for the price.","rating":5},{"author":"Sofia K.","quote":"Friendly staff, fair prices, and the booking confirmation actually arrived. Will be back.","rating":4}]}`},
+		AccordionFAQBlock("Quick answers", []FAQItem{
+			{Question: "Do you take walk-ins or do I need to book?", Answer: "Both. Booking online is the safer bet, especially between 12:00 and 14:00 on weekdays. Walk-ins are welcome and the median wait is around 12 minutes; we'll text you when your table is ready so you can grab a coffee next door."},
+			{Question: "Do you have gluten-free or vegan options?", Answer: "Yes. Three vegan dishes and at least one gluten-free option on the lunch menu, more in the evening. Tell us about allergies when you book and we'll flag the kitchen. Cross-contamination notes are on the printed menu."},
+			{Question: "Where can I park?", Answer: "Street parking on Storgatan and Drottninggatan (paid until 18:00 on weekdays). The closest garage is Q-Park Klara, two minutes walk. Bike racks are right outside the door."},
+			{Question: "Can you cater a private event?", Answer: "Yes, for groups of 12 to 40. We close the back room for private events Tuesday to Thursday evenings. Email events@example.com with a date and headcount and we'll send a fixed-price menu within one business day."},
+			{Question: "Are kids welcome?", Answer: "Always. High chairs available, kids menu on request, changing table in the accessible toilet. We pace kid-friendly meals quickly so the small ones don't lose patience."},
+		}),
+		{BlockType: "cta", Data: `{"heading":"Ready to visit?","text":"Tap below to book a slot, or just walk in. The kitchen closes 45 minutes before listed hours so the team can clean up properly.","cta_text":"Book online","cta_url":"/book","variant":"primary"}`},
 	}
 	return seedBlocks(ctx, q, homeID, homeBlocks)
 }

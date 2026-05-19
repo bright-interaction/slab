@@ -37,16 +37,23 @@ func RunPrivacyChecks(site *SiteContext) []CheckResult {
 
 	// Aggregate scripts across all pages
 	scripts := []string{}
+	// Track whether ANY script tag carries data-consent-platform so a
+	// platform whose filename gets hashed (e.g. atomicsite's
+	// _ccb.{hash}.js bundle) is still detected.
+	hasConsentAttr := false
 	for _, p := range site.Pages {
 		for _, s := range elementsByTag(p.Doc, "script") {
 			if src := attr(s, "src"); src != "" {
 				scripts = append(scripts, strings.ToLower(src))
 			}
+			if cp := attr(s, "data-consent-platform"); cp != "" {
+				hasConsentAttr = true
+			}
 		}
 	}
 
 	// 1. Consent banner detected
-	hasConsent := false
+	hasConsent := hasConsentAttr
 	for _, s := range scripts {
 		for _, c := range consentPlatforms {
 			if strings.Contains(s, c) {

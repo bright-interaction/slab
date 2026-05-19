@@ -24,6 +24,9 @@ func (k *b2bServicesKit) Description() string {
 func (k *b2bServicesKit) TargetSiteTypes() []string { return []string{"b2b"} }
 
 func (k *b2bServicesKit) Apply(ctx context.Context, q *store.Queries, siteID string) error {
+	if err := applyBranding(ctx, q, siteID, BrandAudit); err != nil {
+		return fmt.Errorf("b2b-services branding: %w", err)
+	}
 	if err := k.applyComponents(ctx, q, siteID); err != nil {
 		return fmt.Errorf("b2b-services components: %w", err)
 	}
@@ -178,10 +181,39 @@ func (k *b2bServicesKit) applyPages(ctx context.Context, q *store.Queries, siteI
 		return err
 	}
 	homeBlocks := []blockDef{
-		{BlockType: "hero", Data: `{"component":"hero-services","eyebrow":"Trusted by 40+ teams","heading":"Build a business that holds up under scrutiny","lede":"We help mid-market companies pass audits, win procurement, and stop firefighting compliance. Specific projects with measurable outcomes — no retainers built around busy work.","ctaLabel":"Book a discovery call","ctaHref":"/contact","secondaryLabel":"How we work","secondaryHref":"/process"}`},
-		{BlockType: "feature_grid", Data: `{"component":"trust-strip","heading":"Worked with","logos":[]}`},
-		{BlockType: "feature_grid", Data: `{"component":"case-study-grid","heading":"Recent work","items":[{"industry":"FinTech","title":"Closed 11 SOC2 control gaps in 6 weeks","summary":"Mapped scope, ran the gap analysis, drafted policies, ran the readiness assessment.","metric":"6 weeks","href":"/cases/fintech-soc2"},{"industry":"Healthcare","title":"GDPR vendor questionnaires that actually pass","summary":"Built a reusable answer library, audited 30 active vendors, replaced 4 non-compliant ones.","metric":"30 vendors audited","href":"/cases/healthcare-gdpr"},{"industry":"SaaS","title":"Cut compliance overhead by 60%","summary":"Replaced manual evidence collection with auto-pulled artefacts from existing systems.","metric":"60% time saved","href":"/cases/saas-automation"}]}`},
-		{BlockType: "cta", Data: `{"primary_label":"Book a discovery call","primary_href":"/contact","headline":"Ready to scope a project?","body":"30-minute call, no slides, no pitch. We listen, ask, and tell you whether we can help."}`},
+		HeroBlock(HeroPayload{
+			Eyebrow:        "TRUSTED BY 40+ MID-MARKET TEAMS",
+			Headline:       "Compliance work that survives the audit, not the slide deck.",
+			Subheading:     "We scope, deliver, and document. SOC 2, GDPR, ISO 27001. Fixed-price projects with measurable outcomes. No retainers built around busy work.",
+			CTAText:        "Book a discovery call",
+			CTAUrl:         "/contact",
+			SecondaryLabel: "How we work",
+			SecondaryUrl:   "/process",
+			HeroGraphic:    "audit-receipt",
+			AuditScore:     "100",
+			AuditScoreMax:  "100",
+			AuditBaseline:  "62",
+			AuditLabel:     "Live audit, this site",
+		}),
+		LogoStripBlock("Recent and active engagements", []LogoItem{
+			{Label: "Nordhealth"}, {Label: "Northbeam"}, {Label: "Lattice"},
+			{Label: "Pylon"}, {Label: "Mux"}, {Label: "Korex"},
+		}),
+		StatGridBlock("What 12 months of work looks like", []StatItem{
+			{Value: "43", Label: "audits closed", Context: "SOC 2 Type I + II, ISO 27001, GDPR"},
+			{Value: "6 wk", Label: "median time to readiness", Context: "From scope to internal audit"},
+			{Value: "0", Label: "renewals lost on a non-conformity", Context: "Across 18 surveillance audits"},
+		}),
+		{BlockType: "feature_grid", Data: `{"component":"case-study-grid","heading":"Recent work, signed off","items":[{"industry":"FinTech","title":"Closed 11 SOC 2 control gaps in 6 weeks","summary":"Mapped scope, ran the gap analysis, drafted policies, walked the auditor through the evidence.","metric":"6 weeks","href":"/cases/fintech-soc2"},{"industry":"Healthcare","title":"GDPR vendor questionnaires that actually pass","summary":"Built a reusable answer library, audited 30 active vendors, replaced 4 non-compliant ones.","metric":"30 vendors audited","href":"/cases/healthcare-gdpr"},{"industry":"SaaS","title":"Cut compliance overhead by 60 percent","summary":"Replaced manual evidence collection with auto-pulled artefacts from the systems the team already runs.","metric":"60 percent time saved","href":"/cases/saas-automation"}]}`},
+		{BlockType: "quote", Data: `{"quote":"They turned a six-month death march into a six-week project. The auditor signed off on the evidence the same day she opened the room.","attribution":"Director of Engineering, Series B FinTech"}`},
+		AccordionFAQBlock("Questions we answer before the discovery call", []FAQItem{
+			{Question: "What does a fixed-price project actually mean?", Answer: "We write a scope before you sign. It names the standard, the controls in scope, the deliverables, the timeline, and the exit criteria. The fee is the fee. Out-of-scope work needs a written change order. No hourly invoices, no 'we'll see what we find'."},
+			{Question: "Do you bring the auditor or do we?", Answer: "You bring the auditor. We do not sell readiness AND audit; that's a conflict of interest most boutiques pretend doesn't exist. We've worked with Schellman, Prescient, A-LIGN, and the four big firms. We pre-meet the auditor with you so the engagement starts on the same evidence shape."},
+			{Question: "Will the policies be ours or templated?", Answer: "Yours. We start from a clean template, then walk every paragraph against how your team actually operates. Generic policies fail surveillance audits because the evidence doesn't match. We refuse to ship policies you can't enforce."},
+			{Question: "How are you different from a Vanta or Drata?", Answer: "We're the humans those tools tell you to hire. Vanta automates evidence collection; somebody still has to scope, draft, run the gap analysis, and prep the auditor. We do that part. We work alongside Vanta and Drata regularly."},
+			{Question: "Can you sign an NDA before the discovery call?", Answer: "Yes. We countersign within one business day. We're the data-controllers for nothing on your side and never receive production data. The discovery call is scope-of-work only."},
+		}),
+		{BlockType: "cta", Data: `{"heading":"Ready to scope a project?","text":"30 minutes, no slides, no pitch. We listen, ask the questions that scope the work, and tell you whether we can help.","cta_text":"Book the call","cta_url":"/contact","variant":"primary"}`},
 	}
 	if err := seedBlocks(ctx, q, homeID, homeBlocks); err != nil {
 		return err
