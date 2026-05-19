@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/brightinteraction/atomicsite/internal/eval"
 )
 
 // TestHeroQualityChecks_FailsOnPlainHero asserts that a landing page
@@ -94,6 +95,28 @@ func TestAboveTheFoldTrustChecks_PassesWhenNoBlocks(t *testing.T) {
 	checks := RunChecks(fakeSite(html), agent.DefaultDesignPlaybook())
 	if hasFailNamed(checks, "above_the_fold_trust") {
 		t.Fatalf("above_the_fold_trust should pass when no block sections are present; got: %s", debugChecks(checks))
+	}
+}
+
+// TestDesignQualityChecks_SkipLegalPages confirms the 2026-05-19
+// scope tightening: hero_quality and above_the_fold_trust only grade
+// the homepage roots (/ and /sv). Legal pages, error pages, hub pages
+// and any deep slug are skipped because they legitimately ship
+// different content patterns.
+func TestDesignQualityChecks_SkipLegalPages(t *testing.T) {
+	legalSlugs := []string{"/404", "/cookies", "/privacy", "/terms", "/dpa", "/sv/404", "/sv/cookies", "/insights/foo"}
+	for _, slug := range legalSlugs {
+		t.Run(slug, func(t *testing.T) {
+			html := minimalHeadedHTML(`<section class="block block--hero"><h1>Legal page heading</h1><p>Legal copy.</p></section>`)
+			site := &eval.SiteContext{Pages: []eval.PageContext{{URL: slug + "/index.html", Slug: slug, HTML: html}}}
+			checks := RunChecks(site, agent.DefaultDesignPlaybook())
+			if hasFailNamed(checks, "hero_quality") {
+				t.Errorf("legal/non-home page %q should not trigger hero_quality fail; got: %s", slug, debugChecks(checks))
+			}
+			if hasFailNamed(checks, "above_the_fold_trust") {
+				t.Errorf("legal/non-home page %q should not trigger above_the_fold_trust fail; got: %s", slug, debugChecks(checks))
+			}
+		})
 	}
 }
 
