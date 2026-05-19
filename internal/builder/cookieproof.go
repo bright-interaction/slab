@@ -162,9 +162,9 @@ func RenderCookieProofSnippet(cfg CookieProofConfig) string {
 		// If we can't render the prefix here, fall back to the
 		// content-only filename so the script tag still resolves
 		// to whatever WriteCookieProofWidgetAsset wrote.
-		return fmt.Sprintf(`<script is:inline defer src="/%s"></script>`+"\n", CookieProofWidgetFilename(nil))
+		return fmt.Sprintf(`<script is:inline defer data-consent-platform="cookieproof" src="/%s"></script>`+"\n", CookieProofWidgetFilename(nil))
 	}
-	return fmt.Sprintf(`<script is:inline defer src="/%s"></script>`+"\n", CookieProofWidgetFilename(prefix))
+	return fmt.Sprintf(`<script is:inline defer data-consent-platform="cookieproof" src="/%s"></script>`+"\n", CookieProofWidgetFilename(prefix))
 }
 
 // gcmDefaultDeniedStub is the GCM consent default that runs before any

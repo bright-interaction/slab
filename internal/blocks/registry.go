@@ -30,6 +30,8 @@ func init() {
 				{Value: "pulse", Label: "Radial pulse (consumer/agency)"},
 				{Value: "monogram", Label: "Brand monogram (editorial)"},
 				{Value: "audit-receipt", Label: "Audit receipt (inspector/trust)"},
+				{Value: "gradient-orb", Label: "Gradient orb (drifting soft accent)"},
+				{Value: "globe-wire", Label: "Globe + flowing wires (platform/infra)"},
 			}},
 			{Key: "monogram_char", Label: "Monogram character", Kind: KindText, Help: "Single character used by hero_graphic=monogram. Defaults to first letter of site name."},
 			{Key: "audit_score", Label: "Audit score", Kind: KindText, Help: "Numerator shown by hero_graphic=audit-receipt (e.g. '100')."},
@@ -64,6 +66,8 @@ func init() {
 				{Value: "pulse", Label: "Radial pulse (consumer/agency)"},
 				{Value: "monogram", Label: "Brand monogram (editorial)"},
 				{Value: "audit-receipt", Label: "Audit receipt (inspector/trust)"},
+				{Value: "gradient-orb", Label: "Gradient orb (drifting soft accent)"},
+				{Value: "globe-wire", Label: "Globe + flowing wires (platform/infra)"},
 			}},
 			{Key: "monogram_char", Label: "Monogram character", Kind: KindText, Help: "Single character used by hero_graphic=monogram."},
 			{Key: "audit_score", Label: "Audit score", Kind: KindText},
@@ -136,6 +140,26 @@ func init() {
 				{Key: "cta_text", Label: "CTA label", Kind: KindText},
 				{Key: "cta_url", Label: "CTA URL", Kind: KindURL},
 				{Key: "featured", Label: "Featured tier", Kind: KindBool, Help: "Dark fill + accent border."},
+			}},
+		},
+	})
+
+	Register(Schema{
+		Type: "comparison_table", Label: "Comparison table", Category: "conversion",
+		Description: "Feature matrix comparing us against named alternatives. The us column always renders first; competitor columns follow in declared order. Each cell can be a yes/no boolean, a string (price, score, '-'), or empty.",
+		Fields: []Field{
+			{Key: "heading", Label: "Heading", Kind: KindText},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "us_label", Label: "Our column label", Kind: KindText, Placeholder: "Atomicsite"},
+			{Key: "columns", Label: "Competitor columns", Kind: KindArray, ItemSchema: []Field{
+				{Key: "", Label: "Name", Kind: KindText, Required: true},
+			}},
+			{Key: "rows", Label: "Feature rows", Kind: KindArray, ItemSchema: []Field{
+				{Key: "feature", Label: "Feature", Kind: KindText, Required: true},
+				{Key: "us", Label: "Us cell", Kind: KindText, Help: "Use 'true' / 'false' for tick/cross, or any string like '100/100' or 'Free' for raw text."},
+				{Key: "values", Label: "Competitor cells", Kind: KindArray, Help: "Same order as columns. Use 'true' / 'false' for tick/cross, or any string for raw text.", ItemSchema: []Field{
+					{Key: "", Label: "Cell", Kind: KindText},
+				}},
 			}},
 		},
 	})

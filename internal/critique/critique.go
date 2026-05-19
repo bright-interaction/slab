@@ -91,6 +91,8 @@ func RunChecks(site *eval.SiteContext, playbook agent.DesignPlaybookInfo) []eval
 	checks = append(checks, designTokenCoherenceChecks(allHTML, allCSS)...)
 	checks = append(checks, motionDensityChecks(allCSS)...)
 	checks = append(checks, metaCompletenessChecks(site)...)
+	checks = append(checks, heroQualityChecks(site)...)
+	checks = append(checks, aboveTheFoldTrustChecks(site)...)
 	checks = append(checks, auditChecklistInfo(playbook.AuditChecklist)...)
 
 	return checks
@@ -595,4 +597,138 @@ func newID() string {
 		return ""
 	}
 	return hex.EncodeToString(b)
+}
+
+var (
+	// blockSectionRE captures every rendered block wrapper: the renderer
+	// emits each block as `<section class="block block--XXX">`. The
+	// captured group is the block_type slug.
+	blockSectionRE = regexp.MustCompile(`<section[^>]+class="block\s+block--(\w+)`)
+	// heroSectionRE matches the page-0 hero specifically. Used to scope
+	// hero_quality content checks to the right snippet.
+	heroSectionRE = regexp.MustCompile(`(?is)<section[^>]+class="block\s+block--hero(?:\s|")[^>]*>(.+?)</section>`)
+	// splitHeroSectionRE matches split_hero (also a valid above-the-fold hero).
+	splitHeroSectionRE = regexp.MustCompile(`(?is)<section[^>]+class="block\s+block--split_hero(?:\s|")[^>]*>(.+?)</section>`)
+	// heroGraphicAnyRE matches any rendered hero_graphic variant child.
+	heroGraphicAnyRE = regexp.MustCompile(`class="hero-graphic\s+hero-graphic--(\w+)"`)
+)
+
+// heroQualityChecks fails when the page-0 hero block ships without a
+// curated hero_graphic, circuit background, or image. A naked hero
+// reads as "AI builder demo" and is the single biggest first-impression
+// regression. Scoped to landing-layout pages because hub/leaf pages
+// often legitimately use plain text heroes.
+//
+// Severity is warning by default; an env-flagged strict mode (read by
+// the build handler) escalates warnings to errors so a non-Inspector
+// hero blocks publish.
+func heroQualityChecks(site *eval.SiteContext) []eval.CheckResult {
+	const max = 5
+	var fails []string
+	for _, p := range site.Pages {
+		// Only audit landing-layout pages. We don't have layout in
+		// PageContext today, so use slug heuristic: home (/) and any
+		// page rendered as the first deep-link of a silo are landing
+		// surfaces in practice. Sub-pages with multi-segment slugs
+		// (e.g. /tjanster/gdpr-radgivning) are NOT landings.
+		if p.Slug != "/" && !strings.HasPrefix(p.Slug, "/sv/") && strings.Count(p.Slug, "/") > 1 {
+			continue
+		}
+		if !hasQualityHero(p.HTML) {
+			fails = append(fails, p.Slug)
+		}
+	}
+	if len(fails) == 0 {
+		return []eval.CheckResult{eval.Pass("hero_quality", "design_quality", max, "every landing-layout page-0 hero ships a curated graphic, circuit background, or image")}
+	}
+	deduct := max
+	if deduct > len(fails)+1 {
+		deduct = len(fails) + 1
+	}
+	msg := fmt.Sprintf("%d landing page(s) ship a plain text hero: %s. A plain hero on / reads as 'AI-builder demo' and is the single biggest first-impression regression.", len(fails), strings.Join(fails, ", "))
+	rec := "Set data.hero_graphic to one of mesh / pulse / monogram / audit-receipt / gradient-orb / globe-wire, OR set bg=circuit, OR add an image_id. The kits ship a default; if you cleared it, restore one."
+	return []eval.CheckResult{eval.Fail("hero_quality", "design_quality", deduct, eval.SeverityWarning, msg, rec)}
+}
+
+// hasQualityHero is true when the rendered hero block on this page
+// carries a hero_graphic variant, a circuit background, or an inline
+// image tag. False when the hero is plain text.
+//
+// We extract the WHOLE hero section (open tag + body + close tag) so
+// modifier classes on the section element itself (has-circuit-bg,
+// has-graphic) are visible to the predicate.
+func hasQualityHero(pageHTML string) bool {
+	// Locate the hero or split_hero opening tag and read everything up
+	// to its closing </section>. firstMatch on the wrapped regex would
+	// only return the inner capture; we need the entire matched chunk
+	// (FindString) so the opening-tag class attribute is included.
+	heroChunk := heroSectionRE.FindString(pageHTML)
+	if heroChunk == "" {
+		heroChunk = splitHeroSectionRE.FindString(pageHTML)
+	}
+	if heroChunk == "" {
+		// No hero block at all on this page. Treated as not a quality
+		// regression here, required-block rules live in the agent
+		// guardrails and the eval engine's Has-H1 check.
+		return true
+	}
+	if heroGraphicAnyRE.MatchString(heroChunk) {
+		return true
+	}
+	if strings.Contains(heroChunk, "has-circuit-bg") || strings.Contains(heroChunk, "has-graphic") {
+		return true
+	}
+	if strings.Contains(heroChunk, "<img ") || strings.Contains(heroChunk, "<picture") {
+		return true
+	}
+	return false
+}
+
+// aboveTheFoldTrustChecks fails when none of {logo_strip, logo_carousel,
+// stat_grid, quote, accordion_faq} appears in the first FIVE blocks of
+// any landing page. Visitors decide in 100ms; if the first 5 blocks are
+// all "hero + features + features + features + cta" with no trust
+// signal (logos, numbers, quotes, real answers), the site reads as a
+// pitch deck. Five blocks is the canonical Base44 / Lovable / Stripe
+// pattern: hero, logos, stats, features, proof.
+func aboveTheFoldTrustChecks(site *eval.SiteContext) []eval.CheckResult {
+	const max = 5
+	trustTypes := map[string]bool{
+		"logo_strip":      true,
+		"logo_carousel":   true,
+		"stat_grid":       true,
+		"quote":           true,
+		"accordion_faq":   true,
+		"testimonial":     true, // schema isn't registered yet but reserve.
+	}
+	var fails []string
+	for _, p := range site.Pages {
+		if p.Slug != "/" && !strings.HasPrefix(p.Slug, "/sv/") && strings.Count(p.Slug, "/") > 1 {
+			continue
+		}
+		matches := blockSectionRE.FindAllStringSubmatch(p.HTML, 5)
+		var seen bool
+		for _, m := range matches {
+			if len(m) < 2 {
+				continue
+			}
+			if trustTypes[m[1]] {
+				seen = true
+				break
+			}
+		}
+		if !seen && len(matches) > 0 {
+			fails = append(fails, p.Slug)
+		}
+	}
+	if len(fails) == 0 {
+		return []eval.CheckResult{eval.Pass("above_the_fold_trust", "design_quality", max, "every landing page ships a trust signal (logos / stats / proof / FAQ) in the first 5 blocks")}
+	}
+	deduct := max
+	if deduct > len(fails)+1 {
+		deduct = len(fails) + 1
+	}
+	msg := fmt.Sprintf("%d landing page(s) ship no trust signal in the first 5 blocks: %s. Without logos, numbers, or a real quote above the fold, the site reads as a pitch deck.", len(fails), strings.Join(fails, ", "))
+	rec := "Add at least one of logo_strip / logo_carousel / stat_grid / accordion_faq / quote in the first 5 blocks. The 6 starter kits all ship this pattern out of the box; if you removed it, restore."
+	return []eval.CheckResult{eval.Fail("above_the_fold_trust", "design_quality", deduct, eval.SeverityWarning, msg, rec)}
 }

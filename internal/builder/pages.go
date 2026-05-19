@@ -399,6 +399,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderAccordionFAQBlock(data)
 	case "pricing":
 		return renderPricingBlock(data)
+	case "comparison_table":
+		return renderComparisonTableBlock(data)
 	case "logo_strip":
 		return renderLogoStripBlock(data, mediaByID)
 	case "logo_carousel":

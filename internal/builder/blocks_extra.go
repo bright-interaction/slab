@@ -24,8 +24,39 @@ func renderHeroGraphic(name string, data map[string]any) string {
 	}
 	cls := "hero-graphic hero-graphic--" + escapeAttr(name)
 	switch name {
-	case "mesh", "pulse":
+	case "mesh", "pulse", "gradient-orb":
 		return fmt.Sprintf(`<div class="%s" aria-hidden="true"></div>`, cls)
+	case "globe-wire":
+		// Pure SVG rendition of the marketing site's hero globe.
+		// Five latitude ellipses + four connecting arcs + city dots
+		// pulse-breathing at the Stockholm hub. No JS, no canvas,
+		// honours prefers-reduced-motion via the @media gate in CSS.
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf(`<div class="%s" aria-hidden="true">`, cls))
+		b.WriteString(`<svg viewBox="0 0 400 400" class="hero-graphic__globe" xmlns="http://www.w3.org/2000/svg">`)
+		b.WriteString(`<g class="hero-graphic__grid">`)
+		b.WriteString(`<ellipse cx="200" cy="200" rx="180" ry="180" fill="none"/>`)
+		b.WriteString(`<ellipse cx="200" cy="200" rx="180" ry="120" fill="none"/>`)
+		b.WriteString(`<ellipse cx="200" cy="200" rx="180" ry="60" fill="none"/>`)
+		b.WriteString(`<ellipse cx="200" cy="200" rx="120" ry="180" fill="none"/>`)
+		b.WriteString(`<ellipse cx="200" cy="200" rx="60" ry="180" fill="none"/>`)
+		b.WriteString(`</g>`)
+		b.WriteString(`<g class="hero-graphic__arcs">`)
+		b.WriteString(`<path d="M200,200 Q140,120 80,180" fill="none"/>`)
+		b.WriteString(`<path d="M200,200 Q260,140 320,200" fill="none"/>`)
+		b.WriteString(`<path d="M200,200 Q160,260 100,280" fill="none"/>`)
+		b.WriteString(`<path d="M200,200 Q280,260 340,300" fill="none"/>`)
+		b.WriteString(`</g>`)
+		b.WriteString(`<g class="hero-graphic__cities">`)
+		b.WriteString(`<circle cx="200" cy="200" r="6" class="hero-graphic__hub"/>`)
+		b.WriteString(`<circle cx="80" cy="180" r="3"/>`)
+		b.WriteString(`<circle cx="320" cy="200" r="3"/>`)
+		b.WriteString(`<circle cx="100" cy="280" r="3"/>`)
+		b.WriteString(`<circle cx="340" cy="300" r="3"/>`)
+		b.WriteString(`</g>`)
+		b.WriteString(`</svg>`)
+		b.WriteString(`</div>`)
+		return b.String()
 	case "monogram":
 		char := strings.TrimSpace(dataString(data, "monogram_char"))
 		if char == "" {
@@ -314,6 +345,117 @@ func renderPricingBlock(data map[string]any) string {
 	}
 	b.WriteString("  </section>\n")
 	return b.String()
+}
+
+// renderComparisonTableBlock renders a feature-matrix table comparing
+// the site's offering against named alternatives. Schema:
+//
+//	{
+//	  "heading": "...",
+//	  "subheading": "...",
+//	  "us_label": "Atomicsite",   // column label for our column (defaults to "Us")
+//	  "columns": ["Lovable", "Webflow"],
+//	  "rows": [
+//	    {"feature": "SSR Astro output", "us": true,  "values": [false, true]},
+//	    {"feature": "BYO AI key",        "us": true,  "values": [false, false]},
+//	    {"feature": "Inspector built-in","us": "100/100", "values": ["-", "-"]}
+//	  ]
+//	}
+//
+// Each `us` / `values[i]` may be:
+//   - bool: rendered as a tick or cross
+//   - string: rendered as raw text (e.g. "100/100", "-", "Free")
+//
+// values[i] aligns with columns[i] by index; longer values arrays beyond
+// columns are dropped, shorter rows render dashes for missing cells.
+// The "us" column is always emitted as the leftmost data column (after
+// the feature label) so the read is "is the feature there for us, then
+// who else has it." This is the Stripe/Vercel comparison-page pattern.
+func renderComparisonTableBlock(data map[string]any) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--comparison_table\">\n")
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	usLabel := dataString(data, "us_label")
+	if usLabel == "" {
+		usLabel = "Us"
+	}
+	colsRaw, _ := data["columns"].([]any)
+	rowsRaw, _ := data["rows"].([]any)
+	cols := make([]string, 0, len(colsRaw))
+	for _, c := range colsRaw {
+		if s, ok := c.(string); ok && s != "" {
+			cols = append(cols, s)
+		}
+	}
+	// We always render at least the us column even with zero competitor
+	// columns. That way a single-product "what you get" matrix still
+	// reads as a comparison table rather than a generic feature list.
+	b.WriteString("    <div class=\"comparison-table-wrap\">\n")
+	b.WriteString("    <table class=\"comparison-table\">\n")
+	b.WriteString("      <thead>\n")
+	b.WriteString("        <tr>\n")
+	b.WriteString("          <th scope=\"col\">Feature</th>\n")
+	b.WriteString(fmt.Sprintf("          <th scope=\"col\" class=\"comparison-us\">%s</th>\n", escapeHTML(usLabel)))
+	for _, c := range cols {
+		b.WriteString(fmt.Sprintf("          <th scope=\"col\">%s</th>\n", escapeHTML(c)))
+	}
+	b.WriteString("        </tr>\n")
+	b.WriteString("      </thead>\n")
+	b.WriteString("      <tbody>\n")
+	for _, r := range rowsRaw {
+		row, ok := r.(map[string]any)
+		if !ok {
+			continue
+		}
+		feature := dataString(row, "feature")
+		if feature == "" {
+			continue
+		}
+		b.WriteString("        <tr>\n")
+		b.WriteString(fmt.Sprintf("          <th scope=\"row\">%s</th>\n", escapeHTML(feature)))
+		b.WriteString(fmt.Sprintf("          <td class=\"comparison-us\">%s</td>\n", renderComparisonCell(row["us"])))
+		valsRaw, _ := row["values"].([]any)
+		for i := 0; i < len(cols); i++ {
+			var v any
+			if i < len(valsRaw) {
+				v = valsRaw[i]
+			}
+			b.WriteString(fmt.Sprintf("          <td>%s</td>\n", renderComparisonCell(v)))
+		}
+		b.WriteString("        </tr>\n")
+	}
+	b.WriteString("      </tbody>\n")
+	b.WriteString("    </table>\n")
+	b.WriteString("    </div>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// renderComparisonCell turns one cell value into displayable HTML.
+// nil + false render as a cross, true as a tick, strings pass through.
+// Numbers stringify with %v. The aria-label is set so screen readers
+// announce "yes" / "no" instead of the visual mark.
+func renderComparisonCell(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return `<span class="comparison-cell comparison-cell--none" aria-label="not included">-</span>`
+	case bool:
+		if x {
+			return `<span class="comparison-cell comparison-cell--yes" aria-label="included">&#10003;</span>`
+		}
+		return `<span class="comparison-cell comparison-cell--no" aria-label="not included">&times;</span>`
+	case string:
+		if x == "" {
+			return `<span class="comparison-cell comparison-cell--none" aria-label="not included">-</span>`
+		}
+		return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%s</span>`, escapeHTML(x))
+	}
+	return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%v</span>`, v)
 }
 
 // renderLogoStripBlock renders a row of customer/partner logos. Each item:

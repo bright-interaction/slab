@@ -36,6 +36,13 @@ func TestRenderCookieProofSnippet_HappyPath(t *testing.T) {
 	if strings.Contains(out, "consent.example.com") {
 		t.Errorf("snippet must not reference consent.example.com: %s", out)
 	}
+	// 2026-05-19: the widget filename is hashed (_ccb.{hash}.js) so the
+	// Inspector's privacy check can't detect the consent banner by
+	// matching "cookieproof" in the script src. The snippet must carry
+	// a data-consent-platform attribute the eval picks up instead.
+	if !strings.Contains(out, `data-consent-platform="cookieproof"`) {
+		t.Errorf("snippet missing data-consent-platform attribute (Inspector won't grade Privacy correctly without it): %s", out)
+	}
 	// Inline scripts moved to the per-site bundle. Validate the bundle
 	// prefix carries the config + GCM stub.
 	prefix, err := RenderCookieProofConfigPrefix(cfg)
