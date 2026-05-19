@@ -917,9 +917,15 @@ func (s *Server) Router() http.Handler {
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)
-			mcpServer.WithShield(shield.NewSQLStore(s.db), []byte(s.cfg.ShieldKey), 30*time.Minute, level)
+			// 24-hour TTL: real Claude Code / agent sessions span a full
+			// working day. The previous 30-minute TTL surfaced a hard
+			// "shield: session expired" MCP error after the smallest
+			// coffee break, which killed iteration flow. Tokens are
+			// per-session and the X-Agent-Key auth is the real boundary;
+			// the TTL is just a housekeeping cap, not a security gate.
+			mcpServer.WithShield(shield.NewSQLStore(s.db), []byte(s.cfg.ShieldKey), 24*time.Hour, level)
 			slog.Info("atomicsite: shield enabled on MCP boundary",
-				"key_id", "atomicsite", "ttl_min", 30, "hint_level", s.cfg.ShieldHintLevel)
+				"key_id", "atomicsite", "ttl_hours", 24, "hint_level", s.cfg.ShieldHintLevel)
 		} else if s.cfg.ShieldKey != "" {
 			slog.Warn("atomicsite: ATOMICSITE_SHIELD_KEY set but not 32 bytes; shield disabled",
 				"len", len(s.cfg.ShieldKey))
