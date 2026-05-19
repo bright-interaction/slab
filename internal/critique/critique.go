@@ -613,11 +613,24 @@ var (
 	heroGraphicAnyRE = regexp.MustCompile(`class="hero-graphic\s+hero-graphic--(\w+)"`)
 )
 
-// heroQualityChecks fails when the page-0 hero block ships without a
+// isHomepageRoot reports whether the slug is the EN or SV home page.
+// The design_quality checks (hero_quality + above_the_fold_trust)
+// should only grade the homepage. Legal pages, error pages, hub pages
+// and article surfaces have different content patterns that do not
+// need a curated hero or above-the-fold trust block.
+func isHomepageRoot(slug string) bool {
+	switch slug {
+	case "/", "/sv", "/sv/":
+		return true
+	}
+	return false
+}
+
+// heroQualityChecks fails when the homepage hero block ships without a
 // curated hero_graphic, circuit background, or image. A naked hero
 // reads as "AI builder demo" and is the single biggest first-impression
-// regression. Scoped to landing-layout pages because hub/leaf pages
-// often legitimately use plain text heroes.
+// regression. Scoped to homepage roots only (EN /, SV /sv) because
+// every other page surface legitimately ships different patterns.
 //
 // Severity is warning by default; an env-flagged strict mode (read by
 // the build handler) escalates warnings to errors so a non-Inspector
@@ -626,12 +639,7 @@ func heroQualityChecks(site *eval.SiteContext) []eval.CheckResult {
 	const max = 5
 	var fails []string
 	for _, p := range site.Pages {
-		// Only audit landing-layout pages. We don't have layout in
-		// PageContext today, so use slug heuristic: home (/) and any
-		// page rendered as the first deep-link of a silo are landing
-		// surfaces in practice. Sub-pages with multi-segment slugs
-		// (e.g. /tjanster/gdpr-radgivning) are NOT landings.
-		if p.Slug != "/" && !strings.HasPrefix(p.Slug, "/sv/") && strings.Count(p.Slug, "/") > 1 {
+		if !isHomepageRoot(p.Slug) {
 			continue
 		}
 		if !hasQualityHero(p.HTML) {
@@ -703,7 +711,7 @@ func aboveTheFoldTrustChecks(site *eval.SiteContext) []eval.CheckResult {
 	}
 	var fails []string
 	for _, p := range site.Pages {
-		if p.Slug != "/" && !strings.HasPrefix(p.Slug, "/sv/") && strings.Count(p.Slug, "/") > 1 {
+		if !isHomepageRoot(p.Slug) {
 			continue
 		}
 		matches := blockSectionRE.FindAllStringSubmatch(p.HTML, 5)
