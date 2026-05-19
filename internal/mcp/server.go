@@ -162,7 +162,11 @@ func (s *Server) WithShield(store shield.Store, key []byte, ttl time.Duration, h
 	if ttl > 0 {
 		s.shieldTTL = ttl
 	} else {
-		s.shieldTTL = 30 * time.Minute
+		// 24h default lets real Claude Code / agent conversations span
+		// a full working day. Caller can override to a shorter TTL for
+		// stricter deployments. The TTL is housekeeping, not auth;
+		// X-Agent-Key validation upstream is the security boundary.
+		s.shieldTTL = 24 * time.Hour
 	}
 	return s
 }

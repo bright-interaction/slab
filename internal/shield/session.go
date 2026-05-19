@@ -66,6 +66,16 @@ type Session struct {
 // markers. HintFull is the default; pass HintMinimal/HintNone for
 // stricter deployments where the moat needs to deny the agent
 // the ability to reason about who a token represents.
+//
+// Expired sessions are auto-revived. The original 2026-05-08 design
+// returned ErrSessionExpired here, which surfaced as a hard MCP error
+// after the smallest idle gap (atomicsite default TTL is 30 minutes;
+// real conversations span days). The agent's auth is checked upstream
+// by the MCP transport via X-Agent-Key, so a session row past its TTL
+// just means "issue a fresh tokenization context for the same
+// connection." The old tokens for that session are wiped by the sweep
+// (ON DELETE CASCADE on the token table) so the agent cannot redeem
+// stale markers across the boundary.
 func NewSession(ctx context.Context, store Store, sessionID string, key []byte, ttl time.Duration, hintLevel HintLevel) (*Session, error) {
 	if sessionID == "" {
 		return nil, fmt.Errorf("shield: empty session id")
@@ -74,7 +84,7 @@ func NewSession(ctx context.Context, store Store, sessionID string, key []byte, 
 		return nil, fmt.Errorf("shield: key must be 32 bytes, got %d", len(key))
 	}
 	if ttl <= 0 {
-		ttl = 30 * time.Minute
+		ttl = 24 * time.Hour
 	}
 	now := time.Now().UTC()
 	newExpiry := now.Add(ttl)
@@ -83,10 +93,17 @@ func NewSession(ctx context.Context, store Store, sessionID string, key []byte, 
 	if err != nil {
 		return nil, fmt.Errorf("shield: lookup session: %w", err)
 	}
-	if found {
-		if expiresAt.Before(now) {
-			return nil, ErrSessionExpired
+	if found && expiresAt.Before(now) {
+		// Expired. Sweep every expired session (including this one)
+		// so old token rows cascade away, then fall through to the
+		// create-fresh path so the same connection ID gets a brand
+		// new tokenization context without surfacing an MCP error.
+		if err := store.SweepExpiredSessions(ctx, now); err != nil {
+			return nil, fmt.Errorf("shield: sweep expired: %w", err)
 		}
+		found = false
+	}
+	if found {
 		if err := store.UpdateSessionExpiry(ctx, sessionID, newExpiry); err != nil {
 			return nil, fmt.Errorf("shield: touch session: %w", err)
 		}

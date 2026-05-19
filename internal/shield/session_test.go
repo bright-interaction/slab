@@ -355,15 +355,74 @@ func TestUnshieldJSONNestedStrings(t *testing.T) {
 	})
 }
 
-func TestSessionExpiredOnRevisit(t *testing.T) {
+// TestSessionExpiredRevisitAutoRevives confirms the 2026-05-19 behaviour
+// change: an expired session row is treated as a fresh tokenization
+// context for the same connection ID instead of surfacing a hard MCP
+// error. The agent's auth check upstream (X-Agent-Key) is the real
+// boundary; the TTL is housekeeping. Old tokens cascade away via the
+// sweep so the agent cannot redeem stale markers across the boundary.
+func TestSessionExpiredRevisitAutoRevives(t *testing.T) {
 	runOnAllStores(t, func(t *testing.T, store Store) {
 		ctx := context.Background()
 		// Plant an already-expired session row.
 		if err := store.InsertSession(ctx, "id-expired", time.Now().Add(-1*time.Minute)); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := NewSession(ctx, store, "id-expired", testKey(), time.Minute, HintFull); err != ErrSessionExpired {
-			t.Fatalf("got %v, want ErrSessionExpired", err)
+		sess, err := NewSession(ctx, store, "id-expired", testKey(), time.Minute, HintFull)
+		if err != nil {
+			t.Fatalf("expected expired session to auto-revive, got error: %v", err)
+		}
+		if sess == nil || sess.ID != "id-expired" {
+			t.Fatalf("expected revived session bound to original id, got %+v", sess)
+		}
+		// New row's expires_at must be in the future.
+		expiresAt, found, err := store.GetSession(ctx, "id-expired")
+		if err != nil || !found {
+			t.Fatalf("revived session row missing: err=%v found=%v", err, found)
+		}
+		if !expiresAt.After(time.Now()) {
+			t.Fatalf("revived session's expires_at is not in the future: %v", expiresAt)
+		}
+	})
+}
+
+// TestSessionExpiredRevisitClearsOldTokens confirms the security
+// invariant: tokens issued in the expired lifetime cannot be redeemed
+// after the revive. Sweep + cascade delete wipes them.
+func TestSessionExpiredRevisitClearsOldTokens(t *testing.T) {
+	runOnAllStores(t, func(t *testing.T, store Store) {
+		ctx := context.Background()
+		// Start a fresh session, issue one token.
+		sess, err := NewSession(ctx, store, "id-cycled", testKey(), time.Hour, HintFull)
+		if err != nil {
+			t.Fatal(err)
+		}
+		marker, err := sess.Tokenize(ctx, KindEmail, "alice@example.com", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Extract the token id from the marker.
+		groups := MarkerPattern.FindStringSubmatch(marker)
+		if len(groups) < 3 {
+			t.Fatalf("could not parse marker %q", marker)
+		}
+		oldTokenID := groups[2]
+		// Confirm the token resolves while the session is fresh.
+		if got, err := sess.Resolve(ctx, oldTokenID); err != nil || got != "alice@example.com" {
+			t.Fatalf("baseline resolve failed: got=%q err=%v", got, err)
+		}
+		// Backdate the row to simulate idle expiry.
+		if err := store.UpdateSessionExpiry(ctx, "id-cycled", time.Now().Add(-1*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+		// Revisit: should revive + cascade-delete the old token.
+		revived, err := NewSession(ctx, store, "id-cycled", testKey(), time.Hour, HintFull)
+		if err != nil {
+			t.Fatalf("revive: %v", err)
+		}
+		// Old token must no longer resolve.
+		if _, err := revived.Resolve(ctx, oldTokenID); err != ErrTokenNotFound {
+			t.Fatalf("stale token survived revive: want ErrTokenNotFound, got %v", err)
 		}
 	})
 }
