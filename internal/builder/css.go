@@ -427,18 +427,33 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	// don't fight flex-wrap. Below 1024px the primary nav hides, only
 	// brand + CTA stay visible (mirrors BI's `hidden lg:flex`). ---
 	b.WriteString(".site-header { position: sticky; top: 0; z-index: 50; padding-block: 0; padding-inline: 1.5rem; background: color-mix(in oklab, var(--color-bg) 88%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid color-mix(in oklab, var(--color-text) 8%, transparent); }\n")
-	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; height: 3.5rem; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; }\n")
+	// 2026-05-20: 3-zone layout uses 1fr/auto/1fr so the primary nav
+	// genuinely centers within the viewport rather than just within the
+	// space between brand and actions. This keeps the wordmark left,
+	// nav centered, actions right (or empty right if no CTA), regardless
+	// of how wide the brand wordmark is. Below 1024px nav hides and the
+	// layout falls back to auto/auto for brand + actions only.
+	b.WriteString(".site-header > .container, .site-header > div { width: 100%; max-width: var(--container-width); margin-inline: auto; height: 3.5rem; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; }\n")
+	b.WriteString(".site-header .brand-mark { justify-self: start; }\n")
+	b.WriteString(".site-header .site-nav-primary { justify-self: center; }\n")
+	b.WriteString(".site-header .site-nav-actions { justify-self: end; }\n")
 
 	// Brand mark: badge (B-square) + wordmark with optional accent split.
-	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); text-decoration: none; flex-shrink: 0; }\n")
+	// Font fallback chain: explicit Space Mono name before generic mono so
+	// even if --font-mono fails to resolve via @font-face the wordmark
+	// still hits the right family on machines that have it installed.
+	b.WriteString(".site-header .brand-mark { display: inline-flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono), 'Space Mono', ui-monospace, monospace; font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); text-decoration: none; flex-shrink: 0; }\n")
 	b.WriteString(".site-header .brand-mark img { height: 1.5rem; width: auto; }\n")
-	b.WriteString(".brand-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; background: var(--color-text); color: white; font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; flex-shrink: 0; }\n")
-	b.WriteString(".brand-wordmark { font-family: var(--font-mono); font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); }\n")
+	b.WriteString(".brand-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; background: var(--color-text); color: white; font-family: var(--font-mono), 'Space Mono', ui-monospace, monospace; font-weight: 700; font-size: 0.875rem; flex-shrink: 0; }\n")
+	b.WriteString(".brand-wordmark { font-family: var(--font-mono), 'Space Mono', ui-monospace, monospace; font-weight: 700; font-size: 0.875rem; letter-spacing: -0.01em; color: var(--color-text); }\n")
 	b.WriteString(".brand-wordmark-accent { color: var(--color-primary); }\n")
 
 	// Primary nav: centred row of links between brand and actions.
+	// 2026-05-20: explicit Space Grotesk fallback + slightly tighter
+	// letter-spacing + medium weight gives the nav the premium feel of
+	// brightinteraction.com instead of looking like default system sans.
 	b.WriteString(".site-nav-primary ul { display: flex; gap: 0.125rem; justify-content: center; align-items: center; list-style: none; padding: 0; margin: 0; }\n")
-	b.WriteString(".site-nav-primary a { padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: 500; color: color-mix(in oklab, var(--color-text) 65%, transparent); transition: color 150ms ease-out; white-space: nowrap; }\n")
+	b.WriteString(".site-nav-primary a { padding: 0.5rem 0.875rem; font-family: var(--font-heading), 'Space Grotesk', system-ui, sans-serif; font-size: 0.9375rem; font-weight: 500; letter-spacing: -0.005em; color: color-mix(in oklab, var(--color-text) 70%, transparent); transition: color 150ms ease-out; white-space: nowrap; }\n")
 	b.WriteString(".site-nav-primary a:hover { color: var(--color-text); text-decoration: none; }\n")
 	// Hide primary nav below tablet so the bar stays clean on small screens.
 	b.WriteString("@media (max-width: 1023px) { .site-nav-primary { display: none; } .site-header > .container, .site-header > div { grid-template-columns: auto auto; justify-content: space-between; } }\n")
