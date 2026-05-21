@@ -221,6 +221,18 @@ type DesignReference struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+type EntityRevision struct {
+	ID            string `json:"id"`
+	SiteID        string `json:"site_id"`
+	EntityType    string `json:"entity_type"`
+	EntityID      string `json:"entity_id"`
+	VersionNumber int64  `json:"version_number"`
+	SnapshotJson  string `json:"snapshot_json"`
+	ChangeSummary string `json:"change_summary"`
+	CreatedBy     string `json:"created_by"`
+	CreatedAt     string `json:"created_at"`
+}
+
 type Evaluation struct {
 	ID         string `json:"id"`
 	BuildID    string `json:"build_id"`

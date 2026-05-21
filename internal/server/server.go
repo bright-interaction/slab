@@ -29,6 +29,7 @@ import (
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/migration"
 	"github.com/bright-interaction/slab/internal/retention"
+	"github.com/bright-interaction/slab/internal/revisions"
 	"github.com/bright-interaction/slab/internal/shield"
 	"github.com/bright-interaction/slab/internal/storage"
 	"github.com/bright-interaction/slab/internal/store"
@@ -75,6 +76,11 @@ type Server struct {
 	// is reused on both REST + MCP boundaries so the validation lives
 	// in one place.
 	clarificationsH *handlers.ClarificationsHandler
+
+	// revisionsH backs the version-history MCP tools + the
+	// dashboard history drawer surface. Shared handler instance so
+	// REST + MCP go through the same cross-tenant guards.
+	revisionsH *handlers.RevisionsHandler
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -523,8 +529,14 @@ func (s *Server) Router() http.Handler {
 		siteR.Post("/api/sites/{siteID}/domains/{domainID}/refresh", domH.Refresh)
 		siteR.Delete("/api/sites/{siteID}/domains/{domainID}", domH.Delete)
 
+		// Revisions recorder: writes entity_revisions snapshots before
+		// every page/block mutation so the dashboard + MCP can restore
+		// prior states. Sprint 1 of the WP/Webflow roadmap.
+		recorder := revisions.New(s.queries)
+
 		// Pages
 		ph := handlers.NewPageHandler(s.cfg, s.queries)
+		ph.SetRecorder(recorder)
 		siteR.Get("/api/sites/{siteID}/pages", ph.List)
 		siteR.Post("/api/sites/{siteID}/pages", ph.Create)
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}", ph.Get)
@@ -537,6 +549,7 @@ func (s *Server) Router() http.Handler {
 
 		// Blocks
 		bh := handlers.NewBlockHandler(s.cfg, s.queries, s.db)
+		bh.SetRecorder(recorder)
 		r.Get("/api/blocks/schemas", bh.Schemas)
 		siteR.Get("/api/sites/{siteID}/pages/{pageID}/blocks", bh.List)
 		siteR.Post("/api/sites/{siteID}/pages/{pageID}/blocks", bh.Create)
@@ -851,6 +864,15 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/clarifications/{id}", s.clarificationsH.Get)
 		siteR.Post("/api/sites/{siteID}/clarifications/{id}/resolve", s.clarificationsH.Resolve)
 		siteR.Delete("/api/sites/{siteID}/clarifications/{id}", s.clarificationsH.Cancel)
+
+		// Revisions: per-entity history + restore (Sprint 1 of the
+		// WP/Webflow replacement roadmap). Lists snapshots written by
+		// the page/block update + delete paths, returns single
+		// snapshot, restores onto live row.
+		s.revisionsH = handlers.NewRevisionsHandler(s.cfg, s.queries, recorder)
+		siteR.Get("/api/sites/{siteID}/revisions/{entityType}/{entityID}", s.revisionsH.List)
+		siteR.Get("/api/sites/{siteID}/revisions/{entityType}/{entityID}/{version}", s.revisionsH.Get)
+		siteR.Post("/api/sites/{siteID}/revisions/{entityType}/{entityID}/{version}/restore", s.revisionsH.Restore)
 	})
 
 	// Public font serving (no auth, long cache, CORS *).
@@ -941,7 +963,8 @@ func (s *Server) Router() http.Handler {
 			WithVerifyJobManager(s.verifyJobMgr).
 			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH)).
 			WithPreviewTokens(s.previewTokens, s.cfg.Port).
-			WithClarifications(s.clarificationsH)
+			WithClarifications(s.clarificationsH).
+			WithRevisions(s.revisionsH)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)

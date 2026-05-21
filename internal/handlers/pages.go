@@ -10,6 +10,8 @@ import (
 	"github.com/bright-interaction/slab/internal/agent"
 	"github.com/bright-interaction/slab/internal/builder"
 	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/revisions"
 	"github.com/bright-interaction/slab/internal/store"
 	"github.com/bright-interaction/slab/internal/webhook"
 )
@@ -55,12 +57,33 @@ func validatePageSlug(s string) error {
 }
 
 type PageHandler struct {
-	cfg     *config.Config
-	queries *store.Queries
+	cfg      *config.Config
+	queries  *store.Queries
+	recorder *revisions.Recorder
 }
 
 func NewPageHandler(cfg *config.Config, queries *store.Queries) *PageHandler {
 	return &PageHandler{cfg: cfg, queries: queries}
+}
+
+// SetRecorder wires the revisions recorder. Nil-safe: when unset the
+// Update path skips revision capture (used by older test fixtures
+// that don't care about history).
+func (h *PageHandler) SetRecorder(r *revisions.Recorder) {
+	h.recorder = r
+}
+
+// snapshotPageForRevision is a small helper so the recorder call is
+// uniform across REST update + future MCP update paths. Returns the
+// "user:{id}" or "agent:{keyID}" label for created_by.
+func snapshotCreatedBy(r *http.Request) string {
+	if u := authmw.GetUser(r); u != nil {
+		return "user:" + u.ID
+	}
+	if a := authmw.GetAgent(r); a != nil {
+		return "agent:" + a.KeyID
+	}
+	return ""
 }
 
 func (h *PageHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -264,6 +287,17 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.recorder != nil {
+		_ = h.recorder.Record(r.Context(), revisions.RecordParams{
+			SiteID:        siteID,
+			EntityType:    revisions.EntityTypePage,
+			EntityID:      pageID,
+			Snapshot:      existing,
+			ChangeSummary: pageChangeSummary(existing, params),
+			CreatedBy:     snapshotCreatedBy(r),
+		})
+	}
+
 	if err := h.queries.UpdatePage(r.Context(), params); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update page")
 		return
@@ -275,6 +309,39 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	emitWebhook(r.Context(), siteID, webhook.EventPageUpdated, page)
 	writeJSON(w, http.StatusOK, page)
+}
+
+// pageChangeSummary returns a short human-readable label of what
+// changed between the existing page and the incoming update params.
+// Used as the change_summary on the revision row so the history
+// drawer can show "title edit" rather than "(none)".
+func pageChangeSummary(existing store.Page, p store.UpdatePageParams) string {
+	parts := []string{}
+	if existing.Title != p.Title {
+		parts = append(parts, "title")
+	}
+	if existing.Slug != p.Slug {
+		parts = append(parts, "slug")
+	}
+	if existing.Status != p.Status {
+		parts = append(parts, "status")
+	}
+	if existing.MetaTitle != p.MetaTitle || existing.MetaDescription != p.MetaDescription {
+		parts = append(parts, "seo")
+	}
+	if existing.Layout != p.Layout {
+		parts = append(parts, "layout")
+	}
+	if existing.ShowInNav != p.ShowInNav || existing.NavLabel != p.NavLabel {
+		parts = append(parts, "nav")
+	}
+	if existing.NoIndex != p.NoIndex || existing.CanonicalUrl != p.CanonicalUrl {
+		parts = append(parts, "indexing")
+	}
+	if len(parts) == 0 {
+		return "no-op edit"
+	}
+	return strings.Join(parts, ", ") + " edit"
 }
 
 func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -110,6 +110,13 @@ type Server struct {
 	// disables both tools with a clean error.
 	clarifications *handlers.ClarificationsHandler
 
+	// revisions wires the per-entity history MCP tools to the
+	// persistence layer. Same handler instance used by the REST
+	// endpoints so cross-tenant guards stay in one place. Nil
+	// disables list_revisions / get_revision / restore_revision
+	// with a clean "not configured" error.
+	revisions *handlers.RevisionsHandler
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -131,6 +138,15 @@ func (s *Server) WithPreviewTokens(m PreviewTokenMinter, port int) *Server {
 // disables both tools with a clean "not configured" error.
 func (s *Server) WithClarifications(h *handlers.ClarificationsHandler) *Server {
 	s.clarifications = h
+	return s
+}
+
+// WithRevisions wires the entity-revision handler so list_revisions /
+// get_revision / restore_revision can route through the same
+// cross-tenant guards the REST endpoints use. nil disables the three
+// tools with a clean "not configured" error.
+func (s *Server) WithRevisions(h *handlers.RevisionsHandler) *Server {
+	s.revisions = h
 	return s
 }
 
