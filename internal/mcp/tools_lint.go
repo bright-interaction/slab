@@ -79,9 +79,10 @@ func (s *Server) registerLintTools() {
 			}
 			findings := critique.LintBlockData(args.BlockType, args.Data, agent.DefaultDesignPlaybook())
 			return mustJSON(map[string]any{
-				"design_warnings": findings,
-				"count":           len(findings),
-				"hint":            "Each finding has name, severity (warning|info), field, message, fix. Zero findings = the block clears the synchronous design lint; the Inspector still grades the rendered HTML after the next build.",
+				"design_warnings":    findings,
+				"count":              len(findings),
+				"design_inspiration": critique.InspirationsFor(args.BlockType),
+				"hint":               "Each finding has name, severity (warning|info), field, message, fix. Zero findings = the block clears the synchronous design lint; the Inspector still grades the rendered HTML after the next build. design_inspiration is the curated 2-3 design-corpus references for this block_type (gap 5).",
 			}), nil
 		},
 	})
