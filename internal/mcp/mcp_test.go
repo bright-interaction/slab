@@ -244,6 +244,7 @@ func TestServiceContextResourcesRegistered(t *testing.T) {
 		"atomicsite://integrations",
 		"atomicsite://design-references",
 		"atomicsite://meta/capabilities",
+		"atomicsite://meta/design-playbook",
 	}
 	for _, uri := range required {
 		if _, ok := s.resources[uri]; !ok {
@@ -274,6 +275,7 @@ func TestExtraWriteToolsRegistered(t *testing.T) {
 		"list_fonts",
 		"list_design_references",
 		"get_capabilities",
+		"get_design_playbook",
 		"get_figma_import_url",
 	}
 	for _, name := range readOnly {

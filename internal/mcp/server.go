@@ -397,7 +397,7 @@ func (s *Server) handleInitialize(req Request) (any, *ResponseError) {
 			Resources: &struct{}{},
 			Prompts:   &struct{}{},
 		},
-		Instructions: "atomicsite MCP server. Read resources/list to see live site context (settings, security posture, i18n, pages). Use tools/list to see writable surfaces. Visitor data + identified-tier PII is intentionally NOT exposed via MCP.",
+		Instructions: "atomicsite MCP server. On session start: (1) read atomicsite://meta/design-playbook (the rubric the Inspector grades against: principles, archetypes, anti-patterns, vibe archetypes, materiality, slop terms, motion budget, copy voice, font system, hero graphics) BEFORE authoring any block, (2) read atomicsite://meta/capabilities for identity plus the live tools/resources/prompts surface, (3) read atomicsite://site/context for site state. Use tools/list to see writable surfaces. Visitor data plus identified-tier PII is intentionally NOT exposed via MCP.",
 	}, nil
 }
 

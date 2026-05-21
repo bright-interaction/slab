@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	agentpkg "github.com/brightinteraction/atomicsite/internal/agent"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -304,6 +305,16 @@ func (s *Server) registerServiceContextResources() {
 		MimeType:    "application/json",
 		Reader: func(ctx context.Context, agent *authmw.AgentIdentity) (string, error) {
 			return mustJSON(s.capabilitiesSnapshot(agent)), nil
+		},
+	})
+
+	register(Resource{
+		URI:         "atomicsite://meta/design-playbook",
+		Name:        "Design playbook (rubric the Inspector grades against)",
+		Description: "The atomicsite-wide design DNA the Inspector grades output against: principles (hierarchy, whitespace, rhythm), page archetypes (B2B SaaS home, pricing, etc.), anti-patterns (AI tells), vibe archetypes (mesh / pulse / monogram / audit), materiality, content authenticity (banned slop terms), motion budget, copy voice, font system, hero graphics catalog, one-shot recipe. Read this BEFORE authoring blocks so design decisions stay inside the rubric instead of being corrected after a failed eval.",
+		MimeType:    "application/json",
+		Reader: func(_ context.Context, _ *authmw.AgentIdentity) (string, error) {
+			return mustJSON(agentpkg.DefaultDesignPlaybook()), nil
 		},
 	})
 }

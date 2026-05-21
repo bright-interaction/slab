@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 
+	agentpkg "github.com/brightinteraction/atomicsite/internal/agent"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -739,6 +740,15 @@ func (s *Server) registerExtraTools() {
 		InputSchema: schema(`{"type":"object","properties":{}}`),
 		Handler: func(_ context.Context, agent *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
 			return mustJSON(s.capabilitiesSnapshot(agent)), nil
+		},
+	})
+
+	register(Tool{
+		Name:        "get_design_playbook",
+		Description: "Returns the atomicsite design playbook (same payload as atomicsite://meta/design-playbook resource): principles, page archetypes, anti-patterns, vibe archetypes, materiality, content authenticity (banned slop terms), motion budget, copy voice, font system, hero graphics catalog, one-shot recipe. This is the rubric the Inspector grades against. Read this BEFORE authoring blocks so design decisions stay inside the rubric instead of being corrected after a failed eval. Stateless, free to call, agents should consult it on session start.",
+		InputSchema: schema(`{"type":"object","properties":{}}`),
+		Handler: func(_ context.Context, _ *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
+			return mustJSON(agentpkg.DefaultDesignPlaybook()), nil
 		},
 	})
 
