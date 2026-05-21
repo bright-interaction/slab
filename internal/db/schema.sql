@@ -1206,3 +1206,45 @@ CREATE TABLE IF NOT EXISTS clarifications (
 );
 CREATE INDEX IF NOT EXISTS idx_clarifications_site_status ON clarifications(site_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_clarifications_agent ON clarifications(requested_by, status, created_at DESC);
+
+-- entity_revisions backs the version history + restore surface
+-- (Sprint 1 of the WP/Webflow replacement roadmap, 2026-05-22).
+-- Every UPDATE or DELETE on a versioned entity (pages, blocks)
+-- writes a snapshot here BEFORE the mutation lands so operators
+-- can restore any prior state. Restore is non-destructive: it
+-- applies the snapshot as a fresh UPDATE which itself records
+-- a new revision, so history is append-only.
+--
+-- snapshot_json is the full row at the moment of capture, encoded
+-- as JSON. entity_type is one of 'page' | 'block'; future sprints
+-- add 'global_block' | 'collection_item' | 'site_branding'.
+-- change_summary is a short human label ("title edit", "block reorder")
+-- written by the handler when known, empty otherwise.
+--
+-- created_by is "user:{id}" for dashboard edits, "agent:{keyID}" for
+-- MCP-driven edits, "" for system-triggered (migration imports etc).
+--
+-- version_number is 1-indexed per (entity_type, entity_id) and
+-- strictly monotonic. The Get/List path needs that ordering so the
+-- drawer renders newest-first; the recorder computes version_number
+-- as MAX+1 inside the same transaction (sqlite serialised writes).
+--
+-- Retention: 50 revisions per entity is plenty for the use case;
+-- the recorder prunes older rows on insert so storage stays bounded
+-- without a separate background job.
+CREATE TABLE IF NOT EXISTS entity_revisions (
+    id              TEXT PRIMARY KEY,
+    site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    entity_type     TEXT NOT NULL
+                    CHECK (entity_type IN ('page','block')),
+    entity_id       TEXT NOT NULL,
+    version_number  INTEGER NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    change_summary  TEXT NOT NULL DEFAULT '',
+    created_by      TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_entity_revisions_lookup
+    ON entity_revisions(site_id, entity_type, entity_id, version_number DESC);
+CREATE INDEX IF NOT EXISTS idx_entity_revisions_site_created
+    ON entity_revisions(site_id, created_at DESC);

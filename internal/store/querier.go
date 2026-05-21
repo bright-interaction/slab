@@ -53,6 +53,7 @@ type Querier interface {
 	CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error)
 	CountConsentBySiteByMethod(ctx context.Context, arg CountConsentBySiteByMethodParams) (int64, error)
 	CountConversionsByGoal(ctx context.Context, arg CountConversionsByGoalParams) (int64, error)
+	CountEntityRevisions(ctx context.Context, arg CountEntityRevisionsParams) (int64, error)
 	CountItemsByCollection(ctx context.Context, collectionID string) (int64, error)
 	// Distinct fingerprints in the last N minutes (caller passes the cutoff
 	// timestamp). Used for the "live now" widget.
@@ -86,6 +87,7 @@ type Querier interface {
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
 	CreateDesignReference(ctx context.Context, arg CreateDesignReferenceParams) error
 	CreateDomain(ctx context.Context, arg CreateDomainParams) error
+	CreateEntityRevision(ctx context.Context, arg CreateEntityRevisionParams) error
 	CreateEvaluation(ctx context.Context, arg CreateEvaluationParams) error
 	CreateForm(ctx context.Context, arg CreateFormParams) error
 	CreateFormSubmission(ctx context.Context, arg CreateFormSubmissionParams) error
@@ -200,6 +202,7 @@ type Querier interface {
 	GetDomainByHostname(ctx context.Context, hostname string) (SiteDomain, error)
 	GetDomainByID(ctx context.Context, id string) (SiteDomain, error)
 	GetDomainByVerifyToken(ctx context.Context, verifyToken string) (SiteDomain, error)
+	GetEntityRevisionByVersion(ctx context.Context, arg GetEntityRevisionByVersionParams) (EntityRevision, error)
 	GetFormByID(ctx context.Context, id string) (Form, error)
 	GetGlobalBlockByID(ctx context.Context, id string) (GlobalBlock, error)
 	GetGoalByID(ctx context.Context, id string) (ConversionGoal, error)
@@ -311,6 +314,7 @@ type Querier interface {
 	ListDistinctFontFamilies(ctx context.Context, siteID string) ([]string, error)
 	ListDomainsBySite(ctx context.Context, siteID string) ([]SiteDomain, error)
 	ListDomainsByStatus(ctx context.Context, status string) ([]SiteDomain, error)
+	ListEntityRevisions(ctx context.Context, arg ListEntityRevisionsParams) ([]EntityRevision, error)
 	// Evaluations
 	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
 	ListEvaluationsBySite(ctx context.Context, arg ListEvaluationsBySiteParams) ([]Evaluation, error)
@@ -396,11 +400,13 @@ type Querier interface {
 	MarkWebhookDeliveryRetrying(ctx context.Context, arg MarkWebhookDeliveryRetryingParams) error
 	MarkWebhookDeliverySucceeded(ctx context.Context, arg MarkWebhookDeliverySucceededParams) error
 	MarkWorkspaceInviteUsed(ctx context.Context, id string) error
+	NextEntityRevisionVersion(ctx context.Context, arg NextEntityRevisionVersionParams) (int64, error)
 	// Pageviews per UTC day for the requested window. Returned as ISO-date
 	// buckets so the frontend can render a sparkline / bar chart directly.
 	PageviewsTimeSeriesDaily(ctx context.Context, arg PageviewsTimeSeriesDailyParams) ([]PageviewsTimeSeriesDailyRow, error)
 	// Pageviews per UTC hour for the last day window. Used when range = 1d.
 	PageviewsTimeSeriesHourly(ctx context.Context, arg PageviewsTimeSeriesHourlyParams) ([]PageviewsTimeSeriesHourlyRow, error)
+	PruneEntityRevisionsOverLimit(ctx context.Context, arg PruneEntityRevisionsOverLimitParams) error
 	PurgeExpiredPasswordResets(ctx context.Context) error
 	// Run by retention.Manager. 30-day retention; processed events older
 	// than the cutoff are dropped. Unprocessed events stay forever so the

@@ -8,17 +8,24 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/blocks"
 	"github.com/brightinteraction/atomicsite/internal/builder"
 	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/brightinteraction/atomicsite/internal/revisions"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
 type BlockHandler struct {
-	cfg     *config.Config
-	queries *store.Queries
-	db      *sql.DB
+	cfg      *config.Config
+	queries  *store.Queries
+	db       *sql.DB
+	recorder *revisions.Recorder
 }
 
 func NewBlockHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *BlockHandler {
 	return &BlockHandler{cfg: cfg, queries: queries, db: db}
+}
+
+// SetRecorder wires the revisions recorder. Nil-safe.
+func (h *BlockHandler) SetRecorder(r *revisions.Recorder) {
+	h.recorder = r
 }
 
 func (h *BlockHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +161,17 @@ func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if h.recorder != nil {
+		_ = h.recorder.Record(r.Context(), revisions.RecordParams{
+			SiteID:        siteID,
+			EntityType:    revisions.EntityTypeBlock,
+			EntityID:      blockID,
+			Snapshot:      existing,
+			ChangeSummary: blockChangeSummary(existing, params),
+			CreatedBy:     snapshotCreatedBy(r),
+		})
+	}
+
 	if err := h.queries.UpdateBlock(r.Context(), params); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update block")
 		return
@@ -163,11 +181,64 @@ func (h *BlockHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, block)
 }
 
+// blockChangeSummary is the human-readable label for the revision
+// row created when a block is updated. Returns "data edit" when only
+// the data_json changed (the most common edit), more specific labels
+// for type/style/visibility/order changes.
+func blockChangeSummary(existing store.Block, p store.UpdateBlockParams) string {
+	parts := []string{}
+	if existing.BlockType != p.BlockType {
+		parts = append(parts, "type")
+	}
+	if existing.Name != p.Name {
+		parts = append(parts, "name")
+	}
+	if existing.DataJson != p.DataJson {
+		parts = append(parts, "data")
+	}
+	if existing.StyleJson != p.StyleJson {
+		parts = append(parts, "style")
+	}
+	if existing.SortOrder != p.SortOrder {
+		parts = append(parts, "order")
+	}
+	if existing.IsVisible != p.IsVisible {
+		parts = append(parts, "visibility")
+	}
+	if len(parts) == 0 {
+		return "no-op edit"
+	}
+	return joinWithComma(parts) + " edit"
+}
+
+func joinWithComma(parts []string) string {
+	out := ""
+	for i, p := range parts {
+		if i > 0 {
+			out += ", "
+		}
+		out += p
+	}
+	return out
+}
+
 func (h *BlockHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
 	blockID := urlParam(r, "blockID")
-	if _, ok := blockInSite(r.Context(), h.queries, w, blockID, siteID); !ok {
+	existing, ok := blockInSite(r.Context(), h.queries, w, blockID, siteID)
+	if !ok {
 		return
+	}
+
+	if h.recorder != nil {
+		_ = h.recorder.Record(r.Context(), revisions.RecordParams{
+			SiteID:        siteID,
+			EntityType:    revisions.EntityTypeBlock,
+			EntityID:      blockID,
+			Snapshot:      existing,
+			ChangeSummary: "pre-delete snapshot",
+			CreatedBy:     snapshotCreatedBy(r),
+		})
 	}
 
 	if err := h.queries.DeleteBlock(r.Context(), blockID); err != nil {

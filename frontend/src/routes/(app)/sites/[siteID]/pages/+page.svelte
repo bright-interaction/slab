@@ -12,6 +12,7 @@
 	import { confirm } from '$lib/components/ui/ConfirmDialog.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import PageRow from '$lib/components/pages/PageRow.svelte';
+	import RevisionDrawer from '$lib/components/revisions/RevisionDrawer.svelte';
 	import { transliterateSlugChars } from '$lib/stores/wizard.svelte';
 	import type { Page } from '$lib/api/types';
 
@@ -31,6 +32,24 @@
 	// Parent silo for new page. '' means top-level. Otherwise a silo prefix
 	// like 'tjanster' meaning the new slug becomes 'tjanster/<your-slug>'.
 	let newParentSilo = $state('');
+
+	// Revision history drawer state
+	let historyOpen = $state(false);
+	let historyPage = $state<Page | null>(null);
+
+	function openHistory(p: Page) {
+		historyPage = p;
+		historyOpen = true;
+	}
+
+	async function onRevisionRestored() {
+		// Reload pages so the row reflects the restored state (slug, title etc).
+		try {
+			pages = await pagesApi.list(siteID);
+		} catch {
+			// best-effort; the drawer's own load() will surface its error
+		}
+	}
 
 	// Move dialog state
 	let moveDialogOpen = $state(false);
@@ -385,6 +404,7 @@
 						onOpen={() => openPage(g.page)}
 						onDelete={() => deletePage(g.page)}
 						onMove={() => openMoveDialog(g.page)}
+						onHistory={() => openHistory(g.page)}
 						ondragstart={(e) => handleDragStart(g.page.id, e)}
 						ondragover={(e) => handleDragOver(g.page.id, e)}
 						ondragend={handleDragEnd}
@@ -487,3 +507,15 @@
 		<Button variant="primary" loading={moving} onclick={applyMove}>Move</Button>
 	{/snippet}
 </Dialog>
+
+
+{#if historyPage}
+	<RevisionDrawer
+		bind:open={historyOpen}
+		{siteID}
+		entityType="page"
+		entityID={historyPage.id}
+		entityLabel={historyPage.title}
+		onRestored={onRevisionRestored}
+	/>
+{/if}

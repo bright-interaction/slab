@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GripVertical, Pencil, Trash2, FolderTree } from 'lucide-svelte';
+	import { GripVertical, Pencil, Trash2, FolderTree, History } from 'lucide-svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import type { Page } from '$lib/api/types';
 
@@ -12,6 +12,7 @@
 		onOpen,
 		onDelete,
 		onMove,
+		onHistory,
 		ondragstart,
 		ondragover,
 		ondragend,
@@ -25,6 +26,7 @@
 		onOpen: () => void;
 		onDelete: () => void;
 		onMove?: () => void;
+		onHistory?: () => void;
 		ondragstart?: (e: DragEvent) => void;
 		ondragover?: (e: DragEvent) => void;
 		ondragend?: (e: DragEvent) => void;
@@ -132,6 +134,17 @@
 		>
 			<Pencil class="h-3.5 w-3.5" />
 		</button>
+		{#if onHistory}
+			<button
+				type="button"
+				class="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+				aria-label="Version history"
+				title="Version history"
+				onclick={onHistory}
+			>
+				<History class="h-3.5 w-3.5" />
+			</button>
+		{/if}
 		<button
 			type="button"
 			class="inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-danger"

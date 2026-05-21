@@ -994,6 +994,13 @@ func (s *Server) registerTools() {
 	// loop that costs the one-shot wow. Lives in tools_clarifications.go.
 	s.registerClarificationTools()
 
+	// 3 tools: list_revisions, get_revision, restore_revision. Sprint 1
+	// of the WP/Webflow replacement roadmap. Lets the agent (and the
+	// human via dashboard) roll back any page or block to a prior
+	// state. Restore is non-destructive; history is append-only. Lives
+	// in tools_revisions.go.
+	s.registerRevisionTools()
+
 	// Synchronous design lint (gap 4 of 6, 2026-05-21). lint_block runs
 	// the same rule set create_block + update_block embed in their
 	// responses, but standalone so the agent can vet variants before
