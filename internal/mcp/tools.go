@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/bright-interaction/slab/internal/critique"
 	"github.com/bright-interaction/slab/internal/handlers"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/store"
@@ -374,10 +375,12 @@ func (s *Server) registerTools() {
 				return "", err
 			}
 			block, _ := s.queries.GetBlockByID(ctx, id)
+			inspirations := critique.InspirationsFor(args.BlockType)
 			return mustJSON(map[string]any{
-				"block":           block,
-				"design_warnings": runBlockLint(args.BlockType, args.Data),
-				"hint":            "design_warnings is the synchronous write-time design lint (gap 4): a hero with no hero_graphic, an overly long headline, slop terms in copy, or a custom block with a duplicate eyebrow get flagged before the next build. Each finding carries a fix hint.",
+				"block":              block,
+				"design_warnings":    runBlockLint(args.BlockType, args.Data),
+				"design_inspiration": inspirations,
+				"hint":               "design_warnings = synchronous write-time lint (gap 4): a hero with no hero_graphic, an overly long headline, slop terms in copy, or a custom block with a duplicate eyebrow get flagged before the next build. Each finding carries a fix hint. design_inspiration = curated 2-3 design-corpus references that match this block_type (gap 5); read them via search_design_corpus when designing the next variant.",
 			}), nil
 		},
 	})
@@ -445,9 +448,10 @@ func (s *Server) registerTools() {
 			}
 			block, _ := s.queries.GetBlockByID(ctx, args.BlockID)
 			return mustJSON(map[string]any{
-				"block":           block,
-				"design_warnings": runBlockLintFromJSON(bt, data),
-				"hint":            "design_warnings is the synchronous write-time design lint (gap 4); see create_block hint.",
+				"block":              block,
+				"design_warnings":    runBlockLintFromJSON(bt, data),
+				"design_inspiration": critique.InspirationsFor(bt),
+				"hint":               "design_warnings is the synchronous write-time design lint (gap 4); design_inspiration is the curated design-corpus reference set for this block_type (gap 5). See create_block hint for the full schema.",
 			}), nil
 		},
 	})
