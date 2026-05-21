@@ -402,6 +402,13 @@ func applySchema(sqlDB *sql.DB) error {
 		// every existing site into it. Empty default lets the migration
 		// land on prod DBs before the bootstrap runs.
 		{"sites", "workspace_id", "TEXT NOT NULL DEFAULT ''"},
+		// Page archetype lock (gap 6 of the design-quality push,
+		// 2026-05-21). Empty default = no lock; set to one of the
+		// playbook's vibe archetypes (mesh / pulse / monogram /
+		// audit-receipt) to make create_block / update_block flag
+		// drift away from the archetype's hero_graphic + motion
+		// budget + token set.
+		{"pages", "archetype", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

@@ -378,9 +378,10 @@ func (s *Server) registerTools() {
 			inspirations := critique.InspirationsFor(args.BlockType)
 			return mustJSON(map[string]any{
 				"block":              block,
-				"design_warnings":    runBlockLint(args.BlockType, args.Data),
+				"design_warnings":    runBlockLint(args.BlockType, page.Archetype, args.Data),
 				"design_inspiration": inspirations,
-				"hint":               "design_warnings = synchronous write-time lint (gap 4): a hero with no hero_graphic, an overly long headline, slop terms in copy, or a custom block with a duplicate eyebrow get flagged before the next build. Each finding carries a fix hint. design_inspiration = curated 2-3 design-corpus references that match this block_type (gap 5); read them via search_design_corpus when designing the next variant.",
+				"page_archetype":     page.Archetype,
+				"hint":               "design_warnings = synchronous write-time lint (gap 4 + 6): a hero with no hero_graphic, an overly long headline, slop terms in copy, custom block duplicate eyebrow, archetype drift when the page is locked. Each finding carries a fix hint. design_inspiration = curated 2-3 design-corpus references for this block_type (gap 5); read them via search_design_corpus when designing the next variant. page_archetype = the lock the page carries (set via set_page_archetype); empty = no lock.",
 			}), nil
 		},
 	})
@@ -449,9 +450,10 @@ func (s *Server) registerTools() {
 			block, _ := s.queries.GetBlockByID(ctx, args.BlockID)
 			return mustJSON(map[string]any{
 				"block":              block,
-				"design_warnings":    runBlockLintFromJSON(bt, data),
+				"design_warnings":    runBlockLintFromJSON(bt, page.Archetype, data),
 				"design_inspiration": critique.InspirationsFor(bt),
-				"hint":               "design_warnings is the synchronous write-time design lint (gap 4); design_inspiration is the curated design-corpus reference set for this block_type (gap 5). See create_block hint for the full schema.",
+				"page_archetype":     page.Archetype,
+				"hint":               "design_warnings = synchronous design lint (gap 4 + 6); design_inspiration = curated corpus references for this block_type (gap 5); page_archetype = current lock (set via set_page_archetype). See create_block hint for the full schema.",
 			}), nil
 		},
 	})
@@ -997,6 +999,12 @@ func (s *Server) registerTools() {
 	// responses, but standalone so the agent can vet variants before
 	// committing.
 	s.registerLintTools()
+
+	// Page archetype lock (gap 6 of 6, 2026-05-21). set_page_archetype
+	// + get_page_archetype tools wire the playbook's vibe_archetypes
+	// catalog to a per-page lock; every create_block / update_block on
+	// a locked page runs the archetype_drift check.
+	s.registerArchetypeTools()
 
 	// Conversion goals + events (Phase 31.1.1, 2026-05-06). 6 tools
 	// wrapping the goals admin REST surface plus a server-side

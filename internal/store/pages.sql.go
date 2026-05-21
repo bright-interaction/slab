@@ -58,7 +58,7 @@ func (q *Queries) DeletePage(ctx context.Context, id string) error {
 }
 
 const getPageByID = `-- name: GetPageByID :one
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE id = ?
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, archetype, created_at, updated_at FROM pages WHERE id = ?
 `
 
 func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
@@ -80,6 +80,7 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 		&i.NoIndex,
 		&i.CanonicalUrl,
 		&i.HideGlobalBlocks,
+		&i.Archetype,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -87,7 +88,7 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 }
 
 const getPageBySiteAndSlug = `-- name: GetPageBySiteAndSlug :one
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, archetype, created_at, updated_at FROM pages
 WHERE site_id = ?1
   AND (slug = ?2 OR slug = LTRIM(?2, '/'))
 `
@@ -120,6 +121,7 @@ func (q *Queries) GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAnd
 		&i.NoIndex,
 		&i.CanonicalUrl,
 		&i.HideGlobalBlocks,
+		&i.Archetype,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -157,7 +159,7 @@ func (q *Queries) ListExistingPageSlugsBySite(ctx context.Context, siteID string
 }
 
 const listPagesBySite = `-- name: ListPagesBySite :many
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE site_id = ? ORDER BY sort_order ASC
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, archetype, created_at, updated_at FROM pages WHERE site_id = ? ORDER BY sort_order ASC
 `
 
 func (q *Queries) ListPagesBySite(ctx context.Context, siteID string) ([]Page, error) {
@@ -185,6 +187,7 @@ func (q *Queries) ListPagesBySite(ctx context.Context, siteID string) ([]Page, e
 			&i.NoIndex,
 			&i.CanonicalUrl,
 			&i.HideGlobalBlocks,
+			&i.Archetype,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -202,7 +205,7 @@ func (q *Queries) ListPagesBySite(ctx context.Context, siteID string) ([]Page, e
 }
 
 const listPublishedPagesBySite = `-- name: ListPublishedPagesBySite :many
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE site_id = ? AND status = 'published' ORDER BY sort_order ASC
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, archetype, created_at, updated_at FROM pages WHERE site_id = ? AND status = 'published' ORDER BY sort_order ASC
 `
 
 func (q *Queries) ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error) {
@@ -230,6 +233,7 @@ func (q *Queries) ListPublishedPagesBySite(ctx context.Context, siteID string) (
 			&i.NoIndex,
 			&i.CanonicalUrl,
 			&i.HideGlobalBlocks,
+			&i.Archetype,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -244,6 +248,29 @@ func (q *Queries) ListPublishedPagesBySite(ctx context.Context, siteID string) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const setPageArchetype = `-- name: SetPageArchetype :exec
+UPDATE pages SET
+    archetype = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+`
+
+type SetPageArchetypeParams struct {
+	Archetype string `json:"archetype"`
+	ID        string `json:"id"`
+}
+
+// Sets the archetype lock on a page (gap 6, 2026-05-21). Empty value
+// clears the lock so create_block / update_block stop running the
+// archetype drift check. Archetype values are validated by the MCP
+// tool against the playbook's vibe_archetypes list before this query
+// runs; the DB accepts anything to keep tests cheap and to let future
+// archetypes land without a sqlc regen.
+func (q *Queries) SetPageArchetype(ctx context.Context, arg SetPageArchetypeParams) error {
+	_, err := q.db.ExecContext(ctx, setPageArchetype, arg.Archetype, arg.ID)
+	return err
 }
 
 const updatePage = `-- name: UpdatePage :exec
@@ -334,7 +361,7 @@ ON CONFLICT(site_id, slug) DO UPDATE SET
     no_index         = excluded.no_index,
     canonical_url    = excluded.canonical_url,
     updated_at       = datetime('now')
-RETURNING id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at
+RETURNING id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, archetype, created_at, updated_at
 `
 
 type UpsertPageParams struct {
@@ -389,6 +416,7 @@ func (q *Queries) UpsertPage(ctx context.Context, arg UpsertPageParams) (Page, e
 		&i.NoIndex,
 		&i.CanonicalUrl,
 		&i.HideGlobalBlocks,
+		&i.Archetype,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

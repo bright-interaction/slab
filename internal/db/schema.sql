@@ -296,6 +296,7 @@ CREATE TABLE IF NOT EXISTS pages (
     no_index         INTEGER NOT NULL DEFAULT 0,
     canonical_url    TEXT NOT NULL DEFAULT '',
     hide_global_blocks INTEGER NOT NULL DEFAULT 0,
+    archetype        TEXT NOT NULL DEFAULT '',
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(site_id, slug)

@@ -428,6 +428,13 @@ type Querier interface {
 	// Flips this row to is_canonical=1 and clears the flag on every other
 	// domain row for the same site so exactly one canonical exists.
 	SetDomainCanonical(ctx context.Context, arg SetDomainCanonicalParams) error
+	// Sets the archetype lock on a page (gap 6, 2026-05-21). Empty value
+	// clears the lock so create_block / update_block stop running the
+	// archetype drift check. Archetype values are validated by the MCP
+	// tool against the playbook's vibe_archetypes list before this query
+	// runs; the DB accepts anything to keep tests cheap and to let future
+	// archetypes land without a sqlc regen.
+	SetPageArchetype(ctx context.Context, arg SetPageArchetypeParams) error
 	// Stages a fresh secret without flipping enrolled_at, so the user
 	// can scan the QR + try a code before the secret is locked in.
 	SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error
