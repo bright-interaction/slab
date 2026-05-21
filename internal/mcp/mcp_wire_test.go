@@ -93,6 +93,7 @@ func TestWireToolsListReturnsExpectedTools(t *testing.T) {
 		"get_site_context",
 		"trigger_build",
 		"get_capabilities",
+		"get_design_playbook",
 		"upsert_css_class",
 		"create_knowledgebase_entry",
 		"register_allowed_script",
@@ -132,6 +133,7 @@ func TestWireResourcesListReturnsKnowledgeAndServiceContext(t *testing.T) {
 		"atomicsite://knowledge/premium-design-principles",
 		"atomicsite://meta/knowledge-graph",
 		"atomicsite://meta/capabilities",
+		"atomicsite://meta/design-playbook",
 		"atomicsite://eval/latest",
 		"atomicsite://design-references",
 	}
