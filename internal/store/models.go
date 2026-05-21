@@ -64,6 +64,21 @@ type Block struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type Clarification struct {
+	ID               string `json:"id"`
+	SiteID           string `json:"site_id"`
+	RequestedBy      string `json:"requested_by"`
+	Question         string `json:"question"`
+	Context          string `json:"context"`
+	OptionsJson      string `json:"options_json"`
+	Status           string `json:"status"`
+	ResolutionOption int64  `json:"resolution_option"`
+	ResolutionText   string `json:"resolution_text"`
+	ResolvedBy       string `json:"resolved_by"`
+	CreatedAt        string `json:"created_at"`
+	ResolvedAt       string `json:"resolved_at"`
+}
+
 type Collection struct {
 	ID           string `json:"id"`
 	SiteID       string `json:"site_id"`

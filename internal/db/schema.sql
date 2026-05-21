@@ -1168,3 +1168,40 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     body,
     tokenize = 'unicode61 remove_diacritics 2'
 );
+
+-- clarifications back the request_clarification MCP tool. The agent
+-- creates a row when it needs a human to choose between options
+-- (which hero variant, formal vs casual voice, etc); the dashboard
+-- inbox surfaces pending rows; the human resolves them, the agent
+-- polls until status flips. Closes the loop where the agent has to
+-- guess + ship wrong + correct after the fact, costing the one-shot
+-- wow.
+--
+-- options_json is a JSON-encoded array of choices. resolution_text
+-- is the human's free-text answer (use when the chosen option needs
+-- elaboration, or when none of the options fit). resolution_option
+-- is the index into options_json (negative one means no option
+-- picked, free-text only). context is the surrounding info the
+-- human needs to make a sensible choice (page slug, block id,
+-- screenshot summary, etc).
+--
+-- Indexes: site+status powers the dashboard inbox filter;
+-- requested_by powers the agent-side "what am I waiting on" view.
+CREATE TABLE IF NOT EXISTS clarifications (
+    id                  TEXT PRIMARY KEY,
+    site_id             TEXT NOT NULL,
+    requested_by        TEXT NOT NULL DEFAULT '',
+    question            TEXT NOT NULL,
+    context             TEXT NOT NULL DEFAULT '',
+    options_json        TEXT NOT NULL DEFAULT '[]',
+    status              TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','resolved','cancelled')),
+    resolution_option   INTEGER NOT NULL DEFAULT -1,
+    resolution_text     TEXT NOT NULL DEFAULT '',
+    resolved_by         TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at         TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_clarifications_site_status ON clarifications(site_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_clarifications_agent ON clarifications(requested_by, status, created_at DESC);

@@ -87,7 +87,9 @@ func (q *Queries) GetPageByID(ctx context.Context, id string) (Page, error) {
 }
 
 const getPageBySiteAndSlug = `-- name: GetPageBySiteAndSlug :one
-SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages WHERE site_id = ?1 AND (slug = ?2 OR slug = LTRIM(?2, '/'))
+SELECT id, site_id, title, slug, status, meta_title, meta_description, og_image_id, layout, sort_order, show_in_nav, nav_label, no_index, canonical_url, hide_global_blocks, created_at, updated_at FROM pages
+WHERE site_id = ?1
+  AND (slug = ?2 OR slug = LTRIM(?2, '/'))
 `
 
 type GetPageBySiteAndSlugParams struct {
@@ -95,6 +97,10 @@ type GetPageBySiteAndSlugParams struct {
 	Slug   string `json:"slug"`
 }
 
+// Tolerates slug forms with and without a leading slash. The MCP layer
+// normalizes incoming slugs to a leading-slash form, but the migration
+// porter (and agent.UpdatePage when callers pass new_slug raw) stores
+// slugs without the slash. This OR keeps both reachable.
 func (q *Queries) GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error) {
 	row := q.db.QueryRowContext(ctx, getPageBySiteAndSlug, arg.SiteID, arg.Slug)
 	var i Page

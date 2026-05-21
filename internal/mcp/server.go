@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/handlers"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/migration"
 	"github.com/bright-interaction/slab/internal/shield"
@@ -103,6 +104,12 @@ type Server struct {
 	previewTokens PreviewTokenMinter
 	loopbackPort  int
 
+	// clarifications wires the request_clarification + get_clarification
+	// tools to the persistence layer. Same handler instance used by the
+	// REST endpoints so validation + audit stay in one place. Nil
+	// disables both tools with a clean error.
+	clarifications *handlers.ClarificationsHandler
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -116,6 +123,14 @@ type Server struct {
 func (s *Server) WithPreviewTokens(m PreviewTokenMinter, port int) *Server {
 	s.previewTokens = m
 	s.loopbackPort = port
+	return s
+}
+
+// WithClarifications wires the clarification persistence layer the
+// request_clarification + get_clarification tools call into. nil
+// disables both tools with a clean "not configured" error.
+func (s *Server) WithClarifications(h *handlers.ClarificationsHandler) *Server {
+	s.clarifications = h
 	return s
 }
 

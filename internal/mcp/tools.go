@@ -972,6 +972,14 @@ func (s *Server) registerTools() {
 	// MCP without dropping to raw HTTP. Lives in tools_migrations.go.
 	s.registerMigrationTools()
 
+	// Clarifications (Sprint 6 of the design-quality push, 2026-05-21).
+	// 3 tools: request_clarification, get_clarification,
+	// list_pending_clarifications. Backs the dashboard inbox loop so the
+	// agent can ask the human when a decision would otherwise force a
+	// guess. Closes the "agent guesses + ships wrong + corrects after"
+	// loop that costs the one-shot wow. Lives in tools_clarifications.go.
+	s.registerClarificationTools()
+
 	// Conversion goals + events (Phase 31.1.1, 2026-05-06). 6 tools
 	// wrapping the goals admin REST surface plus a server-side
 	// track_event for back-channel conversions. Lives in
