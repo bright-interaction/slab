@@ -377,6 +377,7 @@ type Page struct {
 	NoIndex          int64  `json:"no_index"`
 	CanonicalUrl     string `json:"canonical_url"`
 	HideGlobalBlocks int64  `json:"hide_global_blocks"`
+	Archetype        string `json:"archetype"`
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
 }

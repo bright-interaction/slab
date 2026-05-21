@@ -20,7 +20,7 @@ import (
 // boundary tight (critique.LintBlockData only deals in map[string]any
 // + DesignPlaybookInfo, no MCP framework types) and lets future
 // linters fan out from a single hook.
-func runBlockLint(blockType string, raw any) []critique.LintFinding {
+func runBlockLint(blockType, archetype string, raw any) []critique.LintFinding {
 	if raw == nil {
 		return nil
 	}
@@ -30,13 +30,13 @@ func runBlockLint(blockType string, raw any) []critique.LintFinding {
 		// the renderer will surface the type error on build.
 		return nil
 	}
-	return critique.LintBlockData(blockType, data, agent.DefaultDesignPlaybook())
+	return critique.LintBlockDataWithArchetype(blockType, data, archetype, agent.DefaultDesignPlaybook())
 }
 
 // runBlockLintFromJSON unmarshals a stored DataJson string and lints
 // the result. Used by update_block where the post-mutation state comes
 // from the DB as a JSON string rather than the just-decoded map.
-func runBlockLintFromJSON(blockType, dataJSON string) []critique.LintFinding {
+func runBlockLintFromJSON(blockType, archetype, dataJSON string) []critique.LintFinding {
 	dataJSON = strings.TrimSpace(dataJSON)
 	if dataJSON == "" || dataJSON == "{}" || dataJSON == "null" {
 		return nil
@@ -45,7 +45,7 @@ func runBlockLintFromJSON(blockType, dataJSON string) []critique.LintFinding {
 	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
 		return nil
 	}
-	return critique.LintBlockData(blockType, data, agent.DefaultDesignPlaybook())
+	return critique.LintBlockDataWithArchetype(blockType, data, archetype, agent.DefaultDesignPlaybook())
 }
 
 // registerLintTools wires the standalone lint_block tool. Lets the
@@ -57,12 +57,13 @@ func (s *Server) registerLintTools() {
 
 	register(Tool{
 		Name:        "lint_block",
-		Description: "Runs the synchronous block-level design lint without persisting. Same rule set create_block + update_block embed in their responses: hero_quality (plain text hero with no hero_graphic / bg=circuit / image_id), headline_length (>12 words), custom_block_duplicate_eyebrow, slop_term / slop_name / slop_company / slop_number against the playbook's banned-phrase list. Input: block_type + data (the JSON the agent is about to commit). Output: design_warnings array. Use this to vet a variant before calling create_block, especially when authoring multiple options for request_clarification.",
+		Description: "Runs the synchronous block-level design lint without persisting. Same rule set create_block + update_block embed in their responses: hero_quality (plain text hero with no hero_graphic / bg=circuit / image_id), headline_length (>12 words), custom_block_duplicate_eyebrow, slop_term / slop_name / slop_company / slop_number, archetype_drift (when archetype is supplied and the hero_graphic does not fit the archetype). Input: block_type + data (the JSON the agent is about to commit), optional archetype (one of mesh|pulse|monogram|audit-receipt). Output: design_warnings + design_inspiration. Use this to vet a variant before calling create_block.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
 				"block_type":{"type":"string"},
-				"data":{"type":"object"}
+				"data":{"type":"object"},
+				"archetype":{"type":"string"}
 			},
 			"required":["block_type","data"]
 		}`),
@@ -70,6 +71,7 @@ func (s *Server) registerLintTools() {
 			var args struct {
 				BlockType string         `json:"block_type"`
 				Data      map[string]any `json:"data"`
+				Archetype string         `json:"archetype"`
 			}
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", err
@@ -77,12 +79,12 @@ func (s *Server) registerLintTools() {
 			if strings.TrimSpace(args.BlockType) == "" {
 				return "", errors.New("block_type required")
 			}
-			findings := critique.LintBlockData(args.BlockType, args.Data, agent.DefaultDesignPlaybook())
+			findings := critique.LintBlockDataWithArchetype(args.BlockType, args.Data, args.Archetype, agent.DefaultDesignPlaybook())
 			return mustJSON(map[string]any{
 				"design_warnings":    findings,
 				"count":              len(findings),
 				"design_inspiration": critique.InspirationsFor(args.BlockType),
-				"hint":               "Each finding has name, severity (warning|info), field, message, fix. Zero findings = the block clears the synchronous design lint; the Inspector still grades the rendered HTML after the next build. design_inspiration is the curated 2-3 design-corpus references for this block_type (gap 5).",
+				"hint":               "Each finding has name, severity (warning|info), field, message, fix. Zero findings = the block clears the synchronous design lint; the Inspector still grades the rendered HTML after the next build. design_inspiration is the curated 2-3 design-corpus references for this block_type (gap 5). Pass archetype to enable the archetype_drift check (gap 6).",
 			}), nil
 		},
 	})

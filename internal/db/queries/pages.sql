@@ -75,3 +75,15 @@ ON CONFLICT(site_id, slug) DO UPDATE SET
     canonical_url    = excluded.canonical_url,
     updated_at       = datetime('now')
 RETURNING *;
+
+-- name: SetPageArchetype :exec
+-- Sets the archetype lock on a page (gap 6, 2026-05-21). Empty value
+-- clears the lock so create_block / update_block stop running the
+-- archetype drift check. Archetype values are validated by the MCP
+-- tool against the playbook's vibe_archetypes list before this query
+-- runs; the DB accepts anything to keep tests cheap and to let future
+-- archetypes land without a sqlc regen.
+UPDATE pages SET
+    archetype = ?,
+    updated_at = datetime('now')
+WHERE id = ?;

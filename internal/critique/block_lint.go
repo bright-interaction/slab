@@ -30,6 +30,14 @@ type LintFinding struct {
 // synchronously from create_block + update_block, so additions here
 // must stay fast (no DB hits, no template rendering).
 func LintBlockData(blockType string, data map[string]any, playbook agent.DesignPlaybookInfo) []LintFinding {
+	return LintBlockDataWithArchetype(blockType, data, "", playbook)
+}
+
+// LintBlockDataWithArchetype is the archetype-aware variant: when the
+// page carries an archetype lock (gap 6, 2026-05-21), block tokens
+// that don't fit the archetype get flagged with archetype_drift.
+// Empty archetype = same behaviour as LintBlockData.
+func LintBlockDataWithArchetype(blockType string, data map[string]any, archetype string, playbook agent.DesignPlaybookInfo) []LintFinding {
 	var out []LintFinding
 
 	add := func(f LintFinding) { out = append(out, f) }
@@ -38,6 +46,7 @@ func LintBlockData(blockType string, data map[string]any, playbook agent.DesignP
 	case "hero", "split_hero":
 		out = append(out, lintHeroQualityField(data)...)
 		out = append(out, lintHeroHeadlineLength(data)...)
+		out = append(out, lintArchetypeHeroGraphic(archetype, data)...)
 	case "custom":
 		out = append(out, lintCustomDuplicateEyebrow(data)...)
 	}
@@ -143,6 +152,65 @@ func lintHeroHeadlineLength(data map[string]any) []LintFinding {
 		Field:    "headline",
 		Message:  fmt.Sprintf("Hero headline is %d words. Premium marketing sites land the headline in <=12 words.", len(words)),
 		Fix:      "Drop adjectives, drop hedge words, lead with a transformation verb (Stop / Own / Replace / Audit). Land the proposition in <=12 words. Subheading carries the rest.",
+	}}
+}
+
+// archetypeHeroGraphics maps each vibe archetype to the hero_graphic
+// values that fit it. The mapping is curated from the playbook's
+// vibe_archetypes catalog AND the renderer's hero_graphic catalog;
+// every entry has been verified to render in-archetype.
+var archetypeHeroGraphics = map[string]map[string]struct{}{
+	"mesh": {
+		"mesh":         {},
+		"gradient-orb": {},
+		"globe-wire":   {},
+	},
+	"pulse": {
+		"pulse":      {},
+		"circuit":    {},
+		"globe-wire": {},
+	},
+	"monogram": {
+		"monogram": {},
+		"":         {}, // monogram archetype permits text-only hero with monogram_char
+	},
+	"audit-receipt": {
+		"audit-receipt": {},
+	},
+}
+
+// lintArchetypeHeroGraphic enforces the page-level archetype lock
+// (gap 6 of 6, 2026-05-21). When the page carries an archetype, the
+// hero block's hero_graphic must come from the archetype's curated
+// set; off-archetype graphics produce a warning. The check is
+// scoped to hero / split_hero because that's where the visual
+// archetype most strongly reads.
+func lintArchetypeHeroGraphic(archetype string, data map[string]any) []LintFinding {
+	archetype = strings.TrimSpace(archetype)
+	if archetype == "" {
+		return nil
+	}
+	allowed, ok := archetypeHeroGraphics[archetype]
+	if !ok {
+		return nil
+	}
+	heroGraphic := strings.TrimSpace(stringOf(data, "hero_graphic"))
+	if _, fits := allowed[heroGraphic]; fits {
+		return nil
+	}
+	listed := make([]string, 0, len(allowed))
+	for k := range allowed {
+		if k == "" {
+			continue
+		}
+		listed = append(listed, k)
+	}
+	return []LintFinding{{
+		Name:     "archetype_drift",
+		Severity: "warning",
+		Field:    "hero_graphic",
+		Message:  fmt.Sprintf("Page archetype=%q expects hero_graphic in {%s}; current value %q drifts off-archetype.", archetype, strings.Join(listed, ", "), heroGraphic),
+		Fix:      fmt.Sprintf("Pick one of {%s} for hero_graphic, or change the page's archetype via set_page_archetype if you want to commit to a different vibe.", strings.Join(listed, ", ")),
 	}}
 }
 

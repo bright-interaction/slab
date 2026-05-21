@@ -123,6 +123,60 @@ func TestBlockLint_NonHeroDoesNotFireHeroChecks(t *testing.T) {
 	}
 }
 
+// TestBlockLint_ArchetypeDriftFires confirms the gap-6 archetype-lock
+// check fires when a hero's hero_graphic does not fit the page's
+// archetype.
+func TestBlockLint_ArchetypeDriftFires(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockDataWithArchetype("hero", map[string]any{
+		"hero_graphic": "mesh", // mesh-style graphic on an audit-receipt page
+		"headline":     "Own it",
+	}, "audit-receipt", playbook)
+	if !hasFinding(findings, "archetype_drift") {
+		t.Fatalf("expected archetype_drift; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_ArchetypeDriftClearsOnMatch confirms an in-archetype
+// hero_graphic clears the lint.
+func TestBlockLint_ArchetypeDriftClearsOnMatch(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockDataWithArchetype("hero", map[string]any{
+		"hero_graphic": "audit-receipt",
+		"headline":     "Own it",
+	}, "audit-receipt", playbook)
+	if hasFinding(findings, "archetype_drift") {
+		t.Errorf("archetype_drift should clear on match; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_ArchetypeEmptyDisablesCheck confirms that passing an
+// empty archetype (no lock) skips the drift check entirely.
+func TestBlockLint_ArchetypeEmptyDisablesCheck(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockDataWithArchetype("hero", map[string]any{
+		"hero_graphic": "anything-weird",
+		"headline":     "Own it",
+	}, "", playbook)
+	if hasFinding(findings, "archetype_drift") {
+		t.Errorf("archetype_drift should not fire when no lock; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_ArchetypeUnknownIsIgnored confirms an unknown
+// archetype falls through quietly (no false positives). New
+// archetypes should be added to archetypeHeroGraphics.
+func TestBlockLint_ArchetypeUnknownIsIgnored(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockDataWithArchetype("hero", map[string]any{
+		"hero_graphic": "mesh",
+		"headline":     "Own it",
+	}, "future-archetype-not-in-map", playbook)
+	if hasFinding(findings, "archetype_drift") {
+		t.Errorf("unknown archetype should not fire drift; got %s", debugLint(findings))
+	}
+}
+
 func hasFinding(findings []LintFinding, name string) bool {
 	for _, f := range findings {
 		if f.Name == name {
