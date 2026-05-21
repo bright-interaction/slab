@@ -2,7 +2,9 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/bright-interaction/slab/internal/store"
@@ -42,8 +44,10 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 
 	componentList, _ := queries.ListComponentsBySite(ctx, siteID)
 	componentExts := make(map[string]string, len(componentList))
+	componentTemplates := make(map[string]string, len(componentList))
 	for _, c := range componentList {
 		componentExts[c.Name] = pickComponentExt(c.Template)
+		componentTemplates[c.Name] = c.Template
 	}
 
 	mediaByID := loadBlockMedia(ctx, queries, blocks)
@@ -53,10 +57,26 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 		if bl.IsVisible == 0 {
 			continue
 		}
+		// Component blocks need Astro to compile their `<PascalName />` syntax
+		// for production, but the preview short-circuits Astro to keep the
+		// round-trip fast. Inline-render the registered template by parsing
+		// the frontmatter for destructured props and substituting them into
+		// the body. This makes the preview match the deployed output for the
+		// component classes we author (no JSX expressions beyond simple prop
+		// references + optional `|| "default"` fallbacks).
+		if compName := extractComponentName(bl); compName != "" {
+			if tpl, ok := componentTemplates[compName]; ok {
+				html, ok := renderRegisteredComponentInline(tpl, bl.DataJson)
+				if ok {
+					blocksHTML.WriteString(html)
+					continue
+				}
+			}
+		}
 		raw := renderBlock(bl, componentExts, mediaByID)
-		// Component blocks emit Astro `<PascalName ... />` which the browser
-		// can't render. Detect and replace with an inline notice so the
-		// preview stays useful instead of swallowing the block silently.
+		// Last-resort fallback: if the renderer still emitted Astro syntax
+		// (component template missing, or inline render bailed), keep the
+		// notice in place of swallowing the block silently.
 		if isComponentBlockOutput(raw, componentExts) {
 			blocksHTML.WriteString(componentBlockPlaceholder(bl, componentExts))
 			continue
@@ -167,4 +187,128 @@ func componentBlockPlaceholder(bl store.Block, componentExts map[string]string) 
 
 func isUpperASCII(b byte) bool {
 	return b >= 'A' && b <= 'Z'
+}
+
+// renderRegisteredComponentInline parses a registered Astro template enough
+// to produce browser-renderable HTML for the admin preview iframe. It is
+// NOT a full Astro compiler; it covers exactly the patterns our registered
+// components use: a single frontmatter block destructuring props from
+// Astro.props, body with `{name}` interpolation, optional
+// `{name || "default"}` fallbacks, and verbatim <style> / <script> blocks.
+//
+// Returns the rendered HTML + true on success, "" + false if the template
+// shape is too unusual to handle. Callers fall back to the placeholder in
+// that case.
+func renderRegisteredComponentInline(template, dataJSON string) (string, bool) {
+	body, ok := stripAstroFrontmatter(template)
+	if !ok {
+		return "", false
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
+		return "", false
+	}
+	props, ok := data["props"].(map[string]any)
+	if !ok {
+		props = data
+	}
+
+	body = substituteAstroProps(body, props)
+	return "  " + body + "\n", true
+}
+
+// stripAstroFrontmatter removes the leading `---\n...---\n` block from an
+// Astro template, returning the body. Returns ok=false if no frontmatter
+// fence is found (we still try to render with empty props).
+func stripAstroFrontmatter(tpl string) (string, bool) {
+	tpl = strings.TrimLeft(tpl, " \t\n\r")
+	tpl = strings.TrimPrefix(tpl, "\uFEFF")
+	if !strings.HasPrefix(tpl, "---") {
+		return tpl, true
+	}
+	rest := tpl[3:]
+	idx := strings.Index(rest, "\n---")
+	if idx < 0 {
+		return "", false
+	}
+	body := rest[idx+4:]
+	body = strings.TrimLeft(body, "\n")
+	return body, true
+}
+
+var (
+	// Capture group 1 distinguishes three contexts:
+	//   `=` -> JSX attribute (`href={x}`); wrap substituted value in quotes
+	//   `$` -> JS template literal (`${x}` inside backticks); re-emit verbatim
+	//   ``  -> text node (`<p>{x}</p>`); substitute raw
+	astroPropWithDefault = regexp.MustCompile(`([=$]?)\{([a-zA-Z_][a-zA-Z0-9_]*)\s*\|\|\s*"([^"]*)"\}`)
+	astroPropBare        = regexp.MustCompile(`([=$]?)\{([a-zA-Z_][a-zA-Z0-9_]*)\}`)
+)
+
+// substituteAstroProps replaces `{propname}` and `{propname || "default"}`
+// occurrences in an Astro body with the corresponding prop value. When the
+// expression appears in JSX attribute position (`attr={prop}`), the result
+// is wrapped in double quotes so values containing whitespace stay parsed
+// as a single attribute value. Unknown props collapse to empty string.
+// Values are HTML-escaped so user-controlled props can't break out of the
+// rendered markup.
+func substituteAstroProps(body string, props map[string]any) string {
+	body = astroPropWithDefault.ReplaceAllStringFunc(body, func(m string) string {
+		sub := astroPropWithDefault.FindStringSubmatch(m)
+		prefix, name, fallback := sub[1], sub[2], sub[3]
+		if prefix == "$" {
+			return m
+		}
+		val, ok := propAsString(props, name)
+		if !ok {
+			val = escapeHTML(fallback)
+		}
+		return wrapAttrIfNeeded(prefix, val)
+	})
+	body = astroPropBare.ReplaceAllStringFunc(body, func(m string) string {
+		sub := astroPropBare.FindStringSubmatch(m)
+		prefix, name := sub[1], sub[2]
+		if prefix == "$" {
+			return m
+		}
+		val, _ := propAsString(props, name)
+		return wrapAttrIfNeeded(prefix, val)
+	})
+	return body
+}
+
+func wrapAttrIfNeeded(prefix, val string) string {
+	if prefix == "=" {
+		return `="` + val + `"`
+	}
+	return val
+}
+
+// propAsString extracts a prop value as an HTML-safe string. Returns
+// ok=false when the prop is missing (lets callers fall back to a default).
+func propAsString(props map[string]any, name string) (string, bool) {
+	if props == nil {
+		return "", false
+	}
+	v, ok := props[name]
+	if !ok {
+		return "", false
+	}
+	switch val := v.(type) {
+	case string:
+		return escapeHTML(val), true
+	case float64:
+		return fmt.Sprintf("%g", val), true
+	case bool:
+		if val {
+			return "true", true
+		}
+		return "false", true
+	case nil:
+		return "", true
+	default:
+		b, _ := json.Marshal(val)
+		return escapeHTML(string(b)), true
+	}
 }
