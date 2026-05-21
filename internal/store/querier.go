@@ -32,6 +32,7 @@ type Querier interface {
 	// exists, the workspace is skipped. Used by ensureDefaultWorkspace
 	// on first boot of a Phase 30+ binary against an existing DB.
 	BackfillWorkspaceMembersForAdmin(ctx context.Context, userID string) error
+	CancelClarification(ctx context.Context, arg CancelClarificationParams) error
 	// Clears the pending deletion. Bumps token_version so any
 	// "deletion-pending" UI state in another tab refreshes.
 	CancelUserDeletion(ctx context.Context, id string) error
@@ -61,6 +62,7 @@ type Querier interface {
 	CountMigrationVerificationsByOK(ctx context.Context, migrationID string) (CountMigrationVerificationsByOKRow, error)
 	CountMissingURLsBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
+	CountPendingClarificationsBySite(ctx context.Context, siteID string) (int64, error)
 	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
 	CountShieldTokensBySession(ctx context.Context, sessionID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
@@ -77,6 +79,7 @@ type Querier interface {
 	CreateAllowedScript(ctx context.Context, arg CreateAllowedScriptParams) error
 	CreateBlock(ctx context.Context, arg CreateBlockParams) error
 	CreateCSSClass(ctx context.Context, arg CreateCSSClassParams) error
+	CreateClarification(ctx context.Context, arg CreateClarificationParams) error
 	CreateCollection(ctx context.Context, arg CreateCollectionParams) error
 	CreateComponent(ctx context.Context, arg CreateComponentParams) error
 	CreateDeployTarget(ctx context.Context, arg CreateDeployTargetParams) error
@@ -184,6 +187,7 @@ type Querier interface {
 	GetBlockByID(ctx context.Context, id string) (Block, error)
 	GetCSSClassByID(ctx context.Context, id string) (CssClass, error)
 	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
+	GetClarificationByID(ctx context.Context, arg GetClarificationByIDParams) (Clarification, error)
 	GetCollectionByID(ctx context.Context, id string) (Collection, error)
 	GetCollectionBySiteAndSlug(ctx context.Context, arg GetCollectionBySiteAndSlugParams) (Collection, error)
 	GetComponentByID(ctx context.Context, id string) (Component, error)
@@ -212,6 +216,10 @@ type Querier interface {
 	GetMissingURLByID(ctx context.Context, id string) (MissingUrl, error)
 	GetMissingURLByPath(ctx context.Context, arg GetMissingURLByPathParams) (MissingUrl, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
+	// Tolerates slug forms with and without a leading slash. The MCP layer
+	// normalizes incoming slugs to a leading-slash form, but the migration
+	// porter (and agent.UpdatePage when callers pass new_slug raw) stores
+	// slugs without the slash. This OR keeps both reachable.
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
 	GetRedirectByID(ctx context.Context, id string) (Redirect, error)
@@ -266,6 +274,7 @@ type Querier interface {
 	// done in Go because SQLite's JSON1 module isn't a hard dependency.
 	ListActiveWebhookSubscriptions(ctx context.Context, siteID string) ([]WebhookSubscription, error)
 	ListAgentKeysBySite(ctx context.Context, siteID string) ([]ListAgentKeysBySiteRow, error)
+	ListAllClarificationsBySite(ctx context.Context, arg ListAllClarificationsBySiteParams) ([]Clarification, error)
 	ListAllDomains(ctx context.Context) ([]SiteDomain, error)
 	ListAllGoalsBySite(ctx context.Context, siteID string) ([]ConversionGoal, error)
 	ListAllPublishedItemsBySite(ctx context.Context, siteID string) ([]CollectionItem, error)
@@ -332,6 +341,8 @@ type Querier interface {
 	ListMigrationsBySite(ctx context.Context, siteID string) ([]Migration, error)
 	ListMissingURLsBySite(ctx context.Context, arg ListMissingURLsBySiteParams) ([]MissingUrl, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
+	ListPendingClarificationsByAgent(ctx context.Context, arg ListPendingClarificationsByAgentParams) ([]Clarification, error)
+	ListPendingClarificationsBySite(ctx context.Context, arg ListPendingClarificationsBySiteParams) ([]Clarification, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
 	ListPendingWaitlist(ctx context.Context) ([]Waitlist, error)
 	// Worker pull: picks up to N rows that are due for delivery (status
@@ -412,6 +423,7 @@ type Querier interface {
 	// the timestamp (useful if the user wants to refresh the cooling-
 	// off window after partially undoing).
 	RequestUserDeletion(ctx context.Context, id string) error
+	ResolveClarification(ctx context.Context, arg ResolveClarificationParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	// Flips this row to is_canonical=1 and clears the flag on every other
 	// domain row for the same site so exactly one canonical exists.

@@ -70,6 +70,11 @@ type Server struct {
 	// preview_screenshot MCP tool. Constructed in Routes(); the MCP
 	// server gets a reference via WithPreviewTokenManager.
 	previewTokens *handlers.PreviewTokenManager
+	// clarificationsH backs the request_clarification + get_clarification
+	// MCP tools and the dashboard inbox surface. Same handler instance
+	// is reused on both REST + MCP boundaries so the validation lives
+	// in one place.
+	clarificationsH *handlers.ClarificationsHandler
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -836,6 +841,16 @@ func (s *Server) Router() http.Handler {
 		siteR.Post("/api/sites/{siteID}/design-references", drh.Create)
 		siteR.Post("/api/sites/{siteID}/design-references/{refID}/refresh", drh.Refresh)
 		siteR.Delete("/api/sites/{siteID}/design-references/{refID}", drh.Delete)
+
+		// Clarifications: agent asks a question via MCP, human resolves
+		// via the dashboard inbox. Closes the "agent guesses and ships
+		// wrong" loop for ambiguous decisions.
+		s.clarificationsH = handlers.NewClarificationsHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/clarifications", s.clarificationsH.List)
+		siteR.Post("/api/sites/{siteID}/clarifications", s.clarificationsH.Create)
+		siteR.Get("/api/sites/{siteID}/clarifications/{id}", s.clarificationsH.Get)
+		siteR.Post("/api/sites/{siteID}/clarifications/{id}/resolve", s.clarificationsH.Resolve)
+		siteR.Delete("/api/sites/{siteID}/clarifications/{id}", s.clarificationsH.Cancel)
 	})
 
 	// Public font serving (no auth, long cache, CORS *).
@@ -925,7 +940,8 @@ func (s *Server) Router() http.Handler {
 			WithDesignReferencesDir(s.cfg.DesignReferencesDir).
 			WithVerifyJobManager(s.verifyJobMgr).
 			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH)).
-			WithPreviewTokens(s.previewTokens, s.cfg.Port)
+			WithPreviewTokens(s.previewTokens, s.cfg.Port).
+			WithClarifications(s.clarificationsH)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)
