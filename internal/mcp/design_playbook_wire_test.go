@@ -101,3 +101,33 @@ func mapKeys(m map[string]any) []string {
 	}
 	return out
 }
+
+// TestWireToolCallPreviewScreenshot_NotConfigured covers the safe-fail
+// shape: when the MCP server is built without WithPreviewTokens (e.g.
+// unit-test environment or a deployment where the loopback route is
+// not wired) the tool returns a clear error string rather than crashing
+// or attempting to hit chromedp against an unknown port. Locks the
+// "configured-correctly" boundary that prevents zero-port surprises.
+func TestWireToolCallPreviewScreenshot_NotConfigured(t *testing.T) {
+	s := freshTestServer(t)
+	resp, _ := jsonRPCRoundtrip(t, s, "tools/call", map[string]any{
+		"name":      "preview_screenshot",
+		"arguments": map[string]any{"slug": "/index"},
+	})
+	result, ok := resp.Result.(map[string]any)
+	if !ok {
+		t.Fatalf("tools/call shape: %#v", resp.Result)
+	}
+	if isErr, _ := result["isError"].(bool); !isErr {
+		t.Fatalf("expected isError=true when previewTokens unset; got result %v", result)
+	}
+	contentArr, _ := result["content"].([]any)
+	if len(contentArr) == 0 {
+		t.Fatalf("expected error content; got empty")
+	}
+	first := contentArr[0].(map[string]any)
+	body, _ := first["text"].(string)
+	if !strings.Contains(body, "preview_screenshot not configured") {
+		t.Errorf("expected diagnostic to mention 'preview_screenshot not configured'; got %q", body)
+	}
+}

@@ -33,6 +33,14 @@ type BuildTrigger interface {
 	GetBuildState(ctx context.Context, buildID, siteID string) (any, error)
 }
 
+// PreviewTokenMinter is the slice of *handlers.PreviewTokenManager the
+// MCP server needs for preview_screenshot. Single-method interface keeps
+// the import cycle clean (handlers imports mcp; mcp cannot import
+// handlers).
+type PreviewTokenMinter interface {
+	Mint(siteID, pageID string) (string, error)
+}
+
 // Server is the MCP server. It owns the registries (tools, resources,
 // prompts) and the JSON-RPC dispatch loop. One instance is constructed at
 // startup and mounted under /mcp behind the existing AgentAuthMiddleware.
@@ -86,9 +94,29 @@ type Server struct {
 	shieldTTL       time.Duration
 	shieldHintLevel shield.HintLevel
 
+	// previewTokens + loopbackPort wire the preview_screenshot tool: the
+	// tool mints a one-shot token via previewTokens.Mint, drives chromedp
+	// at http://127.0.0.1:{loopbackPort}/_preview/{token}, and the
+	// loopback-only Serve handler swaps the token for the rendered draft
+	// HTML so chromedp can capture the visual. Nil disables the tool with
+	// a clean "not configured" error.
+	previewTokens PreviewTokenMinter
+	loopbackPort  int
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
+}
+
+// WithPreviewTokens wires the preview-screenshot loopback path. port is
+// the HTTP port the server is listening on (cfg.Port); the MCP tool
+// builds http://127.0.0.1:{port}/_preview/{token} URLs and drives
+// chromedp against them. Calling with a nil minter disables the
+// preview_screenshot tool surface with a clean error message.
+func (s *Server) WithPreviewTokens(m PreviewTokenMinter, port int) *Server {
+	s.previewTokens = m
+	s.loopbackPort = port
+	return s
 }
 
 // WithFontsDir configures the on-disk root for woff2 uploads. Call once

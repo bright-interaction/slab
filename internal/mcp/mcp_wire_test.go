@@ -94,6 +94,7 @@ func TestWireToolsListReturnsExpectedTools(t *testing.T) {
 		"trigger_build",
 		"get_capabilities",
 		"get_design_playbook",
+		"preview_screenshot",
 		"upsert_css_class",
 		"create_knowledgebase_entry",
 		"register_allowed_script",
