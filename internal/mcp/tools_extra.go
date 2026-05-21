@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	agentpkg "github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/brightinteraction/atomicsite/internal/handlers"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
@@ -749,6 +750,102 @@ func (s *Server) registerExtraTools() {
 		InputSchema: schema(`{"type":"object","properties":{}}`),
 		Handler: func(_ context.Context, _ *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
 			return mustJSON(agentpkg.DefaultDesignPlaybook()), nil
+		},
+	})
+
+	register(Tool{
+		Name:        "preview_screenshot",
+		Description: "Captures a headless Chromium screenshot of the current DRAFT page (current DB state, no build needed). Fixes the loop where the agent had to trigger_build + wait + screenshot the deploy URL to see its own work. Server-side path: mints a one-shot loopback token, drives chromedp at /_preview/{token}, the loopback handler swaps the token for the rendered draft HTML (same renderer as the admin draft-preview, including the inline-rendered component blocks). Fonts load from the same loopback origin. Args: page_id (preferred) OR slug (the agent's known slug for the page). Optional: viewport_width (320-3840, default 1440), viewport_height (240-2160, default 900), full_page (default true), wait_ms (default 1200, lets the canvas globe + cost-calculator islands paint). Returns base64 PNG; vision-capable agents decode it and reason about pixels in the same turn. Use this BEFORE trigger_build to iterate fast.",
+		InputSchema: schema(`{
+			"type":"object",
+			"properties":{
+				"page_id":{"type":"string"},
+				"slug":{"type":"string"},
+				"viewport_width":{"type":"integer","minimum":320,"maximum":3840},
+				"viewport_height":{"type":"integer","minimum":240,"maximum":2160},
+				"full_page":{"type":"boolean"},
+				"wait_ms":{"type":"integer","minimum":0,"maximum":10000}
+			}
+		}`),
+		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
+			if s.previewTokens == nil {
+				return "", errors.New("preview_screenshot not configured on this server (preview tokens unset)")
+			}
+			var args struct {
+				PageID         string `json:"page_id"`
+				Slug           string `json:"slug"`
+				ViewportWidth  int    `json:"viewport_width"`
+				ViewportHeight int    `json:"viewport_height"`
+				FullPage       *bool  `json:"full_page"`
+				WaitMs         int    `json:"wait_ms"`
+			}
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return "", err
+			}
+
+			pageID := strings.TrimSpace(args.PageID)
+			slug := strings.TrimSpace(args.Slug)
+			if pageID == "" && slug == "" {
+				return "", errors.New("page_id or slug required")
+			}
+			if pageID == "" {
+				page, err := s.queries.GetPageBySiteAndSlug(ctx, store.GetPageBySiteAndSlugParams{
+					SiteID: agent.SiteID,
+					Slug:   slug,
+				})
+				if err != nil {
+					return "", fmt.Errorf("page not found for slug %q: %w", slug, err)
+				}
+				pageID = page.ID
+			} else {
+				page, err := s.queries.GetPageByID(ctx, pageID)
+				if err != nil {
+					return "", fmt.Errorf("page not found: %w", err)
+				}
+				if page.SiteID != agent.SiteID {
+					return "", errors.New("page does not belong to this site")
+				}
+			}
+
+			tok, err := s.previewTokens.Mint(agent.SiteID, pageID)
+			if err != nil {
+				return "", fmt.Errorf("mint preview token: %w", err)
+			}
+
+			port := s.loopbackPort
+			if port == 0 {
+				port = 8080
+			}
+			previewURL := fmt.Sprintf("http://127.0.0.1:%d/_preview/%s", port, tok)
+
+			waitMs := args.WaitMs
+			if waitMs == 0 {
+				waitMs = 1200
+			}
+
+			res, err := handlers.CaptureScreenshot(ctx, handlers.ScreenshotRequest{
+				URL:            previewURL,
+				ViewportWidth:  args.ViewportWidth,
+				ViewportHeight: args.ViewportHeight,
+				FullPage:       args.FullPage,
+				WaitMs:         waitMs,
+			})
+			if err != nil {
+				return "", fmt.Errorf("preview screenshot: %w", err)
+			}
+
+			out := map[string]any{
+				"page_id":      pageID,
+				"site_id":      agent.SiteID,
+				"preview_url":  previewURL,
+				"image_base64": res.ImageBase64,
+				"format":       res.Format,
+				"full_page":    res.FullPage,
+				"size_bytes":   res.SizeBytes,
+				"viewport":     map[string]int{"width": res.Viewport.Width, "height": res.Viewport.Height},
+				"hint":         "image_base64 is a base64-encoded PNG. Vision-capable agents decode it and reason about pixels. Capture is of the CURRENT DRAFT (no build needed), so you can iterate before trigger_build.",
+			}
+			return mustJSON(out), nil
 		},
 	})
 

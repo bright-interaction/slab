@@ -66,6 +66,10 @@ type Server struct {
 	// Server construction; nil makes VerifyLive return 503 so the
 	// process is observably misconfigured rather than silently sync.
 	verifyJobMgr *migration.JobManager
+	// previewTokens mints single-use loopback tokens that back the
+	// preview_screenshot MCP tool. Constructed in Routes(); the MCP
+	// server gets a reference via WithPreviewTokenManager.
+	previewTokens *handlers.PreviewTokenManager
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -838,6 +842,13 @@ func (s *Server) Router() http.Handler {
 	publicFontsH := handlers.NewFontsHandler(s.cfg, s.queries)
 	r.Get("/atomicsite-fonts/{siteID}/{fontID}.woff2", publicFontsH.Serve)
 
+	// Preview-token redemption (no auth, loopback-only, single-use). Used
+	// by the preview_screenshot MCP tool: chromedp navigates to
+	// /_preview/{token} on 127.0.0.1, the handler swaps the token for the
+	// rendered draft HTML so chromedp can capture the visual.
+	s.previewTokens = handlers.NewPreviewTokenManager(s.queries)
+	r.Get("/_preview/{token}", s.previewTokens.Serve)
+
 	// Agent API routes (API key auth)
 	r.Group(func(r chi.Router) {
 		r.Use(s.agentMW.Middleware)
@@ -913,7 +924,8 @@ func (s *Server) Router() http.Handler {
 			WithBaseURL(s.cfg.BaseURL).
 			WithDesignReferencesDir(s.cfg.DesignReferencesDir).
 			WithVerifyJobManager(s.verifyJobMgr).
-			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH))
+			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH)).
+			WithPreviewTokens(s.previewTokens, s.cfg.Port)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)
