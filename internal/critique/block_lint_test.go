@@ -1,0 +1,153 @@
+package critique
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/brightinteraction/atomicsite/internal/agent"
+)
+
+// TestBlockLint_HeroQualityFires asserts the headline write-time check:
+// a hero with no graphic-bearing field flags before the next build.
+func TestBlockLint_HeroQualityFires(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("hero", map[string]any{
+		"headline":    "Stop renting your business",
+		"subheading":  "Own it",
+		"cta_text":    "Calculate",
+		"cta_url":     "/calc",
+	}, playbook)
+	if !hasFinding(findings, "hero_quality") {
+		t.Fatalf("expected hero_quality finding; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_HeroQualityClearsWithGraphic confirms picking any of
+// hero_graphic / bg=circuit / image_id clears the check.
+func TestBlockLint_HeroQualityClearsWithGraphic(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	cases := []map[string]any{
+		{"headline": "Own it", "hero_graphic": "mesh"},
+		{"headline": "Own it", "bg": "circuit"},
+		{"headline": "Own it", "image_id": "media-abc"},
+	}
+	for i, data := range cases {
+		findings := LintBlockData("hero", data, playbook)
+		if hasFinding(findings, "hero_quality") {
+			t.Errorf("case %d: hero_quality fired when it should have been cleared: %s", i, debugLint(findings))
+		}
+	}
+}
+
+// TestBlockLint_HeadlineLengthFlagsOnOverlong locks the 12-word cap.
+func TestBlockLint_HeadlineLengthFlagsOnOverlong(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("hero", map[string]any{
+		"hero_graphic": "mesh",
+		"headline":     "We make really great products that help businesses scale their teams without paying for unused seats every month",
+	}, playbook)
+	if !hasFinding(findings, "headline_length") {
+		t.Fatalf("expected headline_length finding for 19-word hero; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_HeadlineLengthClearsAtCap confirms the boundary: 12
+// words is fine, 13 trips. Belts the off-by-one.
+func TestBlockLint_HeadlineLengthClearsAtCap(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	twelve := "one two three four five six seven eight nine ten eleven twelve"
+	findings := LintBlockData("hero", map[string]any{
+		"hero_graphic": "mesh",
+		"headline":     twelve,
+	}, playbook)
+	if hasFinding(findings, "headline_length") {
+		t.Errorf("12-word headline should pass; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_CustomBlockDuplicateEyebrow catches MCP gotcha #1
+// before the renderer emits the duplicate.
+func TestBlockLint_CustomBlockDuplicateEyebrow(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("custom", map[string]any{
+		"name":    "trust-block",
+		"eyebrow": "EU JURISDICTION",
+		"markup":  `<div class="bi-trust"><p class="eyebrow">EU JURISDICTION</p><h2>...</h2></div>`,
+	}, playbook)
+	if !hasFinding(findings, "custom_block_duplicate_eyebrow") {
+		t.Fatalf("expected custom_block_duplicate_eyebrow; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_SlopTermInCopy catches the playbook's banned-phrase
+// terms across any string-valued field.
+func TestBlockLint_SlopTermInCopy(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	// "Elevate" is on the banned list.
+	findings := LintBlockData("hero", map[string]any{
+		"hero_graphic": "mesh",
+		"headline":     "Elevate your team",
+		"subheading":   "Own it",
+	}, playbook)
+	if !hasFindingForField(findings, "slop_term", "headline") {
+		t.Fatalf("expected slop_term on headline; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_NestedSlopScan confirms the walk visits items[] inside
+// stat_grid / feature_grid / etc, not just top-level fields.
+func TestBlockLint_NestedSlopScan(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("stat_grid", map[string]any{
+		"heading": "Our numbers",
+		"items": []any{
+			map[string]any{"value": "99.99%", "label": "Uptime"},
+		},
+	}, playbook)
+	// "99.99%" is on the banned-numbers list.
+	if !hasFinding(findings, "slop_number") {
+		t.Fatalf("expected slop_number for 99.99%%; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_NonHeroDoesNotFireHeroChecks confirms checks scoped to
+// hero / split_hero do NOT fire on other block types.
+func TestBlockLint_NonHeroDoesNotFireHeroChecks(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("text", map[string]any{
+		"heading": "Why open source",
+		"text":    "Receipts not promises.",
+	}, playbook)
+	if hasFinding(findings, "hero_quality") || hasFinding(findings, "headline_length") {
+		t.Errorf("hero checks should not fire on text block; got %s", debugLint(findings))
+	}
+}
+
+func hasFinding(findings []LintFinding, name string) bool {
+	for _, f := range findings {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFindingForField(findings []LintFinding, name, field string) bool {
+	for _, f := range findings {
+		if f.Name == name && f.Field == field {
+			return true
+		}
+	}
+	return false
+}
+
+func debugLint(findings []LintFinding) string {
+	if len(findings) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(findings))
+	for i, f := range findings {
+		parts[i] = f.Name + "@" + f.Field
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}

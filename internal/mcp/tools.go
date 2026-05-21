@@ -374,7 +374,11 @@ func (s *Server) registerTools() {
 				return "", err
 			}
 			block, _ := s.queries.GetBlockByID(ctx, id)
-			return mustJSON(block), nil
+			return mustJSON(map[string]any{
+				"block":           block,
+				"design_warnings": runBlockLint(args.BlockType, args.Data),
+				"hint":            "design_warnings is the synchronous write-time design lint (gap 4): a hero with no hero_graphic, an overly long headline, slop terms in copy, or a custom block with a duplicate eyebrow get flagged before the next build. Each finding carries a fix hint.",
+			}), nil
 		},
 	})
 
@@ -440,7 +444,11 @@ func (s *Server) registerTools() {
 				return "", err
 			}
 			block, _ := s.queries.GetBlockByID(ctx, args.BlockID)
-			return mustJSON(block), nil
+			return mustJSON(map[string]any{
+				"block":           block,
+				"design_warnings": runBlockLintFromJSON(bt, data),
+				"hint":            "design_warnings is the synchronous write-time design lint (gap 4); see create_block hint.",
+			}), nil
 		},
 	})
 
@@ -979,6 +987,12 @@ func (s *Server) registerTools() {
 	// guess. Closes the "agent guesses + ships wrong + corrects after"
 	// loop that costs the one-shot wow. Lives in tools_clarifications.go.
 	s.registerClarificationTools()
+
+	// Synchronous design lint (gap 4 of 6, 2026-05-21). lint_block runs
+	// the same rule set create_block + update_block embed in their
+	// responses, but standalone so the agent can vet variants before
+	// committing.
+	s.registerLintTools()
 
 	// Conversion goals + events (Phase 31.1.1, 2026-05-06). 6 tools
 	// wrapping the goals admin REST surface plus a server-side
