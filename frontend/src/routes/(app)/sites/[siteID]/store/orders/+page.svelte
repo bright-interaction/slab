@@ -96,8 +96,17 @@
 		{:else if orders.length === 0}
 			<EmptyState
 				title="No orders yet"
-				description="Once a visitor completes a checkout, the order shows up here. To enable checkout, set payments.mollie_api_key in Settings with your tenant Mollie API key (test_xxx for staging, live_xxx for production)."
-			/>
+				description="Once a visitor completes a checkout, the order shows up here. Checkout needs a Mollie API key on this site."
+			>
+				{#snippet action()}
+					<a
+						href={`/sites/${siteID}/settings/payments`}
+						class="inline-flex items-center rounded-lg border border-border-light bg-bg-elevated px-3 py-1.5 text-[12px] font-medium text-text-primary hover:bg-bg-base"
+					>
+						Configure Mollie key
+					</a>
+				{/snippet}
+			</EmptyState>
 		{:else}
 			<div class="overflow-x-auto rounded-lg border border-border-light">
 				<table class="w-full text-xs">

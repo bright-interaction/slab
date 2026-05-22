@@ -15,7 +15,8 @@
 		Bot,
 		Sparkles,
 		Lock,
-		Import
+		Import,
+		CreditCard
 	} from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
 
@@ -132,6 +133,13 @@
 			'Analytics',
 			'CookieProof, GA4, Umami, CRM webhook.',
 			BarChart3
+		)}
+		{@render sectionCard(
+			`/sites/${siteID}/settings/payments`,
+			'Storefront',
+			'Payments',
+			'Mollie API key, test vs live mode. Required for checkout_form to redirect to Mollie.',
+			CreditCard
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/security`,
