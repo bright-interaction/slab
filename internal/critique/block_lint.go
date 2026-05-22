@@ -49,6 +49,12 @@ func LintBlockDataWithArchetype(blockType string, data map[string]any, archetype
 		out = append(out, lintArchetypeHeroGraphic(archetype, data)...)
 	case "custom":
 		out = append(out, lintCustomDuplicateEyebrow(data)...)
+	case "product_detail":
+		out = append(out, lintProductDetailSlug(data)...)
+	case "checkout_form":
+		out = append(out, lintCheckoutFormReturnURL(data)...)
+	case "product_grid":
+		out = append(out, lintProductGridLimit(data)...)
 	}
 
 	// Slop scan: walk every string-valued field in data and flag any
@@ -275,6 +281,78 @@ func stringOf(data map[string]any, key string) string {
 		}
 	}
 	return ""
+}
+
+// lintProductDetailSlug warns when the product_slug field is empty or
+// whitespace. The renderer falls back to an editor-only notice in that
+// case, but flagging it at write time prevents the agent from shipping
+// an unconfigured block. We deliberately do NOT verify the slug exists
+// in the catalog here because the linter runs synchronously inside
+// create_block / update_block where a DB hit would slow the agent loop.
+// The build-time resolver in store_blocks.go handles the not-found case
+// with a per-block warning + visible placeholder.
+func lintProductDetailSlug(data map[string]any) []LintFinding {
+	slug := strings.TrimSpace(stringOf(data, "product_slug"))
+	if slug != "" {
+		return nil
+	}
+	return []LintFinding{{
+		Name:     "product_detail_slug_missing",
+		Severity: "warning",
+		Field:    "product_slug",
+		Message:  "product_detail block has no product_slug; the page will render an editor-only 'Configure a product slug' notice instead of a product.",
+		Fix:      "Set product_slug to a product.slug visible in the Store dashboard.",
+	}}
+}
+
+// lintCheckoutFormReturnURL warns when return_url is empty. Mollie
+// requires a return_url to redirect the customer after payment; an
+// empty value means /checkout endpoint will reject the request OR the
+// customer will land on Mollie's default page rather than the
+// merchant's storefront, breaking the post-payment flow.
+func lintCheckoutFormReturnURL(data map[string]any) []LintFinding {
+	url := strings.TrimSpace(stringOf(data, "return_url"))
+	if url != "" {
+		return nil
+	}
+	return []LintFinding{{
+		Name:     "checkout_return_url_missing",
+		Severity: "warning",
+		Field:    "return_url",
+		Message:  "checkout_form has no return_url; Mollie cannot redirect the customer back to your storefront after payment.",
+		Fix:      "Set return_url to a page path on this site such as /thank-you. The order_number is appended as ?order=ATM-... so the thank-you page can show order status.",
+	}}
+}
+
+// lintProductGridLimit warns when the product_grid block sets limit
+// above 48. The build-time resolver already caps at productGridMaxLimit
+// (48) so the page never renders more, but flagging at write time
+// helps the agent re-think the layout: a 60-product grid is a sign
+// pagination or category filtering is needed.
+func lintProductGridLimit(data map[string]any) []LintFinding {
+	switch n := data["limit"].(type) {
+	case float64:
+		if n <= 48 {
+			return nil
+		}
+	case int:
+		if n <= 48 {
+			return nil
+		}
+	case int64:
+		if n <= 48 {
+			return nil
+		}
+	default:
+		return nil
+	}
+	return []LintFinding{{
+		Name:     "product_grid_limit_high",
+		Severity: "info",
+		Field:    "limit",
+		Message:  "product_grid limit above 48; each card loads a real product image so high counts hurt LCP.",
+		Fix:      "Drop limit to <=48, or split the grid into categories using category_filter + multiple product_grid blocks.",
+	}}
 }
 
 func lowerSet(items []string) map[string]struct{} {

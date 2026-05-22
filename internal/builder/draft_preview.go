@@ -73,7 +73,7 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 				}
 			}
 		}
-		raw := renderBlock(bl, componentExts, mediaByID)
+		raw := renderBlock(bl, componentExts, mediaByID, siteID)
 		// Last-resort fallback: if the renderer still emitted Astro syntax
 		// (component template missing, or inline render bailed), keep the
 		// notice in place of swallowing the block silently.

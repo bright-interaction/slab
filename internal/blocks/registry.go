@@ -407,4 +407,73 @@ func init() {
 			{Key: "filter", Label: "Static filter (DSL)", Kind: KindText, Help: `Personalization-DSL filter applied at build time, e.g. industry == "finance" OR featured present.`},
 		},
 	})
+
+	// Sprint 2 slice C (2026-05-22): Public storefront blocks. The 4
+	// blocks below complete the e-commerce surface on top of slice B's
+	// orders + Mollie checkout backend. product_grid and product_detail
+	// resolve product rows at build time (same pattern as collection_list).
+	// cart_drawer and checkout_form rely on the storefront island
+	// (internal/builder/storefront_island.go) for client-side cart state
+	// and the POST to /api/sites/{siteID}/checkout.
+	Register(Schema{
+		Type: "product_grid", Label: "Product grid", Category: "store",
+		Description: "Grid of products from this site's catalog. Resolves active products at build time. Each card has an Add-to-cart button that populates the storefront cart.",
+		Fields: []Field{
+			{Key: "heading", Label: "Heading", Kind: KindText},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "category_filter", Label: "Category filter", Kind: KindText, Help: "Optional. Only show products whose category matches this exact string."},
+			{Key: "limit", Label: "Max products", Kind: KindNumber, Help: "Default 12. Hard cap 48 for LCP."},
+			{Key: "columns", Label: "Columns", Kind: KindSelect, Options: []Option{
+				{Value: "3", Label: "Three columns (default)"},
+				{Value: "2", Label: "Two columns"},
+				{Value: "4", Label: "Four columns"},
+			}},
+			{Key: "sort_by", Label: "Sort by", Kind: KindSelect, Options: []Option{
+				{Value: "sort_order", Label: "Manual sort order (default)"},
+				{Value: "name", Label: "Name (A-Z)"},
+				{Value: "price_asc", Label: "Price (low to high)"},
+				{Value: "price_desc", Label: "Price (high to low)"},
+			}},
+			{Key: "cta_label", Label: "Add-to-cart label", Kind: KindText, Placeholder: "Add to cart"},
+			{Key: "link_to_detail", Label: "Link card to product page", Kind: KindBool, Help: "When on, the card title links to /products/{slug}. Pair with a page using the product_detail block."},
+		},
+	})
+
+	Register(Schema{
+		Type: "product_detail", Label: "Product detail", Category: "store",
+		Description: "Single product page: gallery, name, description, variant picker, Add to cart. Resolves the product by slug at build time.",
+		Fields: []Field{
+			{Key: "product_slug", Label: "Product slug", Kind: KindText, Required: true, Help: "The product.slug to render. Find it in Store -> Products."},
+			{Key: "show_variants", Label: "Show variant picker", Kind: KindBool, Help: "On by default. Hides when product has a single variant."},
+			{Key: "cta_label", Label: "Add-to-cart label", Kind: KindText, Placeholder: "Add to cart"},
+			{Key: "gallery_layout", Label: "Gallery layout", Kind: KindSelect, Options: []Option{
+				{Value: "side-by-side", Label: "Side by side (default)"},
+				{Value: "stacked", Label: "Stacked (image above text)"},
+			}},
+		},
+	})
+
+	Register(Schema{
+		Type: "cart_drawer", Label: "Cart drawer", Category: "store",
+		Description: "Floating cart trigger + slide-out drawer. Place once per page (typically on every page that has Add-to-cart buttons). Cart state persists in localStorage.",
+		Fields: []Field{
+			{Key: "trigger_label", Label: "Trigger label", Kind: KindText, Placeholder: "Cart"},
+			{Key: "empty_message", Label: "Empty state message", Kind: KindTextarea, Placeholder: "Your cart is empty."},
+			{Key: "checkout_url", Label: "Checkout page URL", Kind: KindURL, Required: true, Help: "Path to the page with the checkout_form block, e.g. /checkout."},
+			{Key: "currency_locale", Label: "Currency locale", Kind: KindText, Help: "Optional BCP 47 tag for price formatting (e.g. sv-SE, en-US). Falls back to en-US."},
+		},
+	})
+
+	Register(Schema{
+		Type: "checkout_form", Label: "Checkout form", Category: "store",
+		Description: "Customer details form that submits the cart to /api/sites/{siteID}/checkout and redirects to Mollie. Reads cart items from localStorage. Lives on its own page (typically /checkout).",
+		Fields: []Field{
+			{Key: "heading", Label: "Heading", Kind: KindText, Placeholder: "Checkout"},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "return_url", Label: "Return URL", Kind: KindURL, Required: true, Help: "Where Mollie redirects the visitor after paying, e.g. /thank-you. Receives ?order=ATM-... in the query string."},
+			{Key: "submit_label", Label: "Submit button label", Kind: KindText, Placeholder: "Pay now"},
+			{Key: "require_phone", Label: "Require phone number", Kind: KindBool},
+			{Key: "require_shipping_address", Label: "Require shipping address", Kind: KindBool, Help: "On by default. Turn off for digital-only stores."},
+		},
+	})
 }

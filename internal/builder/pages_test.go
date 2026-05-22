@@ -25,7 +25,7 @@ func TestRenderBlock_DataBlock(t *testing.T) {
 			"secondary_url": "/about"
 		}`,
 	}
-	out := renderBlock(bl, map[string]string{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil, "")
 
 	wantSubstrings := []string{
 		`class="block block--hero"`,
@@ -54,7 +54,7 @@ func TestRenderBlock_HTMLPassthrough(t *testing.T) {
 		BlockType: "raw",
 		DataJson:  `{"html": "<aside class=\"banner\">hello</aside>"}`,
 	}
-	out := renderBlock(bl, map[string]string{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil, "")
 	if !strings.Contains(out, `<aside class="banner">hello</aside>`) {
 		t.Errorf("expected raw HTML passthrough, got: %q", out)
 	}
@@ -72,7 +72,7 @@ func TestRenderBlock_ComponentBlock(t *testing.T) {
 			"props": {"title": "Fast", "icon": "bolt", "highlight": true}
 		}`,
 	}
-	out := renderBlock(bl, map[string]string{"feature-card": ".astro"}, nil)
+	out := renderBlock(bl, map[string]string{"feature-card": ".astro"}, nil, "")
 	if !strings.Contains(out, "<FeatureCard") {
 		t.Errorf("expected PascalCase component tag, got: %q", out)
 	}
@@ -94,7 +94,7 @@ func TestRenderBlock_PersonalizationCondition(t *testing.T) {
 		BlockType: "hero",
 		DataJson:  `{"heading": "Welcome back", "condition": "lifecycle == \"customer\""}`,
 	}
-	out := renderBlock(wrapped, map[string]string{}, nil)
+	out := renderBlock(wrapped, map[string]string{}, nil, "")
 	if !strings.Contains(out, `data-asp-when=`) {
 		t.Errorf("expected condition wrapper when data.condition is set, got: %q", out)
 	}
@@ -107,7 +107,7 @@ func TestRenderBlock_PersonalizationCondition(t *testing.T) {
 		BlockType: "hero",
 		DataJson:  `{"heading": "Welcome", "condition": ""}`,
 	}
-	out2 := renderBlock(plain, map[string]string{}, nil)
+	out2 := renderBlock(plain, map[string]string{}, nil, "")
 	if strings.Contains(out2, `data-asp-when=`) {
 		t.Errorf("expected no wrapper when condition is empty, got: %q", out2)
 	}
@@ -122,7 +122,7 @@ func TestRenderBlock_HTMLEscape(t *testing.T) {
 		BlockType: "text",
 		DataJson:  `{"heading": "<script>alert(1)</script>", "text": "AT&T"}`,
 	}
-	out := renderBlock(bl, map[string]string{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil, "")
 	if strings.Contains(out, "<script>") {
 		t.Errorf("renderBlock leaked unescaped <script> tag: %q", out)
 	}
@@ -143,7 +143,7 @@ func TestRenderBlock_RejectsDangerousScheme(t *testing.T) {
 		BlockType: "cta",
 		DataJson:  `{"cta_text": "Click", "cta_url": "javascript:alert(1)"}`,
 	}
-	out := renderBlock(bl, map[string]string{}, nil)
+	out := renderBlock(bl, map[string]string{}, nil, "")
 	if strings.Contains(out, "javascript:") {
 		t.Errorf("dangerous javascript: URL leaked: %q", out)
 	}

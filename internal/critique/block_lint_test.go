@@ -177,6 +177,75 @@ func TestBlockLint_ArchetypeUnknownIsIgnored(t *testing.T) {
 	}
 }
 
+// TestBlockLint_ProductDetailMissingSlug locks the Slice C check:
+// a product_detail block with an empty product_slug field must flag.
+func TestBlockLint_ProductDetailMissingSlug(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("product_detail", map[string]any{
+		"show_variants": true,
+	}, playbook)
+	if !hasFinding(findings, "product_detail_slug_missing") {
+		t.Fatalf("expected product_detail_slug_missing; got %s", debugLint(findings))
+	}
+}
+
+func TestBlockLint_ProductDetailSlugClears(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("product_detail", map[string]any{
+		"product_slug": "blue-tee",
+	}, playbook)
+	if hasFinding(findings, "product_detail_slug_missing") {
+		t.Errorf("product_detail_slug_missing should clear when slug is set; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_CheckoutFormReturnURL locks the missing return_url
+// warning. Mollie cannot redirect without one.
+func TestBlockLint_CheckoutFormReturnURL(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("checkout_form", map[string]any{
+		"heading": "Checkout",
+	}, playbook)
+	if !hasFinding(findings, "checkout_return_url_missing") {
+		t.Fatalf("expected checkout_return_url_missing; got %s", debugLint(findings))
+	}
+}
+
+func TestBlockLint_CheckoutFormReturnURLClears(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("checkout_form", map[string]any{
+		"heading":    "Checkout",
+		"return_url": "/thank-you",
+	}, playbook)
+	if hasFinding(findings, "checkout_return_url_missing") {
+		t.Errorf("checkout_return_url_missing should clear when return_url is set; got %s", debugLint(findings))
+	}
+}
+
+// TestBlockLint_ProductGridLimitHigh asserts the info-level warning when
+// the author sets a high limit that the renderer would cap at 48.
+func TestBlockLint_ProductGridLimitHigh(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("product_grid", map[string]any{
+		"heading": "All products",
+		"limit":   float64(60),
+	}, playbook)
+	if !hasFinding(findings, "product_grid_limit_high") {
+		t.Fatalf("expected product_grid_limit_high for limit=60; got %s", debugLint(findings))
+	}
+}
+
+func TestBlockLint_ProductGridLimitNormal(t *testing.T) {
+	playbook := agent.DefaultDesignPlaybook()
+	findings := LintBlockData("product_grid", map[string]any{
+		"heading": "Featured",
+		"limit":   float64(12),
+	}, playbook)
+	if hasFinding(findings, "product_grid_limit_high") {
+		t.Errorf("product_grid_limit_high should not fire at limit=12; got %s", debugLint(findings))
+	}
+}
+
 func hasFinding(findings []LintFinding, name string) bool {
 	for _, f := range findings {
 		if f.Name == name {
