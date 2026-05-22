@@ -221,6 +221,24 @@ type DesignReference struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+type DiscountCode struct {
+	ID               string `json:"id"`
+	SiteID           string `json:"site_id"`
+	Code             string `json:"code"`
+	Kind             string `json:"kind"`
+	Value            int64  `json:"value"`
+	MinSubtotalCents int64  `json:"min_subtotal_cents"`
+	MaxUses          int64  `json:"max_uses"`
+	UsedCount        int64  `json:"used_count"`
+	StartsAt         string `json:"starts_at"`
+	EndsAt           string `json:"ends_at"`
+	AppliesTo        string `json:"applies_to"`
+	AppliesToIdsJson string `json:"applies_to_ids_json"`
+	IsActive         int64  `json:"is_active"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
 type EntityRevision struct {
 	ID            string `json:"id"`
 	SiteID        string `json:"site_id"`
@@ -288,6 +306,18 @@ type GuardrailRule struct {
 	Value     string `json:"value"`
 	Severity  string `json:"severity"`
 	IsActive  int64  `json:"is_active"`
+	CreatedAt string `json:"created_at"`
+}
+
+type InventoryAdjustment struct {
+	ID        string `json:"id"`
+	VariantID string `json:"variant_id"`
+	SiteID    string `json:"site_id"`
+	Delta     int64  `json:"delta"`
+	NewCount  int64  `json:"new_count"`
+	Reason    string `json:"reason"`
+	Note      string `json:"note"`
+	CreatedBy string `json:"created_by"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -402,6 +432,40 @@ type PasswordReset struct {
 	UsedAt      string `json:"used_at"`
 	RequesterIp string `json:"requester_ip"`
 	CreatedAt   string `json:"created_at"`
+}
+
+type Product struct {
+	ID               string `json:"id"`
+	SiteID           string `json:"site_id"`
+	Name             string `json:"name"`
+	Slug             string `json:"slug"`
+	Description      string `json:"description"`
+	Category         string `json:"category"`
+	Status           string `json:"status"`
+	ImagesJson       string `json:"images_json"`
+	BasePriceCents   int64  `json:"base_price_cents"`
+	Currency         string `json:"currency"`
+	RequiresShipping int64  `json:"requires_shipping"`
+	TaxClass         string `json:"tax_class"`
+	WeightGrams      int64  `json:"weight_grams"`
+	SortOrder        int64  `json:"sort_order"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+type ProductVariant struct {
+	ID                  string `json:"id"`
+	ProductID           string `json:"product_id"`
+	Sku                 string `json:"sku"`
+	Name                string `json:"name"`
+	PriceCents          int64  `json:"price_cents"`
+	CompareAtPriceCents int64  `json:"compare_at_price_cents"`
+	InventoryCount      int64  `json:"inventory_count"`
+	AllowBackorder      int64  `json:"allow_backorder"`
+	SortOrder           int64  `json:"sort_order"`
+	AttributesJson      string `json:"attributes_json"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
 }
 
 type Redirect struct {

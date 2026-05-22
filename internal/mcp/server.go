@@ -117,6 +117,13 @@ type Server struct {
 	// with a clean "not configured" error.
 	revisions *handlers.RevisionsHandler
 
+	// products + discounts wire the Sprint 2 catalog tools to the
+	// same handler instances the REST endpoints use, so cross-tenant
+	// guards live in exactly one place. Nil disables the respective
+	// tool subset with a clean "not configured" error.
+	products  *handlers.ProductHandler
+	discounts *handlers.DiscountCodeHandler
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -147,6 +154,21 @@ func (s *Server) WithClarifications(h *handlers.ClarificationsHandler) *Server {
 // tools with a clean "not configured" error.
 func (s *Server) WithRevisions(h *handlers.RevisionsHandler) *Server {
 	s.revisions = h
+	return s
+}
+
+// WithProducts wires the catalog handler so list_products /
+// create_product / update_product / delete_product / variants tools
+// share the REST cross-tenant guards. nil disables the catalog tools.
+func (s *Server) WithProducts(h *handlers.ProductHandler) *Server {
+	s.products = h
+	return s
+}
+
+// WithDiscountCodes wires the discount-code handler so the discount
+// MCP tools share the REST cross-tenant guards. nil disables them.
+func (s *Server) WithDiscountCodes(h *handlers.DiscountCodeHandler) *Server {
+	s.discounts = h
 	return s
 }
 
