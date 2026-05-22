@@ -1009,6 +1009,11 @@ func (s *Server) registerTools() {
 	s.registerProductTools()
 	s.registerDiscountCodeTools()
 
+	// 4 order tools: Sprint 2 slice B of the WP/Webflow roadmap.
+	// Order pipeline management (list, get, update_status, refund)
+	// for post-checkout workflows. Lives in tools_orders.go.
+	s.registerOrderTools()
+
 	// Synchronous design lint (gap 4 of 6, 2026-05-21). lint_block runs
 	// the same rule set create_block + update_block embed in their
 	// responses, but standalone so the agent can vet variants before

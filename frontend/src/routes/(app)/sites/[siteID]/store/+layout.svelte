@@ -5,6 +5,7 @@
 
 	const subTabs = $derived([
 		{ id: 'products', label: 'Products', href: `/sites/${siteID}/store/products` },
+		{ id: 'orders', label: 'Orders', href: `/sites/${siteID}/store/orders` },
 		{ id: 'discount-codes', label: 'Discount codes', href: `/sites/${siteID}/store/discount-codes` }
 	]);
 

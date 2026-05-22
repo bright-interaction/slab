@@ -63,6 +63,7 @@ type Querier interface {
 	CountMediaInFolder(ctx context.Context, arg CountMediaInFolderParams) (int64, error)
 	CountMigrationVerificationsByOK(ctx context.Context, migrationID string) (CountMigrationVerificationsByOKRow, error)
 	CountMissingURLsBySite(ctx context.Context, siteID string) (int64, error)
+	CountOrdersBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CountPendingClarificationsBySite(ctx context.Context, siteID string) (int64, error)
 	CountProductsBySite(ctx context.Context, siteID string) (int64, error)
@@ -105,8 +106,11 @@ type Querier interface {
 	CreateMediaFolder(ctx context.Context, arg CreateMediaFolderParams) error
 	CreateMigration(ctx context.Context, arg CreateMigrationParams) error
 	CreateMigrationVerification(ctx context.Context, arg CreateMigrationVerificationParams) error
+	CreateOrder(ctx context.Context, arg CreateOrderParams) error
+	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error
+	CreatePaymentEvent(ctx context.Context, arg CreatePaymentEventParams) error
 	CreateProduct(ctx context.Context, arg CreateProductParams) error
 	CreateProductVariant(ctx context.Context, arg CreateProductVariantParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
@@ -229,6 +233,9 @@ type Querier interface {
 	GetMigrationByID(ctx context.Context, id string) (Migration, error)
 	GetMissingURLByID(ctx context.Context, id string) (MissingUrl, error)
 	GetMissingURLByPath(ctx context.Context, arg GetMissingURLByPathParams) (MissingUrl, error)
+	GetOrderByID(ctx context.Context, arg GetOrderByIDParams) (Order, error)
+	GetOrderByOrderNumber(ctx context.Context, arg GetOrderByOrderNumberParams) (Order, error)
+	GetOrderByPaymentID(ctx context.Context, paymentID string) (Order, error)
 	GetPageByID(ctx context.Context, id string) (Page, error)
 	// Tolerates slug forms with and without a leading slash. The MCP layer
 	// normalizes incoming slugs to a leading-slash form, but the migration
@@ -236,6 +243,7 @@ type Querier interface {
 	// slugs without the slash. This OR keeps both reachable.
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
+	GetPaymentEventByLookup(ctx context.Context, arg GetPaymentEventByLookupParams) (PaymentEvent, error)
 	GetProductByID(ctx context.Context, arg GetProductByIDParams) (Product, error)
 	GetProductBySlug(ctx context.Context, arg GetProductBySlugParams) (Product, error)
 	GetProductVariantByID(ctx context.Context, id string) (ProductVariant, error)
@@ -363,7 +371,11 @@ type Querier interface {
 	ListMigrationVerificationsBySite(ctx context.Context, arg ListMigrationVerificationsBySiteParams) ([]MigrationVerification, error)
 	ListMigrationsBySite(ctx context.Context, siteID string) ([]Migration, error)
 	ListMissingURLsBySite(ctx context.Context, arg ListMissingURLsBySiteParams) ([]MissingUrl, error)
+	ListOrderItems(ctx context.Context, orderID string) ([]OrderItem, error)
+	ListOrdersBySite(ctx context.Context, arg ListOrdersBySiteParams) ([]Order, error)
+	ListOrdersBySiteStatus(ctx context.Context, arg ListOrdersBySiteStatusParams) ([]Order, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
+	ListPaymentEventsByOrder(ctx context.Context, arg ListPaymentEventsByOrderParams) ([]PaymentEvent, error)
 	ListPendingClarificationsByAgent(ctx context.Context, arg ListPendingClarificationsByAgentParams) ([]Clarification, error)
 	ListPendingClarificationsBySite(ctx context.Context, arg ListPendingClarificationsBySiteParams) ([]Clarification, error)
 	ListPendingInvites(ctx context.Context) ([]Invite, error)
@@ -415,6 +427,7 @@ type Querier interface {
 	MarkBillingEventProcessed(ctx context.Context, arg MarkBillingEventProcessedParams) error
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
+	MarkPaymentEventProcessed(ctx context.Context, arg MarkPaymentEventProcessedParams) error
 	MarkVerifyJobRunning(ctx context.Context, id string) error
 	MarkWaitlistInvited(ctx context.Context, arg MarkWaitlistInvitedParams) error
 	MarkWebhookDeliveryDropped(ctx context.Context, arg MarkWebhookDeliveryDroppedParams) error
@@ -524,6 +537,10 @@ type Querier interface {
 	UpdateMediaVariants(ctx context.Context, arg UpdateMediaVariantsParams) error
 	UpdateMigrationManifest(ctx context.Context, arg UpdateMigrationManifestParams) error
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
+	UpdateOrderNotes(ctx context.Context, arg UpdateOrderNotesParams) error
+	UpdateOrderPayment(ctx context.Context, arg UpdateOrderPaymentParams) error
+	UpdateOrderRefundID(ctx context.Context, arg UpdateOrderRefundIDParams) error
+	UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) error
 	UpdatePage(ctx context.Context, arg UpdatePageParams) error
 	UpdatePageOrder(ctx context.Context, arg UpdatePageOrderParams) error
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) error

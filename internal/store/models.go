@@ -403,6 +403,52 @@ type MissingUrl struct {
 	LastSeen  string `json:"last_seen"`
 }
 
+type Order struct {
+	ID                  string `json:"id"`
+	SiteID              string `json:"site_id"`
+	OrderNumber         string `json:"order_number"`
+	Status              string `json:"status"`
+	CustomerName        string `json:"customer_name"`
+	CustomerEmail       string `json:"customer_email"`
+	CustomerPhone       string `json:"customer_phone"`
+	ShippingAddressJson string `json:"shipping_address_json"`
+	BillingAddressJson  string `json:"billing_address_json"`
+	SubtotalCents       int64  `json:"subtotal_cents"`
+	DiscountCents       int64  `json:"discount_cents"`
+	ShippingCents       int64  `json:"shipping_cents"`
+	TaxCents            int64  `json:"tax_cents"`
+	TotalCents          int64  `json:"total_cents"`
+	Currency            string `json:"currency"`
+	DiscountCodeID      string `json:"discount_code_id"`
+	PaymentProvider     string `json:"payment_provider"`
+	PaymentID           string `json:"payment_id"`
+	PaymentStatus       string `json:"payment_status"`
+	PaymentCheckoutUrl  string `json:"payment_checkout_url"`
+	RefundID            string `json:"refund_id"`
+	Notes               string `json:"notes"`
+	MetadataJson        string `json:"metadata_json"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
+	PaidAt              string `json:"paid_at"`
+	FulfilledAt         string `json:"fulfilled_at"`
+	CancelledAt         string `json:"cancelled_at"`
+	RefundedAt          string `json:"refunded_at"`
+}
+
+type OrderItem struct {
+	ID             string `json:"id"`
+	OrderID        string `json:"order_id"`
+	VariantID      string `json:"variant_id"`
+	ProductID      string `json:"product_id"`
+	ProductName    string `json:"product_name"`
+	VariantName    string `json:"variant_name"`
+	Sku            string `json:"sku"`
+	Quantity       int64  `json:"quantity"`
+	UnitPriceCents int64  `json:"unit_price_cents"`
+	TotalCents     int64  `json:"total_cents"`
+	CreatedAt      string `json:"created_at"`
+}
+
 type Page struct {
 	ID               string `json:"id"`
 	SiteID           string `json:"site_id"`
@@ -432,6 +478,18 @@ type PasswordReset struct {
 	UsedAt      string `json:"used_at"`
 	RequesterIp string `json:"requester_ip"`
 	CreatedAt   string `json:"created_at"`
+}
+
+type PaymentEvent struct {
+	ID        string `json:"id"`
+	SiteID    string `json:"site_id"`
+	OrderID   string `json:"order_id"`
+	Provider  string `json:"provider"`
+	PaymentID string `json:"payment_id"`
+	EventType string `json:"event_type"`
+	RawJson   string `json:"raw_json"`
+	Processed int64  `json:"processed"`
+	CreatedAt string `json:"created_at"`
 }
 
 type Product struct {

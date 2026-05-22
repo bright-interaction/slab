@@ -124,6 +124,11 @@ type Server struct {
 	products  *handlers.ProductHandler
 	discounts *handlers.DiscountCodeHandler
 
+	// orders wires the Sprint 2 slice B order pipeline tools. Same
+	// pattern: shared handler instance so REST + MCP go through the
+	// same state machine + cross-tenant guards. Nil disables them.
+	orders *handlers.OrderHandler
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -169,6 +174,14 @@ func (s *Server) WithProducts(h *handlers.ProductHandler) *Server {
 // MCP tools share the REST cross-tenant guards. nil disables them.
 func (s *Server) WithDiscountCodes(h *handlers.DiscountCodeHandler) *Server {
 	s.discounts = h
+	return s
+}
+
+// WithOrders wires the order handler so list_orders / get_order /
+// update_order_status / refund_order MCP tools share the REST
+// validation. nil disables them.
+func (s *Server) WithOrders(h *handlers.OrderHandler) *Server {
+	s.orders = h
 	return s
 }
 

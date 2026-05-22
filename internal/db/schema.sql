@@ -1352,3 +1352,98 @@ CREATE TABLE IF NOT EXISTS discount_codes (
     UNIQUE(site_id, code)
 );
 CREATE INDEX IF NOT EXISTS idx_discount_codes_site ON discount_codes(site_id, is_active);
+
+-- WP/Webflow replacement roadmap Sprint 2 (slice B: orders + checkout), 2026-05-22.
+--
+-- Order pipeline backing the tenant storefront checkout. Mollie is
+-- the v1 payment provider (EU-sovereign, no Cloud Act exposure).
+-- The customer's catalog (slice A: products + variants + inventory
+-- + discount_codes) feeds line items into orders.
+--
+-- State machine for order.status:
+--   pending  -> paid       (Mollie webhook 'paid')
+--   pending  -> failed     (Mollie webhook 'failed' | 'expired' | 'canceled')
+--   paid     -> fulfilled  (operator marks shipped / digital delivered)
+--   paid     -> refunded   (operator triggers refund; Mollie webhook confirms)
+--   fulfilled -> refunded  (post-delivery refund)
+--
+-- Pricing fields are integer cents in the order's currency.
+-- subtotal = sum(line_item.total_cents) before discount + tax + shipping.
+-- total = subtotal - discount + tax + shipping.
+
+CREATE TABLE IF NOT EXISTS orders (
+    id                      TEXT PRIMARY KEY,
+    site_id                 TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    order_number            TEXT NOT NULL,
+    status                  TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','paid','fulfilled','cancelled','refunded','failed')),
+    customer_name           TEXT NOT NULL DEFAULT '',
+    customer_email          TEXT NOT NULL DEFAULT '',
+    customer_phone          TEXT NOT NULL DEFAULT '',
+    shipping_address_json   TEXT NOT NULL DEFAULT '{}',
+    billing_address_json    TEXT NOT NULL DEFAULT '{}',
+    subtotal_cents          INTEGER NOT NULL DEFAULT 0,
+    discount_cents          INTEGER NOT NULL DEFAULT 0,
+    shipping_cents          INTEGER NOT NULL DEFAULT 0,
+    tax_cents               INTEGER NOT NULL DEFAULT 0,
+    total_cents             INTEGER NOT NULL DEFAULT 0,
+    currency                TEXT NOT NULL DEFAULT 'EUR',
+    discount_code_id        TEXT NOT NULL DEFAULT '',
+    payment_provider        TEXT NOT NULL DEFAULT 'mollie',
+    payment_id              TEXT NOT NULL DEFAULT '',
+    payment_status          TEXT NOT NULL DEFAULT '',
+    payment_checkout_url    TEXT NOT NULL DEFAULT '',
+    refund_id               TEXT NOT NULL DEFAULT '',
+    notes                   TEXT NOT NULL DEFAULT '',
+    metadata_json           TEXT NOT NULL DEFAULT '{}',
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at                 TEXT NOT NULL DEFAULT '',
+    fulfilled_at            TEXT NOT NULL DEFAULT '',
+    cancelled_at            TEXT NOT NULL DEFAULT '',
+    refunded_at             TEXT NOT NULL DEFAULT '',
+    UNIQUE(site_id, order_number)
+);
+CREATE INDEX IF NOT EXISTS idx_orders_site_status ON orders(site_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_site_created ON orders(site_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_id ON orders(payment_id);
+
+-- order_items: variant_id + product_id are NOT foreign keys because
+-- the order row must survive product / variant deletion (historical
+-- record). product_name + variant_name + sku are denormalised at
+-- order-creation time so the admin order detail page renders even if
+-- the product later changes name or is archived.
+CREATE TABLE IF NOT EXISTS order_items (
+    id                  TEXT PRIMARY KEY,
+    order_id            TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    variant_id          TEXT NOT NULL,
+    product_id          TEXT NOT NULL,
+    product_name        TEXT NOT NULL,
+    variant_name        TEXT NOT NULL DEFAULT '',
+    sku                 TEXT NOT NULL DEFAULT '',
+    quantity            INTEGER NOT NULL DEFAULT 1,
+    unit_price_cents    INTEGER NOT NULL DEFAULT 0,
+    total_cents         INTEGER NOT NULL DEFAULT 0,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+
+-- payment_events is the idempotency log for webhook deliveries. The
+-- unique index on (provider, payment_id, event_type) lets the
+-- webhook handler INSERT-OR-IGNORE to dedupe redeliveries by Mollie
+-- (which retries on any non-2xx response). processed=1 marks the
+-- side-effects (order status update, inventory decrement, discount
+-- code increment) as applied so a re-fire doesn't double-process.
+CREATE TABLE IF NOT EXISTS payment_events (
+    id          TEXT PRIMARY KEY,
+    site_id     TEXT NOT NULL,
+    order_id    TEXT NOT NULL,
+    provider    TEXT NOT NULL,
+    payment_id  TEXT NOT NULL,
+    event_type  TEXT NOT NULL,
+    raw_json    TEXT NOT NULL,
+    processed   INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_events_dedupe ON payment_events(provider, payment_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_payment_events_order ON payment_events(order_id, created_at DESC);

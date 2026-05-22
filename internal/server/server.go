@@ -86,6 +86,11 @@ type Server struct {
 	// catalog MCP tools (Sprint 2 slice A of the WP/Webflow roadmap).
 	productsH      *handlers.ProductHandler
 	discountCodesH *handlers.DiscountCodeHandler
+
+	// ordersH backs the Orders admin tab + the order MCP tools +
+	// the public Checkout + Mollie Webhook endpoints (Sprint 2
+	// slice B of the WP/Webflow roadmap).
+	ordersH *handlers.OrderHandler
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -901,11 +906,30 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/discount-codes/{codeID}", s.discountCodesH.Get)
 		siteR.Patch("/api/sites/{siteID}/discount-codes/{codeID}", s.discountCodesH.Update)
 		siteR.Delete("/api/sites/{siteID}/discount-codes/{codeID}", s.discountCodesH.Delete)
+
+		// Orders admin (Sprint 2 slice B). List + Get + state machine
+		// transition + refund. Mounted under siteR (session-auth).
+		s.ordersH = handlers.NewOrderHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/orders", s.ordersH.List)
+		siteR.Get("/api/sites/{siteID}/orders/{orderID}", s.ordersH.Get)
+		siteR.Post("/api/sites/{siteID}/orders/{orderID}/status", s.ordersH.UpdateStatus)
+		siteR.Post("/api/sites/{siteID}/orders/{orderID}/refund", s.ordersH.Refund)
 	})
 
 	// Public font serving (no auth, long cache, CORS *).
 	publicFontsH := handlers.NewFontsHandler(s.cfg, s.queries)
 	r.Get("/atomicsite-fonts/{siteID}/{fontID}.woff2", publicFontsH.Serve)
+
+	// Storefront public endpoints (Sprint 2 slice B). No session auth
+	// because checkout is from an anonymous visitor browser; Mollie's
+	// webhook is also unauthenticated against us. Cross-tenant safety
+	// comes from the siteID URL param: the server uses that site's
+	// Mollie API key to fetch the payment, so a foreign key cannot
+	// drive state on a different tenant.
+	if s.ordersH != nil {
+		r.Post("/api/sites/{siteID}/checkout", s.ordersH.Checkout)
+		r.Post("/api/sites/{siteID}/payments/mollie/webhook", s.ordersH.Webhook)
+	}
 
 	// Preview-token redemption (no auth, loopback-only, single-use). Used
 	// by the preview_screenshot MCP tool: chromedp navigates to
@@ -994,7 +1018,8 @@ func (s *Server) Router() http.Handler {
 			WithClarifications(s.clarificationsH).
 			WithRevisions(s.revisionsH).
 			WithProducts(s.productsH).
-			WithDiscountCodes(s.discountCodesH)
+			WithDiscountCodes(s.discountCodesH).
+			WithOrders(s.ordersH)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)
