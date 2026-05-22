@@ -519,6 +519,29 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 			ValueType:   "bool",
 			AgentWritable: false,
 		},
+
+		// --- payments (Sprint 2 slice C+, 2026-05-22) --------------------
+		// Mollie API key + test/live mode flag drive the storefront
+		// checkout. Read by OrderHandler.Checkout + .Refund + .Webhook
+		// from site_settings (category=payments). AgentWritable=false
+		// because Mollie keys are bearer-equivalent secrets; the agent
+		// can read the descriptor (and the empty-state guidance) but
+		// must point the human at the Settings -> Payments page to
+		// rotate or paste a key.
+		{
+			Category: "payments", Key: "mollie_api_key",
+			Label:       "Mollie API key",
+			Description: "Per-tenant Mollie API key. Use the test key (prefix test_) for staging and the live key (prefix live_) once the storefront is ready for real payments. Get one at mollie.com -> Developers -> API keys. Required for the checkout_form block to redirect visitors to Mollie; without it the order is created with status=pending and no checkout_url. The webhook at /api/sites/{siteID}/payments/mollie/webhook is also validated against this key so a foreign payment_id cannot drive state on this tenant.",
+			ValueType:   "string",
+			AgentWritable: false,
+		},
+		{
+			Category: "payments", Key: "mollie_test_mode",
+			Label:       "Mollie test mode (informational)",
+			Description: "Mirrors whether the configured Mollie API key is a test_ or live_ key. Set to 1 for test, 0 for live. The backend ignores this flag for routing decisions because Mollie's API endpoint is the same for both; the value is surfaced so the admin UI can show a clear test/live badge next to the orders list.",
+			ValueType:   "bool",
+			AgentWritable: false,
+		},
 	}
 
 	defaultsByKey := map[string]string{
@@ -579,6 +602,8 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		"security.x_xss_protection":         "1; mode=block",
 		"security.x_permitted_cross_domain_policies": "none",
 		"security.https_redirect":           "1",
+		"payments.mollie_api_key":           "",
+		"payments.mollie_test_mode":         "1",
 	}
 
 	humanAdminURL := func(category string) string {
@@ -592,6 +617,8 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 			return base + "analytics"
 		case "security":
 			return base + "security"
+		case "payments":
+			return base + "payments"
 		default:
 			return base
 		}
