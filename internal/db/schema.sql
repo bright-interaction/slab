@@ -1248,3 +1248,107 @@ CREATE INDEX IF NOT EXISTS idx_entity_revisions_lookup
     ON entity_revisions(site_id, entity_type, entity_id, version_number DESC);
 CREATE INDEX IF NOT EXISTS idx_entity_revisions_site_created
     ON entity_revisions(site_id, created_at DESC);
+
+-- WP/Webflow replacement roadmap Sprint 2 (slice A: catalog), 2026-05-22.
+--
+-- Catalog data model: products + variants + inventory adjustments +
+-- discount codes. Orders + order_items land in slice B with the
+-- checkout / Mollie webhook surface. Splitting the sprint keeps each
+-- slice deployable + verified end to end before adding the next
+-- layer.
+--
+-- Pricing is integer cents per ISO 4217 currency (single currency per
+-- product for the v1; multi-currency is Sprint 2.5). VAT-inclusive
+-- per EU norms; the tax_class field lets the storefront and OSS
+-- export pick the right rate per country at checkout time.
+--
+-- Variants carry their own inventory + price overrides so a product
+-- with size/colour options can sell some variants while others sit
+-- on backorder. allow_backorder=1 lets the cart accept variants with
+-- inventory_count<=0 (e.g. print-on-demand, digital downloads).
+--
+-- Discount codes support percent OR fixed-amount, optional min
+-- subtotal, optional max uses, optional date window, and optional
+-- restriction to specific products / categories. used_count is
+-- maintained server-side at checkout-redeem time so concurrent
+-- redemptions stay correct.
+
+CREATE TABLE IF NOT EXISTS products (
+    id                      TEXT PRIMARY KEY,
+    site_id                 TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    name                    TEXT NOT NULL,
+    slug                    TEXT NOT NULL,
+    description             TEXT NOT NULL DEFAULT '',
+    category                TEXT NOT NULL DEFAULT '',
+    status                  TEXT NOT NULL DEFAULT 'draft'
+                            CHECK (status IN ('draft','active','archived')),
+    images_json             TEXT NOT NULL DEFAULT '[]',
+    base_price_cents        INTEGER NOT NULL DEFAULT 0,
+    currency                TEXT NOT NULL DEFAULT 'EUR',
+    requires_shipping       INTEGER NOT NULL DEFAULT 1,
+    tax_class               TEXT NOT NULL DEFAULT 'standard',
+    weight_grams            INTEGER NOT NULL DEFAULT 0,
+    sort_order              INTEGER NOT NULL DEFAULT 0,
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, slug)
+);
+CREATE INDEX IF NOT EXISTS idx_products_site ON products(site_id, status, sort_order);
+
+CREATE TABLE IF NOT EXISTS product_variants (
+    id                      TEXT PRIMARY KEY,
+    product_id              TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    sku                     TEXT NOT NULL DEFAULT '',
+    name                    TEXT NOT NULL DEFAULT '',
+    price_cents             INTEGER NOT NULL DEFAULT 0,
+    compare_at_price_cents  INTEGER NOT NULL DEFAULT 0,
+    inventory_count         INTEGER NOT NULL DEFAULT 0,
+    allow_backorder         INTEGER NOT NULL DEFAULT 0,
+    sort_order              INTEGER NOT NULL DEFAULT 0,
+    attributes_json         TEXT NOT NULL DEFAULT '{}',
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants(product_id, sort_order);
+
+-- inventory_adjustments is the audit log of every change to a
+-- variant's inventory_count. delta can be positive (restock) or
+-- negative (sale, damage). Reason categorises so the dashboard can
+-- show "Today: -3 from sales, +50 from restock" without parsing
+-- notes.
+CREATE TABLE IF NOT EXISTS inventory_adjustments (
+    id                      TEXT PRIMARY KEY,
+    variant_id              TEXT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
+    site_id                 TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    delta                   INTEGER NOT NULL,
+    new_count               INTEGER NOT NULL,
+    reason                  TEXT NOT NULL DEFAULT 'manual'
+                            CHECK (reason IN ('restock','sale','manual','damage','return','correction')),
+    note                    TEXT NOT NULL DEFAULT '',
+    created_by              TEXT NOT NULL DEFAULT '',
+    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_adj_variant ON inventory_adjustments(variant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_adj_site ON inventory_adjustments(site_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS discount_codes (
+    id                      TEXT PRIMARY KEY,
+    site_id                 TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    code                    TEXT NOT NULL,
+    kind                    TEXT NOT NULL DEFAULT 'percent'
+                            CHECK (kind IN ('percent','fixed')),
+    value                   INTEGER NOT NULL DEFAULT 0,
+    min_subtotal_cents      INTEGER NOT NULL DEFAULT 0,
+    max_uses                INTEGER NOT NULL DEFAULT 0,
+    used_count              INTEGER NOT NULL DEFAULT 0,
+    starts_at               TEXT NOT NULL DEFAULT '',
+    ends_at                 TEXT NOT NULL DEFAULT '',
+    applies_to              TEXT NOT NULL DEFAULT 'all'
+                            CHECK (applies_to IN ('all','categories','products')),
+    applies_to_ids_json     TEXT NOT NULL DEFAULT '[]',
+    is_active               INTEGER NOT NULL DEFAULT 1,
+    created_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(site_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_discount_codes_site ON discount_codes(site_id, is_active);

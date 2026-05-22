@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AddSiteMember(ctx context.Context, arg AddSiteMemberParams) error
 	AddWorkspaceMember(ctx context.Context, arg AddWorkspaceMemberParams) error
+	AdjustVariantInventoryCount(ctx context.Context, arg AdjustVariantInventoryCountParams) error
 	// Per-path engagement so the dashboard can show "users spend 2m12s on
 	// /pricing but bounce at /blog/x in 8s". Capped at the busiest 10 paths.
 	AvgEngagementByPath(ctx context.Context, arg AvgEngagementByPathParams) ([]AvgEngagementByPathRow, error)
@@ -64,6 +65,7 @@ type Querier interface {
 	CountMissingURLsBySite(ctx context.Context, siteID string) (int64, error)
 	CountPagesBySite(ctx context.Context, siteID string) (int64, error)
 	CountPendingClarificationsBySite(ctx context.Context, siteID string) (int64, error)
+	CountProductsBySite(ctx context.Context, siteID string) (int64, error)
 	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
 	CountShieldTokensBySession(ctx context.Context, sessionID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
@@ -86,6 +88,7 @@ type Querier interface {
 	CreateDeployTarget(ctx context.Context, arg CreateDeployTargetParams) error
 	CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error
 	CreateDesignReference(ctx context.Context, arg CreateDesignReferenceParams) error
+	CreateDiscountCode(ctx context.Context, arg CreateDiscountCodeParams) error
 	CreateDomain(ctx context.Context, arg CreateDomainParams) error
 	CreateEntityRevision(ctx context.Context, arg CreateEntityRevisionParams) error
 	CreateEvaluation(ctx context.Context, arg CreateEvaluationParams) error
@@ -94,6 +97,7 @@ type Querier interface {
 	CreateGlobalBlock(ctx context.Context, arg CreateGlobalBlockParams) error
 	CreateGoal(ctx context.Context, arg CreateGoalParams) error
 	CreateGuardrail(ctx context.Context, arg CreateGuardrailParams) error
+	CreateInventoryAdjustment(ctx context.Context, arg CreateInventoryAdjustmentParams) error
 	CreateInvite(ctx context.Context, arg CreateInviteParams) error
 	CreateItem(ctx context.Context, arg CreateItemParams) error
 	CreateKnowledgebaseEntry(ctx context.Context, arg CreateKnowledgebaseEntryParams) error
@@ -103,6 +107,8 @@ type Querier interface {
 	CreateMigrationVerification(ctx context.Context, arg CreateMigrationVerificationParams) error
 	CreatePage(ctx context.Context, arg CreatePageParams) error
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) error
+	CreateProduct(ctx context.Context, arg CreateProductParams) error
+	CreateProductVariant(ctx context.Context, arg CreateProductVariantParams) error
 	CreateRedirect(ctx context.Context, arg CreateRedirectParams) error
 	CreateShieldSession(ctx context.Context, arg CreateShieldSessionParams) error
 	CreateShieldToken(ctx context.Context, arg CreateShieldTokenParams) error
@@ -135,6 +141,7 @@ type Querier interface {
 	DeleteDeployTarget(ctx context.Context, id string) error
 	DeleteDeployment(ctx context.Context, id string) error
 	DeleteDesignReference(ctx context.Context, arg DeleteDesignReferenceParams) error
+	DeleteDiscountCode(ctx context.Context, arg DeleteDiscountCodeParams) error
 	DeleteDomain(ctx context.Context, id string) error
 	DeleteEvaluationsByBuild(ctx context.Context, buildID string) error
 	DeleteForm(ctx context.Context, id string) error
@@ -152,6 +159,8 @@ type Querier interface {
 	DeleteMissingURL(ctx context.Context, id string) error
 	DeleteMissingURLByPath(ctx context.Context, arg DeleteMissingURLByPathParams) error
 	DeletePage(ctx context.Context, id string) error
+	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
+	DeleteProductVariant(ctx context.Context, id string) error
 	DeleteRedirect(ctx context.Context, id string) error
 	DeleteSetting(ctx context.Context, id string) error
 	DeleteSettingsByCategory(ctx context.Context, arg DeleteSettingsByCategoryParams) error
@@ -199,6 +208,8 @@ type Querier interface {
 	GetDeployTarget(ctx context.Context, id string) (DeployTarget, error)
 	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
 	GetDesignReference(ctx context.Context, arg GetDesignReferenceParams) (DesignReference, error)
+	GetDiscountCodeByCode(ctx context.Context, arg GetDiscountCodeByCodeParams) (DiscountCode, error)
+	GetDiscountCodeByID(ctx context.Context, arg GetDiscountCodeByIDParams) (DiscountCode, error)
 	GetDomainByHostname(ctx context.Context, hostname string) (SiteDomain, error)
 	GetDomainByID(ctx context.Context, id string) (SiteDomain, error)
 	GetDomainByVerifyToken(ctx context.Context, verifyToken string) (SiteDomain, error)
@@ -225,6 +236,9 @@ type Querier interface {
 	// slugs without the slash. This OR keeps both reachable.
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
+	GetProductByID(ctx context.Context, arg GetProductByIDParams) (Product, error)
+	GetProductBySlug(ctx context.Context, arg GetProductBySlugParams) (Product, error)
+	GetProductVariantByID(ctx context.Context, id string) (ProductVariant, error)
 	GetRedirectByID(ctx context.Context, id string) (Redirect, error)
 	GetRedirectByPath(ctx context.Context, arg GetRedirectByPathParams) (Redirect, error)
 	GetSessionByFingerprint(ctx context.Context, arg GetSessionByFingerprintParams) (VisitSession, error)
@@ -263,6 +277,7 @@ type Querier interface {
 	GetWorkspaceLastActivity(ctx context.Context, id string) (interface{}, error)
 	GetWorkspaceMembership(ctx context.Context, arg GetWorkspaceMembershipParams) (WorkspaceMember, error)
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
+	IncrementDiscountCodeUsedCount(ctx context.Context, arg IncrementDiscountCodeUsedCountParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	// Conversion goals + events (Phase 31.1, 2026-05-06).
@@ -272,6 +287,7 @@ type Querier interface {
 	ListActiveGoalsBySite(ctx context.Context, siteID string) ([]ConversionGoal, error)
 	ListActiveGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
 	ListActiveKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
+	ListActiveProductsBySite(ctx context.Context, arg ListActiveProductsBySiteParams) ([]Product, error)
 	// Used by the Emit hook to find every subscription on a site that
 	// should receive a given event. Filtering by event_types_json is
 	// done in Go because SQLite's JSON1 module isn't a hard dependency.
@@ -311,6 +327,7 @@ type Querier interface {
 	ListDeployTargetsBySite(ctx context.Context, siteID string) ([]DeployTarget, error)
 	ListDeploymentsBySite(ctx context.Context, siteID string) ([]Deployment, error)
 	ListDesignReferences(ctx context.Context, siteID string) ([]DesignReference, error)
+	ListDiscountCodesBySite(ctx context.Context, arg ListDiscountCodesBySiteParams) ([]DiscountCode, error)
 	ListDistinctFontFamilies(ctx context.Context, siteID string) ([]string, error)
 	ListDomainsBySite(ctx context.Context, siteID string) ([]SiteDomain, error)
 	ListDomainsByStatus(ctx context.Context, status string) ([]SiteDomain, error)
@@ -332,6 +349,8 @@ type Querier interface {
 	ListGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	ListGuardrailsBySite(ctx context.Context, siteID string) ([]GuardrailRule, error)
 	ListIdentifiedSessions(ctx context.Context, arg ListIdentifiedSessionsParams) ([]VisitSession, error)
+	ListInventoryAdjustmentsBySite(ctx context.Context, arg ListInventoryAdjustmentsBySiteParams) ([]InventoryAdjustment, error)
+	ListInventoryAdjustmentsByVariant(ctx context.Context, arg ListInventoryAdjustmentsByVariantParams) ([]InventoryAdjustment, error)
 	ListItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
 	ListKnowledgebaseBySite(ctx context.Context, siteID string) ([]KnowledgebaseEntry, error)
 	ListLocalesByCollection(ctx context.Context, collectionID string) ([]string, error)
@@ -354,6 +373,8 @@ type Querier interface {
 	// skips successful + dropped + in-flight rows.
 	ListPendingWebhookDeliveries(ctx context.Context, arg ListPendingWebhookDeliveriesParams) ([]WebhookDelivery, error)
 	ListPendingWorkspaceInvites(ctx context.Context, workspaceID string) ([]WorkspaceInvite, error)
+	ListProductVariants(ctx context.Context, productID string) ([]ProductVariant, error)
+	ListProductsBySite(ctx context.Context, arg ListProductsBySiteParams) ([]Product, error)
 	ListPublishedItemsByCollection(ctx context.Context, collectionID string) ([]CollectionItem, error)
 	ListPublishedItemsByCollectionAndLocale(ctx context.Context, arg ListPublishedItemsByCollectionAndLocaleParams) ([]CollectionItem, error)
 	ListPublishedPagesBySite(ctx context.Context, siteID string) ([]Page, error)
@@ -444,6 +465,7 @@ type Querier interface {
 	// Stages a fresh secret without flipping enrolled_at, so the user
 	// can scan the QR + try a code before the secret is locked in.
 	SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error
+	SetVariantInventoryCount(ctx context.Context, arg SetVariantInventoryCountParams) error
 	// Phase 31.3 (2026-05-06): form-submit / explicit-identify path. Sets
 	// email + stamps identified_at if it wasn't already (a re-identify keeps
 	// the original timestamp so analytics + retention treat the session as
@@ -488,6 +510,7 @@ type Querier interface {
 	UpdateDeploymentDeployed(ctx context.Context, arg UpdateDeploymentDeployedParams) error
 	UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error
 	UpdateDesignReferenceFetched(ctx context.Context, arg UpdateDesignReferenceFetchedParams) error
+	UpdateDiscountCode(ctx context.Context, arg UpdateDiscountCodeParams) error
 	UpdateDomainCertPath(ctx context.Context, arg UpdateDomainCertPathParams) error
 	UpdateDomainStatus(ctx context.Context, arg UpdateDomainStatusParams) error
 	UpdateForm(ctx context.Context, arg UpdateFormParams) error
@@ -503,6 +526,8 @@ type Querier interface {
 	UpdateMigrationStatus(ctx context.Context, arg UpdateMigrationStatusParams) error
 	UpdatePage(ctx context.Context, arg UpdatePageParams) error
 	UpdatePageOrder(ctx context.Context, arg UpdatePageOrderParams) error
+	UpdateProduct(ctx context.Context, arg UpdateProductParams) error
+	UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) error
 	UpdateRedirect(ctx context.Context, arg UpdateRedirectParams) error
 	UpdateSilo(ctx context.Context, arg UpdateSiloParams) error
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) error

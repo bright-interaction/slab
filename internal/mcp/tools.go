@@ -1001,6 +1001,14 @@ func (s *Server) registerTools() {
 	// in tools_revisions.go.
 	s.registerRevisionTools()
 
+	// 9 catalog tools + 4 discount-code tools: Sprint 2 slice A of
+	// the WP/Webflow roadmap. Lets the agent manage the storefront
+	// catalog end to end (products, variants, inventory adjustments,
+	// promo codes) ahead of slice B's orders + Mollie checkout. Lives
+	// in tools_products.go.
+	s.registerProductTools()
+	s.registerDiscountCodeTools()
+
 	// Synchronous design lint (gap 4 of 6, 2026-05-21). lint_block runs
 	// the same rule set create_block + update_block embed in their
 	// responses, but standalone so the agent can vet variants before

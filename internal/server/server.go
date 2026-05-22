@@ -81,6 +81,11 @@ type Server struct {
 	// dashboard history drawer surface. Shared handler instance so
 	// REST + MCP go through the same cross-tenant guards.
 	revisionsH *handlers.RevisionsHandler
+
+	// productsH + discountCodesH back the Store admin tab + the
+	// catalog MCP tools (Sprint 2 slice A of the WP/Webflow roadmap).
+	productsH      *handlers.ProductHandler
+	discountCodesH *handlers.DiscountCodeHandler
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -873,6 +878,29 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/revisions/{entityType}/{entityID}", s.revisionsH.List)
 		siteR.Get("/api/sites/{siteID}/revisions/{entityType}/{entityID}/{version}", s.revisionsH.Get)
 		siteR.Post("/api/sites/{siteID}/revisions/{entityType}/{entityID}/{version}/restore", s.revisionsH.Restore)
+
+		// Store: products + variants + inventory + discount codes
+		// (Sprint 2 slice A of the WP/Webflow replacement roadmap).
+		// Orders + checkout land in slice B with the Mollie webhook.
+		s.productsH = handlers.NewProductHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/products", s.productsH.List)
+		siteR.Post("/api/sites/{siteID}/products", s.productsH.Create)
+		siteR.Get("/api/sites/{siteID}/products/{productID}", s.productsH.Get)
+		siteR.Patch("/api/sites/{siteID}/products/{productID}", s.productsH.Update)
+		siteR.Delete("/api/sites/{siteID}/products/{productID}", s.productsH.Delete)
+		siteR.Get("/api/sites/{siteID}/products/{productID}/variants", s.productsH.ListVariants)
+		siteR.Post("/api/sites/{siteID}/products/{productID}/variants", s.productsH.CreateVariant)
+		siteR.Patch("/api/sites/{siteID}/variants/{variantID}", s.productsH.UpdateVariant)
+		siteR.Delete("/api/sites/{siteID}/variants/{variantID}", s.productsH.DeleteVariant)
+		siteR.Post("/api/sites/{siteID}/variants/{variantID}/inventory", s.productsH.SetInventory)
+		siteR.Get("/api/sites/{siteID}/variants/{variantID}/inventory", s.productsH.ListInventoryAdjustments)
+
+		s.discountCodesH = handlers.NewDiscountCodeHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/discount-codes", s.discountCodesH.List)
+		siteR.Post("/api/sites/{siteID}/discount-codes", s.discountCodesH.Create)
+		siteR.Get("/api/sites/{siteID}/discount-codes/{codeID}", s.discountCodesH.Get)
+		siteR.Patch("/api/sites/{siteID}/discount-codes/{codeID}", s.discountCodesH.Update)
+		siteR.Delete("/api/sites/{siteID}/discount-codes/{codeID}", s.discountCodesH.Delete)
 	})
 
 	// Public font serving (no auth, long cache, CORS *).
@@ -964,7 +992,9 @@ func (s *Server) Router() http.Handler {
 			WithMediaUploader(handlers.NewProductionMediaUploader(mcpMigrationMediaH)).
 			WithPreviewTokens(s.previewTokens, s.cfg.Port).
 			WithClarifications(s.clarificationsH).
-			WithRevisions(s.revisionsH)
+			WithRevisions(s.revisionsH).
+			WithProducts(s.productsH).
+			WithDiscountCodes(s.discountCodesH)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)

@@ -13,6 +13,7 @@
 		{ id: 'media', label: 'Media', href: `/sites/${siteID}/media` },
 		{ id: 'build', label: 'Build', href: `/sites/${siteID}/build` },
 		{ id: 'clarifications', label: 'Clarifications', href: `/sites/${siteID}/clarifications` },
+		{ id: 'store', label: 'Store', href: `/sites/${siteID}/store` },
 		{ id: 'analytics', label: 'Analytics', href: `/sites/${siteID}/analytics` },
 		{ id: 'cookies', label: 'Cookies', href: `/sites/${siteID}/cookies` },
 		{ id: 'settings', label: 'Settings', href: `/sites/${siteID}/settings` }
