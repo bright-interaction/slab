@@ -26,7 +26,7 @@ func RenderSingleBlock(ctx context.Context, queries *store.Queries, siteID, bloc
 		componentExts[c.Name] = pickComponentExt(c.Template)
 	}
 	mediaByID := loadBlockMedia(ctx, queries, []store.Block{block})
-	return renderBlock(block, componentExts, mediaByID), nil
+	return renderBlock(block, componentExts, mediaByID, siteID), nil
 }
 
 // RenderBlockDraft renders a block using draft data (not the saved
@@ -49,7 +49,7 @@ func RenderBlockDraft(ctx context.Context, queries *store.Queries, siteID, block
 		IsVisible: 1,
 	}
 	mediaByID := loadBlockMedia(ctx, queries, []store.Block{draft})
-	return renderBlock(draft, componentExts, mediaByID), nil
+	return renderBlock(draft, componentExts, mediaByID, siteID), nil
 }
 
 // RenderPagePreview returns the rendered Astro source for a single page.
@@ -150,6 +150,11 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		// Keeps renderDataBlock's signature stable while letting the
 		// renderer access live data.
 		resolveCollectionListBlocks(ctx, queries, site, blocks)
+
+		// Sprint 2 slice C (2026-05-22): pre-resolve product_grid and
+		// product_detail blocks the same way (catalog rows + variants
+		// stuffed into _resolved_products / _resolved_product).
+		resolveStorefrontBlocks(ctx, queries, site, blocks)
 
 		content := renderPageWithContext(page, blocks, componentExts, pageCtx)
 		pagePath := slugToFilePath(page.Slug, wsDir)
@@ -300,14 +305,14 @@ func renderPageWithContext(page store.Page, blocks []store.Block, components map
 		if bl.IsVisible == 0 {
 			continue
 		}
-		b.WriteString(renderBlock(bl, components, ctx.mediaByID))
+		b.WriteString(renderBlock(bl, components, ctx.mediaByID, ctx.site.ID))
 	}
 
 	b.WriteString("</Base>\n")
 	return b.String()
 }
 
-func renderBlock(bl store.Block, components map[string]string, mediaByID map[string]store.Medium) string {
+func renderBlock(bl store.Block, components map[string]string, mediaByID map[string]store.Medium, siteID string) string {
 	var data map[string]any
 	if err := json.Unmarshal([]byte(bl.DataJson), &data); err != nil {
 		return fmt.Sprintf("  <!-- block %s: invalid data -->\n", bl.ID)
@@ -325,7 +330,7 @@ func renderBlock(bl store.Block, components map[string]string, mediaByID map[str
 		inner = fmt.Sprintf("  %s\n", data["html"])
 	default:
 		// Default: render as a section with data-driven content
-		inner = renderDataBlock(bl.BlockType, data, mediaByID)
+		inner = renderDataBlock(bl.BlockType, data, mediaByID, siteID)
 	}
 
 	// Auto-id: inject id="<slug>" on the <section> opening tag so cross-section
@@ -385,7 +390,7 @@ func renderComponentBlock(name string, data map[string]any) string {
 	return b.String()
 }
 
-func renderDataBlock(blockType string, data map[string]any, mediaByID map[string]store.Medium) string {
+func renderDataBlock(blockType string, data map[string]any, mediaByID map[string]store.Medium, siteID string) string {
 	switch blockType {
 	case "hero":
 		return renderHeroBlock(data, mediaByID)
@@ -431,6 +436,14 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderQuoteBlock(data)
 	case "collection_list":
 		return renderCollectionListBlock(data, mediaByID)
+	case "product_grid":
+		return renderProductGridBlock(data, mediaByID)
+	case "product_detail":
+		return renderProductDetailBlock(data, mediaByID)
+	case "cart_drawer":
+		return renderCartDrawerBlock(data)
+	case "checkout_form":
+		return renderCheckoutFormBlock(data, siteID)
 	default:
 		return renderGenericBlock(blockType, data)
 	}

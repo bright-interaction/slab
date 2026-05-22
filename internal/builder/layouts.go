@@ -340,6 +340,16 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString(RenderVisitorHydration(site.ID, adminBase, trackPath))
 	}
 
+	// Sprint 2 slice C (2026-05-22): per-site storefront island. Wires
+	// add-to-cart, the cart drawer, and the checkout-form submit to the
+	// /api/sites/{siteID}/checkout endpoint. Always emitted so any page
+	// can carry a [data-cart-add] button without an extra setting flip;
+	// the script is inert on pages with no matching attributes.
+	if err := WriteStorefrontIslandAsset(wsDir, site.ID); err != nil {
+		return fmt.Errorf("write storefront island asset: %w", err)
+	}
+	b.WriteString(RenderStorefrontIslandTag())
+
 	b.WriteString("</body>\n</html>\n")
 
 	return WriteFile(filepath.Join(wsDir, "src", "layouts", "Base.astro"), b.String())
