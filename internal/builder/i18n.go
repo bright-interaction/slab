@@ -61,13 +61,62 @@ func LoadI18nConfig(ctx context.Context, queries *store.Queries, siteID string) 
 	for _, p := range pages {
 		slugs[normalizeSlug(p.Slug)] = true
 	}
+	// Sprint 3 (multilingual v1, 2026-05-22): seed PageSlugs with the
+	// locale-variant paths emitted from page_locales overlay rows so
+	// ComputeAlternates can find published counterparts even when no
+	// literal /<lang>/* page row exists. Each row contributes one
+	// path under its locale prefix, using slug_override when set.
+	pageLocales, _ := queries.ListPageLocalesBySite(ctx, siteID)
+	if len(pageLocales) > 0 {
+		// Build page_id -> base slug map once.
+		baseByID := make(map[string]string, len(pages))
+		for _, p := range pages {
+			baseByID[p.ID] = strings.TrimPrefix(p.Slug, "/")
+		}
+		for _, pl := range pageLocales {
+			if strings.ToLower(strings.TrimSpace(pl.Status)) != "published" {
+				continue
+			}
+			base := strings.TrimPrefix(strings.TrimSpace(pl.SlugOverride), "/")
+			if base == "" {
+				base = baseByID[pl.PageID]
+			}
+			if base == "" {
+				continue
+			}
+			localePath := "/" + strings.ToLower(pl.Locale) + "/" + base
+			slugs[normalizeSlug(localePath)] = true
+		}
+	}
 
 	defaultLang := strings.ToLower(strings.TrimSpace(site.Lang))
 	if defaultLang == "" {
 		defaultLang = "en"
 	}
 
-	addl := splitCSV(sm["general.additional_langs"])
+	// Sprint 3 (multilingual v1, 2026-05-22): prefer site_locales rows
+	// when configured; fall back to the general.additional_langs CSV so
+	// pre-Sprint-3 sites keep working. When site_locales has a row
+	// with is_default=1, that locale overrides sites.lang as the build
+	// default; this lets a tenant change the default locale without
+	// touching the site row.
+	var addl []string
+	siteLocales, _ := queries.ListSiteLocales(ctx, siteID)
+	if len(siteLocales) > 0 {
+		for _, sl := range siteLocales {
+			if sl.IsDefault == 1 {
+				defaultLang = strings.ToLower(strings.TrimSpace(sl.Locale))
+			}
+		}
+		for _, sl := range siteLocales {
+			loc := strings.ToLower(strings.TrimSpace(sl.Locale))
+			if loc != "" && loc != defaultLang {
+				addl = append(addl, loc)
+			}
+		}
+	} else {
+		addl = splitCSV(sm["general.additional_langs"])
+	}
 	// De-dup, drop default, normalise to lowercase. We never list the
 	// default lang in the additional set; the alternates loop adds it
 	// back as a self-referencing link.

@@ -914,6 +914,24 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/orders/{orderID}", s.ordersH.Get)
 		siteR.Post("/api/sites/{siteID}/orders/{orderID}/status", s.ordersH.UpdateStatus)
 		siteR.Post("/api/sites/{siteID}/orders/{orderID}/refund", s.ordersH.Refund)
+
+		// Locales (Sprint 3 multilingual v1, 2026-05-22). Three CRUD
+		// surfaces: site_locales (the configured locale list),
+		// page_locales (per-locale page metadata overrides),
+		// block_locales (per-locale block content overrides). All
+		// session-auth admin only; the build pipeline reads them
+		// directly without going through the REST handler.
+		localesH := handlers.NewLocalesHandler(s.cfg, s.queries)
+		siteR.Get("/api/sites/{siteID}/locales", localesH.ListSiteLocales)
+		siteR.Post("/api/sites/{siteID}/locales", localesH.UpsertSiteLocale)
+		siteR.Delete("/api/sites/{siteID}/locales/{locale}", localesH.DeleteSiteLocale)
+		siteR.Get("/api/sites/{siteID}/pages/{pageID}/locales", localesH.ListPageLocales)
+		siteR.Put("/api/sites/{siteID}/pages/{pageID}/locales/{locale}", localesH.UpsertPageLocale)
+		siteR.Delete("/api/sites/{siteID}/pages/{pageID}/locales/{locale}", localesH.DeletePageLocale)
+		siteR.Get("/api/sites/{siteID}/blocks/{blockID}/locales", localesH.ListBlockLocales)
+		siteR.Put("/api/sites/{siteID}/blocks/{blockID}/locales/{locale}", localesH.UpsertBlockLocale)
+		siteR.Delete("/api/sites/{siteID}/blocks/{blockID}/locales/{locale}", localesH.DeleteBlockLocale)
+		siteR.Get("/api/sites/{siteID}/pages/{pageID}/block-locales", localesH.ListBlockLocalesByPage)
 	})
 
 	// Public font serving (no auth, long cache, CORS *).
