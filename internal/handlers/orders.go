@@ -1,0 +1,697 @@
+// Package handlers: orders + checkout + Mollie webhook endpoints.
+//
+// Sprint 2 slice B of the WP/Webflow replacement roadmap. Picks up
+// where slice A's catalog left off and ships the order pipeline:
+// public storefront checkout creates a pending order + Mollie
+// payment, Mollie's webhook updates the order status idempotently,
+// the admin dashboard + agent MCP manage post-purchase state
+// (fulfillment, refund).
+//
+// State machine:
+//   pending  -> paid       (Mollie webhook 'paid')
+//   pending  -> failed     (Mollie webhook 'failed' / 'expired' / 'canceled')
+//   paid     -> fulfilled  (operator marks shipped)
+//   paid     -> refunded   (operator triggers refund)
+//   fulfilled -> refunded  (post-delivery refund)
+//
+// Inventory side-effects on 'paid': decrement each line item's
+// variant inventory_count and write an inventory_adjustments row
+// with reason='sale'. Discount code used_count is incremented if a
+// code was applied. All inside the webhook handler, gated by the
+// idempotent payment_events insert.
+
+package handlers
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math/big"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/brightinteraction/atomicsite/internal/config"
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	"github.com/brightinteraction/atomicsite/internal/payments/mollie"
+	"github.com/brightinteraction/atomicsite/internal/store"
+)
+
+// Order status transition map. Empty target list = terminal.
+var orderTransitions = map[string][]string{
+	"pending":   {"paid", "cancelled", "failed"},
+	"paid":      {"fulfilled", "refunded"},
+	"fulfilled": {"refunded"},
+	"cancelled": {},
+	"refunded":  {},
+	"failed":    {},
+}
+
+func validOrderStatus(s string) bool {
+	switch s {
+	case "pending", "paid", "fulfilled", "cancelled", "refunded", "failed":
+		return true
+	}
+	return false
+}
+
+func canTransition(from, to string) bool {
+	for _, t := range orderTransitions[from] {
+		if t == to {
+			return true
+		}
+	}
+	return from == to
+}
+
+type OrderHandler struct {
+	cfg     *config.Config
+	queries *store.Queries
+}
+
+func NewOrderHandler(cfg *config.Config, queries *store.Queries) *OrderHandler {
+	return &OrderHandler{cfg: cfg, queries: queries}
+}
+
+func orderInSite(ctx context.Context, q *store.Queries, w http.ResponseWriter, orderID, siteID string) (store.Order, bool) {
+	o, err := q.GetOrderByID(ctx, store.GetOrderByIDParams{ID: orderID, SiteID: siteID})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Order not found")
+		return store.Order{}, false
+	}
+	return o, true
+}
+
+// orderOut wraps the store row plus the line items for the response.
+type orderOut struct {
+	Order store.Order       `json:"order"`
+	Items []store.OrderItem `json:"items"`
+}
+
+func (h *OrderHandler) loadOut(ctx context.Context, o store.Order) (orderOut, error) {
+	items, err := h.queries.ListOrderItems(ctx, o.ID)
+	if err != nil {
+		return orderOut{}, err
+	}
+	return orderOut{Order: o, Items: items}, nil
+}
+
+// List returns orders for the dashboard. Optional ?status filter.
+func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
+	if authmw.GetUser(r) == nil && authmw.GetAgent(r) == nil {
+		writeError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	siteID := urlParam(r, "siteID")
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	var rows []store.Order
+	var err error
+	if status != "" && status != "all" {
+		if !validOrderStatus(status) {
+			writeError(w, http.StatusBadRequest, "invalid status filter")
+			return
+		}
+		rows, err = h.queries.ListOrdersBySiteStatus(r.Context(), store.ListOrdersBySiteStatusParams{
+			SiteID: siteID, Status: status, Limit: 500,
+		})
+	} else {
+		rows, err = h.queries.ListOrdersBySite(r.Context(), store.ListOrdersBySiteParams{
+			SiteID: siteID, Limit: 500,
+		})
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "list orders failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"orders": rows, "count": len(rows)})
+}
+
+func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	orderID := urlParam(r, "orderID")
+	o, ok := orderInSite(r.Context(), h.queries, w, orderID, siteID)
+	if !ok {
+		return
+	}
+	out, err := h.loadOut(r.Context(), o)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "load items failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// UpdateStatus admin-side flips the order through the state machine.
+// Body: { status: "fulfilled" }. Reject illegal transitions.
+func (h *OrderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	orderID := urlParam(r, "orderID")
+	o, ok := orderInSite(r.Context(), h.queries, w, orderID, siteID)
+	if !ok {
+		return
+	}
+	var req struct {
+		Status string `json:"status"`
+		Notes  string `json:"notes"`
+	}
+	if err := parseJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	next := strings.ToLower(strings.TrimSpace(req.Status))
+	if !validOrderStatus(next) {
+		writeError(w, http.StatusBadRequest, "invalid status")
+		return
+	}
+	if !canTransition(o.Status, next) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("cannot transition from %q to %q", o.Status, next))
+		return
+	}
+	if err := h.queries.UpdateOrderStatus(r.Context(), store.UpdateOrderStatusParams{
+		Status:        next,
+		PaymentStatus: o.PaymentStatus,
+		Column3:       next,
+		Column4:       next,
+		Column5:       next,
+		Column6:       next,
+		ID:            orderID,
+		SiteID:        siteID,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "update status failed")
+		return
+	}
+	if req.Notes != "" {
+		_ = h.queries.UpdateOrderNotes(r.Context(), store.UpdateOrderNotesParams{
+			Notes: req.Notes, ID: orderID, SiteID: siteID,
+		})
+	}
+	updated, _ := h.queries.GetOrderByID(r.Context(), store.GetOrderByIDParams{ID: orderID, SiteID: siteID})
+	out, _ := h.loadOut(r.Context(), updated)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// Refund triggers a Mollie refund for the full order amount and
+// flips the order to status='refunded' optimistically. The webhook
+// then confirms the refund completion (Mollie can take minutes).
+func (h *OrderHandler) Refund(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	orderID := urlParam(r, "orderID")
+	o, ok := orderInSite(r.Context(), h.queries, w, orderID, siteID)
+	if !ok {
+		return
+	}
+	if !canTransition(o.Status, "refunded") {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("cannot refund order in status %q", o.Status))
+		return
+	}
+	if o.PaymentID == "" {
+		writeError(w, http.StatusBadRequest, "order has no payment_id; nothing to refund at Mollie")
+		return
+	}
+	apiKey, err := h.mollieAPIKey(r.Context(), siteID)
+	if err != nil {
+		writeError(w, http.StatusFailedDependency, err.Error())
+		return
+	}
+	client := mollie.NewClient(apiKey)
+	refund, err := client.CreateRefund(r.Context(), o.PaymentID, mollie.CreateRefundInput{
+		Amount:      mollie.MoneyValue{Currency: o.Currency, Value: mollie.FormatAmount(o.TotalCents)},
+		Description: "Refund " + o.OrderNumber,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "Mollie refund failed: "+err.Error())
+		return
+	}
+	_ = h.queries.UpdateOrderRefundID(r.Context(), store.UpdateOrderRefundIDParams{
+		RefundID: refund.ID, ID: orderID, SiteID: siteID,
+	})
+	_ = h.queries.UpdateOrderStatus(r.Context(), store.UpdateOrderStatusParams{
+		Status:        "refunded",
+		PaymentStatus: o.PaymentStatus,
+		Column3:       "refunded", Column4: "refunded", Column5: "refunded", Column6: "refunded",
+		ID:     orderID,
+		SiteID: siteID,
+	})
+	updated, _ := h.queries.GetOrderByID(r.Context(), store.GetOrderByIDParams{ID: orderID, SiteID: siteID})
+	out, _ := h.loadOut(r.Context(), updated)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// mollieAPIKey reads the per-tenant Mollie API key from site_settings.
+// category='payments', key='mollie_api_key'. Empty = not configured.
+func (h *OrderHandler) mollieAPIKey(ctx context.Context, siteID string) (string, error) {
+	row, err := h.queries.GetSetting(ctx, store.GetSettingParams{
+		SiteID: siteID, Category: "payments", Key: "mollie_api_key",
+	})
+	if err != nil || strings.TrimSpace(row.Value) == "" {
+		return "", errors.New("Mollie API key not configured for this site (set payments.mollie_api_key in Settings)")
+	}
+	return strings.TrimSpace(row.Value), nil
+}
+
+// CheckoutInput is the body of POST /api/sites/{siteID}/checkout.
+// Server-side validation: every variant must exist + belong to the
+// site + (have inventory >= quantity OR allow_backorder). Prices are
+// re-read from the DB, not trusted from the client.
+type CheckoutInput struct {
+	Items []struct {
+		VariantID string `json:"variant_id"`
+		Quantity  int64  `json:"quantity"`
+	} `json:"items"`
+	Customer struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+		Phone string `json:"phone"`
+	} `json:"customer"`
+	ShippingAddress map[string]any `json:"shipping_address"`
+	BillingAddress  map[string]any `json:"billing_address"`
+	DiscountCode    string         `json:"discount_code"`
+	ReturnURL       string         `json:"return_url"`
+	Locale          string         `json:"locale"`
+}
+
+// Checkout is the public-facing endpoint. No session auth (visitor
+// is anonymous) but it IS scoped by siteID in the URL. Rate limiting
+// is enforced by the existing per-site middleware.
+//
+// Returns { checkout_url, order_number, total_cents, currency } on
+// success. The frontend redirects the browser to checkout_url.
+func (h *OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	var in CheckoutInput
+	if err := parseJSON(r, &in); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	if len(in.Items) == 0 {
+		writeError(w, http.StatusBadRequest, "items required")
+		return
+	}
+	if !strings.Contains(in.Customer.Email, "@") {
+		writeError(w, http.StatusBadRequest, "valid customer email required")
+		return
+	}
+	ctx := r.Context()
+
+	// Validate items + recompute prices server-side.
+	type validatedItem struct {
+		Variant     store.ProductVariant
+		Product     store.Product
+		UnitPrice   int64
+		LineTotal   int64
+		Quantity    int64
+	}
+	validated := make([]validatedItem, 0, len(in.Items))
+	var subtotal int64
+	var currency string
+	for _, it := range in.Items {
+		if it.Quantity <= 0 || it.Quantity > 999 {
+			writeError(w, http.StatusBadRequest, "item quantity must be 1-999")
+			return
+		}
+		v, err := h.queries.GetProductVariantByID(ctx, it.VariantID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "variant not found: "+it.VariantID)
+			return
+		}
+		p, err := h.queries.GetProductByID(ctx, store.GetProductByIDParams{ID: v.ProductID, SiteID: siteID})
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "product not found for variant "+it.VariantID)
+			return
+		}
+		if p.Status != "active" {
+			writeError(w, http.StatusBadRequest, "product not active: "+p.Slug)
+			return
+		}
+		if v.AllowBackorder != 1 && v.InventoryCount < it.Quantity {
+			writeError(w, http.StatusConflict, fmt.Sprintf("insufficient inventory for %s (have %d, requested %d)", p.Slug, v.InventoryCount, it.Quantity))
+			return
+		}
+		unit := v.PriceCents
+		if unit == 0 {
+			unit = p.BasePriceCents
+		}
+		if currency == "" {
+			currency = p.Currency
+		} else if currency != p.Currency {
+			writeError(w, http.StatusBadRequest, "cart contains mixed currencies; this is not yet supported")
+			return
+		}
+		line := unit * it.Quantity
+		validated = append(validated, validatedItem{Variant: v, Product: p, UnitPrice: unit, LineTotal: line, Quantity: it.Quantity})
+		subtotal += line
+	}
+
+	// Apply discount code if provided.
+	var discountID string
+	var discountCents int64
+	if code := strings.ToUpper(strings.TrimSpace(in.DiscountCode)); code != "" {
+		dc, err := h.queries.GetDiscountCodeByCode(ctx, store.GetDiscountCodeByCodeParams{SiteID: siteID, Code: code})
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "discount code not found")
+			return
+		}
+		if dc.IsActive != 1 {
+			writeError(w, http.StatusBadRequest, "discount code is not active")
+			return
+		}
+		if dc.MaxUses > 0 && dc.UsedCount >= dc.MaxUses {
+			writeError(w, http.StatusBadRequest, "discount code has reached max uses")
+			return
+		}
+		if dc.MinSubtotalCents > 0 && subtotal < dc.MinSubtotalCents {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("discount code requires min subtotal of %d cents", dc.MinSubtotalCents))
+			return
+		}
+		// Date window check.
+		if dc.StartsAt != "" {
+			if t, err := time.Parse(time.RFC3339, dc.StartsAt); err == nil && time.Now().Before(t) {
+				writeError(w, http.StatusBadRequest, "discount code is not yet active")
+				return
+			}
+		}
+		if dc.EndsAt != "" {
+			if t, err := time.Parse(time.RFC3339, dc.EndsAt); err == nil && time.Now().After(t) {
+				writeError(w, http.StatusBadRequest, "discount code has expired")
+				return
+			}
+		}
+		switch dc.Kind {
+		case "percent":
+			discountCents = subtotal * dc.Value / 10000
+		case "fixed":
+			discountCents = dc.Value
+		}
+		if discountCents > subtotal {
+			discountCents = subtotal
+		}
+		discountID = dc.ID
+	}
+
+	total := subtotal - discountCents
+	if total < 0 {
+		total = 0
+	}
+
+	// Create order + items.
+	orderID := newID()
+	orderNumber, err := h.nextOrderNumber(ctx, siteID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not allocate order number")
+		return
+	}
+	shippingJSON, _ := json.Marshal(in.ShippingAddress)
+	billingJSON, _ := json.Marshal(in.BillingAddress)
+
+	if err := h.queries.CreateOrder(ctx, store.CreateOrderParams{
+		ID:                  orderID,
+		SiteID:              siteID,
+		OrderNumber:         orderNumber,
+		Status:              "pending",
+		CustomerName:        strings.TrimSpace(in.Customer.Name),
+		CustomerEmail:       strings.TrimSpace(in.Customer.Email),
+		CustomerPhone:       strings.TrimSpace(in.Customer.Phone),
+		ShippingAddressJson: string(shippingJSON),
+		BillingAddressJson:  string(billingJSON),
+		SubtotalCents:       subtotal,
+		DiscountCents:       discountCents,
+		ShippingCents:       0,
+		TaxCents:            0,
+		TotalCents:          total,
+		Currency:            currency,
+		DiscountCodeID:      discountID,
+		PaymentProvider:     "mollie",
+		PaymentID:           "",
+		PaymentStatus:       "",
+		PaymentCheckoutUrl:  "",
+		Notes:               "",
+		MetadataJson:        "{}",
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "create order failed: "+err.Error())
+		return
+	}
+	for _, v := range validated {
+		_ = h.queries.CreateOrderItem(ctx, store.CreateOrderItemParams{
+			ID:             newID(),
+			OrderID:        orderID,
+			VariantID:      v.Variant.ID,
+			ProductID:      v.Product.ID,
+			ProductName:    v.Product.Name,
+			VariantName:    v.Variant.Name,
+			Sku:            v.Variant.Sku,
+			Quantity:       v.Quantity,
+			UnitPriceCents: v.UnitPrice,
+			TotalCents:     v.LineTotal,
+		})
+	}
+
+	// Create Mollie payment. Skip if API key not configured (in which
+	// case the order stays pending and the operator can finalise it
+	// manually).
+	checkoutURL := ""
+	apiKey, err := h.mollieAPIKey(ctx, siteID)
+	if err == nil {
+		client := mollie.NewClient(apiKey)
+		returnURL := in.ReturnURL
+		if returnURL == "" {
+			returnURL = fmt.Sprintf("%s/checkout/done?order=%s", strings.TrimRight(h.publicURL(siteID), "/"), orderNumber)
+		}
+		webhookURL := fmt.Sprintf("%s/api/sites/%s/payments/mollie/webhook", strings.TrimRight(h.publicURL(siteID), "/"), siteID)
+		pay, err := client.CreatePayment(ctx, mollie.CreatePaymentInput{
+			Amount:      mollie.MoneyValue{Currency: currency, Value: mollie.FormatAmount(total)},
+			Description: orderNumber,
+			RedirectURL: returnURL,
+			WebhookURL:  webhookURL,
+			Metadata:    map[string]any{"order_id": orderID, "order_number": orderNumber, "site_id": siteID},
+			Locale:      in.Locale,
+		})
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "Mollie create payment failed: "+err.Error())
+			return
+		}
+		if pay.Links.Checkout != nil {
+			checkoutURL = pay.Links.Checkout.Href
+		}
+		_ = h.queries.UpdateOrderStatus(ctx, store.UpdateOrderStatusParams{
+			Status:        "pending",
+			PaymentStatus: pay.Status,
+			Column3:       "pending", Column4: "pending", Column5: "pending", Column6: "pending",
+			ID:     orderID,
+			SiteID: siteID,
+		})
+		// Store payment_id + checkout_url via a small follow-up.
+		if err := h.setOrderPayment(ctx, siteID, orderID, pay.ID, checkoutURL); err != nil {
+			writeError(w, http.StatusInternalServerError, "store payment id failed")
+			return
+		}
+	}
+
+	updated, _ := h.queries.GetOrderByID(ctx, store.GetOrderByIDParams{ID: orderID, SiteID: siteID})
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"order":        updated,
+		"checkout_url": checkoutURL,
+	})
+}
+
+func (h *OrderHandler) setOrderPayment(ctx context.Context, siteID, orderID, paymentID, checkoutURL string) error {
+	// We don't have a dedicated SetPayment query (would clutter the sqlc
+	// surface for two columns). Use UpdateOrderStatus, then a raw SQL
+	// patch via the queries' underlying DB. For now we encode the
+	// payment_id + checkout_url via metadata + a separate JSON write.
+	// Simpler: add a small inline UPDATE via the queries object's db.
+	// To stay sqlc-clean, we'll keep an UpdateOrderPayment query.
+	return h.queries.UpdateOrderPayment(ctx, store.UpdateOrderPaymentParams{
+		PaymentID:          paymentID,
+		PaymentCheckoutUrl: checkoutURL,
+		ID:                 orderID,
+		SiteID:             siteID,
+	})
+}
+
+// publicURL returns the customer-facing root URL for redirects +
+// webhook callbacks. Mollie needs an absolute https:// URL. For
+// development this falls back to the API base configured on the
+// server; for production the deployed_domain on the site_domains
+// table is used.
+func (h *OrderHandler) publicURL(siteID string) string {
+	if h.cfg != nil && h.cfg.PrimaryDomain != "" {
+		return "https://" + h.cfg.PrimaryDomain
+	}
+	if h.cfg != nil && h.cfg.BaseURL != "" {
+		return h.cfg.BaseURL
+	}
+	return "https://app.atomicsite.example.com"
+}
+
+// nextOrderNumber generates a human-friendly order number with a
+// random suffix to avoid collisions during concurrent checkouts. The
+// UNIQUE(site_id, order_number) constraint catches duplicates if the
+// random suffix ever collides.
+func (h *OrderHandler) nextOrderNumber(ctx context.Context, siteID string) (string, error) {
+	year := time.Now().UTC().Year()
+	for i := 0; i < 5; i++ {
+		suffix, err := randomDigits(6)
+		if err != nil {
+			return "", err
+		}
+		candidate := fmt.Sprintf("ATM-%d-%s", year, suffix)
+		if _, err := h.queries.GetOrderByOrderNumber(ctx, store.GetOrderByOrderNumberParams{SiteID: siteID, OrderNumber: candidate}); err != nil {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("could not allocate unique order number after 5 attempts")
+}
+
+func randomDigits(n int) (string, error) {
+	const digits = "0123456789"
+	b := make([]byte, n)
+	max := big.NewInt(int64(len(digits)))
+	for i := range b {
+		k, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		b[i] = digits[k.Int64()]
+	}
+	return string(b), nil
+}
+
+// Webhook is the Mollie callback. Mollie POSTs id=<paymentID> in
+// application/x-www-form-urlencoded; the server then fetches the
+// payment from Mollie to read status. Idempotency is enforced via
+// payment_events: INSERT-OR-IGNORE on (provider, payment_id,
+// event_type), then guard the side-effects with the processed flag.
+//
+// This route is OUTSIDE the session-auth middleware (Mollie is
+// anonymous). Cross-tenant safety comes from the {siteID} URL param
+// being used to load that site's API key, and the fact that the
+// payment_id belongs to that key (so a foreign key cannot drive
+// state on a different tenant).
+func (h *OrderHandler) Webhook(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	if err := r.ParseForm(); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid form body")
+		return
+	}
+	paymentID := strings.TrimSpace(r.Form.Get("id"))
+	if paymentID == "" {
+		writeError(w, http.StatusBadRequest, "id required")
+		return
+	}
+	ctx := r.Context()
+
+	apiKey, err := h.mollieAPIKey(ctx, siteID)
+	if err != nil {
+		// 200 so Mollie stops retrying; the misconfig will surface
+		// through the order staying pending in the dashboard.
+		writeJSON(w, http.StatusOK, map[string]string{"status": "no api key configured"})
+		return
+	}
+	pay, err := mollie.NewClient(apiKey).GetPayment(ctx, paymentID)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "mollie get payment failed: "+err.Error())
+		return
+	}
+
+	order, err := h.queries.GetOrderByPaymentID(ctx, paymentID)
+	if err != nil {
+		// Unknown payment ID for this site; respond 200 so Mollie
+		// stops retrying but log the gap via the response body.
+		writeJSON(w, http.StatusOK, map[string]string{"status": "order not found for payment"})
+		return
+	}
+	if order.SiteID != siteID {
+		// Cross-tenant: the URL siteID does not own this payment.
+		writeError(w, http.StatusForbidden, "payment does not belong to this site")
+		return
+	}
+
+	rawJSON, _ := json.Marshal(pay)
+	eventType := pay.Status
+	eventID := newID()
+	_ = h.queries.CreatePaymentEvent(ctx, store.CreatePaymentEventParams{
+		ID:         eventID,
+		SiteID:     siteID,
+		OrderID:    order.ID,
+		Provider:   "mollie",
+		PaymentID:  paymentID,
+		EventType:  eventType,
+		RawJson:    string(rawJSON),
+	})
+	existing, err := h.queries.GetPaymentEventByLookup(ctx, store.GetPaymentEventByLookupParams{
+		Provider: "mollie", PaymentID: paymentID, EventType: eventType,
+	})
+	if err == nil && existing.Processed == 1 {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "already processed"})
+		return
+	}
+
+	// Map Mollie status -> our order.status.
+	newStatus := order.Status
+	switch pay.Status {
+	case "paid":
+		if canTransition(order.Status, "paid") {
+			newStatus = "paid"
+		}
+	case "failed", "expired", "canceled":
+		if canTransition(order.Status, "failed") {
+			newStatus = "failed"
+		}
+	}
+	if newStatus != order.Status {
+		_ = h.queries.UpdateOrderStatus(ctx, store.UpdateOrderStatusParams{
+			Status:        newStatus,
+			PaymentStatus: pay.Status,
+			Column3:       newStatus, Column4: newStatus, Column5: newStatus, Column6: newStatus,
+			ID:     order.ID,
+			SiteID: siteID,
+		})
+		if newStatus == "paid" {
+			h.applyPaidSideEffects(ctx, order)
+		}
+	}
+	_ = h.queries.MarkPaymentEventProcessed(ctx, store.MarkPaymentEventProcessedParams{
+		Provider: "mollie", PaymentID: paymentID, EventType: eventType,
+	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "new_order_status": newStatus})
+}
+
+// applyPaidSideEffects runs the one-time post-payment work:
+// decrement variant inventory, write inventory_adjustments rows,
+// increment discount_codes.used_count. Idempotency comes from the
+// payment_events processed flag; this function is only called when
+// the row transitions to 'paid'.
+func (h *OrderHandler) applyPaidSideEffects(ctx context.Context, order store.Order) {
+	items, err := h.queries.ListOrderItems(ctx, order.ID)
+	if err != nil {
+		return
+	}
+	for _, it := range items {
+		v, err := h.queries.GetProductVariantByID(ctx, it.VariantID)
+		if err != nil {
+			continue
+		}
+		_ = h.queries.AdjustVariantInventoryCount(ctx, store.AdjustVariantInventoryCountParams{
+			InventoryCount: -it.Quantity,
+			ID:             it.VariantID,
+		})
+		newCount := v.InventoryCount - it.Quantity
+		_ = h.queries.CreateInventoryAdjustment(ctx, store.CreateInventoryAdjustmentParams{
+			ID:        newID(),
+			VariantID: it.VariantID,
+			SiteID:    order.SiteID,
+			Delta:     -it.Quantity,
+			NewCount:  newCount,
+			Reason:    "sale",
+			Note:      "Order " + order.OrderNumber,
+			CreatedBy: "system:checkout",
+		})
+	}
+	if order.DiscountCodeID != "" {
+		_ = h.queries.IncrementDiscountCodeUsedCount(ctx, store.IncrementDiscountCodeUsedCountParams{
+			ID: order.DiscountCodeID, SiteID: order.SiteID,
+		})
+	}
+}
