@@ -16,7 +16,8 @@
 		Sparkles,
 		Lock,
 		Import,
-		CreditCard
+		CreditCard,
+		Languages
 	} from 'lucide-svelte';
 	import type { Site } from '$lib/api/types';
 
@@ -126,6 +127,13 @@
 			'SEO',
 			'Meta templates, sitemap, robots.txt, hreflang.',
 			Search
+		)}
+		{@render sectionCard(
+			`/sites/${siteID}/settings/locales`,
+			'Discovery',
+			'Locales',
+			'Configure the languages your site ships in. Drives URL prefixes, hreflang, and the page editor locale tabs.',
+			Languages
 		)}
 		{@render sectionCard(
 			`/sites/${siteID}/settings/analytics`,

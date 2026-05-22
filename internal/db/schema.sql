@@ -1447,3 +1447,65 @@ CREATE TABLE IF NOT EXISTS payment_events (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_events_dedupe ON payment_events(provider, payment_id, event_type);
 CREATE INDEX IF NOT EXISTS idx_payment_events_order ON payment_events(order_id, created_at DESC);
+
+-- WP/Webflow replacement roadmap Sprint 3 (multilingual v1), 2026-05-22.
+--
+-- Three tables that turn the existing single-locale page+block model
+-- into a per-locale overlay. The base rows in `pages` and `blocks`
+-- still carry the default-locale content; per-locale variants live
+-- in `page_locales` + `block_locales` and override the base at
+-- render time. Build emits one HTML page per (page row, locale row)
+-- combination: `/about` for the default locale, `/sv/about` for
+-- Swedish, etc.
+--
+-- site_locales holds the configured locale list per site. One row
+-- has is_default=1 (the default locale, no URL prefix); the rest are
+-- additional locales emitted under their prefix. Empty rowset =
+-- monolingual site (back-compat: I18nConfig falls back to reading
+-- general.additional_langs CSV in that case).
+CREATE TABLE IF NOT EXISTS site_locales (
+    site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    locale      TEXT NOT NULL,
+    is_default  INTEGER NOT NULL DEFAULT 0,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (site_id, locale)
+);
+CREATE INDEX IF NOT EXISTS idx_site_locales_default ON site_locales(site_id, is_default DESC, sort_order ASC);
+
+-- page_locales overrides per-locale page metadata + the URL slug.
+-- When no row exists for a (page, locale) pair, the build falls back
+-- to the base page row's slug + meta. slug_override lets sv version
+-- of /about live at /sv/om-oss instead of /sv/about. status follows
+-- the base row's draft|published semantics so a tenant can hold a
+-- locale back until translation is approved.
+CREATE TABLE IF NOT EXISTS page_locales (
+    page_id           TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    locale            TEXT NOT NULL,
+    slug_override     TEXT NOT NULL DEFAULT '',
+    title             TEXT NOT NULL DEFAULT '',
+    meta_title        TEXT NOT NULL DEFAULT '',
+    meta_description  TEXT NOT NULL DEFAULT '',
+    status            TEXT NOT NULL DEFAULT 'draft',
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (page_id, locale)
+);
+CREATE INDEX IF NOT EXISTS idx_page_locales_locale ON page_locales(locale);
+
+-- block_locales overrides per-locale block content. data_json shadows
+-- the base block's data_json for that locale only; nil/missing means
+-- "use the base content unchanged". is_visible can also be flipped
+-- per locale so a block hides on, say, the German variant but stays
+-- on the English one.
+CREATE TABLE IF NOT EXISTS block_locales (
+    block_id    TEXT NOT NULL REFERENCES blocks(id) ON DELETE CASCADE,
+    locale      TEXT NOT NULL,
+    data_json   TEXT NOT NULL DEFAULT '{}',
+    is_visible  INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (block_id, locale)
+);
+CREATE INDEX IF NOT EXISTS idx_block_locales_locale ON block_locales(locale);

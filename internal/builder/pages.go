@@ -130,6 +130,7 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		descTpl:   sm["seo.meta_description_template"],
 	}
 
+	written := 0
 	for _, page := range pages {
 		blocks, err := queries.ListBlocksByPage(ctx, page.ID)
 		if err != nil {
@@ -156,15 +157,27 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		// stuffed into _resolved_products / _resolved_product).
 		resolveStorefrontBlocks(ctx, queries, site, blocks)
 
-		content := renderPageWithContext(page, blocks, componentExts, pageCtx)
-		pagePath := slugToFilePath(page.Slug, wsDir)
-
-		if err := WriteFile(pagePath, content); err != nil {
-			return 0, fmt.Errorf("write page %s: %w", page.Slug, err)
+		// Sprint 3 (multilingual v1, 2026-05-22): load the page +
+		// block locale overlays once per page; build a list of
+		// (locale, slug) specs to emit. Single-locale sites get one
+		// spec at the base slug; multi-locale sites get the default
+		// at /<slug> plus one /<lang>/<slug-or-override> per
+		// published page_locale row.
+		pageOverlays := loadPageLocaleOverlays(ctx, queries, page.ID)
+		blockOverlays := loadBlockLocaleOverlays(ctx, queries, page.ID)
+		specs := buildLocaleSpecs(page, i18n.DefaultLang, i18n.AdditionalLangs, pageOverlays)
+		for _, spec := range specs {
+			localizedBlocks := applyBlockLocaleOverlays(blocks, spec.lang, blockOverlays)
+			content := renderPageWithContext(spec.page, localizedBlocks, componentExts, pageCtx)
+			pagePath := slugToFilePath(spec.outSlug, wsDir)
+			if err := WriteFile(pagePath, content); err != nil {
+				return 0, fmt.Errorf("write page %s (locale %s): %w", spec.outSlug, spec.lang, err)
+			}
+			written++
 		}
 	}
 
-	return len(pages), nil
+	return written, nil
 }
 
 // loadBlockMedia walks every block's data_json for image_id references and

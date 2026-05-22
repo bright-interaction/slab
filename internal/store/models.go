@@ -64,6 +64,15 @@ type Block struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type BlockLocale struct {
+	BlockID   string `json:"block_id"`
+	Locale    string `json:"locale"`
+	DataJson  string `json:"data_json"`
+	IsVisible int64  `json:"is_visible"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type Clarification struct {
 	ID               string `json:"id"`
 	SiteID           string `json:"site_id"`
@@ -470,6 +479,18 @@ type Page struct {
 	UpdatedAt        string `json:"updated_at"`
 }
 
+type PageLocale struct {
+	PageID          string `json:"page_id"`
+	Locale          string `json:"locale"`
+	SlugOverride    string `json:"slug_override"`
+	Title           string `json:"title"`
+	MetaTitle       string `json:"meta_title"`
+	MetaDescription string `json:"meta_description"`
+	Status          string `json:"status"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
 type PasswordReset struct {
 	ID          string `json:"id"`
 	UserID      string `json:"user_id"`
@@ -643,6 +664,15 @@ type SiteFont struct {
 	FileSize     int64  `json:"file_size"`
 	OriginalName string `json:"original_name"`
 	CreatedAt    string `json:"created_at"`
+}
+
+type SiteLocale struct {
+	SiteID    string `json:"site_id"`
+	Locale    string `json:"locale"`
+	IsDefault int64  `json:"is_default"`
+	SortOrder int64  `json:"sort_order"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type SiteMember struct {

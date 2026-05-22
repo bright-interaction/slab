@@ -15,6 +15,7 @@
 	import PageSourceDialog from '$lib/components/pages/PageSourceDialog.svelte';
 	import PagePreviewPanel from '$lib/components/pages/PagePreviewPanel.svelte';
 	import TextMode from '$lib/components/pages/TextMode.svelte';
+	import LocaleStrip from '$lib/components/pages/LocaleStrip.svelte';
 	import { ChevronDown, ArrowLeft, Code, Type, LayoutPanelTop, Eye } from 'lucide-svelte';
 	import type { Block, Page } from '$lib/api/types';
 
@@ -400,6 +401,10 @@
 				</Button>
 			</div>
 		</header>
+
+		<section class="mt-6">
+			<LocaleStrip {siteID} {pageID} />
+		</section>
 
 		<section class="mt-6">
 			<button

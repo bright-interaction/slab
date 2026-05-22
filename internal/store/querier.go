@@ -38,6 +38,7 @@ type Querier interface {
 	// "deletion-pending" UI state in another tab refreshes.
 	CancelUserDeletion(ctx context.Context, id string) error
 	ClearDefaultDeployTargets(ctx context.Context, siteID string) error
+	ClearDefaultSiteLocales(ctx context.Context, arg ClearDefaultSiteLocalesParams) error
 	ClearMediaFolder(ctx context.Context, arg ClearMediaFolderParams) error
 	// Disables MFA and bumps token_version so any session that thought
 	// it had MFA is invalidated. Only callable by the user themselves
@@ -69,6 +70,7 @@ type Querier interface {
 	CountProductsBySite(ctx context.Context, siteID string) (int64, error)
 	CountRedirectsBySite(ctx context.Context, siteID string) (int64, error)
 	CountShieldTokensBySession(ctx context.Context, sessionID string) (int64, error)
+	CountSiteLocales(ctx context.Context, siteID string) (int64, error)
 	CountUnfiledMedia(ctx context.Context, siteID string) (int64, error)
 	CountUniqueConvertersByGoal(ctx context.Context, arg CountUniqueConvertersByGoalParams) (int64, error)
 	CountUniqueVisitorsSince(ctx context.Context, arg CountUniqueVisitorsSinceParams) (int64, error)
@@ -132,6 +134,8 @@ type Querier interface {
 	DeleteAllowedScript(ctx context.Context, id string) error
 	DeleteAuditLogOlderThan(ctx context.Context, createdAt string) (int64, error)
 	DeleteBlock(ctx context.Context, id string) error
+	DeleteBlockLocale(ctx context.Context, arg DeleteBlockLocaleParams) error
+	DeleteBlockLocalesByLocale(ctx context.Context, arg DeleteBlockLocalesByLocaleParams) error
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
 	DeleteCollection(ctx context.Context, id string) error
@@ -163,6 +167,8 @@ type Querier interface {
 	DeleteMissingURL(ctx context.Context, id string) error
 	DeleteMissingURLByPath(ctx context.Context, arg DeleteMissingURLByPathParams) error
 	DeletePage(ctx context.Context, id string) error
+	DeletePageLocale(ctx context.Context, arg DeletePageLocaleParams) error
+	DeletePageLocalesByLocale(ctx context.Context, arg DeletePageLocalesByLocaleParams) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
 	DeleteProductVariant(ctx context.Context, id string) error
 	DeleteRedirect(ctx context.Context, id string) error
@@ -172,6 +178,7 @@ type Querier interface {
 	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
 	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
+	DeleteSiteLocale(ctx context.Context, arg DeleteSiteLocaleParams) error
 	DeleteSubscription(ctx context.Context, id string) error
 	DeleteUser(ctx context.Context, id string) error
 	// Per-site retention purge for engagement rows (screen size, time-on-page,
@@ -200,6 +207,7 @@ type Querier interface {
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
 	GetBillingEventByExternalID(ctx context.Context, arg GetBillingEventByExternalIDParams) (BillingEvent, error)
 	GetBlockByID(ctx context.Context, id string) (Block, error)
+	GetBlockLocale(ctx context.Context, arg GetBlockLocaleParams) (BlockLocale, error)
 	GetCSSClassByID(ctx context.Context, id string) (CssClass, error)
 	GetCSSClassByName(ctx context.Context, arg GetCSSClassByNameParams) (CssClass, error)
 	GetClarificationByID(ctx context.Context, arg GetClarificationByIDParams) (Clarification, error)
@@ -209,6 +217,7 @@ type Querier interface {
 	GetComponentByName(ctx context.Context, arg GetComponentByNameParams) (Component, error)
 	GetConsentByID(ctx context.Context, arg GetConsentByIDParams) (ConsentRecord, error)
 	GetConsentSalt(ctx context.Context, dayUtc string) (string, error)
+	GetDefaultSiteLocale(ctx context.Context, siteID string) (SiteLocale, error)
 	GetDeployTarget(ctx context.Context, id string) (DeployTarget, error)
 	GetDeploymentByID(ctx context.Context, id string) (Deployment, error)
 	GetDesignReference(ctx context.Context, arg GetDesignReferenceParams) (DesignReference, error)
@@ -242,6 +251,7 @@ type Querier interface {
 	// porter (and agent.UpdatePage when callers pass new_slug raw) stores
 	// slugs without the slash. This OR keeps both reachable.
 	GetPageBySiteAndSlug(ctx context.Context, arg GetPageBySiteAndSlugParams) (Page, error)
+	GetPageLocale(ctx context.Context, arg GetPageLocaleParams) (PageLocale, error)
 	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
 	GetPaymentEventByLookup(ctx context.Context, arg GetPaymentEventByLookupParams) (PaymentEvent, error)
 	GetProductByID(ctx context.Context, arg GetProductByIDParams) (Product, error)
@@ -259,6 +269,7 @@ type Querier interface {
 	GetSiteByID(ctx context.Context, id string) (Site, error)
 	GetSiteBySlug(ctx context.Context, slug string) (Site, error)
 	GetSiteFont(ctx context.Context, arg GetSiteFontParams) (SiteFont, error)
+	GetSiteLocale(ctx context.Context, arg GetSiteLocaleParams) (SiteLocale, error)
 	GetSiteMembership(ctx context.Context, arg GetSiteMembershipParams) (SiteMember, error)
 	// Site profiles
 	GetSiteProfile(ctx context.Context, siteID string) (SiteProfile, error)
@@ -314,6 +325,8 @@ type Querier interface {
 	// can be empty for non-site-scoped actions (member invites, secret
 	// rotations).
 	ListAuditLogGlobal(ctx context.Context, limit int64) ([]AuditLog, error)
+	ListBlockLocalesByBlock(ctx context.Context, blockID string) ([]BlockLocale, error)
+	ListBlockLocalesByPage(ctx context.Context, pageID string) ([]BlockLocale, error)
 	ListBlocksByPage(ctx context.Context, pageID string) ([]Block, error)
 	// Audit H1: single-query alternative to "list pages, loop with
 	// ListBlocksByPage". Returns every block for the site joined with its
@@ -374,6 +387,8 @@ type Querier interface {
 	ListOrderItems(ctx context.Context, orderID string) ([]OrderItem, error)
 	ListOrdersBySite(ctx context.Context, arg ListOrdersBySiteParams) ([]Order, error)
 	ListOrdersBySiteStatus(ctx context.Context, arg ListOrdersBySiteStatusParams) ([]Order, error)
+	ListPageLocalesByPage(ctx context.Context, pageID string) ([]PageLocale, error)
+	ListPageLocalesBySite(ctx context.Context, siteID string) ([]PageLocale, error)
 	ListPagesBySite(ctx context.Context, siteID string) ([]Page, error)
 	ListPaymentEventsByOrder(ctx context.Context, arg ListPaymentEventsByOrderParams) ([]PaymentEvent, error)
 	ListPendingClarificationsByAgent(ctx context.Context, arg ListPendingClarificationsByAgentParams) ([]Clarification, error)
@@ -400,6 +415,7 @@ type Querier interface {
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
 	ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont, error)
 	ListSiteIDsForUser(ctx context.Context, userID string) ([]string, error)
+	ListSiteLocales(ctx context.Context, siteID string) ([]SiteLocale, error)
 	ListSiteMembers(ctx context.Context, siteID string) ([]ListSiteMembersRow, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	ListSitesByWorkspace(ctx context.Context, workspaceID string) ([]ListSitesByWorkspaceRow, error)
@@ -464,6 +480,7 @@ type Querier interface {
 	// off window after partially undoing).
 	RequestUserDeletion(ctx context.Context, id string) error
 	ResolveClarification(ctx context.Context, arg ResolveClarificationParams) error
+	SetDefaultSiteLocale(ctx context.Context, arg SetDefaultSiteLocaleParams) error
 	SetDeployTargetDefault(ctx context.Context, id string) error
 	// Flips this row to is_canonical=1 and clears the flag on every other
 	// domain row for the same site so exactly one canonical exists.
@@ -566,6 +583,7 @@ type Querier interface {
 	UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) error
 	UpdateWorkspaceStatus(ctx context.Context, arg UpdateWorkspaceStatusParams) error
 	UpdateWorkspaceStripe(ctx context.Context, arg UpdateWorkspaceStripeParams) error
+	UpsertBlockLocale(ctx context.Context, arg UpsertBlockLocaleParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
 	// Sprint 4 (2026-05-06): re-import upsert. Conflict on the
 	// (collection_id, locale, slug) compound natural key.
@@ -575,12 +593,14 @@ type Querier interface {
 	// on (site_id, slug) conflict. RETURNING * lets the porter detect the
 	// outcome by comparing returned row.ID to the candidate ID it passed.
 	UpsertPage(ctx context.Context, arg UpsertPageParams) (Page, error)
+	UpsertPageLocale(ctx context.Context, arg UpsertPageLocaleParams) error
 	// Sprint 4 (2026-05-06): re-import upsert. ON CONFLICT(site_id, from_path)
 	// DO UPDATE leaves created_at alone and returns the existing row's id, so
 	// the porter detects insert-vs-update by comparing returned ID.
 	UpsertRedirect(ctx context.Context, arg UpsertRedirectParams) (Redirect, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
+	UpsertSiteLocale(ctx context.Context, arg UpsertSiteLocaleParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error
 	UpsertVisitSession(ctx context.Context, arg UpsertVisitSessionParams) error
 	UpsertVisitorMetadataByFingerprint(ctx context.Context, arg UpsertVisitorMetadataByFingerprintParams) (int64, error)
