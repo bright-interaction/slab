@@ -279,6 +279,8 @@ export interface Medium {
 	variants_json: JsonText;
 	original_path: string;
 	folder: string;
+	focal_x: number;
+	focal_y: number;
 	created_at: Timestamp;
 	updated_at: Timestamp;
 }

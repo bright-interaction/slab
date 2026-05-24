@@ -90,6 +90,13 @@ func RenderPicture(m store.Medium, cssClassName string) string {
 		if cssClassName != "" {
 			b.WriteString(fmt.Sprintf(` class="%s"`, escapeAttr(cssClassName)))
 		}
+		// Sprint 5 quick-win (2026-05-24): per-image focal point.
+		// Default 50/50 = centered; CSS object-position only emits
+		// when the operator moved it away from centered, so existing
+		// images keep their current byte-identical markup.
+		if m.FocalX != 50 || m.FocalY != 50 {
+			b.WriteString(fmt.Sprintf(` style="object-position:%d%% %d%%"`, m.FocalX, m.FocalY))
+		}
 		b.WriteString(" />\n")
 	}
 

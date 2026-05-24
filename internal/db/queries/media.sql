@@ -58,3 +58,10 @@ DELETE FROM media WHERE id = ?;
 
 -- name: ListMediaByIDs :many
 SELECT * FROM media WHERE id IN (sqlc.slice('ids'));
+
+-- name: UpdateMediaFocalPoint :exec
+UPDATE media SET
+    focal_x = ?,
+    focal_y = ?,
+    updated_at = datetime('now')
+WHERE id = ? AND site_id = ?;

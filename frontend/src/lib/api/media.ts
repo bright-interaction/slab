@@ -40,6 +40,8 @@ export function upload(
 export interface MediaPatch {
 	alt_text?: string;
 	folder?: string;
+	focal_x?: number;
+	focal_y?: number;
 }
 
 export function update(siteID: string, mediaID: string, patch: MediaPatch): Promise<Medium> {

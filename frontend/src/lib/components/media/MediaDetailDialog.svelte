@@ -25,11 +25,56 @@
 	let saving = $state(false);
 	let deleting = $state(false);
 
+	// Sprint 5 quick-win (2026-05-24): per-image focal point. Click the
+	// preview to set the focal point; the marker shows the current
+	// position; save persists focal_x / focal_y as percentages.
+	let focalX = $state(50);
+	let focalY = $state(50);
+	let focalSaving = $state(false);
+
 	$effect(() => {
 		if (media) {
 			altDraft = media.alt_text ?? '';
+			focalX = typeof media.focal_x === 'number' ? media.focal_x : 50;
+			focalY = typeof media.focal_y === 'number' ? media.focal_y : 50;
 		}
 	});
+
+	async function saveFocal(nextX: number, nextY: number) {
+		if (!media) return;
+		const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+		const x = clamp(nextX);
+		const y = clamp(nextY);
+		if (x === media.focal_x && y === media.focal_y) return;
+		focalSaving = true;
+		try {
+			const updated = await mediaApi.update(siteID, media.id, { focal_x: x, focal_y: y });
+			focalX = updated.focal_x ?? x;
+			focalY = updated.focal_y ?? y;
+			onUpdated?.(updated);
+			toast.success('Focal point saved');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to save focal point');
+		} finally {
+			focalSaving = false;
+		}
+	}
+
+	function handlePreviewClick(e: MouseEvent) {
+		const target = e.currentTarget as HTMLDivElement;
+		const rect = target.getBoundingClientRect();
+		const x = ((e.clientX - rect.left) / rect.width) * 100;
+		const y = ((e.clientY - rect.top) / rect.height) * 100;
+		focalX = Math.round(x);
+		focalY = Math.round(y);
+		void saveFocal(x, y);
+	}
+
+	function resetFocal() {
+		focalX = 50;
+		focalY = 50;
+		void saveFocal(50, 50);
+	}
 
 	const variants = $derived<MediaVariant[]>(
 		media ? mediaApi.parseMediaVariants(media.variants_json) : []
@@ -131,12 +176,36 @@
 <Dialog bind:open size="lg" title={media?.filename ?? 'Media'}>
 	{#if media}
 		<div class="flex flex-col gap-5">
-			<div class="overflow-hidden rounded-xl border border-border-light bg-bg-elevated">
+			<div
+				role="button"
+				tabindex="0"
+				class="relative overflow-hidden rounded-xl border border-border-light bg-bg-elevated cursor-crosshair"
+				onclick={handlePreviewClick}
+				onkeydown={(e) => {
+					if (e.key === 'Enter') resetFocal();
+				}}
+				title="Click to set focal point"
+			>
 				<img
 					src={previewSrc}
 					alt={media.alt_text || media.filename}
-					class="block max-h-[60vh] w-full object-contain"
+					class="block max-h-[60vh] w-full object-contain pointer-events-none"
 				/>
+				<span
+					class="absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full border-2 border-accent bg-accent/30 pointer-events-none transition-all"
+					style:left={`${focalX}%`}
+					style:top={`${focalY}%`}
+				></span>
+			</div>
+			<div class="flex items-center justify-between text-[11px] text-text-muted">
+				<span>Focal point: {focalX}% x {focalY}% {focalSaving ? '(saving...)' : ''}</span>
+				<button
+					type="button"
+					class="text-accent hover:underline"
+					onclick={resetFocal}
+				>
+					Reset to centered
+				</button>
 			</div>
 
 			<div class="grid grid-cols-2 gap-4 text-[12px]">

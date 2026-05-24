@@ -409,6 +409,11 @@ func applySchema(sqlDB *sql.DB) error {
 		// drift away from the archetype's hero_graphic + motion
 		// budget + token set.
 		{"pages", "archetype", "TEXT NOT NULL DEFAULT ''"},
+		// Image focal-point (Sprint 5 quick-win, 2026-05-24). Two
+		// integer percentages used by the renderer's object-position
+		// when a crop is applied. Default 50/50 = centered.
+		{"media", "focal_x", "INTEGER NOT NULL DEFAULT 50"},
+		{"media", "focal_y", "INTEGER NOT NULL DEFAULT 50"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {

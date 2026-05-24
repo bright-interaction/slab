@@ -109,7 +109,7 @@ func (q *Queries) DeleteMedia(ctx context.Context, id string) error {
 }
 
 const getMediaByID = `-- name: GetMediaByID :one
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE id = ?
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, focal_x, focal_y, created_at, updated_at FROM media WHERE id = ?
 `
 
 func (q *Queries) GetMediaByID(ctx context.Context, id string) (Medium, error) {
@@ -128,6 +128,8 @@ func (q *Queries) GetMediaByID(ctx context.Context, id string) (Medium, error) {
 		&i.VariantsJson,
 		&i.OriginalPath,
 		&i.Folder,
+		&i.FocalX,
+		&i.FocalY,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -135,7 +137,7 @@ func (q *Queries) GetMediaByID(ctx context.Context, id string) (Medium, error) {
 }
 
 const listMediaByIDs = `-- name: ListMediaByIDs :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE id IN (/*SLICE:ids*/?)
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, focal_x, focal_y, created_at, updated_at FROM media WHERE id IN (/*SLICE:ids*/?)
 `
 
 func (q *Queries) ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, error) {
@@ -170,6 +172,8 @@ func (q *Queries) ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, e
 			&i.VariantsJson,
 			&i.OriginalPath,
 			&i.Folder,
+			&i.FocalX,
+			&i.FocalY,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -187,7 +191,7 @@ func (q *Queries) ListMediaByIDs(ctx context.Context, ids []string) ([]Medium, e
 }
 
 const listMediaBySite = `-- name: ListMediaBySite :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, focal_x, focal_y, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium, error) {
@@ -212,6 +216,8 @@ func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium,
 			&i.VariantsJson,
 			&i.OriginalPath,
 			&i.Folder,
+			&i.FocalX,
+			&i.FocalY,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -229,7 +235,7 @@ func (q *Queries) ListMediaBySite(ctx context.Context, siteID string) ([]Medium,
 }
 
 const listMediaBySitePaginated = `-- name: ListMediaBySitePaginated :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, focal_x, focal_y, created_at, updated_at FROM media WHERE site_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaBySitePaginatedParams struct {
@@ -260,6 +266,8 @@ func (q *Queries) ListMediaBySitePaginated(ctx context.Context, arg ListMediaByS
 			&i.VariantsJson,
 			&i.OriginalPath,
 			&i.Folder,
+			&i.FocalX,
+			&i.FocalY,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -277,7 +285,7 @@ func (q *Queries) ListMediaBySitePaginated(ctx context.Context, arg ListMediaByS
 }
 
 const listMediaInFolderPaginated = `-- name: ListMediaInFolderPaginated :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? AND folder = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, focal_x, focal_y, created_at, updated_at FROM media WHERE site_id = ? AND folder = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListMediaInFolderPaginatedParams struct {
@@ -314,6 +322,8 @@ func (q *Queries) ListMediaInFolderPaginated(ctx context.Context, arg ListMediaI
 			&i.VariantsJson,
 			&i.OriginalPath,
 			&i.Folder,
+			&i.FocalX,
+			&i.FocalY,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -331,7 +341,7 @@ func (q *Queries) ListMediaInFolderPaginated(ctx context.Context, arg ListMediaI
 }
 
 const listUnfiledMediaPaginated = `-- name: ListUnfiledMediaPaginated :many
-SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, created_at, updated_at FROM media WHERE site_id = ? AND folder = '' ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, site_id, filename, alt_text, mime_type, file_size, width, height, blurhash, variants_json, original_path, folder, focal_x, focal_y, created_at, updated_at FROM media WHERE site_id = ? AND folder = '' ORDER BY created_at DESC LIMIT ? OFFSET ?
 `
 
 type ListUnfiledMediaPaginatedParams struct {
@@ -362,6 +372,8 @@ func (q *Queries) ListUnfiledMediaPaginated(ctx context.Context, arg ListUnfiled
 			&i.VariantsJson,
 			&i.OriginalPath,
 			&i.Folder,
+			&i.FocalX,
+			&i.FocalY,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -392,6 +404,31 @@ type UpdateMediaParams struct {
 
 func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) error {
 	_, err := q.db.ExecContext(ctx, updateMedia, arg.AltText, arg.ID)
+	return err
+}
+
+const updateMediaFocalPoint = `-- name: UpdateMediaFocalPoint :exec
+UPDATE media SET
+    focal_x = ?,
+    focal_y = ?,
+    updated_at = datetime('now')
+WHERE id = ? AND site_id = ?
+`
+
+type UpdateMediaFocalPointParams struct {
+	FocalX int64  `json:"focal_x"`
+	FocalY int64  `json:"focal_y"`
+	ID     string `json:"id"`
+	SiteID string `json:"site_id"`
+}
+
+func (q *Queries) UpdateMediaFocalPoint(ctx context.Context, arg UpdateMediaFocalPointParams) error {
+	_, err := q.db.ExecContext(ctx, updateMediaFocalPoint,
+		arg.FocalX,
+		arg.FocalY,
+		arg.ID,
+		arg.SiteID,
+	)
 	return err
 }
 
