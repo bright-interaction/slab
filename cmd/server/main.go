@@ -415,6 +415,16 @@ func applySchema(sqlDB *sql.DB) error {
 			return fmt.Errorf("migrate %s.%s: %w", m.table, m.column, err)
 		}
 	}
+	// Sprint 3 slice B (2026-05-24): widen entity_revisions.entity_type
+	// CHECK to include 'page_locale' + 'block_locale' so revisions
+	// can be recorded for the new overlay tables. SQLite doesn't
+	// allow ALTER TABLE on CHECK, so we rebuild the table in place
+	// when the existing CHECK lacks the new values. CREATE TABLE IF
+	// NOT EXISTS in the schema apply below is a no-op on existing
+	// tables, so the rebuild has to land BEFORE the schema apply.
+	if err := rebuildEntityRevisionsCheckIfNeeded(sqlDB); err != nil {
+		return fmt.Errorf("entity_revisions CHECK rebuild: %w", err)
+	}
 	// Now apply the full schema. CREATE TABLE IF NOT EXISTS is a no-op for
 	// existing tables; CREATE INDEX IF NOT EXISTS now succeeds because the
 	// referenced columns exist (newly added by the migrations above on
@@ -484,6 +494,82 @@ func addColumnIfMissing(sqlDB *sql.DB, table, column, spec string) error {
 	}
 	_, err = sqlDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, spec))
 	return err
+}
+
+// rebuildEntityRevisionsCheckIfNeeded widens the CHECK constraint on
+// entity_revisions.entity_type to include 'page_locale' + 'block_locale'
+// when the existing table predates Sprint 3 slice B. SQLite doesn't
+// support ALTER TABLE on CHECK so we do a table-rebuild migration:
+// detect whether the constraint is current, and if not, rename the
+// old table, create the wider-CHECK table from schema, copy rows,
+// drop old, recreate indexes. Idempotent: subsequent boots find the
+// constraint already wide and no-op.
+//
+// On fresh DBs (no entity_revisions table yet) this returns nil and
+// the schema apply below creates the table with the wide CHECK.
+func rebuildEntityRevisionsCheckIfNeeded(sqlDB *sql.DB) error {
+	// Read the table's stored SQL definition from sqlite_master.
+	var stmt string
+	err := sqlDB.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='entity_revisions'").Scan(&stmt)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// If the CHECK already lists page_locale, nothing to do.
+	if strings.Contains(stmt, "'page_locale'") {
+		return nil
+	}
+	slog.Info("entity_revisions: widening CHECK constraint to include page_locale + block_locale")
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Drop the FK-sensitive indexes first so the old table can be
+	// renamed without index collisions.
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_entity_revisions_lookup`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_entity_revisions_site_created`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`ALTER TABLE entity_revisions RENAME TO entity_revisions_old`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`CREATE TABLE entity_revisions (
+		id              TEXT PRIMARY KEY,
+		site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		entity_type     TEXT NOT NULL
+		                CHECK (entity_type IN ('page','block','page_locale','block_locale')),
+		entity_id       TEXT NOT NULL,
+		version_number  INTEGER NOT NULL,
+		snapshot_json   TEXT NOT NULL,
+		change_summary  TEXT NOT NULL DEFAULT '',
+		created_by      TEXT NOT NULL DEFAULT '',
+		created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+	)`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO entity_revisions
+		(id, site_id, entity_type, entity_id, version_number, snapshot_json, change_summary, created_by, created_at)
+		SELECT id, site_id, entity_type, entity_id, version_number, snapshot_json, change_summary, created_by, created_at
+		FROM entity_revisions_old`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP TABLE entity_revisions_old`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_entity_revisions_lookup
+		ON entity_revisions(site_id, entity_type, entity_id, version_number DESC)`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_entity_revisions_site_created
+		ON entity_revisions(site_id, created_at DESC)`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {

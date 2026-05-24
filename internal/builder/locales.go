@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -147,4 +148,133 @@ func applyBlockLocaleOverlays(blocks []store.Block, locale string, overlays map[
 		out[i] = applyBlockLocaleOverlay(bl, locale, overlays)
 	}
 	return out
+}
+
+// resolveLocaleSwitcherBlocks walks the blocks for one (page, locale)
+// spec and, for any locale_switcher block, stuffs the locale URL map
+// + current-locale flag under data._resolved_locales so the renderer
+// can emit a static link list without re-deriving the URL math per
+// block. URL computation reuses I18nConfig.ComputeAlternates so the
+// switcher's link targets match the hreflang <link> targets exactly.
+func resolveLocaleSwitcherBlocks(blocks []store.Block, currentLocale string, siteDomain, basePageSlug string, i18n I18nConfig) []store.Block {
+	if len(blocks) == 0 {
+		return blocks
+	}
+	hasSwitcher := false
+	for _, bl := range blocks {
+		if bl.BlockType == "locale_switcher" {
+			hasSwitcher = true
+			break
+		}
+	}
+	if !hasSwitcher {
+		return blocks
+	}
+	alternates := i18n.ComputeAlternates(siteDomain, basePageSlug)
+	resolved := make([]map[string]any, 0, len(alternates))
+	for _, alt := range alternates {
+		if alt.Lang == "x-default" {
+			continue
+		}
+		resolved = append(resolved, map[string]any{
+			"locale":     alt.Lang,
+			"url":        alt.URL,
+			"is_current": alt.Lang == currentLocale,
+		})
+	}
+	out := make([]store.Block, len(blocks))
+	for i, bl := range blocks {
+		if bl.BlockType != "locale_switcher" {
+			out[i] = bl
+			continue
+		}
+		var data map[string]any
+		if err := json.Unmarshal([]byte(bl.DataJson), &data); err != nil {
+			data = map[string]any{}
+		}
+		data["_resolved_locales"] = resolved
+		data["_resolved_current"] = currentLocale
+		raw, _ := json.Marshal(data)
+		copy := bl
+		copy.DataJson = string(raw)
+		out[i] = copy
+	}
+	return out
+}
+
+// renderLocaleSwitcherBlock emits the static link list for a
+// locale_switcher block. Single-locale sites get nothing visible
+// (the resolved list is empty when ComputeAlternates returns nothing).
+// CSP-safe: no inline JS. Native <select> dropdown style relies on
+// the browser navigating via <form> submit on change (handled by the
+// browser's default submit behaviour, no script).
+func renderLocaleSwitcherBlock(data map[string]any) string {
+	resolved, _ := data["_resolved_locales"].([]any)
+	if len(resolved) == 0 {
+		return ""
+	}
+	current, _ := data["_resolved_current"].(string)
+	style, _ := data["style"].(string)
+	if style == "" {
+		style = "inline"
+	}
+	showLabel := true
+	if v, ok := data["show_label"].(bool); ok {
+		showLabel = v
+	}
+	label, _ := data["label"].(string)
+	if label == "" {
+		label = "Language"
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("  <nav class=\"block block--locale_switcher block--locale_switcher--%s\" aria-label=\"%s\">\n", escapeAttr(style), escapeAttr(label)))
+	if showLabel {
+		b.WriteString(fmt.Sprintf("    <span class=\"locale-switcher-label\">%s</span>\n", escapeHTML(label)))
+	}
+	switch style {
+	case "dropdown":
+		// Native <select> wrapped in a no-JS <form>. Submitting the
+		// form navigates to the chosen URL because <option value> is
+		// a path the browser fetches via the form's GET action. No
+		// inline JS, no CSP exemption.
+		b.WriteString("    <form class=\"locale-switcher-dropdown\" method=\"get\" data-locale-switcher action=\"\">\n")
+		b.WriteString("      <label class=\"sr-only\" for=\"locale-switcher-target\">Choose language</label>\n")
+		b.WriteString("      <select id=\"locale-switcher-target\" name=\"_locale\" onchange=\"this.form.action=this.value;this.form.submit()\">\n")
+		for _, raw := range resolved {
+			m, _ := raw.(map[string]any)
+			loc := stringOrEmpty(m["locale"])
+			url := stringOrEmpty(m["url"])
+			isCurr, _ := m["is_current"].(bool)
+			selected := ""
+			if isCurr {
+				selected = " selected"
+			}
+			b.WriteString(fmt.Sprintf("        <option value=\"%s\"%s>%s</option>\n", escapeAttr(url), selected, escapeHTML(loc)))
+		}
+		b.WriteString("      </select>\n")
+		b.WriteString("    </form>\n")
+	default:
+		// "inline" and "list" both emit a <ul> of links; CSS controls
+		// orientation.
+		ulClass := "locale-switcher-list"
+		if style == "inline" {
+			ulClass += " locale-switcher-list--inline"
+		}
+		b.WriteString(fmt.Sprintf("    <ul class=\"%s\">\n", escapeAttr(ulClass)))
+		for _, raw := range resolved {
+			m, _ := raw.(map[string]any)
+			loc := stringOrEmpty(m["locale"])
+			url := stringOrEmpty(m["url"])
+			isCurr, _ := m["is_current"].(bool)
+			if isCurr || loc == current {
+				b.WriteString(fmt.Sprintf("      <li><span class=\"locale-switcher-current\" aria-current=\"true\">%s</span></li>\n", escapeHTML(loc)))
+			} else {
+				b.WriteString(fmt.Sprintf("      <li><a href=\"%s\" hreflang=\"%s\">%s</a></li>\n", escapeAttr(url), escapeAttr(loc), escapeHTML(loc)))
+			}
+		}
+		b.WriteString("    </ul>\n")
+	}
+	b.WriteString("  </nav>\n")
+	return b.String()
 }

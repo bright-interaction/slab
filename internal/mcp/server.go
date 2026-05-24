@@ -129,6 +129,12 @@ type Server struct {
 	// same state machine + cross-tenant guards. Nil disables them.
 	orders *handlers.OrderHandler
 
+	// locales wires the Sprint 3 multilingual translate_entity tool to
+	// the same handler the REST routes use, sharing locale-regex
+	// validation + cross-tenant guards. Nil disables translate_entity
+	// with a clean "not configured" error.
+	locales *handlers.LocalesHandler
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -182,6 +188,14 @@ func (s *Server) WithDiscountCodes(h *handlers.DiscountCodeHandler) *Server {
 // validation. nil disables them.
 func (s *Server) WithOrders(h *handlers.OrderHandler) *Server {
 	s.orders = h
+	return s
+}
+
+// WithLocales wires the locales handler so translate_entity routes
+// through the same REST validation + cross-tenant guards. nil
+// disables translate_entity.
+func (s *Server) WithLocales(h *handlers.LocalesHandler) *Server {
+	s.locales = h
 	return s
 }
 

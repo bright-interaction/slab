@@ -91,6 +91,11 @@ type Server struct {
 	// the public Checkout + Mollie Webhook endpoints (Sprint 2
 	// slice B of the WP/Webflow roadmap).
 	ordersH *handlers.OrderHandler
+
+	// localesH backs the Settings -> Locales admin page, the
+	// per-locale page editor, and the translate_entity MCP tool
+	// (Sprint 3 multilingual v1).
+	localesH *handlers.LocalesHandler
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -921,17 +926,18 @@ func (s *Server) Router() http.Handler {
 		// block_locales (per-locale block content overrides). All
 		// session-auth admin only; the build pipeline reads them
 		// directly without going through the REST handler.
-		localesH := handlers.NewLocalesHandler(s.cfg, s.queries)
-		siteR.Get("/api/sites/{siteID}/locales", localesH.ListSiteLocales)
-		siteR.Post("/api/sites/{siteID}/locales", localesH.UpsertSiteLocale)
-		siteR.Delete("/api/sites/{siteID}/locales/{locale}", localesH.DeleteSiteLocale)
-		siteR.Get("/api/sites/{siteID}/pages/{pageID}/locales", localesH.ListPageLocales)
-		siteR.Put("/api/sites/{siteID}/pages/{pageID}/locales/{locale}", localesH.UpsertPageLocale)
-		siteR.Delete("/api/sites/{siteID}/pages/{pageID}/locales/{locale}", localesH.DeletePageLocale)
-		siteR.Get("/api/sites/{siteID}/blocks/{blockID}/locales", localesH.ListBlockLocales)
-		siteR.Put("/api/sites/{siteID}/blocks/{blockID}/locales/{locale}", localesH.UpsertBlockLocale)
-		siteR.Delete("/api/sites/{siteID}/blocks/{blockID}/locales/{locale}", localesH.DeleteBlockLocale)
-		siteR.Get("/api/sites/{siteID}/pages/{pageID}/block-locales", localesH.ListBlockLocalesByPage)
+		s.localesH = handlers.NewLocalesHandler(s.cfg, s.queries)
+		s.localesH.SetRecorder(recorder)
+		siteR.Get("/api/sites/{siteID}/locales", s.localesH.ListSiteLocales)
+		siteR.Post("/api/sites/{siteID}/locales", s.localesH.UpsertSiteLocale)
+		siteR.Delete("/api/sites/{siteID}/locales/{locale}", s.localesH.DeleteSiteLocale)
+		siteR.Get("/api/sites/{siteID}/pages/{pageID}/locales", s.localesH.ListPageLocales)
+		siteR.Put("/api/sites/{siteID}/pages/{pageID}/locales/{locale}", s.localesH.UpsertPageLocale)
+		siteR.Delete("/api/sites/{siteID}/pages/{pageID}/locales/{locale}", s.localesH.DeletePageLocale)
+		siteR.Get("/api/sites/{siteID}/blocks/{blockID}/locales", s.localesH.ListBlockLocales)
+		siteR.Put("/api/sites/{siteID}/blocks/{blockID}/locales/{locale}", s.localesH.UpsertBlockLocale)
+		siteR.Delete("/api/sites/{siteID}/blocks/{blockID}/locales/{locale}", s.localesH.DeleteBlockLocale)
+		siteR.Get("/api/sites/{siteID}/pages/{pageID}/block-locales", s.localesH.ListBlockLocalesByPage)
 	})
 
 	// Public font serving (no auth, long cache, CORS *).
@@ -1037,7 +1043,8 @@ func (s *Server) Router() http.Handler {
 			WithRevisions(s.revisionsH).
 			WithProducts(s.productsH).
 			WithDiscountCodes(s.discountCodesH).
-			WithOrders(s.ordersH)
+			WithOrders(s.ordersH).
+			WithLocales(s.localesH)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)

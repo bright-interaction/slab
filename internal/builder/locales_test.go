@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,6 +206,63 @@ func TestApplyBlockLocaleOverlay_UsesOverlayDataJson(t *testing.T) {
 	out2 := applyBlockLocaleOverlay(bl, "de", overlays)
 	if !strings.Contains(out2.DataJson, "base") {
 		t.Errorf("de fallback should use base, got %s", out2.DataJson)
+	}
+}
+
+func TestResolveLocaleSwitcherBlocks_StuffsResolvedList(t *testing.T) {
+	blocks := []store.Block{
+		{ID: "b1", BlockType: "locale_switcher", DataJson: `{"label":"Language"}`, IsVisible: 1},
+	}
+	i18n := I18nConfig{
+		DefaultLang:     "en",
+		AdditionalLangs: []string{"sv"},
+		Strategy:        "path",
+		CanonicalBase:   "https://example.com",
+		PageSlugs:       map[string]bool{"/about": true, "/sv/about": true},
+	}
+	out := resolveLocaleSwitcherBlocks(blocks, "sv", "example.com", "about", i18n)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(out))
+	}
+	var data map[string]any
+	if err := json.Unmarshal([]byte(out[0].DataJson), &data); err != nil {
+		t.Fatalf("post-resolve json: %v", err)
+	}
+	resolved, ok := data["_resolved_locales"].([]any)
+	if !ok || len(resolved) < 2 {
+		t.Fatalf("expected resolved list with >=2 locales, got %v", data)
+	}
+	if cur, _ := data["_resolved_current"].(string); cur != "sv" {
+		t.Errorf("expected _resolved_current=sv, got %q", cur)
+	}
+}
+
+func TestRenderLocaleSwitcherBlock_InlineMarksCurrent(t *testing.T) {
+	data := map[string]any{
+		"style":      "inline",
+		"show_label": false,
+		"_resolved_current": "en",
+		"_resolved_locales": []any{
+			map[string]any{"locale": "en", "url": "https://example.com/", "is_current": true},
+			map[string]any{"locale": "sv", "url": "https://example.com/sv/", "is_current": false},
+		},
+	}
+	out := renderLocaleSwitcherBlock(data)
+	if !strings.Contains(out, `aria-current="true"`) {
+		t.Errorf("expected aria-current on current locale; got:\n%s", out)
+	}
+	if !strings.Contains(out, `href="https://example.com/sv/"`) {
+		t.Errorf("expected sv link emitted; got:\n%s", out)
+	}
+	if strings.Contains(out, `href="https://example.com/"`) {
+		t.Errorf("current locale should NOT be a link; got:\n%s", out)
+	}
+}
+
+func TestRenderLocaleSwitcherBlock_EmptyResolvedRendersNothing(t *testing.T) {
+	out := renderLocaleSwitcherBlock(map[string]any{"_resolved_locales": []any{}})
+	if out != "" {
+		t.Errorf("expected empty output on monolingual page, got:\n%s", out)
 	}
 }
 

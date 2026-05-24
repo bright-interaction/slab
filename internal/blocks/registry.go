@@ -465,6 +465,20 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "locale_switcher", Label: "Locale switcher", Category: "navigation",
+		Description: "Visitor-facing language picker. Lists every configured locale that has a published counterpart for the current page; the active locale renders as a marker (aria-current=true) instead of a link. Place once globally (in the header or footer) so it appears on every page. Renders as a static link list, zero JS.",
+		Fields: []Field{
+			{Key: "label", Label: "Strip label", Kind: KindText, Placeholder: "Language"},
+			{Key: "style", Label: "Style", Kind: KindSelect, Options: []Option{
+				{Value: "inline", Label: "Inline links (default)"},
+				{Value: "dropdown", Label: "Native select dropdown"},
+				{Value: "list", Label: "Stacked list"},
+			}},
+			{Key: "show_label", Label: "Show 'Language' label", Kind: KindBool, Help: "On by default. Turn off when placing in a tight nav."},
+		},
+	})
+
+	Register(Schema{
 		Type: "checkout_form", Label: "Checkout form", Category: "store",
 		Description: "Customer details form that submits the cart to /api/sites/{siteID}/checkout and redirects to Mollie. Reads cart items from localStorage. Lives on its own page (typically /checkout).",
 		Fields: []Field{

@@ -1014,6 +1014,12 @@ func (s *Server) registerTools() {
 	// for post-checkout workflows. Lives in tools_orders.go.
 	s.registerOrderTools()
 
+	// 1 translation tool: Sprint 3 slice B of the WP/Webflow roadmap.
+	// translate_entity is BYOAI-shaped: GET mode returns source +
+	// existing overlays, PUT mode upserts a page_locale + N
+	// block_locale rows atomically. Lives in tools_translate.go.
+	s.registerTranslateTools()
+
 	// Synchronous design lint (gap 4 of 6, 2026-05-21). lint_block runs
 	// the same rule set create_block + update_block embed in their
 	// responses, but standalone so the agent can vet variants before
