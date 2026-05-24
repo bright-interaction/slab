@@ -275,6 +275,8 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AltText *string `json:"alt_text,omitempty"`
 		Folder  *string `json:"folder,omitempty"`
+		FocalX  *int64  `json:"focal_x,omitempty"`
+		FocalY  *int64  `json:"focal_y,omitempty"`
 	}
 	if err := parseJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -295,8 +297,41 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Sprint 5 quick-win (2026-05-24): per-image focal point as
+	// percentages of width/height. Accepted only when both are
+	// supplied; either omitted keeps the existing value. Range
+	// clamped to [0,100] so a sloppy slider can't poison the CSS.
+	if req.FocalX != nil || req.FocalY != nil {
+		x := m.FocalX
+		y := m.FocalY
+		if req.FocalX != nil {
+			x = clampPercent(*req.FocalX)
+		}
+		if req.FocalY != nil {
+			y = clampPercent(*req.FocalY)
+		}
+		if err := h.queries.UpdateMediaFocalPoint(r.Context(), store.UpdateMediaFocalPointParams{
+			FocalX: x,
+			FocalY: y,
+			ID:     id,
+			SiteID: siteID,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to update focal point")
+			return
+		}
+	}
 	out, _ := h.queries.GetMediaByID(r.Context(), id)
 	writeJSON(w, http.StatusOK, out)
+}
+
+func clampPercent(n int64) int64 {
+	if n < 0 {
+		return 0
+	}
+	if n > 100 {
+		return 100
+	}
+	return n
 }
 
 // applyFolderChange validates and applies a folder change on a single media

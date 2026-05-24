@@ -349,6 +349,13 @@ CREATE TABLE IF NOT EXISTS media (
     variants_json  TEXT NOT NULL DEFAULT '[]',
     original_path  TEXT NOT NULL,
     folder         TEXT NOT NULL DEFAULT '',
+    -- Sprint 5 quick-win (2026-05-24): per-image focal point as
+    -- percentages of width/height. Drives the CSS object-position on
+    -- rendered <img> elements so crops at non-1:1 aspect ratios keep
+    -- the subject visible. 50/50 default = centered (existing
+    -- behaviour, zero change for sites that never touch the field).
+    focal_x        INTEGER NOT NULL DEFAULT 50,
+    focal_y        INTEGER NOT NULL DEFAULT 50,
     created_at     TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );

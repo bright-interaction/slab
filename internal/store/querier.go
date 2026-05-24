@@ -550,6 +550,7 @@ type Querier interface {
 	UpdateItem(ctx context.Context, arg UpdateItemParams) error
 	UpdateKnowledgebaseEntry(ctx context.Context, arg UpdateKnowledgebaseEntryParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) error
+	UpdateMediaFocalPoint(ctx context.Context, arg UpdateMediaFocalPointParams) error
 	UpdateMediaFolder(ctx context.Context, arg UpdateMediaFolderParams) error
 	UpdateMediaVariants(ctx context.Context, arg UpdateMediaVariantsParams) error
 	UpdateMigrationManifest(ctx context.Context, arg UpdateMigrationManifestParams) error

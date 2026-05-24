@@ -373,6 +373,8 @@ type Medium struct {
 	VariantsJson string `json:"variants_json"`
 	OriginalPath string `json:"original_path"`
 	Folder       string `json:"folder"`
+	FocalX       int64  `json:"focal_x"`
+	FocalY       int64  `json:"focal_y"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 }
