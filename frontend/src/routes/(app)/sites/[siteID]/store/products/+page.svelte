@@ -203,14 +203,8 @@
 		<Input label="Name" bind:value={newName} placeholder="Premium T-Shirt" />
 		<Input label="Slug" bind:value={newSlug} placeholder="premium-t-shirt" />
 		<div class="grid grid-cols-2 gap-3">
-			<div>
-				<label class="mb-1.5 block text-xs text-text-muted">Status</label>
-				<Select bind:value={newStatus} options={statusOptions} />
-			</div>
-			<div>
-				<label class="mb-1.5 block text-xs text-text-muted">Currency</label>
-				<Select bind:value={newCurrency} options={currencyOptions} />
-			</div>
+			<Select label="Status" bind:value={newStatus} options={statusOptions} />
+			<Select label="Currency" bind:value={newCurrency} options={currencyOptions} />
 		</div>
 		<Input
 			label="Base price (incl. VAT)"

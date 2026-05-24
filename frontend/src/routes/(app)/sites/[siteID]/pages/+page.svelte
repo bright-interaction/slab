@@ -44,11 +44,7 @@
 
 	async function onRevisionRestored() {
 		// Reload pages so the row reflects the restored state (slug, title etc).
-		try {
-			pages = await pagesApi.list(siteID);
-		} catch {
-			// best-effort; the drawer's own load() will surface its error
-		}
+		await loadPages(siteID);
 	}
 
 	// Move dialog state

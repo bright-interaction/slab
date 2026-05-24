@@ -86,6 +86,7 @@
 		if (idx <= 0) return;
 		const above = rows[idx - 1];
 		const me = rows[idx];
+		if (!above || !me) return;
 		try {
 			await localesApi.upsertSiteLocale(siteID, {
 				locale: me.locale,
