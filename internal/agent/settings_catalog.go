@@ -520,6 +520,20 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 			AgentWritable: false,
 		},
 
+		// --- analytics.cwv_enabled (Sprint 5 quick-win, 2026-05-24) -------
+		// Real-user Core Web Vitals collection. Opt-in per site so
+		// tenants without dashboard interest don't pay the
+		// beacon-per-pageview cost. The /t/cwv receiver writes
+		// cwv_events rows; the Analytics dashboard widget reads p75
+		// over the last 7 days per metric + device.
+		{
+			Category: "analytics", Key: "cwv_enabled",
+			Label:       "Core Web Vitals collection",
+			Description: "When on, every page load runs an inline web-vitals measurement script that posts LCP / INP / CLS / FCP / TTFB samples back to /t/cwv. The Analytics dashboard surfaces p75 values + Good / Needs Improvement / Poor ratings against Google's published thresholds. Consent-gated when CookieProof is configured; legitimate-interest otherwise.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+
 		// --- search (Sprint 5 quick-win, 2026-05-24) ---------------------
 		// Pagefind static search index. Opt-in per site to avoid the
 		// post-build cost on tenants that don't want search. When on,
@@ -600,6 +614,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		"analytics.cookie_banner_snippet":   "",
 		"analytics.personalization_enabled": "0",
 		"analytics.identity_max_age_days":   "30",
+		"analytics.cwv_enabled":             "0",
 		"security.hsts_enabled":             "0",
 		"security.hsts_max_age":             "31536000",
 		"security.hsts_preload":             "0",

@@ -53,6 +53,7 @@ type Querier interface {
 	// For every identified session, return its full path history ordered by ts.
 	// The handler groups by session_id / fingerprint to assemble the journey.
 	ConversionPathsForIdentified(ctx context.Context, arg ConversionPathsForIdentifiedParams) ([]ConversionPathsForIdentifiedRow, error)
+	CountCWVForSite(ctx context.Context, siteID string) (int64, error)
 	CountConsentBySite(ctx context.Context, arg CountConsentBySiteParams) (int64, error)
 	CountConsentBySiteByMethod(ctx context.Context, arg CountConsentBySiteByMethodParams) (int64, error)
 	CountConversionsByGoal(ctx context.Context, arg CountConversionsByGoalParams) (int64, error)
@@ -140,6 +141,10 @@ type Querier interface {
 	DeleteBlockLocalesByLocale(ctx context.Context, arg DeleteBlockLocalesByLocaleParams) error
 	DeleteBlocksByPage(ctx context.Context, pageID string) error
 	DeleteCSSClass(ctx context.Context, id string) error
+	// Per-site retention sweep. The retention manager passes an ISO
+	// timestamp cutoff and gets back the number of rows deleted so the
+	// sweep result struct can report per-table totals.
+	DeleteCWVBySiteOlderThan(ctx context.Context, arg DeleteCWVBySiteOlderThanParams) (int64, error)
 	DeleteCollection(ctx context.Context, id string) error
 	DeleteComponent(ctx context.Context, id string) error
 	// Per-site retention purge for the GDPR proof log. created_at is unix-ms;
@@ -304,6 +309,7 @@ type Querier interface {
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementDiscountCodeUsedCount(ctx context.Context, arg IncrementDiscountCodeUsedCountParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
+	InsertCWVEvent(ctx context.Context, arg InsertCWVEventParams) error
 	ListActiveApps(ctx context.Context) ([]App, error)
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	// Conversion goals + events (Phase 31.1, 2026-05-06).
@@ -342,6 +348,11 @@ type Querier interface {
 	// agent context Build.
 	ListBlocksBySite(ctx context.Context, siteID string) ([]ListBlocksBySiteRow, error)
 	ListCSSClassesBySite(ctx context.Context, siteID string) ([]CssClass, error)
+	// Returns every value for one (site, metric, device) over the last
+	// N days. The dashboard handler computes p75 in Go (SQLite has no
+	// native percentile). N is passed via datetime('now', ?); the
+	// callsite formats e.g. '-7 days'.
+	ListCWVValuesForWindow(ctx context.Context, arg ListCWVValuesForWindowParams) ([]ListCWVValuesForWindowRow, error)
 	ListCollectionsBySite(ctx context.Context, siteID string) ([]Collection, error)
 	ListComponentsBySite(ctx context.Context, siteID string) ([]Component, error)
 	// No method filter. Caller passes method='' or omits filtering. Splitting

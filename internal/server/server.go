@@ -231,6 +231,11 @@ func (s *Server) Router() http.Handler {
 		r.Post("/t/consent", trackH.Consent)
 		r.Post("/t/pageview", trackH.PageView)
 		r.Post("/t/engagement", trackH.Engagement)
+		// /t/cwv (Sprint 5 quick-win, 2026-05-24): Core Web Vitals
+		// metric beacon. The inline web-vitals script fires one POST
+		// per observed metric per visit; the receiver de-dups via row
+		// insert + last-write-wins aggregation on the dashboard side.
+		r.Post("/t/cwv", trackH.CWV)
 		// /t/event (Phase 31.1): explicit conversion-event ping fired
 		// by window.atomic.track(name, props). Goal-eval matches the
 		// posted name against active event_name goals.
@@ -799,6 +804,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/analytics/sessions", anH.AnalyticsSessions)
 		siteR.Get("/api/sites/{siteID}/analytics/conversion-paths", anH.AnalyticsConversionPaths)
 		siteR.Get("/api/sites/{siteID}/analytics/tracked-fields", anH.AnalyticsTrackedFields)
+		siteR.Get("/api/sites/{siteID}/analytics/cwv", anH.AnalyticsCWV)
 
 		// Consent records (GDPR proof log). atomicsite became system of record
 		// for tenant consent after the CookieProof fold-in (2026-04-30); these

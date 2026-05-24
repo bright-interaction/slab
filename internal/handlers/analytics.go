@@ -422,6 +422,140 @@ func toInt64(v any) int64 {
 	return 0
 }
 
+// CWVMetricResult is one row in the CWV overview payload: per-metric
+// per-device p75 value + sample count + rating against Google's
+// published thresholds. The rating is computed in Go (not from the
+// stored rating column) so the dashboard view stays consistent even
+// if the publisher-side web-vitals library bumps its threshold table
+// at some future date.
+type CWVMetricResult struct {
+	Metric      string  `json:"metric"`
+	Device      string  `json:"device"`
+	P75         float64 `json:"p75"`
+	Samples     int     `json:"samples"`
+	Rating      string  `json:"rating"`
+	BadCount    int     `json:"bad_count"`
+	GoodCount   int     `json:"good_count"`
+}
+
+// AnalyticsCWV returns p75 LCP / INP / CLS / FCP / TTFB over the
+// configured window (default 7d), split by device (all + desktop +
+// mobile). Sprint 5 quick-win (2026-05-24). Fast enough for an
+// interactive dashboard call: every metric goes through one SQL
+// query, p75 is computed in Go from the sorted value list.
+func (h *AnalyticsHandler) AnalyticsCWV(w http.ResponseWriter, r *http.Request) {
+	siteID := urlParam(r, "siteID")
+	since := r.URL.Query().Get("since")
+	if since == "" {
+		since = "7d"
+	}
+	window := "-7 days"
+	switch since {
+	case "1d", "24h":
+		window = "-1 days"
+	case "7d":
+		window = "-7 days"
+	case "30d":
+		window = "-30 days"
+	}
+	devices := []string{"", "desktop", "mobile"}
+	metrics := []string{"LCP", "INP", "CLS", "FCP", "TTFB"}
+	out := make([]CWVMetricResult, 0, len(metrics)*len(devices))
+	for _, metric := range metrics {
+		for _, device := range devices {
+			rows, err := h.queries.ListCWVValuesForWindow(r.Context(), store.ListCWVValuesForWindowParams{
+				SiteID:   siteID,
+				Metric:   metric,
+				Device:   device,
+				Column4:  device,
+				Datetime: window,
+			})
+			if err != nil {
+				continue
+			}
+			result := CWVMetricResult{Metric: metric, Device: device, Samples: len(rows)}
+			if len(rows) == 0 {
+				out = append(out, result)
+				continue
+			}
+			// Rows come back ORDER BY value ASC; index for the 75th
+			// percentile is floor(0.75 * len) per the standard
+			// nearest-rank method.
+			idx := int(0.75 * float64(len(rows)))
+			if idx >= len(rows) {
+				idx = len(rows) - 1
+			}
+			result.P75 = rows[idx].Value
+			for _, row := range rows {
+				switch row.Rating {
+				case "good":
+					result.GoodCount++
+				case "poor":
+					result.BadCount++
+				}
+			}
+			result.Rating = cwvRatingFor(metric, result.P75)
+			out = append(out, result)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"site_id": siteID,
+		"since":   since,
+		"metrics": out,
+	})
+}
+
+// cwvRatingFor returns the Good / Needs Improvement / Poor label for
+// a metric value against Google's published 2026 thresholds. The
+// browser-side script uses the same table; we duplicate the
+// thresholds server-side so the dashboard's rating never depends on
+// the publisher web-vitals.js library version.
+func cwvRatingFor(metric string, v float64) string {
+	switch metric {
+	case "LCP":
+		if v <= 2500 {
+			return "good"
+		}
+		if v <= 4000 {
+			return "needs-improvement"
+		}
+		return "poor"
+	case "INP":
+		if v <= 200 {
+			return "good"
+		}
+		if v <= 500 {
+			return "needs-improvement"
+		}
+		return "poor"
+	case "CLS":
+		if v <= 0.1 {
+			return "good"
+		}
+		if v <= 0.25 {
+			return "needs-improvement"
+		}
+		return "poor"
+	case "FCP":
+		if v <= 1800 {
+			return "good"
+		}
+		if v <= 3000 {
+			return "needs-improvement"
+		}
+		return "poor"
+	case "TTFB":
+		if v <= 800 {
+			return "good"
+		}
+		if v <= 1800 {
+			return "needs-improvement"
+		}
+		return "poor"
+	}
+	return ""
+}
+
 // sinceToCutoff turns a since=… string into (cutoffTimestamp, bucketUnit).
 // 1d window uses hourly buckets; everything else daily. "all" uses a
 // far-past cutoff so every event is included.

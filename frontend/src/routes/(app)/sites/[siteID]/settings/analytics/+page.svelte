@@ -34,6 +34,7 @@
 	let crmWebhookSecret = $state('');
 	let cookieBannerSnippet = $state('');
 	let personalizationEnabled = $state(false);
+	let cwvEnabled = $state(false);
 	let identityMaxAgeDays = $state('30');
 
 	type State = {
@@ -48,6 +49,7 @@
 		cookieBannerSnippet: string;
 		personalizationEnabled: boolean;
 		identityMaxAgeDays: string;
+		cwvEnabled: boolean;
 	};
 
 	let initial: State = $state({
@@ -61,7 +63,8 @@
 		crmWebhookSecret: '',
 		cookieBannerSnippet: '',
 		personalizationEnabled: false,
-		identityMaxAgeDays: '30'
+		identityMaxAgeDays: '30',
+		cwvEnabled: false
 	});
 
 	async function load() {
@@ -84,6 +87,7 @@
 			cookieBannerSnippet = m.cookie_banner_snippet || '';
 			personalizationEnabled = toBool(m.personalization_enabled);
 			identityMaxAgeDays = m.identity_max_age_days || '30';
+			cwvEnabled = toBool(m.cwv_enabled);
 
 			initial = {
 				atomicsiteTrackingEnabled,
@@ -96,7 +100,8 @@
 				crmWebhookSecret,
 				cookieBannerSnippet,
 				personalizationEnabled,
-				identityMaxAgeDays
+				identityMaxAgeDays,
+				cwvEnabled
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -120,7 +125,8 @@
 			crmWebhookSecret !== initial.crmWebhookSecret ||
 			cookieBannerSnippet !== initial.cookieBannerSnippet ||
 			personalizationEnabled !== initial.personalizationEnabled ||
-			identityMaxAgeDays !== initial.identityMaxAgeDays
+			identityMaxAgeDays !== initial.identityMaxAgeDays ||
+			cwvEnabled !== initial.cwvEnabled
 	);
 
 	function discard() {
@@ -135,6 +141,7 @@
 		cookieBannerSnippet = initial.cookieBannerSnippet;
 		personalizationEnabled = initial.personalizationEnabled;
 		identityMaxAgeDays = initial.identityMaxAgeDays;
+		cwvEnabled = initial.cwvEnabled;
 	}
 
 	function b(v: boolean): string {
@@ -172,7 +179,8 @@
 					category: 'analytics',
 					key: 'identity_max_age_days',
 					value: identityMaxAgeDays
-				}
+				},
+				{ category: 'analytics', key: 'cwv_enabled', value: b(cwvEnabled) }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
@@ -187,7 +195,8 @@
 				crmWebhookSecret,
 				cookieBannerSnippet,
 				personalizationEnabled,
-				identityMaxAgeDays
+				identityMaxAgeDays,
+				cwvEnabled
 			};
 			toast.success('Analytics settings saved.');
 		} catch (err) {
@@ -258,6 +267,19 @@
 						</span>
 					</div>
 					<Switch bind:checked={atomicsiteTrackingEnabled} ariaLabel="Enable Atomicsite tracking" />
+				</div>
+				<div class="mt-4 border-t border-border-light pt-4 flex items-center justify-between gap-4">
+					<div class="flex flex-col">
+						<span class="text-[13px] text-text-primary">Core Web Vitals collection</span>
+						<span class="text-[12px] text-text-muted">
+							Inline web-vitals measurement script reports LCP / INP / CLS / FCP / TTFB
+							to <code class="font-mono text-[11.5px]">/t/cwv</code> per pageview. The
+							Analytics dashboard surfaces p75 + Good / Needs Improvement / Poor ratings
+							against Google's published thresholds. Consent-gated when CookieProof is
+							configured; legitimate-interest otherwise.
+						</span>
+					</div>
+					<Switch bind:checked={cwvEnabled} ariaLabel="Enable Core Web Vitals collection" />
 				</div>
 			</Card>
 
