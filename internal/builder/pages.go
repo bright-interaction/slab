@@ -464,6 +464,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderCheckoutFormBlock(data, siteID)
 	case "locale_switcher":
 		return renderLocaleSwitcherBlock(data)
+	case "search_box":
+		return renderSearchBoxBlock(data)
 	default:
 		return renderGenericBlock(blockType, data)
 	}

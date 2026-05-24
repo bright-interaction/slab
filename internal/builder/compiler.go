@@ -148,3 +148,44 @@ func capLog(s string) string {
 // on this prefix to distinguish "build legitimately failed" from "build
 // got killed by us".
 var ErrBuildCancelled = errors.New("build cancelled")
+
+// PagefindTimeout caps a single pagefind index pass. Sites with 1000+
+// pages take a few seconds; 5 minutes is comfortably above the worst
+// case we'd want to wait on a build.
+const PagefindTimeout = 5 * time.Minute
+
+// RunPagefind generates the static search index for the built site by
+// invoking pagefind against dist/. Sprint 5 quick-win (2026-05-24).
+// The output lands in dist/pagefind/ and the search_box block's
+// runtime loader points at it. Opt-in: callers gate this behind the
+// search.pagefind_enabled setting.
+//
+// pagefind is declared in the workspace skeleton's devDependencies so
+// `bun install` in Compile() already fetched it. We invoke via bunx
+// to pick up the local copy; no global install required on the
+// builder host.
+//
+// Returns the captured log lines so the renderer can append them to
+// the deployment's build_log column, and a single error when pagefind
+// itself returns non-zero. Cancellation flows through ctx.
+func RunPagefind(ctx context.Context, wsDir string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, PagefindTimeout)
+		defer cancel()
+	}
+	slog.Info("build: running pagefind index", "workspace", wsDir)
+	cmd := exec.CommandContext(ctx, "bunx", "pagefind", "--site", "dist", "--quiet")
+	cmd.Dir = wsDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return string(out), fmt.Errorf("pagefind timed out or cancelled: %w", ctxErr)
+		}
+		return string(out), fmt.Errorf("pagefind failed: %w", err)
+	}
+	return string(out), nil
+}

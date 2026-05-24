@@ -465,6 +465,16 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "search_box", Label: "Search box", Category: "navigation",
+		Description: "Pagefind-powered on-site search. Renders a search input + result list. Index is built post-Astro at deploy time when search.pagefind_enabled is on (Settings -> SEO). The block emits a single <div id=\"search\"></div> mount + a same-origin loader script; CSP-safe, no third-party CDN. Place once per page where you want the search affordance (header, dedicated /search page, etc).",
+		Fields: []Field{
+			{Key: "placeholder", Label: "Input placeholder", Kind: KindText, Placeholder: "Search the site"},
+			{Key: "show_empty_state", Label: "Show empty state copy", Kind: KindBool, Help: "Display 'No results' inside the result panel when a query returns nothing. On by default."},
+			{Key: "results_max", Label: "Max results shown", Kind: KindNumber, Help: "Default 6. Pagefind ranks all matches; the UI clips at this number."},
+		},
+	})
+
+	Register(Schema{
 		Type: "locale_switcher", Label: "Locale switcher", Category: "navigation",
 		Description: "Visitor-facing language picker. Lists every configured locale that has a published counterpart for the current page; the active locale renders as a marker (aria-current=true) instead of a link. Place once globally (in the header or footer) so it appears on every page. Renders as a static link list, zero JS.",
 		Fields: []Field{

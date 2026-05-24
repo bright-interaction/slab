@@ -34,6 +34,7 @@
 	let robotsExtra = $state('');
 	let llmsTxt = $state('');
 	let sitemapEnabled = $state(true);
+	let pagefindEnabled = $state(false);
 
 	let pickerOpen = $state(false);
 
@@ -45,6 +46,7 @@
 		robotsExtra: string;
 		llmsTxt: string;
 		sitemapEnabled: boolean;
+		pagefindEnabled: boolean;
 	};
 
 	let initial: State = $state({
@@ -54,14 +56,19 @@
 		ogDefaultImageId: '',
 		robotsExtra: '',
 		llmsTxt: '',
-		sitemapEnabled: true
+		sitemapEnabled: true,
+		pagefindEnabled: false
 	});
 
 	async function load() {
 		loading = true;
 		try {
-			const rows = await settingsApi.listByCategory(siteID, 'seo');
-			const m = categoryMap(rows);
+			const [seoRows, searchRows] = await Promise.all([
+				settingsApi.listByCategory(siteID, 'seo'),
+				settingsApi.listByCategory(siteID, 'search')
+			]);
+			const m = categoryMap(seoRows);
+			const ms = categoryMap(searchRows);
 
 			metaTitleTemplate = m.meta_title_template || '';
 			metaDescriptionTemplate = m.meta_description_template || '';
@@ -70,6 +77,7 @@
 			robotsExtra = m.robots_txt_extra || '';
 			llmsTxt = m.llms_txt || '';
 			sitemapEnabled = m.sitemap_enabled ? toBool(m.sitemap_enabled) : true;
+			pagefindEnabled = toBool(ms.pagefind_enabled);
 
 			if (ogDefaultImageId) {
 				try {
@@ -86,7 +94,8 @@
 				ogDefaultImageId,
 				robotsExtra,
 				llmsTxt,
-				sitemapEnabled
+				sitemapEnabled,
+				pagefindEnabled
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -106,7 +115,8 @@
 			ogDefaultImageId !== initial.ogDefaultImageId ||
 			robotsExtra !== initial.robotsExtra ||
 			llmsTxt !== initial.llmsTxt ||
-			sitemapEnabled !== initial.sitemapEnabled
+			sitemapEnabled !== initial.sitemapEnabled ||
+			pagefindEnabled !== initial.pagefindEnabled
 	);
 
 	function discard() {
@@ -117,6 +127,7 @@
 		robotsExtra = initial.robotsExtra;
 		llmsTxt = initial.llmsTxt;
 		sitemapEnabled = initial.sitemapEnabled;
+		pagefindEnabled = initial.pagefindEnabled;
 	}
 
 	function pickImage(m: Medium) {
@@ -140,7 +151,8 @@
 				{ category: 'seo', key: 'og_default_image_id', value: ogDefaultImageId },
 				{ category: 'seo', key: 'robots_txt_extra', value: robotsExtra },
 				{ category: 'seo', key: 'llms_txt', value: llmsTxt },
-				{ category: 'seo', key: 'sitemap_enabled', value: sitemapEnabled ? '1' : '0' }
+				{ category: 'seo', key: 'sitemap_enabled', value: sitemapEnabled ? '1' : '0' },
+				{ category: 'search', key: 'pagefind_enabled', value: pagefindEnabled ? '1' : '0' }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
@@ -151,7 +163,8 @@
 				ogDefaultImageId,
 				robotsExtra,
 				llmsTxt,
-				sitemapEnabled
+				sitemapEnabled,
+				pagefindEnabled
 			};
 			toast.success('SEO settings saved.');
 		} catch (err) {
@@ -245,6 +258,28 @@
 					. The builder emits self-ref + counterpart links automatically when
 					sister pages exist (e.g. /about and /sv/about both published).
 				</p>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					On-site search
+				</h2>
+				<div class="mt-4 flex items-center justify-between gap-4">
+					<div class="flex flex-col">
+						<span class="text-[13px] text-text-primary">Pagefind static search index</span>
+						<span class="text-[12px] text-text-muted">
+							When on, every build appends a pagefind index pass so the
+							<code class="font-mono text-[11.5px]">search_box</code>
+							block can query a same-origin index. Adds roughly 1 to 5
+							seconds to a small site's build; longer for content-heavy
+							builds. Drop the
+							<code class="font-mono text-[11.5px]">search_box</code>
+							block onto any page (header, footer, or a dedicated /search
+							page) to expose the UI.
+						</span>
+					</div>
+					<Switch bind:checked={pagefindEnabled} />
+				</div>
 			</Card>
 
 			<Card padding="md">
