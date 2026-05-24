@@ -1236,7 +1236,7 @@ CREATE TABLE IF NOT EXISTS entity_revisions (
     id              TEXT PRIMARY KEY,
     site_id         TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
     entity_type     TEXT NOT NULL
-                    CHECK (entity_type IN ('page','block')),
+                    CHECK (entity_type IN ('page','block','page_locale','block_locale')),
     entity_id       TEXT NOT NULL,
     version_number  INTEGER NOT NULL,
     snapshot_json   TEXT NOT NULL,

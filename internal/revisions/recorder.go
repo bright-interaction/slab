@@ -29,8 +29,10 @@ import (
 // Entity types stored in entity_revisions.entity_type. Must match the
 // schema CHECK constraint in internal/db/schema.sql.
 const (
-	EntityTypePage  = "page"
-	EntityTypeBlock = "block"
+	EntityTypePage        = "page"
+	EntityTypeBlock       = "block"
+	EntityTypePageLocale  = "page_locale"
+	EntityTypeBlockLocale = "block_locale"
 )
 
 // MaxPerEntity is the retention cap. PruneEntityRevisionsOverLimit
@@ -84,7 +86,9 @@ func (r *Recorder) Record(ctx context.Context, p RecordParams) error {
 	if p.EntityID == "" {
 		return errors.New("revisions: entity_id required")
 	}
-	if p.EntityType != EntityTypePage && p.EntityType != EntityTypeBlock {
+	switch p.EntityType {
+	case EntityTypePage, EntityTypeBlock, EntityTypePageLocale, EntityTypeBlockLocale:
+	default:
 		return fmt.Errorf("revisions: unsupported entity_type %q", p.EntityType)
 	}
 	if p.Snapshot == nil {

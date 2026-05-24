@@ -168,6 +168,11 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 		specs := buildLocaleSpecs(page, i18n.DefaultLang, i18n.AdditionalLangs, pageOverlays)
 		for _, spec := range specs {
 			localizedBlocks := applyBlockLocaleOverlays(blocks, spec.lang, blockOverlays)
+			// Sprint 3 slice B (2026-05-23): resolve any locale_switcher
+			// blocks per-spec so each emitted page carries the correct
+			// active-locale marker + only-real-counterpart links. Cheap
+			// no-op on pages without a locale_switcher block.
+			localizedBlocks = resolveLocaleSwitcherBlocks(localizedBlocks, spec.lang, site.Domain, page.Slug, i18n)
 			content := renderPageWithContext(spec.page, localizedBlocks, componentExts, pageCtx)
 			pagePath := slugToFilePath(spec.outSlug, wsDir)
 			if err := WriteFile(pagePath, content); err != nil {
@@ -457,6 +462,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderCartDrawerBlock(data)
 	case "checkout_form":
 		return renderCheckoutFormBlock(data, siteID)
+	case "locale_switcher":
+		return renderLocaleSwitcherBlock(data)
 	default:
 		return renderGenericBlock(blockType, data)
 	}
