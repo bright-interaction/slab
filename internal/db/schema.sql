@@ -1516,3 +1516,59 @@ CREATE TABLE IF NOT EXISTS block_locales (
     PRIMARY KEY (block_id, locale)
 );
 CREATE INDEX IF NOT EXISTS idx_block_locales_locale ON block_locales(locale);
+
+-- WP/Webflow replacement roadmap Sprint 4 (MCP-as-Apps platform,
+-- 2026-05-24).
+--
+-- apps is the cross-tenant catalogue of installable third-party MCP
+-- integrations (Stripe, Calendly, Brevo, etc). Rows seeded at boot
+-- from internal/apps/curated.go so the marketplace is non-empty on a
+-- fresh OSS install; new publishers add rows via a future console
+-- (Slice B). is_curated=1 = ships in the OSS bundle; =0 = community-
+-- submitted. category lets the marketplace filter (commerce, crm,
+-- marketing, dev, etc). mcp_url is the upstream MCP server endpoint
+-- the agent proxy will dial in Slice B; credentials_schema_json
+-- describes the fields the install dialog renders (api_key, webhook
+-- secret, etc) so the schema is publisher-defined rather than hard-
+-- coded.
+CREATE TABLE IF NOT EXISTS apps (
+    id                       TEXT PRIMARY KEY,
+    slug                     TEXT NOT NULL UNIQUE,
+    name                     TEXT NOT NULL,
+    description              TEXT NOT NULL DEFAULT '',
+    category                 TEXT NOT NULL DEFAULT 'misc',
+    publisher                TEXT NOT NULL DEFAULT '',
+    icon_url                 TEXT NOT NULL DEFAULT '',
+    mcp_url                  TEXT NOT NULL DEFAULT '',
+    docs_url                 TEXT NOT NULL DEFAULT '',
+    version                  TEXT NOT NULL DEFAULT '0.1.0',
+    credentials_schema_json  TEXT NOT NULL DEFAULT '[]',
+    is_curated               INTEGER NOT NULL DEFAULT 0,
+    is_active                INTEGER NOT NULL DEFAULT 1,
+    created_at               TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at               TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_apps_category ON apps(category, is_active DESC);
+
+-- site_app_installs is the per-site install ledger. credentials_json
+-- carries the {field_name: value} map the tenant entered in the
+-- install dialog. Plain at rest in v1 (matches the precedent of
+-- site_settings carrying GA4 / Umami / Mollie API keys plain); a
+-- Sprint 1.5 hardening pass routes every tenant secret through
+-- Shield-style encryption with a master key. status: active | revoked
+-- | error. last_used_at gets bumped by the MCP proxy when an upstream
+-- tool fires (Slice B). installed_by tracks user:id vs agent:keyID
+-- for the audit log.
+CREATE TABLE IF NOT EXISTS site_app_installs (
+    site_id          TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    app_id           TEXT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    status           TEXT NOT NULL DEFAULT 'active',
+    credentials_json TEXT NOT NULL DEFAULT '{}',
+    installed_by     TEXT NOT NULL DEFAULT '',
+    last_used_at     TEXT NOT NULL DEFAULT '',
+    notes            TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (site_id, app_id)
+);
+CREATE INDEX IF NOT EXISTS idx_site_app_installs_site ON site_app_installs(site_id, status);

@@ -33,6 +33,7 @@ type Querier interface {
 	// exists, the workspace is skipped. Used by ensureDefaultWorkspace
 	// on first boot of a Phase 30+ binary against an existing DB.
 	BackfillWorkspaceMembersForAdmin(ctx context.Context, userID string) error
+	BumpSiteAppInstallLastUsed(ctx context.Context, arg BumpSiteAppInstallLastUsedParams) error
 	CancelClarification(ctx context.Context, arg CancelClarificationParams) error
 	// Clears the pending deletion. Bumps token_version so any
 	// "deletion-pending" UI state in another tab refreshes.
@@ -130,6 +131,7 @@ type Querier interface {
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) error
 	CreateWorkspaceInvite(ctx context.Context, arg CreateWorkspaceInviteParams) error
 	DeactivateAgentKey(ctx context.Context, id string) error
+	DeactivateApp(ctx context.Context, id string) error
 	DeleteAgentKey(ctx context.Context, id string) error
 	DeleteAllowedScript(ctx context.Context, id string) error
 	DeleteAuditLogOlderThan(ctx context.Context, createdAt string) (int64, error)
@@ -177,6 +179,7 @@ type Querier interface {
 	DeleteShieldSession(ctx context.Context, id string) error
 	DeleteSilo(ctx context.Context, id string) error
 	DeleteSite(ctx context.Context, id string) error
+	DeleteSiteAppInstall(ctx context.Context, arg DeleteSiteAppInstallParams) error
 	DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) error
 	DeleteSiteLocale(ctx context.Context, arg DeleteSiteLocaleParams) error
 	DeleteSubscription(ctx context.Context, id string) error
@@ -205,6 +208,8 @@ type Querier interface {
 	FinishVerifyJob(ctx context.Context, arg FinishVerifyJobParams) error
 	GetAgentKeyByHash(ctx context.Context, keyHash string) (AgentKey, error)
 	GetAgentKeyByID(ctx context.Context, id string) (AgentKey, error)
+	GetAppByID(ctx context.Context, id string) (App, error)
+	GetAppBySlug(ctx context.Context, slug string) (App, error)
 	GetBillingEventByExternalID(ctx context.Context, arg GetBillingEventByExternalIDParams) (BillingEvent, error)
 	GetBlockByID(ctx context.Context, id string) (Block, error)
 	GetBlockLocale(ctx context.Context, arg GetBlockLocaleParams) (BlockLocale, error)
@@ -264,6 +269,7 @@ type Querier interface {
 	GetShieldSession(ctx context.Context, id string) (ShieldSession, error)
 	GetShieldToken(ctx context.Context, arg GetShieldTokenParams) (ShieldToken, error)
 	GetSiloByID(ctx context.Context, id string) (SiteSilo, error)
+	GetSiteAppInstall(ctx context.Context, arg GetSiteAppInstallParams) (SiteAppInstall, error)
 	// Site architecture
 	GetSiteArchitecture(ctx context.Context, siteID string) (SiteArchitecture, error)
 	GetSiteByID(ctx context.Context, id string) (Site, error)
@@ -298,6 +304,7 @@ type Querier interface {
 	IdentifyVisitSession(ctx context.Context, arg IdentifyVisitSessionParams) error
 	IncrementDiscountCodeUsedCount(ctx context.Context, arg IncrementDiscountCodeUsedCountParams) error
 	IncrementTokenVersion(ctx context.Context, id string) error
+	ListActiveApps(ctx context.Context) ([]App, error)
 	ListActiveGlobalBlocksBySite(ctx context.Context, siteID string) ([]GlobalBlock, error)
 	// Conversion goals + events (Phase 31.1, 2026-05-06).
 	// The CRUD surface for goals plus the ingest + read queries for events.
@@ -319,6 +326,7 @@ type Querier interface {
 	ListAllWorkspaces(ctx context.Context) ([]Workspace, error)
 	// Allowed scripts
 	ListAllowedScriptsBySite(ctx context.Context, siteID string) ([]AllowedScript, error)
+	ListAppsByCategory(ctx context.Context, category string) ([]App, error)
 	ListAuditLogByResource(ctx context.Context, arg ListAuditLogByResourceParams) ([]AuditLog, error)
 	ListAuditLogBySite(ctx context.Context, arg ListAuditLogBySiteParams) ([]AuditLog, error)
 	// Used by the workspace-admin "everything that happened" feed. site_id
@@ -413,6 +421,7 @@ type Querier interface {
 	ListShieldTokensBySession(ctx context.Context, sessionID string) ([]ListShieldTokensBySessionRow, error)
 	// Silos
 	ListSilosBySite(ctx context.Context, siteID string) ([]SiteSilo, error)
+	ListSiteAppInstalls(ctx context.Context, siteID string) ([]ListSiteAppInstallsRow, error)
 	ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont, error)
 	ListSiteIDsForUser(ctx context.Context, userID string) ([]string, error)
 	ListSiteLocales(ctx context.Context, siteID string) ([]SiteLocale, error)
@@ -492,6 +501,7 @@ type Querier interface {
 	// runs; the DB accepts anything to keep tests cheap and to let future
 	// archetypes land without a sqlc regen.
 	SetPageArchetype(ctx context.Context, arg SetPageArchetypeParams) error
+	SetSiteAppInstallStatus(ctx context.Context, arg SetSiteAppInstallStatusParams) error
 	// Stages a fresh secret without flipping enrolled_at, so the user
 	// can scan the QR + try a code before the secret is locked in.
 	SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error
@@ -584,6 +594,7 @@ type Querier interface {
 	UpdateWorkspacePlan(ctx context.Context, arg UpdateWorkspacePlanParams) error
 	UpdateWorkspaceStatus(ctx context.Context, arg UpdateWorkspaceStatusParams) error
 	UpdateWorkspaceStripe(ctx context.Context, arg UpdateWorkspaceStripeParams) error
+	UpsertApp(ctx context.Context, arg UpsertAppParams) error
 	UpsertBlockLocale(ctx context.Context, arg UpsertBlockLocaleParams) error
 	UpsertConsentSalt(ctx context.Context, arg UpsertConsentSaltParams) error
 	// Sprint 4 (2026-05-06): re-import upsert. Conflict on the
@@ -600,6 +611,7 @@ type Querier interface {
 	// the porter detects insert-vs-update by comparing returned ID.
 	UpsertRedirect(ctx context.Context, arg UpsertRedirectParams) (Redirect, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
+	UpsertSiteAppInstall(ctx context.Context, arg UpsertSiteAppInstallParams) error
 	UpsertSiteArchitecture(ctx context.Context, arg UpsertSiteArchitectureParams) error
 	UpsertSiteLocale(ctx context.Context, arg UpsertSiteLocaleParams) error
 	UpsertSiteProfile(ctx context.Context, arg UpsertSiteProfileParams) error

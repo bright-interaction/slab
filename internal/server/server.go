@@ -96,6 +96,11 @@ type Server struct {
 	// per-locale page editor, and the translate_entity MCP tool
 	// (Sprint 3 multilingual v1).
 	localesH *handlers.LocalesHandler
+
+	// appsH backs the Apps marketplace + per-site install ledger +
+	// the list_apps_marketplace / list_installed_apps MCP tools
+	// (Sprint 4 MCP-as-Apps platform slice A).
+	appsH *handlers.AppsHandler
 }
 
 // SetVerifyJobManager wires the async verify-live worker. Called from
@@ -920,6 +925,21 @@ func (s *Server) Router() http.Handler {
 		siteR.Post("/api/sites/{siteID}/orders/{orderID}/status", s.ordersH.UpdateStatus)
 		siteR.Post("/api/sites/{siteID}/orders/{orderID}/refund", s.ordersH.Refund)
 
+		// Apps marketplace + installs (Sprint 4 MCP-as-Apps platform
+		// slice A, 2026-05-24). Marketplace listing is cross-tenant
+		// (every site sees the same active apps), install + revoke
+		// are per-site. Credentials are stored in credentials_json
+		// plain at rest (matches the precedent for Mollie/GA4/Umami;
+		// Sprint 1.5 hardening will route every tenant secret through
+		// Shield encryption).
+		appsH := handlers.NewAppsHandler(s.cfg, s.queries)
+		r.Get("/api/apps", appsH.ListMarketplace)
+		r.Get("/api/apps/{appID}", appsH.GetApp)
+		siteR.Get("/api/sites/{siteID}/apps", appsH.ListSiteInstalls)
+		siteR.Post("/api/sites/{siteID}/apps/{appID}", appsH.Install)
+		siteR.Delete("/api/sites/{siteID}/apps/{appID}", appsH.Revoke)
+		s.appsH = appsH
+
 		// Locales (Sprint 3 multilingual v1, 2026-05-22). Three CRUD
 		// surfaces: site_locales (the configured locale list),
 		// page_locales (per-locale page metadata overrides),
@@ -1044,7 +1064,8 @@ func (s *Server) Router() http.Handler {
 			WithProducts(s.productsH).
 			WithDiscountCodes(s.discountCodesH).
 			WithOrders(s.ordersH).
-			WithLocales(s.localesH)
+			WithLocales(s.localesH).
+			WithApps(s.appsH)
 
 		if len(s.cfg.ShieldKey) == 32 {
 			level := shield.ParseHintLevel(s.cfg.ShieldHintLevel)

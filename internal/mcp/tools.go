@@ -1020,6 +1020,13 @@ func (s *Server) registerTools() {
 	// block_locale rows atomically. Lives in tools_translate.go.
 	s.registerTranslateTools()
 
+	// 2 apps tools: Sprint 4 slice A. list_apps_marketplace (read
+	// the cross-tenant catalogue) + list_installed_apps (read the
+	// per-site install ledger with credentials_set metadata, never
+	// the values). Slice B adds use_app for upstream MCP proxy
+	// calls. Lives in tools_apps.go.
+	s.registerAppsTools()
+
 	// Synchronous design lint (gap 4 of 6, 2026-05-21). lint_block runs
 	// the same rule set create_block + update_block embed in their
 	// responses, but standalone so the agent can vet variants before
