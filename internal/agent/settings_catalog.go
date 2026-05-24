@@ -520,6 +520,20 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 			AgentWritable: false,
 		},
 
+		// --- search (Sprint 5 quick-win, 2026-05-24) ---------------------
+		// Pagefind static search index. Opt-in per site to avoid the
+		// post-build cost on tenants that don't want search. When on,
+		// every successful Astro build appends a pagefind index pass
+		// that writes dist/pagefind/ with the search bundle the
+		// search_box block loads at runtime.
+		{
+			Category: "search", Key: "pagefind_enabled",
+			Label:       "Pagefind on-site search",
+			Description: "Run pagefind after every Astro build to generate a same-origin static search index (dist/pagefind/). Pair with the search_box block to expose the UI on a page. Adds 1-5 seconds to build time on a small marketing site; longer for content-heavy builds.",
+			ValueType:   "bool",
+			AgentWritable: true,
+		},
+
 		// --- payments (Sprint 2 slice C+, 2026-05-22) --------------------
 		// Mollie API key + test/live mode flag drive the storefront
 		// checkout. Read by OrderHandler.Checkout + .Refund + .Webhook
@@ -604,6 +618,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		"security.https_redirect":           "1",
 		"payments.mollie_api_key":           "",
 		"payments.mollie_test_mode":         "1",
+		"search.pagefind_enabled":           "0",
 	}
 
 	humanAdminURL := func(category string) string {

@@ -119,15 +119,57 @@ func Build(ctx context.Context, queries *store.Queries, siteID string, dataDir s
 	// Pass the build context through so cancellation (admin click,
 	// graceful shutdown, BuildTimeout) reaches the bun child processes.
 	result := Compile(ctx, wsDir)
+	buildLog := result.BuildLog
+
+	// 8. Sprint 5 quick-win (2026-05-24): optional Pagefind static
+	// search index. Opt-in per site via search.pagefind_enabled so
+	// sites that don't want search don't pay the index-time cost
+	// (1-5s for a small marketing site, longer for content-heavy
+	// builds). Failure is non-fatal: search degrades gracefully (the
+	// search_box block renders an empty mount) so a transient
+	// pagefind crash doesn't fail the whole deploy.
+	if result.Success && shouldRunPagefind(ctx, queries, siteID) {
+		pfLog, err := RunPagefind(ctx, wsDir)
+		buildLog = appendPagefindLog(buildLog, pfLog, err)
+		if err != nil {
+			slog.Warn("build: pagefind failed (non-fatal)", "site_id", siteID, "err", err)
+		}
+	}
 
 	return &BuildResult{
 		DistDir:    result.DistDir,
-		BuildLog:   result.BuildLog,
+		BuildLog:   buildLog,
 		PagesBuilt: pageCount,
 		DurationMs: result.DurationMs,
 		Success:    result.Success,
 		Error:      result.Error,
 	}
+}
+
+// shouldRunPagefind reads search.pagefind_enabled from site_settings.
+// Default off so existing sites keep building byte-identically.
+func shouldRunPagefind(ctx context.Context, queries *store.Queries, siteID string) bool {
+	row, err := queries.GetSetting(ctx, store.GetSettingParams{
+		SiteID: siteID, Category: "search", Key: "pagefind_enabled",
+	})
+	if err != nil {
+		return false
+	}
+	switch row.Value {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// appendPagefindLog tacks the pagefind step onto the build log so
+// operators see whether the index ran + how long it took.
+func appendPagefindLog(existing, pfLog string, pfErr error) string {
+	out := existing + "\n=== pagefind ===\n" + pfLog
+	if pfErr != nil {
+		out += "\nerror: " + pfErr.Error() + "\n"
+	}
+	return out
 }
 
 func fail(msg string) *BuildResult {

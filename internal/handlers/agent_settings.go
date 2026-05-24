@@ -27,6 +27,7 @@ var agentWritableSettingsCategories = map[string]bool{
 	"seo":       true,
 	"analytics": true,
 	"general":   true,
+	"search":    true,
 }
 
 // ListSettings returns all settings rows for the agent's site (any category).
