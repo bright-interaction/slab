@@ -503,7 +503,7 @@ func addColumnIfMissing(sqlDB *sql.DB, table, column, spec string) error {
 // detect whether the constraint is current, and if not, rename the
 // old table, create the wider-CHECK table from schema, copy rows,
 // drop old, recreate indexes. Idempotent: subsequent boots find the
-// constraint already wide and no-op.
+// constraint already wide and no-op. (retrigger marker 2026-05-24)
 //
 // On fresh DBs (no entity_revisions table yet) this returns nil and
 // the schema apply below creates the table with the wide CHECK.
