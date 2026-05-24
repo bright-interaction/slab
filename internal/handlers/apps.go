@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -340,6 +341,60 @@ func (h *AppsHandler) ListAgentInstalls(ctx context.Context, siteID string) ([]A
 		})
 	}
 	return out, nil
+}
+
+// CallAppForAgent dispatches one upstream MCP tools/call for
+// (siteID, appSlug). Slice B's use_app proxy entry point. Resolves
+// the install, hydrates credentials, calls the publisher's MCP
+// endpoint, bumps last_used_at, and returns the upstream result
+// (or upstream error envelope) for the MCP tool to relay.
+//
+// The Go error return is for *dispatch* failures (app not found,
+// not installed, transport failure). Upstream-level failures
+// (HTTP 4xx/5xx, JSON-RPC error) come back inside the
+// UpstreamResult so the agent can see what the publisher said.
+func (h *AppsHandler) CallAppForAgent(ctx context.Context, siteID, appSlug, toolName string, args map[string]any) (*apps.UpstreamResult, error) {
+	app, err := h.queries.GetAppBySlug(ctx, appSlug)
+	if err != nil {
+		return nil, fmt.Errorf("app not found: %s", appSlug)
+	}
+	if app.IsActive != 1 {
+		return nil, fmt.Errorf("app is not active in the marketplace: %s", appSlug)
+	}
+	install, err := h.queries.GetSiteAppInstall(ctx, store.GetSiteAppInstallParams{
+		SiteID: siteID, AppID: app.ID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("app not installed on this site: %s", appSlug)
+	}
+	if install.Status != "active" {
+		return nil, fmt.Errorf("app install is %s on this site", install.Status)
+	}
+	creds := map[string]string{}
+	if install.CredentialsJson != "" {
+		_ = json.Unmarshal([]byte(install.CredentialsJson), &creds)
+	}
+	var fields []apps.CredentialField
+	if app.CredentialsSchemaJson != "" {
+		_ = json.Unmarshal([]byte(app.CredentialsSchemaJson), &fields)
+	}
+	result, err := apps.CallUpstreamMCP(ctx, apps.UpstreamCall{
+		URL:         app.McpUrl,
+		ToolName:    toolName,
+		Arguments:   args,
+		Credentials: creds,
+		Schema:      fields,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Bump last_used_at on every successful dispatch (including
+	// JSON-RPC error responses from upstream; the credentials were
+	// used regardless of the publisher's outcome).
+	_ = h.queries.BumpSiteAppInstallLastUsed(ctx, store.BumpSiteAppInstallLastUsedParams{
+		SiteID: siteID, AppID: app.ID,
+	})
+	return result, nil
 }
 
 // ListAgentMarketplace returns the cross-tenant marketplace for the

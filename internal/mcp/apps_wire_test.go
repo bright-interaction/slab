@@ -19,7 +19,7 @@ func TestWireToolsListIncludesAppsTools(t *testing.T) {
 		tool := ti.(map[string]any)
 		names[tool["name"].(string)] = true
 	}
-	for _, name := range []string{"list_apps_marketplace", "list_installed_apps"} {
+	for _, name := range []string{"list_apps_marketplace", "list_installed_apps", "use_app"} {
 		if !names[name] {
 			t.Errorf("tools/list missing apps tool %q", name)
 		}
