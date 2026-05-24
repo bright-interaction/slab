@@ -8,6 +8,7 @@
 	const tabs = $derived<Tab[]>([
 		{ id: 'overview', label: 'Overview', href: `/sites/${siteID}` },
 		{ id: 'pages', label: 'Pages', href: `/sites/${siteID}/pages` },
+		{ id: 'forms', label: 'Forms', href: `/sites/${siteID}/forms` },
 		{ id: 'global-blocks', label: 'Global blocks', href: `/sites/${siteID}/global-blocks` },
 		{ id: 'branding', label: 'Branding', href: `/sites/${siteID}/branding` },
 		{ id: 'media', label: 'Media', href: `/sites/${siteID}/media` },
