@@ -126,7 +126,8 @@
 
 			for (const bl of blocks) {
 				const draft = blockDrafts[bl.id];
-				const filled = (draft?.dataJson ?? '').trim();
+				if (!draft) continue;
+				const filled = draft.dataJson.trim();
 				if (filled === '') {
 					// Operator left this block untranslated; remove any
 					// stale overlay row instead of writing an empty one.
@@ -156,9 +157,10 @@
 	}
 
 	function copyBaseInto(blockID: string, baseJson: string) {
+		const existing = blockDrafts[blockID] ?? { dataJson: '', visible: true };
 		blockDrafts = {
 			...blockDrafts,
-			[blockID]: { ...blockDrafts[blockID], dataJson: baseJson }
+			[blockID]: { ...existing, dataJson: baseJson }
 		};
 	}
 </script>
@@ -263,16 +265,16 @@
 								</div>
 								<div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
 									<div>
-										<label class="text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
+										<span class="text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
 											Base content (read-only)
-										</label>
+										</span>
 										<pre class="mt-1 max-h-56 overflow-auto rounded-lg border border-border-light bg-bg-elevated p-3 font-mono text-[11.5px]">{bl.data_json}</pre>
 									</div>
 									<div>
 										<div class="flex items-center justify-between">
-											<label class="text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
+											<span class="text-[11px] font-mono uppercase tracking-[0.18em] text-text-muted">
 												{locale} translation
-											</label>
+											</span>
 											<button
 												type="button"
 												class="text-[11px] text-accent underline-offset-2 hover:underline"
@@ -287,9 +289,10 @@
 											value={blockDrafts[bl.id]?.dataJson ?? ''}
 											oninput={(e) => {
 												const value = (e.currentTarget as HTMLTextAreaElement).value;
+												const existing = blockDrafts[bl.id] ?? { dataJson: '', visible: true };
 												blockDrafts = {
 													...blockDrafts,
-													[bl.id]: { ...blockDrafts[bl.id], dataJson: value }
+													[bl.id]: { ...existing, dataJson: value }
 												};
 											}}
 										/>

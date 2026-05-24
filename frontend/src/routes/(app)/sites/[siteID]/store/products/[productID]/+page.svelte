@@ -282,28 +282,24 @@
 						markDirty();
 					}}
 				/>
-				<div>
-					<label class="mb-1.5 block text-xs text-text-muted">Status</label>
-					<Select
-						value={product.status}
-						options={statusOptions}
-						onchange={(v) => {
-							product = { ...product!, status: v as ProductStatus };
-							markDirty();
-						}}
-					/>
-				</div>
-				<div>
-					<label class="mb-1.5 block text-xs text-text-muted">Category</label>
-					<Input
-						value={product.category}
-						oninput={(e) => {
-							product = { ...product!, category: (e.currentTarget as HTMLInputElement).value };
-							markDirty();
-						}}
-						placeholder="apparel"
-					/>
-				</div>
+				<Select
+					label="Status"
+					value={product.status}
+					options={statusOptions}
+					onchange={(v) => {
+						product = { ...product!, status: v as ProductStatus };
+						markDirty();
+					}}
+				/>
+				<Input
+					label="Category"
+					value={product.category}
+					oninput={(e) => {
+						product = { ...product!, category: (e.currentTarget as HTMLInputElement).value };
+						markDirty();
+					}}
+					placeholder="apparel"
+				/>
 				<Input
 					label={`Base price (${product.currency})`}
 					value={(product.base_price_cents / 100).toFixed(2)}
@@ -429,10 +425,7 @@
 		{:else}
 			<Input label="Delta (signed)" bind:value={invDelta} placeholder="+50 or -3" />
 		{/if}
-		<div>
-			<label class="mb-1.5 block text-xs text-text-muted">Reason</label>
-			<Select bind:value={invReason} options={reasonOptions} />
-		</div>
+		<Select label="Reason" bind:value={invReason} options={reasonOptions} />
 		<Input label="Note (optional)" bind:value={invNote} placeholder="Restock from supplier ABC" />
 
 		{#if invAdjustments.length > 0}

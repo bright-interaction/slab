@@ -129,8 +129,8 @@
 
 	function resolutionSummary(row: Clarification): string {
 		if (row.status !== 'resolved') return '';
-		if (row.resolution_option >= 0 && row.resolution_option < row.options.length) {
-			const label = row.options[row.resolution_option];
+		const label = row.options[row.resolution_option];
+		if (label !== undefined) {
 			return row.resolution_text ? `${label}: ${row.resolution_text}` : label;
 		}
 		return row.resolution_text;
@@ -247,10 +247,7 @@
 >
 	<div class="space-y-3">
 		{#if selected && selected.options.length > 0}
-			<div>
-				<label class="mb-1.5 block text-xs text-text-muted">Pick an option</label>
-				<Select bind:value={pickedIndex} options={pickedOptions} disabled={useFreeText} />
-			</div>
+			<Select label="Pick an option" bind:value={pickedIndex} options={pickedOptions} disabled={useFreeText} />
 			<label class="flex items-center gap-2 text-xs text-text-secondary">
 				<input
 					type="checkbox"

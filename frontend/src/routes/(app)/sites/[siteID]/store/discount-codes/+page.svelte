@@ -220,10 +220,7 @@
 	<div class="space-y-3">
 		<Input label="Code" bind:value={newCode} placeholder="SUMMER15" hint="Uppercase A-Z, digits, dash, underscore" />
 		<div class="grid grid-cols-2 gap-3">
-			<div>
-				<label class="mb-1.5 block text-xs text-text-muted">Kind</label>
-				<Select bind:value={newKind} options={kindOptions} />
-			</div>
+			<Select label="Kind" bind:value={newKind} options={kindOptions} />
 			{#if newKind === 'percent'}
 				<Input label="Percent off" bind:value={newPercent} placeholder="15" />
 			{:else}
