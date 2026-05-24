@@ -511,9 +511,22 @@ func renderCodeBlock(data map[string]any) string {
 }
 
 // renderFormBlock renders a basic HTML form. Data shape:
-// {heading?, subheading?, action, method?, fields: [{name, type, label, placeholder?, required?, options?}], submit_label}.
+// {heading?, subheading?, action, method?, fields: [{name, type, label, placeholder?, required?, options?, visible_if_field?, visible_if_equals?, step?}], submit_label, next_label?, previous_label?}.
 // type can be: text, email, tel, url, textarea, select, checkbox, radio.
 // Browser submits to action; the operator wires the receiving endpoint.
+//
+// Sprint 5 quick-win (2026-05-24) extends the renderer with two
+// additive behaviours wired by a single inline form script:
+//  1. Conditional field visibility via visible_if_field +
+//     visible_if_equals. Empty visible_if_equals = "any non-empty
+//     value on the gating field". Required fields are auto-unrequired
+//     while hidden so the form doesn't fail submit on data the user
+//     can't see.
+//  2. Multi-step forms via step (number, default 0). When any field
+//     has step >= 1 the form auto-groups all fields by step and
+//     renders Next / Previous buttons; the submit button only shows
+//     on the highest step. Honeypot + ungrouped fields (step=0) live
+//     on step 1.
 func renderFormBlock(data map[string]any) string {
 	var b strings.Builder
 	b.WriteString("  <section class=\"block block--form\">\n")
@@ -544,17 +557,93 @@ func renderFormBlock(data map[string]any) string {
 	if formID != "" {
 		formIDAttr = fmt.Sprintf(" data-form-id=\"%s\"", escapeAttr(formID))
 	}
-	b.WriteString(fmt.Sprintf("    <form action=\"%s\" method=\"%s\"%s>\n", escapeURL(action), method, formIDAttr))
+
+	// Multi-step detection: scan once for the highest step value. If
+	// every field has step=0 (or omitted) the form renders the
+	// classic single-step layout and we skip the step-wrapper markup.
+	maxStep := int64(0)
+	fieldsRaw, _ := data["fields"].([]any)
+	for _, f := range fieldsRaw {
+		field, ok := f.(map[string]any)
+		if !ok {
+			continue
+		}
+		if s := numberFromData(field, "step"); s > maxStep {
+			maxStep = s
+		}
+	}
+	hasMultiStep := maxStep > 0
+	// Conditional visibility detection: any field carries a
+	// visible_if_field? Used to decide whether to emit the runtime
+	// script at all so single-step / no-conditional forms stay
+	// markup-only.
+	hasConditional := false
+	for _, f := range fieldsRaw {
+		field, ok := f.(map[string]any)
+		if !ok {
+			continue
+		}
+		if dataString(field, "visible_if_field") != "" {
+			hasConditional = true
+			break
+		}
+	}
+
+	formClasses := "block-form"
+	if hasMultiStep {
+		formClasses += " block-form--multi-step"
+	}
+	b.WriteString(fmt.Sprintf("    <form class=\"%s\" action=\"%s\" method=\"%s\"%s>\n", formClasses, escapeURL(action), method, formIDAttr))
 	// Honeypot field. Bots that auto-fill all visible inputs trip
 	// this and the public submit endpoint silently drops the row.
 	// Real users never see the field (off-screen + tabindex=-1).
 	b.WriteString("      <input type=\"text\" name=\"website\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\" style=\"position:absolute;left:-9999px;width:1px;height:1px;opacity:0;\" />\n")
-	if fieldsRaw, ok := data["fields"].([]any); ok {
-		for _, f := range fieldsRaw {
-			field, ok := f.(map[string]any)
-			if !ok {
-				continue
-			}
+
+	// Group fields by step for multi-step rendering. step=0 (or
+	// missing) lands on step 1 alongside any other ungrouped fields.
+	// Single-step forms see this collapse into one group at "1".
+	stepGroups := map[int64][]map[string]any{}
+	stepOrder := []int64{}
+	for _, f := range fieldsRaw {
+		field, ok := f.(map[string]any)
+		if !ok {
+			continue
+		}
+		step := numberFromData(field, "step")
+		if step <= 0 {
+			step = 1
+		}
+		if _, seen := stepGroups[step]; !seen {
+			stepOrder = append(stepOrder, step)
+		}
+		stepGroups[step] = append(stepGroups[step], field)
+	}
+	// Sort step keys ascending so step 1 renders first.
+	for i := 1; i < len(stepOrder); i++ {
+		for j := i; j > 0 && stepOrder[j-1] > stepOrder[j]; j-- {
+			stepOrder[j-1], stepOrder[j] = stepOrder[j], stepOrder[j-1]
+		}
+	}
+	if len(stepOrder) == 0 {
+		stepOrder = []int64{1}
+	}
+
+	for idx, step := range stepOrder {
+		isFirst := idx == 0
+		isLast := idx == len(stepOrder)-1
+		// Wrap each step in a <fieldset> with data-form-step so the
+		// runtime script can toggle visibility step-by-step. When the
+		// form has only one step the fieldset stays visible
+		// unconditionally and the Next/Previous buttons never render,
+		// so the markup degrades cleanly without JS.
+		hiddenAttr := ""
+		if hasMultiStep && !isFirst {
+			hiddenAttr = " hidden"
+		}
+		if hasMultiStep {
+			b.WriteString(fmt.Sprintf("      <fieldset class=\"form-step\" data-form-step=\"%d\"%s>\n", step, hiddenAttr))
+		}
+		for _, field := range stepGroups[step] {
 			name := dataString(field, "name")
 			ftype := dataString(field, "type")
 			label := dataString(field, "label")
@@ -563,13 +652,36 @@ func renderFormBlock(data map[string]any) string {
 			if name == "" || ftype == "" {
 				continue
 			}
-			b.WriteString("      <div class=\"form-field\">\n")
+			visIfField := dataString(field, "visible_if_field")
+			visIfEquals := dataString(field, "visible_if_equals")
+			fieldAttrs := ""
+			fieldHidden := ""
+			if visIfField != "" {
+				fieldAttrs = fmt.Sprintf(" data-visible-if-field=\"%s\" data-visible-if-equals=\"%s\"",
+					escapeAttr(visIfField), escapeAttr(visIfEquals))
+				// Hidden by default; the script reveals on first
+				// evaluation so flash-of-visible-content never
+				// happens. The hidden attribute also drops the field
+				// from form submission per native browser semantics
+				// + tabbing order.
+				fieldHidden = " hidden"
+			}
+			b.WriteString(fmt.Sprintf("      <div class=\"form-field\"%s%s>\n", fieldAttrs, fieldHidden))
 			if label != "" {
 				b.WriteString(fmt.Sprintf("        <label for=\"f-%s\">%s</label>\n", escapeAttr(name), escapeHTML(label)))
 			}
 			reqAttr := ""
 			if required {
-				reqAttr = " required"
+				// Conditional fields use data-required + skip the
+				// native required attribute, so the form doesn't
+				// reject submit on a field the user can't see. The
+				// runtime script re-applies the native required only
+				// while visible.
+				if visIfField != "" {
+					reqAttr = " data-required"
+				} else {
+					reqAttr = " required"
+				}
 			}
 			switch ftype {
 			case "textarea":
@@ -594,14 +706,88 @@ func renderFormBlock(data map[string]any) string {
 			}
 			b.WriteString("      </div>\n")
 		}
+		if hasMultiStep {
+			// Step nav buttons inside the fieldset so they hide
+			// alongside their step.
+			previousLabel := dataString(data, "previous_label")
+			if previousLabel == "" {
+				previousLabel = "Back"
+			}
+			nextLabel := dataString(data, "next_label")
+			if nextLabel == "" {
+				nextLabel = "Next"
+			}
+			b.WriteString("        <div class=\"form-step-nav\">\n")
+			if !isFirst {
+				b.WriteString(fmt.Sprintf("          <button type=\"button\" data-form-prev>%s</button>\n", escapeHTML(previousLabel)))
+			}
+			if !isLast {
+				b.WriteString(fmt.Sprintf("          <button type=\"button\" data-form-next>%s</button>\n", escapeHTML(nextLabel)))
+			}
+			b.WriteString("        </div>\n")
+			b.WriteString("      </fieldset>\n")
+		}
 	}
+
 	submitLabel := dataString(data, "submit_label")
 	if submitLabel == "" {
 		submitLabel = "Submit"
 	}
-	b.WriteString(fmt.Sprintf("      <button type=\"submit\">%s</button>\n", escapeHTML(submitLabel)))
+	// Submit button lives OUTSIDE any step fieldset so single-step
+	// forms render it inline AND multi-step forms only show it on
+	// the final step (the script toggles hidden on it based on which
+	// step is active). When single-step, the script doesn't run and
+	// the button stays visible by default.
+	submitHidden := ""
+	if hasMultiStep {
+		submitHidden = " hidden"
+	}
+	b.WriteString(fmt.Sprintf("      <button type=\"submit\" data-form-submit%s>%s</button>\n", submitHidden, escapeHTML(submitLabel)))
 	b.WriteString("    </form>\n")
+
+	// Inline form-logic script: toggles conditional fields + steps.
+	// Same CSP-safe inline pattern as the other small per-form
+	// scripts in the codebase (visitor hydration, storefront
+	// island). Emitted only when needed.
+	if hasConditional || hasMultiStep {
+		b.WriteString(formLogicScript(hasConditional, hasMultiStep))
+	}
+
 	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// formLogicScript returns the inline vanilla-JS handler that powers
+// conditional-visibility + multi-step gating on the form. CSP-safe
+// (inline allowed under the existing 'unsafe-inline' relaxation OR
+// hashed by Caddy when the operator pins a strict CSP). Idle cost on
+// non-form pages is zero because the script lives inside the form
+// block's own markup; no global event listeners.
+func formLogicScript(conditional, multiStep bool) string {
+	var b strings.Builder
+	b.WriteString("    <script>(function(){\n")
+	b.WriteString("      var script=document.currentScript; var form=script&&script.previousElementSibling; while(form&&form.tagName!=='FORM'){form=form.previousElementSibling;}\n")
+	b.WriteString("      if(!form){return;}\n")
+	if conditional {
+		b.WriteString("      function evalConditional(){\n")
+		b.WriteString("        var gated=form.querySelectorAll('[data-visible-if-field]');\n")
+		b.WriteString("        for(var i=0;i<gated.length;i++){\n")
+		b.WriteString("          var el=gated[i]; var fieldName=el.getAttribute('data-visible-if-field'); var needs=el.getAttribute('data-visible-if-equals')||'';\n")
+		b.WriteString("          var src=form.querySelector('[name=\"'+fieldName+'\"]'); var val=src?(src.type==='checkbox'?(src.checked?'1':''):src.value):'';\n")
+		b.WriteString("          var show=needs===''?(val!==''):(val===needs);\n")
+		b.WriteString("          if(show){el.removeAttribute('hidden');}else{el.setAttribute('hidden','');}\n")
+		b.WriteString("          var dr=el.querySelectorAll('[data-required]'); for(var j=0;j<dr.length;j++){ if(show){dr[j].setAttribute('required','');}else{dr[j].removeAttribute('required');} }\n")
+		b.WriteString("        }\n")
+		b.WriteString("      }\n")
+		b.WriteString("      form.addEventListener('input',evalConditional); form.addEventListener('change',evalConditional); evalConditional();\n")
+	}
+	if multiStep {
+		b.WriteString("      var steps=form.querySelectorAll('[data-form-step]'); var current=0; var submitBtn=form.querySelector('[data-form-submit]');\n")
+		b.WriteString("      function showStep(idx){ for(var i=0;i<steps.length;i++){ if(i===idx){steps[i].removeAttribute('hidden');}else{steps[i].setAttribute('hidden','');} } if(submitBtn){ if(idx===steps.length-1){submitBtn.removeAttribute('hidden');}else{submitBtn.setAttribute('hidden','');} } current=idx; }\n")
+		b.WriteString("      form.addEventListener('click',function(e){ var t=e.target; if(t.matches&&t.matches('[data-form-next]')){e.preventDefault(); if(current<steps.length-1)showStep(current+1);} else if(t.matches&&t.matches('[data-form-prev]')){e.preventDefault(); if(current>0)showStep(current-1);} });\n")
+		b.WriteString("      showStep(0);\n")
+	}
+	b.WriteString("    })();</script>\n")
 	return b.String()
 }
 

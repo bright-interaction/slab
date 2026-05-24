@@ -340,8 +340,26 @@ func init() {
 				{Key: "options", Label: "Options (select only)", Kind: KindArray, ItemSchema: []Field{
 					{Key: "", Label: "Option", Kind: KindText, Required: true},
 				}},
+				// Sprint 5 quick-win (2026-05-24): conditional field
+				// visibility. When set, the runtime show/hide script
+				// in the form renderer only shows this field when the
+				// named other field's value equals the supplied
+				// string. Hidden fields are NOT removed from the DOM,
+				// just `hidden` attribute toggled, so re-showing is
+				// instant + state survives across reveal/hide cycles.
+				{Key: "visible_if_field", Label: "Show only when field", Kind: KindText, Help: "Optional. Name of another field on this form whose value gates this one."},
+				{Key: "visible_if_equals", Label: "...equals this value", Kind: KindText, Help: "The value the gating field must hold for this one to show. Exact string match. Empty value means 'when the gating field has any non-empty value'."},
+				// Sprint 5 quick-win (2026-05-24): multi-step grouping.
+				// All fields with step=0 (or missing) render on the
+				// initial step; fields with step=1+ render on
+				// subsequent steps with Next / Previous buttons
+				// gating between them. Set 0 (default) to keep the
+				// field on the single-step classic form.
+				{Key: "step", Label: "Step (multi-step forms)", Kind: KindNumber, Help: "0 = single-step (default). 1+ groups this field on the Nth step; Next/Previous buttons appear automatically when any field has step >= 1."},
 			}},
 			{Key: "submit_label", Label: "Submit button label", Kind: KindText, Placeholder: "Submit"},
+			{Key: "next_label", Label: "Next button label (multi-step)", Kind: KindText, Placeholder: "Next"},
+			{Key: "previous_label", Label: "Previous button label (multi-step)", Kind: KindText, Placeholder: "Back"},
 		},
 	})
 
