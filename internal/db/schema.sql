@@ -1501,6 +1501,35 @@ CREATE TABLE IF NOT EXISTS page_locales (
 );
 CREATE INDEX IF NOT EXISTS idx_page_locales_locale ON page_locales(locale);
 
+-- cwv_events stores Core Web Vitals samples reported from real
+-- visitors via the /t/cwv beacon (Sprint 5 quick-win, 2026-05-24).
+-- One row per (visitor, page, metric); the dashboard widget reads
+-- last-7-days windows and computes p75 in Go. metric is constrained
+-- to the five web-vitals.js native metrics so the dashboard's
+-- threshold table can map directly to Google's published bands.
+-- value is stored as REAL (CLS values are fractional, LCP / INP /
+-- FCP / TTFB are milliseconds). rating is the publisher-supplied
+-- 'good' / 'needs-improvement' / 'poor' label so the dashboard
+-- doesn't have to re-compute thresholds (publisher = web-vitals.js
+-- library bumping its own table over time without us having to ship
+-- code). device groups desktop vs mobile (the dashboard splits by
+-- device since INP differs sharply between them).
+CREATE TABLE IF NOT EXISTS cwv_events (
+    id          TEXT PRIMARY KEY,
+    site_id     TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    page_path   TEXT NOT NULL,
+    metric      TEXT NOT NULL
+                CHECK (metric IN ('LCP','INP','CLS','FCP','TTFB')),
+    value       REAL NOT NULL,
+    rating      TEXT NOT NULL DEFAULT '',
+    device      TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cwv_site_metric_created
+    ON cwv_events(site_id, metric, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cwv_site_created
+    ON cwv_events(site_id, created_at);
+
 -- block_locales overrides per-locale block content. data_json shadows
 -- the base block's data_json for that locale only; nil/missing means
 -- "use the base content unchanged". is_visible can also be flipped

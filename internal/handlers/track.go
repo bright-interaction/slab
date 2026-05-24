@@ -868,3 +868,104 @@ func encodeCategories(c map[string]bool) string {
 func deriveVisitorID(siteID, fingerprint string) string {
 	return "v_" + siteID[:6] + "_" + fingerprint
 }
+
+// cwvRequest is the body the inline web-vitals measurement script
+// sends to /t/cwv per (visitor, page, metric). The script fires one
+// beacon per metric observation; the schema's CHECK constraint
+// rejects bad metric names so a confused client gets 400 rather than
+// silently writing junk. Sprint 5 quick-win (2026-05-24).
+type cwvRequest struct {
+	SiteID   string  `json:"siteId"`
+	PagePath string  `json:"page"`
+	Metric   string  `json:"metric"`
+	Value    float64 `json:"value"`
+	Rating   string  `json:"rating"`
+	Device   string  `json:"device"`
+}
+
+var validCWVMetrics = map[string]bool{
+	"LCP": true, "INP": true, "CLS": true, "FCP": true, "TTFB": true,
+}
+
+var validCWVRatings = map[string]bool{
+	"":                  true,
+	"good":              true,
+	"needs-improvement": true,
+	"poor":              true,
+}
+
+// CWV receives a single Core Web Vitals metric observation from the
+// inline web-vitals measurement script. Rate-limited per IP via the
+// engagement limiter (CWV beacons share that budget; both fire
+// during pageviews + at most a handful per visit). Best-effort
+// storage: a failed insert logs but answers 204 so a transient DB
+// hiccup doesn't churn the client's retry loop.
+func (h *TrackHandler) CWV(w http.ResponseWriter, r *http.Request) {
+	if h.engagementLimiter != nil && !h.engagementLimiter.allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "5")
+		writeError(w, http.StatusTooManyRequests, "Too many CWV beacons; slow down")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, trackBodyMaxBytes)
+	defer r.Body.Close()
+
+	var req cwvRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+	siteID := strings.TrimSpace(req.SiteID)
+	if !isSafeSiteID(siteID) {
+		writeError(w, http.StatusBadRequest, "Invalid siteId")
+		return
+	}
+	if _, err := h.queries.GetSiteByID(r.Context(), siteID); err != nil {
+		writeError(w, http.StatusNotFound, "Unknown siteId")
+		return
+	}
+	metric := strings.ToUpper(strings.TrimSpace(req.Metric))
+	if !validCWVMetrics[metric] {
+		writeError(w, http.StatusBadRequest, "Unsupported metric")
+		return
+	}
+	rating := strings.ToLower(strings.TrimSpace(req.Rating))
+	if !validCWVRatings[rating] {
+		// Unknown rating = drop to empty rather than 400, so a future
+		// web-vitals.js version that introduces new band labels does
+		// not break the receiver.
+		rating = ""
+	}
+	device := strings.ToLower(strings.TrimSpace(req.Device))
+	if device != "desktop" && device != "mobile" && device != "tablet" {
+		device = ""
+	}
+	path := strings.TrimSpace(req.PagePath)
+	if path == "" {
+		path = "/"
+	}
+	if len(path) > 1024 {
+		path = path[:1024]
+	}
+	// Cap value to a sane positive range. LCP / INP in ms can reach
+	// many seconds on bad networks; CLS is fractional 0..unbounded
+	// but practically <= 5. 60_000 covers all observed bad numbers.
+	v := req.Value
+	if v < 0 {
+		v = 0
+	}
+	if v > 60000 {
+		v = 60000
+	}
+	if err := h.queries.InsertCWVEvent(r.Context(), store.InsertCWVEventParams{
+		ID:       newID(),
+		SiteID:   siteID,
+		PagePath: path,
+		Metric:   metric,
+		Value:    v,
+		Rating:   rating,
+		Device:   device,
+	}); err != nil {
+		slog.Error("track: cwv insert", "site_id", siteID, "metric", metric, "err", err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

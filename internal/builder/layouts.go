@@ -350,6 +350,20 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	}
 	b.WriteString(RenderStorefrontIslandTag())
 
+	// Sprint 5 quick-win (2026-05-24): Core Web Vitals beacon. Opt-in
+	// via analytics.cwv_enabled so tenants who don't want the field
+	// data don't pay the per-pageview beacon cost. CookieProof consent
+	// gating mirrors the engagement beacon: when the consent widget is
+	// wired up, wait for analytics=true; otherwise report under
+	// legitimate interest from first paint.
+	if boolSetting(settingsMap["analytics.cwv_enabled"], false) {
+		trackPath := orDefault(settingsMap["analytics.track_path"], "/t")
+		if err := WriteCWVBeaconAsset(wsDir, site.ID, trackPath, cookieProofEnabled); err != nil {
+			return fmt.Errorf("write cwv beacon asset: %w", err)
+		}
+		b.WriteString(RenderCWVBeacon())
+	}
+
 	b.WriteString("</body>\n</html>\n")
 
 	return WriteFile(filepath.Join(wsDir, "src", "layouts", "Base.astro"), b.String())

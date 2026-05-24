@@ -209,6 +209,17 @@ type CssClass struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type CwvEvent struct {
+	ID        string  `json:"id"`
+	SiteID    string  `json:"site_id"`
+	PagePath  string  `json:"page_path"`
+	Metric    string  `json:"metric"`
+	Value     float64 `json:"value"`
+	Rating    string  `json:"rating"`
+	Device    string  `json:"device"`
+	CreatedAt string  `json:"created_at"`
+}
+
 type DeployTarget struct {
 	ID         string `json:"id"`
 	SiteID     string `json:"site_id"`

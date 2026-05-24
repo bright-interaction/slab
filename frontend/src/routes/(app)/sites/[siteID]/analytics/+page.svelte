@@ -12,6 +12,7 @@
 		VisitSession
 	} from '$lib/api/analytics';
 	import Card from '$lib/components/ui/Card.svelte';
+	import CWVCard from '$lib/components/analytics/CWVCard.svelte';
 	import Skeleton from '$lib/components/ui/Skeleton.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -397,6 +398,10 @@
 					<p class="mt-1 text-[11px] text-text-muted">consented and matched</p>
 				</Card>
 			</div>
+		</section>
+
+		<section class="mt-8">
+			<CWVCard {siteID} />
 		</section>
 
 		{#if overview && overview.time_series && overview.time_series.length > 0}

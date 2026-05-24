@@ -165,6 +165,9 @@ type PerSiteSweepResult struct {
 	EngagementDeleted      int64  `json:"engagement_deleted"`
 	SessionsDeleted        int64  `json:"sessions_deleted"`
 	ConsentDeleted         int64  `json:"consent_deleted"`
+	// CWVDeleted is the count of cwv_events rows purged in this sweep.
+	// Shares the analytics retention window.
+	CWVDeleted int64 `json:"cwv_deleted"`
 }
 
 // NewManager builds a Manager. Pass the same *sql.DB and *store.Queries the
@@ -477,6 +480,18 @@ func (m *Manager) purgeSite(ctx context.Context, siteID string) PerSiteSweepResu
 		slog.Warn("retention: delete consent", "site_id", siteID, "err", err)
 	} else {
 		res.ConsentDeleted = n
+	}
+
+	// Sprint 5 quick-win (2026-05-24): per-site CWV sample retention.
+	// Shares the analytics retention window since CWV is part of the
+	// real-user analytics surface; a separate window would be more
+	// flexibility than tenants need today.
+	if n, err := m.queries.DeleteCWVBySiteOlderThan(ctx, store.DeleteCWVBySiteOlderThanParams{
+		SiteID: siteID, CreatedAt: tsCutoff,
+	}); err != nil {
+		slog.Warn("retention: delete cwv events", "site_id", siteID, "err", err)
+	} else {
+		res.CWVDeleted = n
 	}
 
 	return res
