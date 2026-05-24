@@ -135,6 +135,11 @@ type Server struct {
 	// with a clean "not configured" error.
 	locales *handlers.LocalesHandler
 
+	// apps wires the Sprint 4 slice A read-only MCP tools
+	// (list_apps_marketplace + list_installed_apps). Nil disables
+	// both with a clean "not configured" error.
+	apps *handlers.AppsHandler
+
 	tools     map[string]Tool
 	resources map[string]Resource
 	prompts   map[string]Prompt
@@ -196,6 +201,14 @@ func (s *Server) WithOrders(h *handlers.OrderHandler) *Server {
 // disables translate_entity.
 func (s *Server) WithLocales(h *handlers.LocalesHandler) *Server {
 	s.locales = h
+	return s
+}
+
+// WithApps wires the apps handler so list_apps_marketplace +
+// list_installed_apps share the REST cross-tenant guards. nil
+// disables both tools.
+func (s *Server) WithApps(h *handlers.AppsHandler) *Server {
+	s.apps = h
 	return s
 }
 

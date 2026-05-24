@@ -25,6 +25,24 @@ type AllowedScript struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type App struct {
+	ID                    string `json:"id"`
+	Slug                  string `json:"slug"`
+	Name                  string `json:"name"`
+	Description           string `json:"description"`
+	Category              string `json:"category"`
+	Publisher             string `json:"publisher"`
+	IconUrl               string `json:"icon_url"`
+	McpUrl                string `json:"mcp_url"`
+	DocsUrl               string `json:"docs_url"`
+	Version               string `json:"version"`
+	CredentialsSchemaJson string `json:"credentials_schema_json"`
+	IsCurated             int64  `json:"is_curated"`
+	IsActive              int64  `json:"is_active"`
+	CreatedAt             string `json:"created_at"`
+	UpdatedAt             string `json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID           string `json:"id"`
 	ActorUserID  string `json:"actor_user_id"`
@@ -631,6 +649,18 @@ type Site struct {
 	QuotaOverageBlocked int64  `json:"quota_overage_blocked"`
 	CreatedAt           string `json:"created_at"`
 	UpdatedAt           string `json:"updated_at"`
+}
+
+type SiteAppInstall struct {
+	SiteID          string `json:"site_id"`
+	AppID           string `json:"app_id"`
+	Status          string `json:"status"`
+	CredentialsJson string `json:"credentials_json"`
+	InstalledBy     string `json:"installed_by"`
+	LastUsedAt      string `json:"last_used_at"`
+	Notes           string `json:"notes"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
 }
 
 type SiteArchitecture struct {

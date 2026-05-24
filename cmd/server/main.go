@@ -137,6 +137,15 @@ func main() {
 	// flow create workspaces explicitly.
 	ensureDefaultWorkspace(queries)
 
+	// Sprint 4 (2026-05-24): seed the curated apps catalogue on every
+	// boot. UpsertApp is idempotent so the rows get refreshed (new
+	// descriptions / credential schemas / version bumps) without
+	// touching site_app_installs. Slice A ships 8 curated apps; new
+	// publishers add rows via Slice B's publisher console.
+	if err := handlers.NewAppsHandler(cfg, queries).SeedCuratedApps(context.Background()); err != nil {
+		slog.Warn("apps: seed curated catalogue failed (non-fatal)", "err", err)
+	}
+
 	// Set embedded frontend FS
 	sub, err := fs.Sub(frontendFiles, "frontend/build")
 	if err != nil {

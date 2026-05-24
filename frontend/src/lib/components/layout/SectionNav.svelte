@@ -14,6 +14,7 @@
 		{ id: 'build', label: 'Build', href: `/sites/${siteID}/build` },
 		{ id: 'clarifications', label: 'Clarifications', href: `/sites/${siteID}/clarifications` },
 		{ id: 'store', label: 'Store', href: `/sites/${siteID}/store` },
+		{ id: 'apps', label: 'Apps', href: `/sites/${siteID}/apps` },
 		{ id: 'analytics', label: 'Analytics', href: `/sites/${siteID}/analytics` },
 		{ id: 'cookies', label: 'Cookies', href: `/sites/${siteID}/cookies` },
 		{ id: 'settings', label: 'Settings', href: `/sites/${siteID}/settings` }
