@@ -165,6 +165,28 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "video_hero", Label: "Video hero", Category: "hero",
+		Description: "Hero block with a background video (self-hosted or YouTube/Vimeo no-cookie). Poster image preloads first so LCP stays fast.",
+		Fields: []Field{
+			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText},
+			{Key: "headline", Label: "Headline", Kind: KindText, Required: true},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "video_source", Label: "Video source", Kind: KindSelect, Options: []Option{
+				{Value: "self_hosted", Label: "Self-hosted (uploaded video)"},
+				{Value: "youtube", Label: "YouTube (no-cookie)"},
+				{Value: "vimeo", Label: "Vimeo"},
+			}, Help: "youtube uses youtube-nocookie.com so no third-party cookies are set before consent."},
+			{Key: "video_id", Label: "Video ID or media ID", Kind: KindText, Required: true, Help: "For self_hosted: paste the uploaded media ID. For YouTube/Vimeo: the public video ID."},
+			{Key: "poster_image_id", Label: "Poster image", Kind: KindImageID, Help: "Shown while the video loads. Becomes the LCP element so make it sharp."},
+			{Key: "overlay_opacity", Label: "Overlay darkness (0-100)", Kind: KindText, Placeholder: "35", Help: "Dark overlay between video and text. Higher = more legible copy."},
+			{Key: "cta_text", Label: "Primary CTA text", Kind: KindText},
+			{Key: "cta_url", Label: "Primary CTA URL", Kind: KindURL},
+			{Key: "secondary_label", Label: "Secondary link text", Kind: KindText},
+			{Key: "secondary_url", Label: "Secondary link URL", Kind: KindURL},
+		},
+	})
+
+	Register(Schema{
 		Type: "testimonial_wall", Label: "Testimonial wall", Category: "social proof",
 		Description: "Customer quote wall. Three layouts: 'wall' (masonry grid), 'carousel' (horizontal scroll-snap), 'single_featured' (one large quote).",
 		Fields: []Field{
