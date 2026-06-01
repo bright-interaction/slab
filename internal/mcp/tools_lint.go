@@ -9,7 +9,29 @@ import (
 	"github.com/brightinteraction/atomicsite/internal/agent"
 	"github.com/brightinteraction/atomicsite/internal/critique"
 	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	"github.com/brightinteraction/atomicsite/internal/store"
 )
+
+// strictDesignLintEnabled reads the per-site `design.strict_lint` setting.
+// Default ON (returns true) so new sites get design enforcement out of the
+// box; operators flip it via bulk_upsert_settings to "0"/"false"/"off" for a
+// relaxed mode. A missing row / DB error keeps the default ON: strict mode is
+// the documented default and we do not silently downgrade enforcement.
+func strictDesignLintEnabled(ctx context.Context, queries *store.Queries, siteID string) bool {
+	row, err := queries.GetSetting(ctx, store.GetSettingParams{
+		SiteID:   siteID,
+		Category: "design",
+		Key:      "strict_lint",
+	})
+	if err != nil {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(row.Value)) {
+	case "0", "false", "off", "no":
+		return false
+	}
+	return true
+}
 
 // runBlockLint is the in-process bridge create_block + update_block
 // use to run the synchronous design lint (gap 4 of 6, 2026-05-21).

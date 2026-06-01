@@ -327,7 +327,7 @@ func (s *Server) registerTools() {
 
 	register(Tool{
 		Name:        "create_block",
-		Description: "Creates a new block on a page. Required: page_slug, block_type. Optional: data (block-type-specific JSON, see context.block_schemas), style, sort_order. Use list_blocks first to see what's already there + sort_order conventions.",
+		Description: "Creates a new block on a page. Required: page_slug, block_type. Optional: data (block-type-specific JSON, see context.block_schemas), style, sort_order, force (bool: bypass strict-mode lint, default false). Strict mode (default ON) refuses writes that hit slop_term, slop_name, slop_company, slop_number, or archetype_drift findings; pass force=true to override after a human has approved the copy. Use list_blocks first to see what's already there + sort_order conventions.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
@@ -335,7 +335,8 @@ func (s *Server) registerTools() {
 				"block_type":{"type":"string"},
 				"data":{"type":"object"},
 				"style":{"type":"object"},
-				"sort_order":{"type":"integer"}
+				"sort_order":{"type":"integer"},
+				"force":{"type":"boolean"}
 			},
 			"required":["page_slug","block_type"]
 		}`),
@@ -347,6 +348,7 @@ func (s *Server) registerTools() {
 				Data      any    `json:"data"`
 				Style     any    `json:"style"`
 				SortOrder *int64 `json:"sort_order"`
+				Force     bool   `json:"force"`
 			}
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", err
@@ -358,6 +360,21 @@ func (s *Server) registerTools() {
 			if err != nil {
 				return "", fmt.Errorf("page not found: %s", args.PageSlug)
 			}
+
+			findings := runBlockLint(args.BlockType, page.Archetype, args.Data)
+			if !args.Force && strictDesignLintEnabled(ctx, s.queries, agent.SiteID) {
+				if blockers := critique.FilterBlocking(findings); len(blockers) > 0 {
+					return mustJSON(map[string]any{
+						"error":              "strict_lint_blocked",
+						"blockers":           blockers,
+						"design_warnings":    findings,
+						"design_inspiration": critique.InspirationsFor(args.BlockType),
+						"page_archetype":     page.Archetype,
+						"hint":               "Strict design lint refused the write. Each blocker carries a fix hint; revise the data and call create_block again. Override only after a human reviewer has approved the copy by passing force=true, or set site_settings design.strict_lint=0 to relax for this site.",
+					}), nil
+				}
+			}
+
 			id := newID()
 			var so int64
 			if args.SortOrder != nil {
@@ -378,7 +395,7 @@ func (s *Server) registerTools() {
 			inspirations := critique.InspirationsFor(args.BlockType)
 			return mustJSON(map[string]any{
 				"block":              block,
-				"design_warnings":    runBlockLint(args.BlockType, page.Archetype, args.Data),
+				"design_warnings":    findings,
 				"design_inspiration": inspirations,
 				"page_archetype":     page.Archetype,
 				"hint":               "design_warnings = synchronous write-time lint (gap 4 + 6): a hero with no hero_graphic, an overly long headline, slop terms in copy, custom block duplicate eyebrow, archetype drift when the page is locked. Each finding carries a fix hint. design_inspiration = curated 2-3 design-corpus references for this block_type (gap 5); read them via search_design_corpus when designing the next variant. page_archetype = the lock the page carries (set via set_page_archetype); empty = no lock.",
@@ -388,7 +405,7 @@ func (s *Server) registerTools() {
 
 	register(Tool{
 		Name:        "update_block",
-		Description: "Updates a block by id. Pass block_id + any of: block_type, data, style, is_visible (0|1), sort_order. Use list_blocks to find the block_id.",
+		Description: "Updates a block by id. Pass block_id + any of: block_type, data, style, is_visible (0|1), sort_order, force (bool: bypass strict-mode lint, default false). Strict mode (default ON) refuses writes that hit slop_term, slop_name, slop_company, slop_number, or archetype_drift findings. Use list_blocks to find the block_id.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
@@ -397,7 +414,8 @@ func (s *Server) registerTools() {
 				"data":{"type":"object"},
 				"style":{"type":"object"},
 				"is_visible":{"type":"integer","enum":[0,1]},
-				"sort_order":{"type":"integer"}
+				"sort_order":{"type":"integer"},
+				"force":{"type":"boolean"}
 			},
 			"required":["block_id"]
 		}`),
@@ -410,6 +428,7 @@ func (s *Server) registerTools() {
 				Style     any     `json:"style"`
 				IsVisible *int64  `json:"is_visible"`
 				SortOrder *int64  `json:"sort_order"`
+				Force     bool    `json:"force"`
 			}
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", err
@@ -430,6 +449,24 @@ func (s *Server) registerTools() {
 			if args.Data != nil {
 				data = marshalJSON(args.Data)
 			}
+
+			// Run lint against the incoming data BEFORE the UpdateBlock call so
+			// strict-mode blockers can refuse to overwrite a clean block with
+			// slop. Lint runs against the merged post-update state.
+			findings := runBlockLintFromJSON(bt, page.Archetype, data)
+			if !args.Force && strictDesignLintEnabled(ctx, s.queries, agent.SiteID) {
+				if blockers := critique.FilterBlocking(findings); len(blockers) > 0 {
+					return mustJSON(map[string]any{
+						"error":              "strict_lint_blocked",
+						"blockers":           blockers,
+						"design_warnings":    findings,
+						"design_inspiration": critique.InspirationsFor(bt),
+						"page_archetype":     page.Archetype,
+						"hint":               "Strict design lint refused the update. Each blocker carries a fix hint; revise the data and call update_block again. Override only after human approval by passing force=true, or set site_settings design.strict_lint=0 to relax for this site.",
+					}), nil
+				}
+			}
+
 			style := existing.StyleJson
 			if args.Style != nil {
 				style = marshalJSON(args.Style)
@@ -450,7 +487,7 @@ func (s *Server) registerTools() {
 			block, _ := s.queries.GetBlockByID(ctx, args.BlockID)
 			return mustJSON(map[string]any{
 				"block":              block,
-				"design_warnings":    runBlockLintFromJSON(bt, page.Archetype, data),
+				"design_warnings":    findings,
 				"design_inspiration": critique.InspirationsFor(bt),
 				"page_archetype":     page.Archetype,
 				"hint":               "design_warnings = synchronous design lint (gap 4 + 6); design_inspiration = curated corpus references for this block_type (gap 5); page_archetype = current lock (set via set_page_archetype). See create_block hint for the full schema.",
