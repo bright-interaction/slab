@@ -21,7 +21,8 @@
 		FormInput,
 		Frame,
 		FileCode2,
-		Wand2
+		Wand2,
+		MessageSquareQuote
 	} from 'lucide-svelte';
 	import * as blocksApi from '$lib/api/blocks';
 	import type { BlockSchema } from '$lib/api/types';
@@ -90,6 +91,8 @@
 				return ListOrdered;
 			case 'replacement_grid':
 				return Repeat;
+			case 'testimonial_wall':
+				return MessageSquareQuote;
 			case 'logo_strip':
 				return Receipt;
 			case 'logo_carousel':
