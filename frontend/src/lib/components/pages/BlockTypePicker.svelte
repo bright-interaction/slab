@@ -24,7 +24,8 @@
 		Wand2,
 		MessageSquareQuote,
 		PlayCircle,
-		PanelTop
+		PanelTop,
+		ChevronsDown
 	} from 'lucide-svelte';
 	import * as blocksApi from '$lib/api/blocks';
 	import type { BlockSchema } from '$lib/api/types';
@@ -97,6 +98,8 @@
 				return PlayCircle;
 			case 'tabs':
 				return PanelTop;
+			case 'scroll_reveal':
+				return ChevronsDown;
 			case 'testimonial_wall':
 				return MessageSquareQuote;
 			case 'logo_strip':

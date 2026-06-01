@@ -546,6 +546,38 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".pricing-tier ul.tier-features li::before { content: '✓'; position: absolute; left: 0; color: var(--color-primary); font-weight: 700; }\n")
 	b.WriteString(".pricing-tier .tier-cta { margin-block-start: auto; }\n\n")
 
+	// scroll_reveal: vertical sequence of text/image rows that fade + lift
+	// into view as the user scrolls. Pure CSS via animation-timeline: view()
+	// (Chromium + Edge + Safari 2024+; Firefox graceful fallback to static).
+	// prefers-reduced-motion turns it off entirely.
+	b.WriteString(".block--scroll_reveal { max-width: var(--container-width); }\n")
+	b.WriteString(".block--scroll_reveal > h2 { margin-block-end: 0.5rem; }\n")
+	b.WriteString(".block--scroll_reveal > .subheading { color: color-mix(in oklab, var(--color-text) 70%, transparent); margin-block-end: 3rem; max-width: 36rem; }\n")
+	b.WriteString(".scroll-reveal-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: clamp(3rem, 8vw, 6rem); counter-reset: reveal-step; }\n")
+	b.WriteString(".scroll-reveal-item { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(2rem, 5vw, 4rem); align-items: center; counter-increment: reveal-step; }\n")
+	b.WriteString(".scroll-reveal-item.is-image-left .scroll-reveal-media { order: 0; }\n")
+	b.WriteString(".scroll-reveal-item.is-image-left .scroll-reveal-content { order: 1; }\n")
+	b.WriteString(".scroll-reveal-content h3 { font-size: clamp(1.5rem, 2.5vw, 2rem); margin-block: 0 0.75rem; }\n")
+	b.WriteString(".scroll-reveal-content h3::before { content: counter(reveal-step, decimal-leading-zero); display: block; font-family: var(--font-mono, monospace); font-size: 0.75rem; letter-spacing: 0.15em; color: var(--color-primary); margin-block-end: 0.5rem; }\n")
+	b.WriteString(".scroll-reveal-content p { line-height: 1.65; color: color-mix(in oklab, var(--color-text) 80%, transparent); }\n")
+	b.WriteString(".scroll-reveal-media .scroll-reveal-img { width: 100%; height: auto; border-radius: 1rem; box-shadow: 0 12px 32px color-mix(in oklab, var(--color-text) 12%, transparent); }\n")
+	// Mobile collapse.
+	b.WriteString("@media (max-width: " + tabletBP + ") {\n")
+	b.WriteString("  .scroll-reveal-item, .scroll-reveal-item.is-image-left { grid-template-columns: 1fr; }\n")
+	b.WriteString("  .scroll-reveal-item .scroll-reveal-media, .scroll-reveal-item.is-image-left .scroll-reveal-media { order: 1; }\n")
+	b.WriteString("  .scroll-reveal-item .scroll-reveal-content, .scroll-reveal-item.is-image-left .scroll-reveal-content { order: 0; }\n")
+	b.WriteString("}\n")
+	// Scroll-driven animation: opacity 0 -> 1 and translateY 16px -> 0 as
+	// each item enters the viewport. Only runs when the browser supports
+	// animation-timeline: view() AND the user has not requested reduced
+	// motion.
+	b.WriteString("@supports (animation-timeline: view()) {\n")
+	b.WriteString("  @media (prefers-reduced-motion: no-preference) {\n")
+	b.WriteString("    @keyframes scroll-reveal-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }\n")
+	b.WriteString("    .scroll-reveal-item { animation: scroll-reveal-rise linear both; animation-timeline: view(); animation-range: entry 0% cover 25%; }\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n\n")
+
 	// tabs: pure-CSS tabbed content. Hidden radios drive the sibling selector
 	// so only the matching panel renders. Native keyboard nav via radios.
 	b.WriteString(".block--tabs { max-width: var(--container-width); }\n")
