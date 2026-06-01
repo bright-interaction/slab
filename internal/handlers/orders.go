@@ -447,18 +447,21 @@ func (h *OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Create Mollie payment. Skip if API key not configured (in which
-	// case the order stays pending and the operator can finalise it
-	// manually).
+	// Create Mollie payment. Skip if API key not configured (order stays
+	// pending and the operator finalises manually). Also skip if no public
+	// URL is resolvable: Mollie needs absolute https URLs, and rather than
+	// fall back to someone else's hostname we keep the order pending and
+	// surface the misconfiguration to the operator.
 	checkoutURL := ""
+	publicBase := strings.TrimRight(h.publicURL(ctx, siteID), "/")
 	apiKey, err := h.mollieAPIKey(ctx, siteID)
-	if err == nil {
+	if err == nil && publicBase != "" {
 		client := mollie.NewClient(apiKey)
 		returnURL := in.ReturnURL
 		if returnURL == "" {
-			returnURL = fmt.Sprintf("%s/checkout/done?order=%s", strings.TrimRight(h.publicURL(siteID), "/"), orderNumber)
+			returnURL = fmt.Sprintf("%s/checkout/done?order=%s", publicBase, orderNumber)
 		}
-		webhookURL := fmt.Sprintf("%s/api/sites/%s/payments/mollie/webhook", strings.TrimRight(h.publicURL(siteID), "/"), siteID)
+		webhookURL := fmt.Sprintf("%s/api/sites/%s/payments/mollie/webhook", publicBase, siteID)
 		pay, err := client.CreatePayment(ctx, mollie.CreatePaymentInput{
 			Amount:      mollie.MoneyValue{Currency: currency, Value: mollie.FormatAmount(total)},
 			Description: orderNumber,
@@ -511,18 +514,33 @@ func (h *OrderHandler) setOrderPayment(ctx context.Context, siteID, orderID, pay
 }
 
 // publicURL returns the customer-facing root URL for redirects +
-// webhook callbacks. Mollie needs an absolute https:// URL. For
-// development this falls back to the API base configured on the
-// server; for production the deployed_domain on the site_domains
-// table is used.
-func (h *OrderHandler) publicURL(siteID string) string {
+// webhook callbacks. Mollie needs an absolute https:// URL.
+//
+// Resolution order, picked so an OSS self-hoster always lands on their
+// own hostname rather than ours:
+//  1. The canonical site_domains row for this site (operator-configured,
+//     always the right answer when present).
+//  2. cfg.PrimaryDomain (env: ATOMICSITE_PRIMARY_DOMAIN), the multi-tenant
+//     apex set at boot.
+//  3. cfg.BaseURL (env: BASE_URL), the dev / single-site fallback.
+//  4. Empty string. Caller-side checkout flow logs and skips Mollie when
+//     no public URL is resolvable; better than redirecting customers to
+//     Bright Interaction's hostname on a self-hosted instance.
+func (h *OrderHandler) publicURL(ctx context.Context, siteID string) string {
+	if domains, err := h.queries.ListDomainsBySite(ctx, siteID); err == nil {
+		for _, d := range domains {
+			if d.Hostname != "" && (d.IsCanonical == 1 || d.Status == "active" || d.Status == "verified") {
+				return "https://" + d.Hostname
+			}
+		}
+	}
 	if h.cfg != nil && h.cfg.PrimaryDomain != "" {
 		return "https://" + h.cfg.PrimaryDomain
 	}
 	if h.cfg != nil && h.cfg.BaseURL != "" {
 		return h.cfg.BaseURL
 	}
-	return "https://app.slab.example.com"
+	return ""
 }
 
 // nextOrderNumber generates a human-friendly order number with a
