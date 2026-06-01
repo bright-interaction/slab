@@ -430,6 +430,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderTabsBlock(data, mediaByID)
 	case "scroll_reveal":
 		return renderScrollRevealBlock(data, mediaByID)
+	case "mega_menu":
+		return renderMegaMenuBlock(data)
 	case "testimonial_wall":
 		return renderTestimonialWallBlock(data, mediaByID)
 	case "logo_strip":

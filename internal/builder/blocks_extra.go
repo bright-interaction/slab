@@ -458,6 +458,108 @@ func renderComparisonCell(v any) string {
 	return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%v</span>`, v)
 }
 
+// renderMegaMenuBlock emits a navigation bar with multi-column dropdown
+// panels. Built on native <details> + <summary> so keyboard nav works
+// without JS: Tab to focus, Enter to toggle. CSS opens panels on hover
+// for pointer devices (desktop), tap-to-toggle for touch (mobile). The
+// panel layout is grid-based with up to four columns + optional featured
+// slot.
+func renderMegaMenuBlock(data map[string]any) string {
+	var b strings.Builder
+	itemsRaw, _ := data["items"].([]any)
+	if len(itemsRaw) == 0 {
+		return ""
+	}
+	b.WriteString("  <nav class=\"block block--mega_menu\" aria-label=\"Primary navigation\">\n")
+	b.WriteString("    <ul class=\"mega-menu-list\">\n")
+	for _, it := range itemsRaw {
+		item, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		label := dataString(item, "label")
+		if label == "" {
+			continue
+		}
+		href := dataString(item, "href")
+		columnsRaw, _ := item["columns"].([]any)
+		hasDropdown := len(columnsRaw) > 0 ||
+			dataString(item, "featured_heading") != "" ||
+			dataString(item, "featured_body") != ""
+
+		switch {
+		case !hasDropdown && href != "":
+			b.WriteString(fmt.Sprintf("      <li class=\"mega-menu-item mega-menu-item--link\"><a href=\"%s\">%s</a></li>\n",
+				escapeURL(href), escapeHTML(label)))
+		case hasDropdown:
+			b.WriteString("      <li class=\"mega-menu-item mega-menu-item--dropdown\">\n")
+			b.WriteString("        <details>\n")
+			b.WriteString(fmt.Sprintf("          <summary>%s<span class=\"mega-menu-caret\" aria-hidden=\"true\">▾</span></summary>\n", escapeHTML(label)))
+			b.WriteString("          <div class=\"mega-panel\">\n")
+			b.WriteString("            <div class=\"mega-panel-columns\">\n")
+			for _, c := range columnsRaw {
+				col, ok := c.(map[string]any)
+				if !ok {
+					continue
+				}
+				b.WriteString("              <div class=\"mega-column\">\n")
+				if h := dataString(col, "heading"); h != "" {
+					b.WriteString(fmt.Sprintf("                <p class=\"mega-column-heading\">%s</p>\n", escapeHTML(h)))
+				}
+				colItems, _ := col["items"].([]any)
+				if len(colItems) > 0 {
+					b.WriteString("                <ul>\n")
+					for _, ci := range colItems {
+						link, ok := ci.(map[string]any)
+						if !ok {
+							continue
+						}
+						lLabel := dataString(link, "label")
+						lHref := dataString(link, "href")
+						if lLabel == "" || lHref == "" {
+							continue
+						}
+						desc := dataString(link, "description")
+						b.WriteString(fmt.Sprintf("                  <li><a href=\"%s\"><span class=\"mega-link-label\">%s</span>", escapeURL(lHref), escapeHTML(lLabel)))
+						if desc != "" {
+							b.WriteString(fmt.Sprintf("<span class=\"mega-link-desc\">%s</span>", escapeHTML(desc)))
+						}
+						b.WriteString("</a></li>\n")
+					}
+					b.WriteString("                </ul>\n")
+				}
+				b.WriteString("              </div>\n")
+			}
+			b.WriteString("            </div>\n")
+			// Featured slot.
+			if fh := dataString(item, "featured_heading"); fh != "" {
+				b.WriteString("            <aside class=\"mega-featured\">\n")
+				b.WriteString(fmt.Sprintf("              <p class=\"mega-featured-heading\">%s</p>\n", escapeHTML(fh)))
+				if fb := dataString(item, "featured_body"); fb != "" {
+					b.WriteString(fmt.Sprintf("              <p class=\"mega-featured-body\">%s</p>\n", escapeHTML(fb)))
+				}
+				fctaT := dataString(item, "featured_cta_text")
+				fctaU := dataString(item, "featured_cta_url")
+				if fctaT != "" && fctaU != "" {
+					b.WriteString(fmt.Sprintf("              <a class=\"mega-featured-cta\" href=\"%s\">%s</a>\n", escapeURL(fctaU), escapeHTML(fctaT)))
+				}
+				b.WriteString("            </aside>\n")
+			}
+			b.WriteString("          </div>\n")
+			b.WriteString("        </details>\n")
+			b.WriteString("      </li>\n")
+		default:
+			// Label only, no href and no dropdown content. Render as
+			// plain text so the menu item still appears (operator can
+			// edit later) without dead links.
+			b.WriteString(fmt.Sprintf("      <li class=\"mega-menu-item mega-menu-item--text\"><span>%s</span></li>\n", escapeHTML(label)))
+		}
+	}
+	b.WriteString("    </ul>\n")
+	b.WriteString("  </nav>\n")
+	return b.String()
+}
+
 // renderScrollRevealBlock emits a vertical sequence of text+image pairs
 // that fade and lift into view as the user scrolls. The animation runs
 // entirely in the browser compositor via the CSS animation-timeline:
