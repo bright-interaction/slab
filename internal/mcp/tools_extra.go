@@ -853,7 +853,7 @@ func (s *Server) registerExtraTools() {
 
 	register(Tool{
 		Name:        "upload_font",
-		Description: "Uploads a woff2 font as base64 data via JSON-RPC. The REST handler at POST /api/sites/{siteID}/fonts accepts multipart; this tool is the agent-friendly equivalent. Required: family_name (1-64 chars, letters/digits/spaces/hyphen/underscore), file_base64 (woff2 binary, max 2MB after decode). Optional: weight (100-900, default 400), style (normal|italic, default normal), original_name (display filename). Server validates the woff2 signature ('wOF2' magic at offset 0) before writing. UNIQUE per (site, family, weight, style); duplicate uploads return a clear error.",
+		Description: "Uploads a woff2 font as base64 data via JSON-RPC. The REST handler at POST /api/sites/{siteID}/fonts accepts multipart; this tool is the agent-friendly equivalent. Required: family_name (1-64 chars, letters/digits/spaces/hyphen/underscore), file_base64 (woff2 binary, max 2MB after decode). Optional: weight (100-900, default 400), style (normal|italic, default normal), original_name (display filename), subset (unicode-range: latin|latin-ext|cyrillic|greek|vietnamese|arabic|hebrew|all, default latin). Subset drives the @font-face unicode-range descriptor so the browser only fetches the woff2 when the page contains characters in that range. Pick 'all' for a fully unsubsetted font, otherwise stay on 'latin' for EU/UK sites. Server validates the woff2 signature ('wOF2' magic at offset 0) before writing. UNIQUE per (site, family, weight, style); duplicate uploads return a clear error.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
@@ -861,7 +861,8 @@ func (s *Server) registerExtraTools() {
 				"file_base64":{"type":"string"},
 				"weight":{"type":"number"},
 				"style":{"type":"string","enum":["normal","italic"]},
-				"original_name":{"type":"string"}
+				"original_name":{"type":"string"},
+				"subset":{"type":"string","enum":["latin","latin-ext","cyrillic","greek","vietnamese","arabic","hebrew","all"]}
 			},
 			"required":["family_name","file_base64"]
 		}`),
@@ -876,6 +877,7 @@ func (s *Server) registerExtraTools() {
 				Weight       int64  `json:"weight"`
 				Style        string `json:"style"`
 				OriginalName string `json:"original_name"`
+				Subset       string `json:"subset"`
 			}
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", err
@@ -896,6 +898,7 @@ func (s *Server) registerExtraTools() {
 			if args.Style != "normal" && args.Style != "italic" {
 				return "", errors.New("style must be normal or italic")
 			}
+			args.Subset = normalizeMCPSubset(args.Subset)
 			body, err := base64.StdEncoding.DecodeString(args.FileBase64)
 			if err != nil {
 				return "", fmt.Errorf("file_base64 is not valid base64: %v", err)
@@ -924,6 +927,7 @@ func (s *Server) registerExtraTools() {
 				FilePath:     outPath,
 				FileSize:     int64(len(body)),
 				OriginalName: cleanFontFilename(args.OriginalName),
+				Subset:       args.Subset,
 			}); err != nil {
 				_ = os.Remove(outPath)
 				if strings.Contains(err.Error(), "UNIQUE") {
@@ -936,6 +940,7 @@ func (s *Server) registerExtraTools() {
 				"family_name": args.FamilyName,
 				"weight":      args.Weight,
 				"style":       args.Style,
+				"subset":      args.Subset,
 				"size":        len(body),
 				"status":      "uploaded",
 			}), nil

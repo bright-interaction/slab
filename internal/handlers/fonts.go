@@ -36,6 +36,33 @@ const fontUploadMaxBytes = 2 << 20
 // the @font-face emission can't break out of quotes.
 var validFamilyName = regexp.MustCompile(`^[A-Za-z0-9 _-]{1,64}$`)
 
+// validSubsets is the allowlist of Unicode-range subset names accepted at
+// upload time. Maps to a deterministic unicode-range descriptor in
+// builder.layouts so the browser only fetches the woff2 when the page
+// actually contains characters in the declared range. The "all" value
+// emits no unicode-range so the font loads on every page.
+var validSubsets = map[string]struct{}{
+	"latin":      {},
+	"latin-ext":  {},
+	"cyrillic":   {},
+	"greek":      {},
+	"vietnamese": {},
+	"arabic":     {},
+	"hebrew":     {},
+	"all":        {},
+}
+
+// normalizeSubset coerces an operator-supplied subset string into one of the
+// allowed values; empty or unknown falls back to "latin". Default matches the
+// EU/UK target market where Latin-only is the common case.
+func normalizeSubset(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if _, ok := validSubsets[s]; ok {
+		return s
+	}
+	return "latin"
+}
+
 type FontsHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
@@ -93,6 +120,7 @@ func (h *FontsHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if style != "italic" {
 		style = "normal"
 	}
+	subset := normalizeSubset(r.FormValue("subset"))
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -133,6 +161,7 @@ func (h *FontsHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		FilePath:     outPath,
 		FileSize:     int64(len(body)),
 		OriginalName: cleanFilename(header.Filename),
+		Subset:       subset,
 	}); err != nil {
 		// Roll back the file on insert failure so we don't leak orphans.
 		_ = os.Remove(outPath)

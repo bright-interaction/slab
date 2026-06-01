@@ -858,6 +858,15 @@ CREATE TABLE IF NOT EXISTS site_fonts (
     file_path     TEXT NOT NULL,
     file_size     INTEGER NOT NULL DEFAULT 0,
     original_name TEXT NOT NULL DEFAULT '',
+    -- Unicode-range subset the operator declared at upload time. Values:
+    -- latin (default), latin-ext, cyrillic, greek, vietnamese, arabic,
+    -- hebrew, all. Drives the unicode-range descriptor in @font-face so
+    -- the browser only downloads the file when the page actually contains
+    -- those characters. Saves ~80% of font weight on a typical Latin-only
+    -- EU/UK site that uploaded a full-Unicode font file. Existing rows
+    -- get this default via the cmd/server/main.go addColumnIfMissing
+    -- migration so older DBs do not need a manual ALTER.
+    subset        TEXT NOT NULL DEFAULT 'latin',
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_site_fonts_site ON site_fonts(site_id);

@@ -706,6 +706,7 @@ type SiteFont struct {
 	FilePath     string `json:"file_path"`
 	FileSize     int64  `json:"file_size"`
 	OriginalName string `json:"original_name"`
+	Subset       string `json:"subset"`
 	CreatedAt    string `json:"created_at"`
 }
 
