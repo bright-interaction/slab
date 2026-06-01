@@ -191,6 +191,7 @@ func (h *AgentHandler) UploadFont(w http.ResponseWriter, r *http.Request) {
 	if style != "italic" {
 		style = "normal"
 	}
+	subset := normalizeSubset(r.FormValue("subset"))
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "file field required")
@@ -221,6 +222,7 @@ func (h *AgentHandler) UploadFont(w http.ResponseWriter, r *http.Request) {
 		ID: id, SiteID: a.SiteID, FamilyName: familyName,
 		Weight: int64(weight), Style: style, FilePath: outPath,
 		FileSize: int64(len(body)), OriginalName: cleanFilename(header.Filename),
+		Subset: subset,
 	}); err != nil {
 		_ = os.Remove(outPath)
 		if strings.Contains(err.Error(), "UNIQUE") {

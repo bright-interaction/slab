@@ -1,6 +1,9 @@
 -- name: CreateSiteFont :exec
-INSERT INTO site_fonts (id, site_id, family_name, weight, style, file_path, file_size, original_name)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO site_fonts (id, site_id, family_name, weight, style, file_path, file_size, original_name, subset)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: UpdateSiteFontSubset :exec
+UPDATE site_fonts SET subset = ? WHERE id = ? AND site_id = ?;
 
 -- name: ListSiteFonts :many
 SELECT * FROM site_fonts

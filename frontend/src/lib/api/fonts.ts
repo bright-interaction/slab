@@ -3,6 +3,16 @@
 
 import { apiGet, apiDelete } from './client';
 
+export type FontSubset =
+	| 'latin'
+	| 'latin-ext'
+	| 'cyrillic'
+	| 'greek'
+	| 'vietnamese'
+	| 'arabic'
+	| 'hebrew'
+	| 'all';
+
 export interface SiteFont {
 	id: string;
 	site_id: string;
@@ -12,6 +22,7 @@ export interface SiteFont {
 	file_path: string;
 	file_size: number;
 	original_name: string;
+	subset: FontSubset;
 	created_at: string;
 }
 
@@ -35,13 +46,15 @@ export async function upload(
 	file: File,
 	familyName: string,
 	weight: number,
-	style: 'normal' | 'italic'
+	style: 'normal' | 'italic',
+	subset: FontSubset = 'latin'
 ): Promise<SiteFont> {
 	const fd = new FormData();
 	fd.append('file', file);
 	fd.append('family_name', familyName);
 	fd.append('weight', String(weight));
 	fd.append('style', style);
+	fd.append('subset', subset);
 	const res = await fetch(`/api/sites/${siteID}/fonts`, {
 		method: 'POST',
 		credentials: 'same-origin',

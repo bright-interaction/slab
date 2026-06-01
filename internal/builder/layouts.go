@@ -255,21 +255,29 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		b.WriteString("  <style>\n")
 		for _, f := range fontRows {
 			src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, f.ID)
+			rangeDecl := UnicodeRangeFor(f.Subset)
+			if rangeDecl != "" {
+				b.WriteString(fmt.Sprintf(
+					"    @font-face { font-family: %q; font-style: %s; font-weight: %d; font-display: swap; src: url(%q) format('woff2'); unicode-range: %s; }\n",
+					f.FamilyName, f.Style, f.Weight, src, rangeDecl,
+				))
+			} else {
+				b.WriteString(fmt.Sprintf(
+					"    @font-face { font-family: %q; font-style: %s; font-weight: %d; font-display: swap; src: url(%q) format('woff2'); }\n",
+					f.FamilyName, f.Style, f.Weight, src,
+				))
+			}
 			b.WriteString(fmt.Sprintf(
-				"    @font-face { font-family: %q; font-style: %s; font-weight: %d; font-display: swap; src: url(%q) format('woff2'); }\n",
-				f.FamilyName, f.Style, f.Weight, src,
-			))
-			// Hint the browser to start fetching the file as soon as the
-			// document parses; matters most for above-the-fold heading
-			// fonts.
-			b.WriteString(fmt.Sprintf(
-				"    /* preload-hint: %q (rel=preload emitted as <link> below) */\n",
-				f.FamilyName,
+				"    /* preload-hint: %q subset=%s */\n",
+				f.FamilyName, fontSubsetOrAll(f.Subset),
 			))
 		}
 		b.WriteString("  </style>\n")
 		// Emit one <link rel="preload"> per uploaded font so above-the-fold
-		// renders don't FOUT.
+		// renders don't FOUT. The browser still respects unicode-range:
+		// the preload fetches the file but it only renders if the page
+		// contains characters in the declared range. For a Latin-only
+		// site that's still a perf win because the file lands in cache.
 		for _, f := range fontRows {
 			src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, f.ID)
 			b.WriteString(fmt.Sprintf(

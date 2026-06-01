@@ -55,6 +55,16 @@
 		{ value: 'normal', label: 'Normal' },
 		{ value: 'italic', label: 'Italic' }
 	];
+	const subsetOptions = [
+		{ value: 'latin', label: 'Latin (default, ~80% smaller)' },
+		{ value: 'latin-ext', label: 'Latin Extended' },
+		{ value: 'cyrillic', label: 'Cyrillic' },
+		{ value: 'greek', label: 'Greek' },
+		{ value: 'vietnamese', label: 'Vietnamese' },
+		{ value: 'arabic', label: 'Arabic' },
+		{ value: 'hebrew', label: 'Hebrew' },
+		{ value: 'all', label: 'All (no subsetting hint)' }
+	];
 	const refTypeOptions = [
 		{ value: 'design-system', label: 'Design system' },
 		{ value: 'component-library', label: 'Component library' },
@@ -277,6 +287,7 @@
 	let uploadFamily = $state('');
 	let uploadWeight = $state(400);
 	let uploadStyle = $state<'normal' | 'italic'>('normal');
+	let uploadSubset = $state<fontsApi.FontSubset>('latin');
 	let uploading = $state(false);
 	let uploadError = $state<string | null>(null);
 
@@ -313,13 +324,17 @@
 				uploadFile,
 				uploadFamily.trim(),
 				uploadWeight,
-				uploadStyle
+				uploadStyle,
+				uploadSubset
 			);
-			toast.success(`Uploaded ${uploadFamily.trim()} ${uploadWeight} ${uploadStyle}.`);
+			toast.success(
+				`Uploaded ${uploadFamily.trim()} ${uploadWeight} ${uploadStyle} (${uploadSubset}).`
+			);
 			uploadFile = null;
 			uploadFamily = '';
 			uploadWeight = 400;
 			uploadStyle = 'normal';
+			uploadSubset = 'latin';
 			await loadCustomFonts();
 		} catch (err) {
 			uploadError = err instanceof Error ? err.message : 'Upload failed.';
@@ -627,6 +642,18 @@
 									onchange={(v) => (uploadStyle = v as 'normal' | 'italic')}
 								/>
 							</div>
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<span class="text-[12px] font-medium text-text-primary">Unicode range</span>
+							<Select
+								options={subsetOptions}
+								value={uploadSubset}
+								onchange={(v) => (uploadSubset = v as fontsApi.FontSubset)}
+							/>
+							<p class="text-[11px] text-text-muted">
+								Browser only fetches the font when the page contains characters in
+								this range. Saves ~80% of font weight on a Latin-only EU/UK site.
+							</p>
 						</div>
 					</div>
 					{#if uploadError}

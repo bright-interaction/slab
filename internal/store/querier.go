@@ -589,6 +589,7 @@ type Querier interface {
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) error
 	UpdateSiteBuildStatus(ctx context.Context, arg UpdateSiteBuildStatusParams) error
 	UpdateSiteDeployAt(ctx context.Context, arg UpdateSiteDeployAtParams) error
+	UpdateSiteFontSubset(ctx context.Context, arg UpdateSiteFontSubsetParams) error
 	UpdateSiteQuota(ctx context.Context, arg UpdateSiteQuotaParams) error
 	UpdateSubscriptionExternal(ctx context.Context, arg UpdateSubscriptionExternalParams) error
 	UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscriptionStatusParams) error

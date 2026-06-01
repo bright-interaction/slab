@@ -10,8 +10,8 @@ import (
 )
 
 const createSiteFont = `-- name: CreateSiteFont :exec
-INSERT INTO site_fonts (id, site_id, family_name, weight, style, file_path, file_size, original_name)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO site_fonts (id, site_id, family_name, weight, style, file_path, file_size, original_name, subset)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateSiteFontParams struct {
@@ -23,6 +23,7 @@ type CreateSiteFontParams struct {
 	FilePath     string `json:"file_path"`
 	FileSize     int64  `json:"file_size"`
 	OriginalName string `json:"original_name"`
+	Subset       string `json:"subset"`
 }
 
 func (q *Queries) CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) error {
@@ -35,6 +36,7 @@ func (q *Queries) CreateSiteFont(ctx context.Context, arg CreateSiteFontParams) 
 		arg.FilePath,
 		arg.FileSize,
 		arg.OriginalName,
+		arg.Subset,
 	)
 	return err
 }
@@ -54,7 +56,7 @@ func (q *Queries) DeleteSiteFont(ctx context.Context, arg DeleteSiteFontParams) 
 }
 
 const getSiteFont = `-- name: GetSiteFont :one
-SELECT id, site_id, family_name, weight, style, file_path, file_size, original_name, created_at FROM site_fonts
+SELECT id, site_id, family_name, weight, style, file_path, file_size, original_name, subset, created_at FROM site_fonts
 WHERE id = ? AND site_id = ?
 `
 
@@ -75,6 +77,7 @@ func (q *Queries) GetSiteFont(ctx context.Context, arg GetSiteFontParams) (SiteF
 		&i.FilePath,
 		&i.FileSize,
 		&i.OriginalName,
+		&i.Subset,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -110,7 +113,7 @@ func (q *Queries) ListDistinctFontFamilies(ctx context.Context, siteID string) (
 }
 
 const listSiteFonts = `-- name: ListSiteFonts :many
-SELECT id, site_id, family_name, weight, style, file_path, file_size, original_name, created_at FROM site_fonts
+SELECT id, site_id, family_name, weight, style, file_path, file_size, original_name, subset, created_at FROM site_fonts
 WHERE site_id = ?
 ORDER BY family_name ASC, weight ASC, style ASC
 `
@@ -133,6 +136,7 @@ func (q *Queries) ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont,
 			&i.FilePath,
 			&i.FileSize,
 			&i.OriginalName,
+			&i.Subset,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -146,4 +150,19 @@ func (q *Queries) ListSiteFonts(ctx context.Context, siteID string) ([]SiteFont,
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateSiteFontSubset = `-- name: UpdateSiteFontSubset :exec
+UPDATE site_fonts SET subset = ? WHERE id = ? AND site_id = ?
+`
+
+type UpdateSiteFontSubsetParams struct {
+	Subset string `json:"subset"`
+	ID     string `json:"id"`
+	SiteID string `json:"site_id"`
+}
+
+func (q *Queries) UpdateSiteFontSubset(ctx context.Context, arg UpdateSiteFontSubsetParams) error {
+	_, err := q.db.ExecContext(ctx, updateSiteFontSubset, arg.Subset, arg.ID, arg.SiteID)
+	return err
 }

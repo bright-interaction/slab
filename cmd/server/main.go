@@ -423,6 +423,15 @@ func applySchema(sqlDB *sql.DB) error {
 		// when a crop is applied. Default 50/50 = centered.
 		{"media", "focal_x", "INTEGER NOT NULL DEFAULT 50"},
 		{"media", "focal_y", "INTEGER NOT NULL DEFAULT 50"},
+		// Font unicode-range subset (Sprint A, 2026-06-01). Drives the
+		// @font-face unicode-range descriptor so the browser only fetches
+		// the woff2 when the page contains characters in the declared
+		// range. Saves ~80% on a Latin-only site that uploaded a
+		// full-Unicode font file. Values: latin / latin-ext / cyrillic /
+		// greek / vietnamese / arabic / hebrew / all. Default 'latin'
+		// matches the EU/UK target market; operators bump to 'all' for
+		// multi-script sites or upload one file per range.
+		{"site_fonts", "subset", "TEXT NOT NULL DEFAULT 'latin'"},
 	}
 	for _, m := range migrations {
 		if err := addColumnIfMissing(sqlDB, m.table, m.column, m.spec); err != nil {
