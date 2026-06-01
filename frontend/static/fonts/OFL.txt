@@ -1,0 +1,22 @@
+Self-hosted webfonts in this directory are distributed under the SIL Open Font
+License Version 1.1 (OFL-1.1). Upstream sources:
+
+- Inter:                https://github.com/rsms/inter
+- Geist + Geist Mono:   https://github.com/vercel/geist-font
+- JetBrains Mono:       https://github.com/JetBrains/JetBrainsMono
+- Space Grotesk:        https://github.com/floriankarsten/space-grotesk
+- Space Mono:           https://fonts.google.com/specimen/Space+Mono
+- Plus Jakarta Sans:    https://github.com/tokotype/PlusJakartaSans
+- Manrope:              https://github.com/sharanda/manrope
+- IBM Plex Sans:        https://github.com/IBM/plex
+- Playfair Display:     https://github.com/clauseggers/Playfair-Display
+- Lora:                 https://github.com/cyrealtype/Lora-Cyrillic
+- Source Serif 4:       https://github.com/adobe-fonts/source-serif
+
+EU sovereignty: Atomicsite is sold as a cloud-rebellion alternative.
+We do not load fonts from a third-party CDN at runtime. fonts.googleapis.com
+and fonts.gstatic.com would expose the visitor's IP to Google on every page
+load (cf. LG Munich case 3 O 17493/20). We refuse that exposure as a matter
+of product policy.
+
+To refresh, run: scripts/refresh-fonts.sh
