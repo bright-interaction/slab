@@ -546,6 +546,22 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".pricing-tier ul.tier-features li::before { content: '✓'; position: absolute; left: 0; color: var(--color-primary); font-weight: 700; }\n")
 	b.WriteString(".pricing-tier .tier-cta { margin-block-start: auto; }\n\n")
 
+	// video_hero: full-bleed hero with background video + content overlay.
+	// The poster image is the LCP element; video / iframe loads after first
+	// paint. Aspect set to min-h with vh fallback so it never overflows.
+	b.WriteString(".block--video_hero { position: relative; isolation: isolate; padding: clamp(4rem, 10vw, 9rem) 1.5rem; color: #fff; min-height: 32rem; display: grid; place-items: center; overflow: hidden; max-width: none; --video-hero-overlay: 0.35; }\n")
+	b.WriteString(".video-hero-media { position: absolute; inset: 0; z-index: -2; }\n")
+	b.WriteString(".video-hero-media iframe, .video-hero-media video, .video-hero-media .video-hero-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: 0; }\n")
+	b.WriteString(".video-hero-overlay { position: absolute; inset: 0; z-index: -1; background: rgba(0, 0, 0, var(--video-hero-overlay, 0.35)); }\n")
+	b.WriteString(".video-hero-content { max-width: 56rem; text-align: center; }\n")
+	b.WriteString(".video-hero-content > .eyebrow { color: rgba(255,255,255,0.78); }\n")
+	b.WriteString(".video-hero-content h1 { color: #fff; font-size: clamp(2.25rem, 5vw, 4rem); margin-block: 0.75rem 1rem; }\n")
+	b.WriteString(".video-hero-content .subheading { color: rgba(255,255,255,0.88); font-size: clamp(1rem, 1.5vw, 1.25rem); max-width: 44rem; margin-inline: auto; }\n")
+	b.WriteString(".video-hero-content .cta-group { margin-block-start: 2rem; display: inline-flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center; }\n")
+	b.WriteString(".video-hero-content .cta--primary { background: #fff; color: var(--color-text); }\n")
+	b.WriteString(".video-hero-content .cta--secondary { color: #fff; border: 1px solid rgba(255,255,255,0.4); }\n")
+	b.WriteString(".video-hero-content .cta--secondary:hover { background: rgba(255,255,255,0.1); }\n\n")
+
 	// testimonial_wall: customer quote presentation in 3 layouts.
 	// Pure CSS scroll-snap for carousel (no JS at runtime).
 	b.WriteString(".block--testimonial_wall { max-width: var(--container-width); }\n")

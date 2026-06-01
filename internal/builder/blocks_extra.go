@@ -458,6 +458,121 @@ func renderComparisonCell(v any) string {
 	return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%v</span>`, v)
 }
 
+// renderVideoHeroBlock emits a hero with a background video. Three
+// sources supported: self_hosted (uploaded mp4/webm), youtube (via
+// youtube-nocookie.com so no third-party cookies fire pre-consent), and
+// vimeo (player.vimeo.com background mode). The poster image is the LCP
+// element and is rendered separately with fetchpriority=high; the video
+// loads after first paint and replaces the poster client-side via the
+// browser's native poster attribute / iframe load.
+func renderVideoHeroBlock(data map[string]any, mediaByID map[string]store.Medium) string {
+	var b strings.Builder
+	headline := dataString(data, "headline")
+	source := strings.TrimSpace(strings.ToLower(dataString(data, "video_source")))
+	videoID := strings.TrimSpace(dataString(data, "video_id"))
+	posterID := dataString(data, "poster_image_id")
+	overlay := parseOverlayOpacity(dataString(data, "overlay_opacity"))
+
+	// Emit the overlay as a unitless number (0.0-1.0) so CSS rgba()
+	// can consume it directly. Percent-typed custom properties cannot
+	// be divided to a unitless alpha in calc().
+	style := fmt.Sprintf("--video-hero-overlay: %.2f;", float64(overlay)/100.0)
+	b.WriteString(fmt.Sprintf("  <section class=\"block block--video_hero\" style=\"%s\">\n", style))
+
+	// Background video layer (or static poster fallback when no video_id).
+	b.WriteString("    <div class=\"video-hero-media\" aria-hidden=\"true\">\n")
+	switch source {
+	case "youtube":
+		if videoID != "" {
+			src := fmt.Sprintf("https://www.youtube-nocookie.com/embed/%s?autoplay=1&mute=1&loop=1&playlist=%s&controls=0&modestbranding=1&playsinline=1", escapeAttr(videoID), escapeAttr(videoID))
+			b.WriteString(fmt.Sprintf("      <iframe src=\"%s\" title=\"Background video\" loading=\"lazy\" referrerpolicy=\"strict-origin-when-cross-origin\" allow=\"autoplay; encrypted-media; picture-in-picture\" allowfullscreen></iframe>\n", src))
+		}
+	case "vimeo":
+		if videoID != "" {
+			src := fmt.Sprintf("https://player.vimeo.com/video/%s?background=1&muted=1&loop=1&autoplay=1", escapeAttr(videoID))
+			b.WriteString(fmt.Sprintf("      <iframe src=\"%s\" title=\"Background video\" loading=\"lazy\" referrerpolicy=\"strict-origin-when-cross-origin\" allow=\"autoplay; picture-in-picture\" allowfullscreen></iframe>\n", src))
+		}
+	default:
+		// self_hosted
+		if videoID != "" {
+			posterAttr := ""
+			if m, ok := mediaByID[posterID]; ok && len(m.VariantsJson) > 0 {
+				// Use the smallest variant path as a quick poster.
+				posterAttr = fmt.Sprintf(" poster=\"/media/%s/original\"", escapeAttr(m.ID))
+			}
+			b.WriteString(fmt.Sprintf("      <video%s autoplay muted loop playsinline preload=\"metadata\"><source src=\"/media/%s/original.mp4\" type=\"video/mp4\" /></video>\n", posterAttr, escapeAttr(videoID)))
+		}
+	}
+	// Static poster underneath the video keeps LCP grounded. fetchpriority=high
+	// ensures the poster wins the LCP race over any iframe / <video>.
+	if posterID != "" {
+		b.WriteString("      " + renderMediaImgWithPriority(posterID, headline, headline, "video-hero-poster", mediaByID, true) + "\n")
+	}
+	b.WriteString("    </div>\n")
+	// Overlay tint.
+	b.WriteString("    <div class=\"video-hero-overlay\" aria-hidden=\"true\"></div>\n")
+
+	// Content layer.
+	b.WriteString("    <div class=\"video-hero-content\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("      <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if headline != "" {
+		b.WriteString(fmt.Sprintf("      <h1>%s</h1>\n", escapeHTML(headline)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("      <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	cta := dataString(data, "cta_text")
+	ctaURL := dataString(data, "cta_url")
+	secLabel := dataString(data, "secondary_label")
+	secURL := dataString(data, "secondary_url")
+	if cta != "" || secLabel != "" {
+		b.WriteString("      <div class=\"cta-group\">\n")
+		if cta != "" && ctaURL != "" {
+			b.WriteString(fmt.Sprintf("        <a class=\"cta cta--primary\" href=\"%s\">%s</a>\n", escapeURL(ctaURL), escapeHTML(cta)))
+		}
+		if secLabel != "" && secURL != "" {
+			b.WriteString(fmt.Sprintf("        <a class=\"cta cta--secondary\" href=\"%s\">%s</a>\n", escapeURL(secURL), escapeHTML(secLabel)))
+		}
+		b.WriteString("      </div>\n")
+	}
+	b.WriteString("    </div>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// parseOverlayOpacity coerces a user-supplied "0-100" string into a
+// clamped int. Empty / unparseable values default to 35, the operator-
+// friendly default that keeps a poster image legible behind white text.
+func parseOverlayOpacity(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 35
+	}
+	n := 0
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			n = n*10 + int(r-'0')
+			if n > 1000 {
+				break
+			}
+			continue
+		}
+		break
+	}
+	if n < 0 {
+		return 0
+	}
+	if n > 100 {
+		return 100
+	}
+	if n == 0 && s != "0" {
+		return 35
+	}
+	return n
+}
+
 // renderTestimonialWallBlock emits a customer-quote wall in one of three
 // layouts (wall / carousel / single_featured). Pure HTML + CSS; the
 // carousel layout uses scroll-snap so no JS runs at runtime, keeping the
