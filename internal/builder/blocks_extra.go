@@ -458,6 +458,68 @@ func renderComparisonCell(v any) string {
 	return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%v</span>`, v)
 }
 
+// renderScrollRevealBlock emits a vertical sequence of text+image pairs
+// that fade and lift into view as the user scrolls. The animation runs
+// entirely in the browser compositor via the CSS animation-timeline:
+// view() spec (supported in evergreen browsers from 2024). Older
+// browsers see the items appear normally with full opacity, so the
+// fallback is graceful, not broken. prefers-reduced-motion disables
+// the animation entirely.
+func renderScrollRevealBlock(data map[string]any, mediaByID map[string]store.Medium) string {
+	var b strings.Builder
+	b.WriteString("  <section class=\"block block--scroll_reveal\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	itemsRaw, _ := data["items"].([]any)
+	if len(itemsRaw) == 0 {
+		b.WriteString("  </section>\n")
+		return b.String()
+	}
+	b.WriteString("    <ol class=\"scroll-reveal-list\">\n")
+	for _, it := range itemsRaw {
+		item, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		stepHeading := dataString(item, "heading")
+		if stepHeading == "" {
+			continue
+		}
+		imagePos := dataString(item, "image_position")
+		if imagePos != "left" {
+			imagePos = "right"
+		}
+		b.WriteString(fmt.Sprintf("      <li class=\"scroll-reveal-item is-image-%s\">\n", escapeAttr(imagePos)))
+		b.WriteString("        <div class=\"scroll-reveal-content\">\n")
+		b.WriteString(fmt.Sprintf("          <h3>%s</h3>\n", escapeHTML(stepHeading)))
+		if body := dataString(item, "body"); body != "" {
+			for _, para := range strings.Split(body, "\n\n") {
+				para = strings.TrimSpace(para)
+				if para != "" {
+					b.WriteString(fmt.Sprintf("          <p>%s</p>\n", escapeHTML(para)))
+				}
+			}
+		}
+		b.WriteString("        </div>\n")
+		if imageID := dataString(item, "image_id"); imageID != "" {
+			b.WriteString("        <div class=\"scroll-reveal-media\">\n")
+			b.WriteString("          " + renderMediaImg(imageID, stepHeading, stepHeading, "scroll-reveal-img", mediaByID) + "\n")
+			b.WriteString("        </div>\n")
+		}
+		b.WriteString("      </li>\n")
+	}
+	b.WriteString("    </ol>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
 // renderTabsBlock emits a tabbed content block. Pure CSS via hidden radio
 // inputs plus the sibling-selector trick: each `:checked` radio reveals its
 // matching panel. No JS at runtime; native keyboard nav (arrow keys cycle

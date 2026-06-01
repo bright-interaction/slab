@@ -165,6 +165,25 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "scroll_reveal", Label: "Scroll-revealed story", Category: "content",
+		Description: "Vertical sequence of text/image pairs that fade and lift into view as the visitor scrolls. Pure CSS animation-timeline; zero JS. Respects prefers-reduced-motion.",
+		Fields: []Field{
+			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText},
+			{Key: "heading", Label: "Heading", Kind: KindText},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "items", Label: "Reveal steps", Kind: KindArray, ItemSchema: []Field{
+				{Key: "heading", Label: "Step heading", Kind: KindText, Required: true},
+				{Key: "body", Label: "Step body", Kind: KindTextarea},
+				{Key: "image_id", Label: "Step image", Kind: KindImageID},
+				{Key: "image_position", Label: "Image position", Kind: KindSelect, Options: []Option{
+					{Value: "right", Label: "Right of text"},
+					{Value: "left", Label: "Left of text"},
+				}},
+			}},
+		},
+	})
+
+	Register(Schema{
 		Type: "tabs", Label: "Tabs", Category: "content",
 		Description: "Tabbed content panels. Pure CSS via radio + sibling selector; zero JS at runtime. Use for feature deep-dives, pricing tiers explained, or use-case galleries.",
 		Fields: []Field{
