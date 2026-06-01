@@ -23,7 +23,8 @@
 		FileCode2,
 		Wand2,
 		MessageSquareQuote,
-		PlayCircle
+		PlayCircle,
+		PanelTop
 	} from 'lucide-svelte';
 	import * as blocksApi from '$lib/api/blocks';
 	import type { BlockSchema } from '$lib/api/types';
@@ -94,6 +95,8 @@
 				return Repeat;
 			case 'video_hero':
 				return PlayCircle;
+			case 'tabs':
+				return PanelTop;
 			case 'testimonial_wall':
 				return MessageSquareQuote;
 			case 'logo_strip':
