@@ -403,7 +403,10 @@ export interface Evaluation {
 export interface EvaluationCheck {
 	id?: string;
 	name: string;
-	passed: boolean;
+	// null means informational (no scoring impact). The Go eval package
+	// emits Pass / Fail / Info checks; preserving null in the union keeps
+	// the UI able to group informational rows separately from failures.
+	passed: boolean | null;
 	score?: number;
 	max_score?: number;
 	severity?: 'info' | 'warning' | 'error' | 'critical';
