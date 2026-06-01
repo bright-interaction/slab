@@ -464,7 +464,7 @@ func renderProductDetailBlock(data map[string]any, mediaByID map[string]store.Me
 	b.WriteString(fmt.Sprintf("  <section class=\"block block--product_detail block--product_detail--%s\" data-product-detail data-product-slug=\"%s\">\n", escapeAttr(layout), escapeAttr(stringOrEmpty(p["slug"]))))
 	b.WriteString("    <div class=\"product-detail-gallery\">\n")
 	if imageID != "" {
-		b.WriteString("      " + renderMediaImg(imageID, name, name, "product-detail-img", mediaByID) + "\n")
+		b.WriteString("      " + renderMediaImgWithPriority(imageID, name, name, "product-detail-img", mediaByID, true) + "\n")
 	}
 	b.WriteString("    </div>\n")
 	b.WriteString("    <div class=\"product-detail-body\">\n")

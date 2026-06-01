@@ -166,7 +166,7 @@ func renderSplitHeroBlock(data map[string]any, mediaByID map[string]store.Medium
 	if graphic != "" {
 		b.WriteString("      " + renderHeroGraphic(graphic, data) + "\n")
 	} else if imageID := dataString(data, "image_id"); imageID != "" {
-		b.WriteString("      " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "split-hero-img", mediaByID) + "\n")
+		b.WriteString("      " + renderMediaImgWithPriority(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "split-hero-img", mediaByID, true) + "\n")
 	}
 	b.WriteString("    </div>\n")
 	b.WriteString("  </section>\n")

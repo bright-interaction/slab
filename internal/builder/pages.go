@@ -587,7 +587,7 @@ func renderHeroBlock(data map[string]any, mediaByID map[string]store.Medium) str
 		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
 	}
 	if imageID := dataString(data, "image_id"); imageID != "" && graphic == "" {
-		b.WriteString("    " + renderMediaImg(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "hero-image", mediaByID) + "\n")
+		b.WriteString("    " + renderMediaImgWithPriority(imageID, dataString(data, "image_alt"), dataString(data, "headline"), "hero-image", mediaByID, true) + "\n")
 	}
 	ctaText := dataString(data, "cta_text")
 	secLabel := dataString(data, "secondary_label")
@@ -645,25 +645,33 @@ func renderHeadlineWithAccent(headline, accent string) string {
 // mediaByID (with WebP source + width/height + alt + lazy), or a fallback
 // <img> with /media/<id>/original.png when the lookup misses. The alt
 // argument wins over the medium's stored alt_text; fallbackAlt is used when
-// alt is empty (typically the hero headline).
+// alt is empty (typically the hero headline). Defaults to lazy loading.
 func renderMediaImg(mediaID, alt, fallbackAlt, cssClass string, mediaByID map[string]store.Medium) string {
+	return renderMediaImgWithPriority(mediaID, alt, fallbackAlt, cssClass, mediaByID, false)
+}
+
+// renderMediaImgWithPriority is the LCP-aware variant. priority=true on hero
+// blocks emits loading=eager + fetchpriority=high so the largest contentful
+// paint is not deferred behind layout-related JS.
+func renderMediaImgWithPriority(mediaID, alt, fallbackAlt, cssClass string, mediaByID map[string]store.Medium, priority bool) string {
 	if alt == "" {
 		alt = fallbackAlt
 	}
 	if m, ok := mediaByID[mediaID]; ok {
-		// RenderPicture reads m.AltText for the alt; override if the
-		// caller passed a non-empty alt that should win.
 		if alt != "" {
 			m.AltText = alt
 		}
-		out := RenderPicture(m, cssClass)
+		out := RenderPictureWithPriority(m, cssClass, priority)
 		if out != "" {
 			return out
 		}
 	}
-	// Fallback for when media lookup misses (preview helper, missing row).
-	return fmt.Sprintf(`<img src="/media/%s/original.png" alt="%s" loading="lazy" />`,
-		escapeAttr(mediaID), escapeAttr(alt))
+	loadAttrs := `loading="lazy"`
+	if priority {
+		loadAttrs = `loading="eager" fetchpriority="high"`
+	}
+	return fmt.Sprintf(`<img src="/media/%s/original.png" alt="%s" %s />`,
+		escapeAttr(mediaID), escapeAttr(alt), loadAttrs)
 }
 
 func renderFeatureGridBlock(data map[string]any) string {

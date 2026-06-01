@@ -10,13 +10,20 @@ import (
 	"github.com/bright-interaction/slab/internal/store"
 )
 
-// RenderPicture emits a <picture> element with srcset, sizes, lazy loading, and
-// a blurhash CSS placeholder background. Returns empty string if media has no
-// usable variants.
+// RenderPicture emits a <picture> with srcset, sizes, and lazy loading. Kept
+// as the default (non-priority) form so existing callsites stay byte-identical.
+func RenderPicture(m store.Medium, cssClassName string) string {
+	return RenderPictureWithPriority(m, cssClassName, false)
+}
+
+// RenderPictureWithPriority is the LCP-aware form. When priority is true the
+// rendered <img> emits loading="eager" + fetchpriority="high" instead of
+// loading="lazy"; below-the-fold images stay lazy. Hero blocks call this with
+// priority=true so the LCP element is not deferred behind layout-related JS.
 //
 // Paths use /media/{mediaID}/... (no siteID) because CopyMedia flattens the
 // workspace layout.
-func RenderPicture(m store.Medium, cssClassName string) string {
+func RenderPictureWithPriority(m store.Medium, cssClassName string, priority bool) string {
 	if m.VariantsJson == "" {
 		return ""
 	}
@@ -86,7 +93,11 @@ func RenderPicture(m store.Medium, cssClassName string) string {
 		}
 		b.WriteString(fmt.Sprintf(` width="%d" height="%d"`, fallback.Width, fallback.Height))
 		b.WriteString(fmt.Sprintf(` alt="%s"`, escapeAttr(m.AltText)))
-		b.WriteString(` loading="lazy" decoding="async"`)
+		if priority {
+			b.WriteString(` loading="eager" fetchpriority="high" decoding="async"`)
+		} else {
+			b.WriteString(` loading="lazy" decoding="async"`)
+		}
 		if cssClassName != "" {
 			b.WriteString(fmt.Sprintf(` class="%s"`, escapeAttr(cssClassName)))
 		}
