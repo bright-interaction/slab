@@ -23,6 +23,48 @@ type LintFinding struct {
 	Fix      string `json:"fix,omitempty"`
 }
 
+// BlockingFindingNames is the curated set of lint findings that fail
+// strict mode. These are categorical violations of the design playbook
+// that should not ship even one revision: banned slop terms (elevate,
+// unleash, synergy), placeholder testimonial names, placeholder company
+// names, suspicious round numbers, and archetype drift on a locked
+// page. Soft warnings (headline length, hero quality, content tone)
+// stay non-blocking so the agent can still ship a draft and revise.
+var BlockingFindingNames = map[string]struct{}{
+	"slop_term":        {},
+	"slop_name":        {},
+	"slop_company":     {},
+	"slop_number":      {},
+	"archetype_drift":  {},
+}
+
+// HasBlockingFindings reports whether any finding in the slice should
+// cause a strict-mode create/update to refuse the write. Severity stays
+// "warning" on the finding itself for backward compatibility; the
+// gating decision lives here so the call surface (MCP tool handlers)
+// can be one helper away from the policy.
+func HasBlockingFindings(findings []LintFinding) bool {
+	for _, f := range findings {
+		if _, ok := BlockingFindingNames[f.Name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// FilterBlocking returns just the findings that would block a strict-mode
+// write. Useful for tool responses that want to surface the blockers
+// separately from soft warnings.
+func FilterBlocking(findings []LintFinding) []LintFinding {
+	out := make([]LintFinding, 0, len(findings))
+	for _, f := range findings {
+		if _, ok := BlockingFindingNames[f.Name]; ok {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // LintBlockData runs the block-level write-time checks for one block.
 // Pass the block_type and the data map the agent is about to commit;
 // findings come back ordered by severity then name. Empty result =

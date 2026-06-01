@@ -4,6 +4,7 @@
 	import { ApiError } from '$lib/api/client';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
+	import Switch from '$lib/components/ui/Switch.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
@@ -41,6 +42,13 @@
 	let canonicalBase = $state('');
 	let additionalLangs = $state('');
 	let hreflangStrategy = $state<'path' | 'subdomain' | 'off'>('path');
+	let strictDesignLint = $state(true);
+
+	function toBool(v: string | undefined, fallback: boolean): boolean {
+		if (v === undefined || v === '') return fallback;
+		const s = v.toLowerCase();
+		return !(s === '0' || s === 'false' || s === 'off' || s === 'no');
+	}
 
 	const hreflangOptions = [
 		{ value: 'path', label: 'Path-based (/sv/about, /de/about)' },
@@ -67,7 +75,8 @@
 		metaDescriptionTemplate: '',
 		canonicalBase: '',
 		additionalLangs: '',
-		hreflangStrategy: 'path' as 'path' | 'subdomain' | 'off'
+		hreflangStrategy: 'path' as 'path' | 'subdomain' | 'off',
+		strictDesignLint: true
 	});
 
 	async function load() {
@@ -77,12 +86,14 @@
 			domain = data.site.domain;
 			lang = data.site.lang || 'en';
 
-			const [seo, general] = await Promise.all([
+			const [seo, general, design] = await Promise.all([
 				settingsApi.listByCategory(siteID, 'seo'),
-				settingsApi.listByCategory(siteID, 'general')
+				settingsApi.listByCategory(siteID, 'general'),
+				settingsApi.listByCategory(siteID, 'design')
 			]);
 			const seoMap = categoryMap(seo);
 			const genMap = categoryMap(general);
+			const designMap = categoryMap(design);
 
 			metaTitleTemplate = seoMap.meta_title_template || '';
 			metaDescriptionTemplate = seoMap.meta_description_template || '';
@@ -93,6 +104,7 @@
 				| 'subdomain'
 				| 'off';
 			hreflangStrategy = ['path', 'subdomain', 'off'].includes(strat) ? strat : 'path';
+			strictDesignLint = toBool(designMap.strict_lint, true);
 
 			initial = {
 				name,
@@ -102,7 +114,8 @@
 				metaDescriptionTemplate,
 				canonicalBase,
 				additionalLangs,
-				hreflangStrategy
+				hreflangStrategy,
+				strictDesignLint
 			};
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to load settings.');
@@ -123,7 +136,8 @@
 			metaDescriptionTemplate !== initial.metaDescriptionTemplate ||
 			canonicalBase !== initial.canonicalBase ||
 			additionalLangs !== initial.additionalLangs ||
-			hreflangStrategy !== initial.hreflangStrategy
+			hreflangStrategy !== initial.hreflangStrategy ||
+			strictDesignLint !== initial.strictDesignLint
 	);
 
 	function discard() {
@@ -135,6 +149,7 @@
 		canonicalBase = initial.canonicalBase;
 		additionalLangs = initial.additionalLangs;
 		hreflangStrategy = initial.hreflangStrategy;
+		strictDesignLint = initial.strictDesignLint;
 	}
 
 	// Live preview of how the meta-title template renders with a sample
@@ -186,7 +201,8 @@
 				{ category: 'seo', key: 'canonical_base', value: canonicalBase },
 				{ category: 'seo', key: 'hreflang_strategy', value: hreflangStrategy },
 				{ category: 'general', key: 'additional_langs', value: additionalLangs },
-				{ category: 'general', key: 'default_lang', value: lang }
+				{ category: 'general', key: 'default_lang', value: lang },
+				{ category: 'design', key: 'strict_lint', value: strictDesignLint ? '1' : '0' }
 			];
 			await settingsApi.bulkUpsert(siteID, items);
 
@@ -198,7 +214,8 @@
 				metaDescriptionTemplate,
 				canonicalBase,
 				additionalLangs,
-				hreflangStrategy
+				hreflangStrategy,
+				strictDesignLint
 			};
 			toast.success('General settings saved.');
 		} catch (err) {
@@ -322,6 +339,36 @@
 						placeholder="https://example.com"
 						hint="Override the default URL prefix (https://your primary domain). Useful when the public URL differs from the build's domain (CDN, sub-path proxy, staging vs prod)."
 						bind:value={canonicalBase}
+					/>
+				</div>
+			</Card>
+
+			<Card padding="md">
+				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+					Design quality
+				</h2>
+				<p class="mt-2 text-[12px] text-text-muted">
+					Strict design lint refuses agent writes that hit the playbook's hard
+					rules: slop terms ("elevate", "unleash", "synergy"), placeholder
+					testimonial names, placeholder company names, suspicious round
+					numbers, and hero graphics that drift from a locked page
+					archetype. The agent gets a structured error with fix hints and
+					must revise before the block ships. Soft warnings (long headline,
+					generic hero) stay non-blocking. Turn this off only if you trust
+					the source of the copy.
+				</p>
+				<div class="mt-4 flex items-center justify-between gap-4 rounded-lg border border-border-light bg-bg-elevated/40 px-4 py-3">
+					<div class="flex flex-col gap-0.5">
+						<span class="text-[13px] font-medium text-text-primary">
+							Block agent writes on critical lint findings
+						</span>
+						<span class="text-[11.5px] text-text-muted">
+							Default ON. Off = warnings only, agent ships anyway.
+						</span>
+					</div>
+					<Switch
+						bind:checked={strictDesignLint}
+						ariaLabel="Enable strict design lint"
 					/>
 				</div>
 			</Card>
