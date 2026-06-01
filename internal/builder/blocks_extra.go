@@ -458,6 +458,143 @@ func renderComparisonCell(v any) string {
 	return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%v</span>`, v)
 }
 
+// renderTabsBlock emits a tabbed content block. Pure CSS via hidden radio
+// inputs plus the sibling-selector trick: each `:checked` radio reveals its
+// matching panel. No JS at runtime; native keyboard nav (arrow keys cycle
+// radio group) and screen-reader semantics via role="tablist" + role="tab"
+// labels. Per-block unique ID derived from a deterministic hash of the
+// data so two tabs blocks on the same page do not collide.
+func renderTabsBlock(data map[string]any, mediaByID map[string]store.Medium) string {
+	var b strings.Builder
+	itemsRaw, _ := data["items"].([]any)
+	if len(itemsRaw) == 0 {
+		return ""
+	}
+
+	groupID := tabsGroupID(data)
+	defaultTab := 0
+	if v := parseRating(dataString(data, "default_tab")); v >= 0 && v < len(itemsRaw) {
+		defaultTab = v
+	}
+
+	b.WriteString("  <section class=\"block block--tabs\">\n")
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+
+	b.WriteString("    <div class=\"tabs-root\">\n")
+
+	// Radios first, then labels, then panels. The CSS uses
+	// `input:nth-of-type(N):checked ~ .tab-panels > .tab-panel:nth-child(N)`
+	// to reveal the matching panel.
+	for i := range itemsRaw {
+		checked := ""
+		if i == defaultTab {
+			checked = " checked"
+		}
+		b.WriteString(fmt.Sprintf("      <input type=\"radio\" class=\"tab-radio\" name=\"%s\" id=\"%s-%d\"%s />\n",
+			escapeAttr(groupID), escapeAttr(groupID), i, checked))
+	}
+
+	b.WriteString("      <div class=\"tabs-list\" role=\"tablist\">\n")
+	for i, it := range itemsRaw {
+		item, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		label := dataString(item, "label")
+		if label == "" {
+			label = fmt.Sprintf("Tab %d", i+1)
+		}
+		b.WriteString(fmt.Sprintf("        <label for=\"%s-%d\" class=\"tab-trigger\" role=\"tab\">%s</label>\n",
+			escapeAttr(groupID), i, escapeHTML(label)))
+	}
+	b.WriteString("      </div>\n")
+
+	b.WriteString("      <div class=\"tab-panels\">\n")
+	for _, it := range itemsRaw {
+		item, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		b.WriteString("        <div class=\"tab-panel\" role=\"tabpanel\">\n")
+		if h := dataString(item, "heading"); h != "" {
+			b.WriteString(fmt.Sprintf("          <h3>%s</h3>\n", escapeHTML(h)))
+		}
+		if body := dataString(item, "body"); body != "" {
+			for _, para := range strings.Split(body, "\n\n") {
+				para = strings.TrimSpace(para)
+				if para != "" {
+					b.WriteString(fmt.Sprintf("          <p>%s</p>\n", escapeHTML(para)))
+				}
+			}
+		}
+		if imageID := dataString(item, "image_id"); imageID != "" {
+			alt := dataString(item, "heading")
+			b.WriteString("          " + renderMediaImg(imageID, alt, alt, "tab-panel-img", mediaByID) + "\n")
+		}
+		ctaText := dataString(item, "cta_text")
+		ctaURL := dataString(item, "cta_url")
+		if ctaText != "" && ctaURL != "" {
+			b.WriteString(fmt.Sprintf("          <a class=\"cta cta--secondary\" href=\"%s\">%s</a>\n", escapeURL(ctaURL), escapeHTML(ctaText)))
+		}
+		b.WriteString("        </div>\n")
+	}
+	b.WriteString("      </div>\n")
+	b.WriteString("    </div>\n")
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// tabsGroupID returns a stable 10-char identifier derived from the tab
+// labels concatenated. Same content = same ID, so a re-build does not
+// change the rendered markup. Two tabs blocks with different labels get
+// different IDs. Collisions are theoretically possible but require two
+// blocks on the same page with identical label sequences, which is itself
+// a UX bug worth flagging.
+func tabsGroupID(data map[string]any) string {
+	itemsRaw, _ := data["items"].([]any)
+	var seed strings.Builder
+	seed.WriteString("tabs-")
+	for _, it := range itemsRaw {
+		item, _ := it.(map[string]any)
+		seed.WriteString(stringOfAny(item, "label"))
+		seed.WriteString("|")
+	}
+	return fmt.Sprintf("tabs-%010x", fnv1aHash(seed.String()))
+}
+
+// fnv1aHash is the 64-bit FNV-1a hash used purely for content-derived
+// element IDs. NOT a security primitive.
+func fnv1aHash(s string) uint64 {
+	const offset uint64 = 14695981039346656037
+	const prime uint64 = 1099511628211
+	h := offset
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= prime
+	}
+	return h
+}
+
+// stringOfAny mirrors stringOf but takes the map directly so callers that
+// hold a parsed map[string]any do not have to wrap it.
+func stringOfAny(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
 // renderVideoHeroBlock emits a hero with a background video. Three
 // sources supported: self_hosted (uploaded mp4/webm), youtube (via
 // youtube-nocookie.com so no third-party cookies fire pre-consent), and

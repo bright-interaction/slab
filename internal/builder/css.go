@@ -546,6 +546,29 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".pricing-tier ul.tier-features li::before { content: '✓'; position: absolute; left: 0; color: var(--color-primary); font-weight: 700; }\n")
 	b.WriteString(".pricing-tier .tier-cta { margin-block-start: auto; }\n\n")
 
+	// tabs: pure-CSS tabbed content. Hidden radios drive the sibling selector
+	// so only the matching panel renders. Native keyboard nav via radios.
+	b.WriteString(".block--tabs { max-width: var(--container-width); }\n")
+	b.WriteString(".block--tabs > h2 { margin-block-end: 0.5rem; }\n")
+	b.WriteString(".block--tabs > .subheading { color: color-mix(in oklab, var(--color-text) 70%, transparent); margin-block-end: 2rem; max-width: 36rem; }\n")
+	b.WriteString(".tabs-root { display: grid; gap: 0; }\n")
+	b.WriteString(".tabs-root .tab-radio { position: absolute; opacity: 0; pointer-events: none; }\n")
+	b.WriteString(".tabs-list { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid color-mix(in oklab, var(--color-text) 12%, transparent); margin-block-end: 1.5rem; }\n")
+	b.WriteString(".tab-trigger { padding: 0.875rem 1.25rem; font-size: 0.9375rem; font-weight: 500; color: color-mix(in oklab, var(--color-text) 60%, transparent); cursor: pointer; border-bottom: 2px solid transparent; margin-block-end: -1px; transition: color 150ms ease-out, border-color 150ms ease-out; }\n")
+	b.WriteString(".tab-trigger:hover { color: var(--color-text); }\n")
+	b.WriteString(".tab-radio:focus-visible + .tabs-list .tab-trigger:first-of-type, .tab-radio:focus-visible ~ .tabs-list .tab-trigger { outline-offset: 2px; }\n")
+	b.WriteString(".tab-panels { display: grid; }\n")
+	b.WriteString(".tab-panel { display: none; }\n")
+	// Reveal panel matching the :checked radio. nth-child selectors line up
+	// the panel index to the radio index. 12 max tabs covered.
+	for i := 1; i <= 12; i++ {
+		b.WriteString(fmt.Sprintf(".tab-radio:nth-of-type(%d):checked ~ .tab-panels > .tab-panel:nth-child(%d) { display: block; }\n", i, i))
+		b.WriteString(fmt.Sprintf(".tab-radio:nth-of-type(%d):checked ~ .tabs-list > .tab-trigger:nth-child(%d) { color: var(--color-text); border-bottom-color: var(--color-primary); }\n", i, i))
+	}
+	b.WriteString(".tab-panel h3 { margin-block: 0 0.75rem; font-size: 1.5rem; }\n")
+	b.WriteString(".tab-panel p { margin-block: 0 1rem; line-height: 1.6; }\n")
+	b.WriteString(".tab-panel .tab-panel-img { max-width: 100%; height: auto; border-radius: 0.75rem; margin-block: 1rem; }\n\n")
+
 	// video_hero: full-bleed hero with background video + content overlay.
 	// The poster image is the LCP element; video / iframe loads after first
 	// paint. Aspect set to min-h with vh fallback so it never overflows.

@@ -165,6 +165,25 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "tabs", Label: "Tabs", Category: "content",
+		Description: "Tabbed content panels. Pure CSS via radio + sibling selector; zero JS at runtime. Use for feature deep-dives, pricing tiers explained, or use-case galleries.",
+		Fields: []Field{
+			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText},
+			{Key: "heading", Label: "Heading", Kind: KindText},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "default_tab", Label: "Default tab (0-based)", Kind: KindText, Placeholder: "0"},
+			{Key: "items", Label: "Tabs", Kind: KindArray, ItemSchema: []Field{
+				{Key: "label", Label: "Tab label", Kind: KindText, Required: true},
+				{Key: "heading", Label: "Panel heading", Kind: KindText},
+				{Key: "body", Label: "Panel body", Kind: KindTextarea},
+				{Key: "image_id", Label: "Panel image", Kind: KindImageID},
+				{Key: "cta_text", Label: "CTA text", Kind: KindText},
+				{Key: "cta_url", Label: "CTA URL", Kind: KindURL},
+			}},
+		},
+	})
+
+	Register(Schema{
 		Type: "video_hero", Label: "Video hero", Category: "hero",
 		Description: "Hero block with a background video (self-hosted or YouTube/Vimeo no-cookie). Poster image preloads first so LCP stays fast.",
 		Fields: []Field{

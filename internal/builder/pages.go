@@ -426,6 +426,8 @@ func renderDataBlock(blockType string, data map[string]any, mediaByID map[string
 		return renderComparisonTableBlock(data)
 	case "video_hero":
 		return renderVideoHeroBlock(data, mediaByID)
+	case "tabs":
+		return renderTabsBlock(data, mediaByID)
 	case "testimonial_wall":
 		return renderTestimonialWallBlock(data, mediaByID)
 	case "logo_strip":
