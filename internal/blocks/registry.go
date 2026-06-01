@@ -165,6 +165,33 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "testimonial_wall", Label: "Testimonial wall", Category: "social proof",
+		Description: "Customer quote wall. Three layouts: 'wall' (masonry grid), 'carousel' (horizontal scroll-snap), 'single_featured' (one large quote).",
+		Fields: []Field{
+			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText},
+			{Key: "heading", Label: "Heading", Kind: KindText, Placeholder: "What teams say after switching"},
+			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
+			{Key: "layout", Label: "Layout", Kind: KindSelect, Options: []Option{
+				{Value: "wall", Label: "Wall (masonry 3-up)"},
+				{Value: "carousel", Label: "Carousel (scroll-snap)"},
+				{Value: "single_featured", Label: "Single featured"},
+			}},
+			{Key: "items", Label: "Testimonials", Kind: KindArray, ItemSchema: []Field{
+				{Key: "quote", Label: "Quote", Kind: KindTextarea, Required: true},
+				{Key: "author_name", Label: "Author name", Kind: KindText, Required: true},
+				{Key: "author_role", Label: "Author role", Kind: KindText},
+				{Key: "author_company", Label: "Author company", Kind: KindText},
+				{Key: "author_image_id", Label: "Author photo", Kind: KindImageID},
+				{Key: "company_logo_id", Label: "Company logo", Kind: KindImageID},
+				{Key: "rating", Label: "Rating (1-5)", Kind: KindText, Help: "Optional. Renders as star pips if set."},
+				{Key: "source_url", Label: "Source link", Kind: KindURL, Help: "Optional. Links the quote to the original review / case study."},
+			}},
+			{Key: "footer", Label: "Footer line", Kind: KindText, Help: "Optional small line below the wall (e.g. 'Read 200+ more reviews →')."},
+			{Key: "footer_url", Label: "Footer link URL", Kind: KindURL},
+		},
+	})
+
+	Register(Schema{
 		Type: "logo_strip", Label: "Logo strip", Category: "social proof",
 		Description: "Row of customer/partner logos.",
 		Fields: []Field{

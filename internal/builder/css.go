@@ -546,6 +546,39 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".pricing-tier ul.tier-features li::before { content: '✓'; position: absolute; left: 0; color: var(--color-primary); font-weight: 700; }\n")
 	b.WriteString(".pricing-tier .tier-cta { margin-block-start: auto; }\n\n")
 
+	// testimonial_wall: customer quote presentation in 3 layouts.
+	// Pure CSS scroll-snap for carousel (no JS at runtime).
+	b.WriteString(".block--testimonial_wall { max-width: var(--container-width); }\n")
+	b.WriteString(".block--testimonial_wall > h2 { margin-block-end: 0.5rem; }\n")
+	b.WriteString(".block--testimonial_wall > .subheading { color: color-mix(in oklab, var(--color-text) 70%, transparent); margin-block-end: 2.5rem; max-width: 36rem; }\n")
+	// Wall layout: responsive grid of cards.
+	b.WriteString(".testimonial-wall-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem; }\n")
+	// Carousel layout: horizontal scroll with snap; no JS.
+	b.WriteString(".testimonial-carousel-list { list-style: none; padding: 0 0 1rem 0; margin: 0; display: flex; gap: 1.25rem; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 1rem; }\n")
+	b.WriteString(".testimonial-carousel-list .testimonial-card { flex: 0 0 22rem; scroll-snap-align: start; }\n")
+	// Single featured: one large card, centered.
+	b.WriteString(".testimonial-featured-list { list-style: none; padding: 0; margin: 0; max-width: 48rem; margin-inline: auto; }\n")
+	b.WriteString(".testimonial-featured-list .testimonial-card { padding: 2.5rem; }\n")
+	b.WriteString(".testimonial-featured-list blockquote { font-size: 1.375rem; line-height: 1.5; }\n")
+	// Card shell.
+	b.WriteString(".testimonial-card { display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem; border-radius: 0.875rem; background: var(--color-surface, var(--color-bg)); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); }\n")
+	b.WriteString(".testimonial-card blockquote { margin: 0; font-size: 1.0625rem; line-height: 1.55; color: var(--color-text); }\n")
+	b.WriteString(".testimonial-card blockquote::before { content: '\"'; color: var(--color-primary); font-size: 1.5em; line-height: 0; vertical-align: -0.3em; margin-inline-end: 0.1em; }\n")
+	b.WriteString(".testimonial-card blockquote::after { content: '\"'; color: var(--color-primary); font-size: 1.5em; line-height: 0; vertical-align: -0.3em; margin-inline-start: 0.1em; }\n")
+	// Rating pips.
+	b.WriteString(".testimonial-rating { display: inline-flex; gap: 0.125rem; color: color-mix(in oklab, var(--color-text) 30%, transparent); font-size: 0.9375rem; line-height: 1; }\n")
+	b.WriteString(".testimonial-rating .is-filled { color: var(--color-primary); }\n")
+	// Cite footer with optional author photo + company logo.
+	b.WriteString(".testimonial-cite { display: grid; grid-template-columns: auto 1fr auto; gap: 0.875rem; align-items: center; margin: 0; padding: 0; font-style: normal; }\n")
+	b.WriteString(".testimonial-cite .testimonial-author-img { width: 2.5rem; height: 2.5rem; border-radius: 50%; object-fit: cover; }\n")
+	b.WriteString(".testimonial-cite .testimonial-author { display: flex; flex-direction: column; line-height: 1.25; }\n")
+	b.WriteString(".testimonial-cite .testimonial-author-name { font-weight: 600; font-size: 0.9375rem; color: var(--color-text); }\n")
+	b.WriteString(".testimonial-cite .testimonial-author-meta { font-size: 0.8125rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); }\n")
+	b.WriteString(".testimonial-cite .testimonial-company-logo { height: 1.25rem; width: auto; max-width: 5rem; opacity: 0.55; }\n")
+	// Footer line.
+	b.WriteString(".block--testimonial_wall .testimonial-footer { display: inline-block; margin-block-start: 1.5rem; font-size: 0.875rem; color: color-mix(in oklab, var(--color-text) 65%, transparent); }\n")
+	b.WriteString("a.testimonial-footer:hover { color: var(--color-primary); }\n\n")
+
 	// logo_strip: row of customer logos / partner logos.
 	b.WriteString(".block--logo_strip { padding-block: 3rem; text-align: center; }\n")
 	b.WriteString(".block--logo_strip .logo-strip-label { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.1em; color: color-mix(in oklab, var(--color-text) 55%, transparent); margin-block-end: 1.5rem; }\n")

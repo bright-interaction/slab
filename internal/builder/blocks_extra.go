@@ -458,6 +458,140 @@ func renderComparisonCell(v any) string {
 	return fmt.Sprintf(`<span class="comparison-cell comparison-cell--text">%v</span>`, v)
 }
 
+// renderTestimonialWallBlock emits a customer-quote wall in one of three
+// layouts (wall / carousel / single_featured). Pure HTML + CSS; the
+// carousel layout uses scroll-snap so no JS runs at runtime, keeping the
+// SSG-wedge intact.
+func renderTestimonialWallBlock(data map[string]any, mediaByID map[string]store.Medium) string {
+	var b strings.Builder
+	layout := strings.TrimSpace(dataString(data, "layout"))
+	switch layout {
+	case "carousel", "single_featured":
+		// keep
+	default:
+		layout = "wall"
+	}
+	b.WriteString(fmt.Sprintf("  <section class=\"block block--testimonial_wall block--testimonial_wall--%s\">\n", escapeAttr(layout)))
+	if eyebrow := dataString(data, "eyebrow"); eyebrow != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"eyebrow\">%s</p>\n", escapeHTML(eyebrow)))
+	}
+	if heading := dataString(data, "heading"); heading != "" {
+		b.WriteString(fmt.Sprintf("    <h2>%s</h2>\n", escapeHTML(heading)))
+	}
+	if sub := dataString(data, "subheading"); sub != "" {
+		b.WriteString(fmt.Sprintf("    <p class=\"subheading\">%s</p>\n", escapeHTML(sub)))
+	}
+	itemsRaw, _ := data["items"].([]any)
+	if len(itemsRaw) > 0 {
+		listClass := "testimonial-wall-list"
+		if layout == "carousel" {
+			listClass = "testimonial-carousel-list"
+		} else if layout == "single_featured" {
+			listClass = "testimonial-featured-list"
+		}
+		b.WriteString(fmt.Sprintf("    <ul class=\"%s\">\n", listClass))
+		for _, it := range itemsRaw {
+			item, ok := it.(map[string]any)
+			if !ok {
+				continue
+			}
+			quote := dataString(item, "quote")
+			if quote == "" {
+				continue
+			}
+			b.WriteString("      <li class=\"testimonial-card\">\n")
+
+			// Rating pips (optional). Renders as 5 stars with filled pips
+			// for the given rating.
+			rating := parseRating(dataString(item, "rating"))
+			if rating > 0 {
+				b.WriteString("        <div class=\"testimonial-rating\" aria-label=\"")
+				b.WriteString(fmt.Sprintf("Rated %d out of 5", rating))
+				b.WriteString("\">")
+				for i := 1; i <= 5; i++ {
+					if i <= rating {
+						b.WriteString("<span class=\"is-filled\" aria-hidden=\"true\">★</span>")
+					} else {
+						b.WriteString("<span aria-hidden=\"true\">☆</span>")
+					}
+				}
+				b.WriteString("</div>\n")
+			}
+
+			// The quote itself. Wrapped in blockquote for semantics +
+			// quote marks dropped in by CSS so the text stays plain.
+			if sourceURL := dataString(item, "source_url"); sourceURL != "" {
+				b.WriteString(fmt.Sprintf("        <blockquote cite=\"%s\">%s</blockquote>\n",
+					escapeAttr(sourceURL), escapeHTML(quote)))
+			} else {
+				b.WriteString(fmt.Sprintf("        <blockquote>%s</blockquote>\n", escapeHTML(quote)))
+			}
+
+			// Cite block: optional author photo, name, role @ company.
+			b.WriteString("        <figcaption class=\"testimonial-cite\">\n")
+			if photoID := dataString(item, "author_image_id"); photoID != "" {
+				name := dataString(item, "author_name")
+				b.WriteString("          " + renderMediaImg(photoID, name, name, "testimonial-author-img", mediaByID) + "\n")
+			}
+			b.WriteString("          <div class=\"testimonial-author\">\n")
+			if name := dataString(item, "author_name"); name != "" {
+				b.WriteString(fmt.Sprintf("            <span class=\"testimonial-author-name\">%s</span>\n", escapeHTML(name)))
+			}
+			role := dataString(item, "author_role")
+			company := dataString(item, "author_company")
+			switch {
+			case role != "" && company != "":
+				b.WriteString(fmt.Sprintf("            <span class=\"testimonial-author-meta\">%s, %s</span>\n", escapeHTML(role), escapeHTML(company)))
+			case role != "":
+				b.WriteString(fmt.Sprintf("            <span class=\"testimonial-author-meta\">%s</span>\n", escapeHTML(role)))
+			case company != "":
+				b.WriteString(fmt.Sprintf("            <span class=\"testimonial-author-meta\">%s</span>\n", escapeHTML(company)))
+			}
+			b.WriteString("          </div>\n")
+			if logoID := dataString(item, "company_logo_id"); logoID != "" {
+				b.WriteString("          " + renderMediaImg(logoID, dataString(item, "author_company"), dataString(item, "author_company"), "testimonial-company-logo", mediaByID) + "\n")
+			}
+			b.WriteString("        </figcaption>\n")
+			b.WriteString("      </li>\n")
+		}
+		b.WriteString("    </ul>\n")
+	}
+	if footer := dataString(data, "footer"); footer != "" {
+		if footerURL := dataString(data, "footer_url"); footerURL != "" {
+			b.WriteString(fmt.Sprintf("    <a class=\"testimonial-footer\" href=\"%s\">%s</a>\n", escapeURL(footerURL), escapeHTML(footer)))
+		} else {
+			b.WriteString(fmt.Sprintf("    <p class=\"testimonial-footer\">%s</p>\n", escapeHTML(footer)))
+		}
+	}
+	b.WriteString("  </section>\n")
+	return b.String()
+}
+
+// parseRating coerces an operator-supplied rating string (e.g. "5", "4.5",
+// "3 stars") into an integer in [0, 5]. Returns 0 when the value is empty
+// or unparseable so the renderer skips the rating row entirely.
+func parseRating(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	// Take the leading digit (operators sometimes type "5 stars" / "4/5").
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			v := int(r - '0')
+			if v < 0 {
+				return 0
+			}
+			if v > 5 {
+				return 5
+			}
+			return v
+		}
+		break
+	}
+	return 0
+}
+
 // renderLogoStripBlock renders a row of customer/partner logos. Each item:
 // {image_id, alt, href?}.
 func renderLogoStripBlock(data map[string]any, mediaByID map[string]store.Medium) string {
