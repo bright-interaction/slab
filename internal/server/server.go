@@ -1081,9 +1081,21 @@ func (s *Server) Router() http.Handler {
 			// coffee break, which killed iteration flow. Tokens are
 			// per-session and the X-Agent-Key auth is the real boundary;
 			// the TTL is just a housekeeping cap, not a security gate.
-			mcpServer.WithShield(shield.NewSQLStore(s.db), []byte(s.cfg.ShieldKey), 24*time.Hour, level)
-			slog.Info("atomicsite: shield enabled on MCP boundary",
-				"key_id", "atomicsite", "ttl_hours", 24, "hint_level", s.cfg.ShieldHintLevel)
+			//
+			// Store backend: Redis when ATOMICSITE_SHIELD_REDIS_URL is set
+			// (unlocks multi-node SaaS - every cluster member sees the same
+			// session+token state). SQLStore fallback for single-node OSS
+			// installs which still scale to dozens of concurrent MCP sessions
+			// per box without distributed coordination.
+			shieldStore, storeKind, err := buildShieldStore(s.cfg, s.db)
+			if err != nil {
+				slog.Error("atomicsite: shield store init failed; shield disabled", "err", err)
+			} else {
+				mcpServer.WithShield(shieldStore, []byte(s.cfg.ShieldKey), 24*time.Hour, level)
+				slog.Info("atomicsite: shield enabled on MCP boundary",
+					"key_id", "atomicsite", "ttl_hours", 24,
+					"hint_level", s.cfg.ShieldHintLevel, "store", storeKind)
+			}
 		} else if s.cfg.ShieldKey != "" {
 			slog.Warn("atomicsite: ATOMICSITE_SHIELD_KEY set but not 32 bytes; shield disabled",
 				"len", len(s.cfg.ShieldKey))

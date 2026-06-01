@@ -157,6 +157,23 @@ type Config struct {
 	// without learning which entity it is.
 	ShieldHintLevel string
 
+	// ShieldRedisURL points the Shield store at a Redis instance for
+	// multi-node deploys. Read from ATOMICSITE_SHIELD_REDIS_URL. When
+	// empty, Shield falls back to the per-node SQLStore (single-process
+	// SQLite). When set, every node in a cluster shares the same
+	// shield_sessions + shield_tokens state, so an MCP session opened
+	// on node A can resolve markers issued on node B.
+	//
+	// Format: redis://[:password@]host[:port][/db]. TLS via rediss://.
+	// Optional shield:<prefix>: prepended via ShieldRedisPrefix below to
+	// isolate tenants on a shared Redis.
+	ShieldRedisURL string
+
+	// ShieldRedisPrefix is prepended to every key when ShieldRedisURL is
+	// set. Empty = "shield:" default. Set to "<tenant>:shield:" when
+	// multiple atomicsite tenants share one Redis instance.
+	ShieldRedisPrefix string
+
 	// RequireMFA enforces TOTP enrollment policy. Read from
 	// ATOMICSITE_REQUIRE_MFA. Values:
 	//
@@ -269,8 +286,10 @@ func Load() *Config {
 
 		DesignReferencesDir: envOr("DESIGN_REFERENCES_DIR", ""),
 
-		ShieldKey:       envOr("ATOMICSITE_SHIELD_KEY", ""),
-		ShieldHintLevel: envOr("ATOMICSITE_SHIELD_HINT_LEVEL", ""),
+		ShieldKey:         envOr("ATOMICSITE_SHIELD_KEY", ""),
+		ShieldHintLevel:   envOr("ATOMICSITE_SHIELD_HINT_LEVEL", ""),
+		ShieldRedisURL:    envOr("ATOMICSITE_SHIELD_REDIS_URL", ""),
+		ShieldRedisPrefix: envOr("ATOMICSITE_SHIELD_REDIS_PREFIX", ""),
 
 		RequireMFA: strings.ToLower(strings.TrimSpace(envOr("ATOMICSITE_REQUIRE_MFA", ""))),
 
