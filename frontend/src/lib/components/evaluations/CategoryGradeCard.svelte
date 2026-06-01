@@ -20,8 +20,9 @@
 		evaluation ? evaluationsApi.parseEvaluationChecks(evaluation.checks_json) : []
 	);
 
-	const failedChecks = $derived(checks.filter((c) => c.passed !== true));
+	const failedChecks = $derived(checks.filter((c) => c.passed === false));
 	const passedChecks = $derived(checks.filter((c) => c.passed === true));
+	const infoChecks = $derived(checks.filter((c) => c.passed === null));
 	const total = $derived(
 		checks.filter((c) => c.passed !== undefined && c.passed !== null).length
 	);
@@ -32,9 +33,11 @@
 	// keep the card scannable on a healthy A+ result.
 	let showFailing = $state(true);
 	let showPassing = $state(false);
+	let showInfo = $state(false);
 
 	const hasFailing = $derived(failedChecks.length > 0);
 	const hasPassing = $derived(passedChecks.length > 0);
+	const hasInfo = $derived(infoChecks.length > 0);
 
 	function toggleFailing() {
 		showFailing = !showFailing;
@@ -42,11 +45,15 @@
 	function togglePassing() {
 		showPassing = !showPassing;
 	}
+	function toggleInfo() {
+		showInfo = !showInfo;
+	}
 
 	const categoryBlurb: Record<string, string> = {
 		security: 'Security headers, CSP quality, SRI, mixed content, security.txt.',
 		seo: 'Meta tags, headings, schema, robots, sitemap, llms.txt, GEO signals.',
-		performance: 'HTML size, render-blocking scripts, image formats, lazy loading.',
+		performance:
+			'HTML size, render-blocking scripts, image formats, lazy loading, measured Core Web Vitals (LCP, INP, CLS).',
 		accessibility: 'Landmarks, alt text, form labels, contrast, focus indicators.',
 		privacy: 'Consent, trackers, AI-bot blocking, cookie hygiene.'
 	};
@@ -117,6 +124,40 @@
 			{#if showFailing}
 				<div class="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
 					{#each failedChecks as check, i (check.id ?? `${check.name}-${i}`)}
+						<CheckRow {check} {siteID} />
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Informational rows (e.g. waiting for CWV samples). No scoring impact;
+	     surfaced so the operator knows why grading is markup-only. -->
+	{#if hasInfo}
+		<div class="mt-5 border-t border-border-light pt-5">
+			<button
+				type="button"
+				onclick={toggleInfo}
+				class="flex w-full items-center justify-between text-left"
+				aria-expanded={showInfo}
+			>
+				<div>
+					<p class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
+						Informational
+					</p>
+					<p class="mt-0.5 text-[12px] text-text-secondary">
+						{infoChecks.length} item{infoChecks.length === 1 ? '' : 's'} not scored. Often awaiting data.
+					</p>
+				</div>
+				<ChevronDown
+					class="h-4 w-4 shrink-0 text-text-muted transition-transform {showInfo
+						? 'rotate-180'
+						: ''}"
+				/>
+			</button>
+			{#if showInfo}
+				<div class="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+					{#each infoChecks as check, i (check.id ?? `${check.name}-${i}`)}
 						<CheckRow {check} {siteID} />
 					{/each}
 				</div>

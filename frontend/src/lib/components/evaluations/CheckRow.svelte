@@ -27,10 +27,11 @@
 	});
 
 	const severityLabel = $derived.by(() => {
-		if (check.passed) return 'pass';
+		if (check.passed === true) return 'pass';
 		if (severity === 'critical') return 'critical';
 		if (severity === 'error') return 'high';
 		if (severity === 'warning') return 'medium';
+		if (severity === 'info') return 'info';
 		return 'low';
 	});
 </script>

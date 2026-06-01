@@ -125,12 +125,15 @@ func Run(ctx context.Context, queries *store.Queries, siteID, buildID, distDir s
 		return nil, fmt.Errorf("load site context: %w", err)
 	}
 
+	perfChecks := RunPerformanceChecks(site)
+	perfChecks = append(perfChecks, RunCWVChecks(ctx, queries, siteID)...)
+
 	reports := []CategoryReport{
 		{Category: "security", Checks: RunSecurityChecks(site)},
 		{Category: "seo", Checks: RunSEOChecks(site)},
 		{Category: "accessibility", Checks: RunAccessibilityChecks(site)},
 		{Category: "privacy", Checks: RunPrivacyChecks(site)},
-		{Category: "performance", Checks: RunPerformanceChecks(site)},
+		{Category: "performance", Checks: perfChecks},
 	}
 
 	for i := range reports {
