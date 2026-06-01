@@ -165,6 +165,29 @@ func init() {
 	})
 
 	Register(Schema{
+		Type: "mega_menu", Label: "Mega menu", Category: "navigation",
+		Description: "Top-of-page navigation with column-based dropdown panels. Uses native <details> for full keyboard accessibility; CSS opens on hover for pointer devices, on click otherwise. Zero JS.",
+		Fields: []Field{
+			{Key: "items", Label: "Top-level menu items", Kind: KindArray, ItemSchema: []Field{
+				{Key: "label", Label: "Label", Kind: KindText, Required: true},
+				{Key: "href", Label: "Direct link URL", Kind: KindURL, Help: "Set this for a simple link; leave empty to open a dropdown panel with columns."},
+				{Key: "columns", Label: "Dropdown columns", Kind: KindArray, ItemSchema: []Field{
+					{Key: "heading", Label: "Column heading", Kind: KindText},
+					{Key: "items", Label: "Column links", Kind: KindArray, ItemSchema: []Field{
+						{Key: "label", Label: "Link label", Kind: KindText, Required: true},
+						{Key: "href", Label: "URL", Kind: KindURL, Required: true},
+						{Key: "description", Label: "Sub-label", Kind: KindText},
+					}},
+				}},
+				{Key: "featured_heading", Label: "Featured slot heading", Kind: KindText},
+				{Key: "featured_body", Label: "Featured slot body", Kind: KindTextarea},
+				{Key: "featured_cta_text", Label: "Featured CTA text", Kind: KindText},
+				{Key: "featured_cta_url", Label: "Featured CTA URL", Kind: KindURL},
+			}},
+		},
+	})
+
+	Register(Schema{
 		Type: "scroll_reveal", Label: "Scroll-revealed story", Category: "content",
 		Description: "Vertical sequence of text/image pairs that fade and lift into view as the visitor scrolls. Pure CSS animation-timeline; zero JS. Respects prefers-reduced-motion.",
 		Fields: []Field{

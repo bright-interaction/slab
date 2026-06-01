@@ -25,7 +25,8 @@
 		MessageSquareQuote,
 		PlayCircle,
 		PanelTop,
-		ChevronsDown
+		ChevronsDown,
+		Menu
 	} from 'lucide-svelte';
 	import * as blocksApi from '$lib/api/blocks';
 	import type { BlockSchema } from '$lib/api/types';
@@ -100,6 +101,8 @@
 				return PanelTop;
 			case 'scroll_reveal':
 				return ChevronsDown;
+			case 'mega_menu':
+				return Menu;
 			case 'testimonial_wall':
 				return MessageSquareQuote;
 			case 'logo_strip':

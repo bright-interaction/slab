@@ -546,6 +546,51 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".pricing-tier ul.tier-features li::before { content: '✓'; position: absolute; left: 0; color: var(--color-primary); font-weight: 700; }\n")
 	b.WriteString(".pricing-tier .tier-cta { margin-block-start: auto; }\n\n")
 
+	// mega_menu: horizontal nav with column-based dropdown panels.
+	// Native <details> drives the open/close so keyboard nav (Tab + Enter)
+	// works zero-JS. Hover-to-open on pointer-fine devices; otherwise
+	// tap-to-toggle. Panel anchors to the menu item, slides under it.
+	b.WriteString(".block--mega_menu { max-width: var(--container-width); padding-block: 0.5rem; }\n")
+	b.WriteString(".mega-menu-list { list-style: none; padding: 0; margin: 0; display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }\n")
+	b.WriteString(".mega-menu-item { position: relative; }\n")
+	b.WriteString(".mega-menu-item > a, .mega-menu-item > span, .mega-menu-item summary { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.625rem 0.875rem; border-radius: 0.5rem; font-size: 0.9375rem; font-weight: 500; color: var(--color-text); cursor: pointer; }\n")
+	b.WriteString(".mega-menu-item summary { list-style: none; -webkit-tap-highlight-color: transparent; }\n")
+	b.WriteString(".mega-menu-item summary::-webkit-details-marker { display: none; }\n")
+	b.WriteString(".mega-menu-item > a:hover, .mega-menu-item summary:hover { background: color-mix(in oklab, var(--color-text) 6%, transparent); }\n")
+	b.WriteString(".mega-menu-caret { font-size: 0.75rem; opacity: 0.6; transition: transform 150ms ease-out; }\n")
+	b.WriteString(".mega-menu-item details[open] .mega-menu-caret { transform: rotate(180deg); }\n")
+	// Panel anchors below the item, full width on mobile, fixed width on desktop.
+	b.WriteString(".mega-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; min-width: 36rem; max-width: min(56rem, 90vw); background: var(--color-surface, var(--color-bg)); border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent); border-radius: 0.875rem; padding: 1.5rem; box-shadow: 0 12px 40px color-mix(in oklab, var(--color-text) 12%, transparent); z-index: 100; display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; }\n")
+	b.WriteString(".mega-panel-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1.5rem; }\n")
+	b.WriteString(".mega-column-heading { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: color-mix(in oklab, var(--color-text) 60%, transparent); margin: 0 0 0.5rem; }\n")
+	b.WriteString(".mega-column ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25rem; }\n")
+	b.WriteString(".mega-column ul a { display: flex; flex-direction: column; gap: 0.125rem; padding: 0.5rem 0.625rem; border-radius: 0.5rem; text-decoration: none; }\n")
+	b.WriteString(".mega-column ul a:hover { background: color-mix(in oklab, var(--color-text) 5%, transparent); }\n")
+	b.WriteString(".mega-link-label { font-size: 0.9375rem; font-weight: 500; color: var(--color-text); }\n")
+	b.WriteString(".mega-link-desc { font-size: 0.8125rem; color: color-mix(in oklab, var(--color-text) 60%, transparent); }\n")
+	b.WriteString(".mega-featured { padding: 1rem; background: color-mix(in oklab, var(--color-primary) 6%, var(--color-bg)); border-radius: 0.75rem; max-width: 18rem; }\n")
+	b.WriteString(".mega-featured-heading { font-size: 0.875rem; font-weight: 600; margin: 0 0 0.375rem; }\n")
+	b.WriteString(".mega-featured-body { font-size: 0.8125rem; line-height: 1.5; color: color-mix(in oklab, var(--color-text) 70%, transparent); margin: 0 0 0.75rem; }\n")
+	b.WriteString(".mega-featured-cta { display: inline-flex; align-items: center; font-size: 0.875rem; font-weight: 500; color: var(--color-primary); text-decoration: none; }\n")
+	b.WriteString(".mega-featured-cta::after { content: '→'; margin-inline-start: 0.25rem; transition: transform 150ms ease-out; }\n")
+	b.WriteString(".mega-featured-cta:hover::after { transform: translateX(2px); }\n")
+	// Pointer-fine: hover opens the panel via the [open] attribute toggled
+	// from a sibling CSS rule that flips the details state when hovered.
+	// Browsers without script handlers cannot change [open] via :hover
+	// directly; instead we render the panel visible whenever its parent
+	// is :hover OR :focus-within, even when [open] is false. This loses
+	// the caret rotation but keeps the panel reachable.
+	b.WriteString("@media (hover: hover) and (pointer: fine) {\n")
+	b.WriteString("  .mega-menu-item--dropdown:hover .mega-panel, .mega-menu-item--dropdown:focus-within .mega-panel { display: grid; }\n")
+	b.WriteString("  .mega-menu-item--dropdown details:not([open]) .mega-panel { display: none; }\n")
+	b.WriteString("  .mega-menu-item--dropdown:hover details:not([open]) .mega-panel { display: grid; }\n")
+	b.WriteString("}\n")
+	// Mobile collapse: panel becomes a full-width disclosure under the
+	// summary; columns stack vertically.
+	b.WriteString("@media (max-width: " + tabletBP + ") {\n")
+	b.WriteString("  .mega-panel { position: static; min-width: 0; max-width: none; box-shadow: none; padding: 0.75rem 0 0 1rem; border-left: 2px solid color-mix(in oklab, var(--color-text) 10%, transparent); border-radius: 0; grid-template-columns: 1fr; }\n")
+	b.WriteString("}\n\n")
+
 	// scroll_reveal: vertical sequence of text/image rows that fade + lift
 	// into view as the user scrolls. Pure CSS via animation-timeline: view()
 	// (Chromium + Edge + Safari 2024+; Firefox graceful fallback to static).
