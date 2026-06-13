@@ -174,7 +174,10 @@ func RenderPages(ctx context.Context, queries *store.Queries, siteID string, wsD
 			// no-op on pages without a locale_switcher block.
 			localizedBlocks = resolveLocaleSwitcherBlocks(localizedBlocks, spec.lang, site.Domain, page.Slug, i18n)
 			content := renderPageWithContext(spec.page, localizedBlocks, componentExts, pageCtx)
-			pagePath := slugToFilePath(spec.outSlug, wsDir)
+			pagePath, err := slugToFilePath(spec.outSlug, wsDir)
+			if err != nil {
+				return 0, fmt.Errorf("page %s (locale %s): %w", spec.outSlug, spec.lang, err)
+			}
 			if err := WriteFile(pagePath, content); err != nil {
 				return 0, fmt.Errorf("write page %s (locale %s): %w", spec.outSlug, spec.lang, err)
 			}
@@ -863,12 +866,24 @@ func extractComponentName(bl store.Block) string {
 	return ""
 }
 
-func slugToFilePath(slug string, wsDir string) string {
+// slugToFilePath maps a page slug to its .astro output path and
+// guarantees the result stays within <wsDir>/src/pages. A slug that
+// escapes (via .. segments or otherwise) returns an error so the build
+// fails closed instead of writing another tenant's workspace. Slugs are
+// validated at the write boundary (handlers.ValidatePageSlug on the REST,
+// MCP, and locale paths); this is the last line of defense.
+func slugToFilePath(slug string, wsDir string) (string, error) {
+	base := filepath.Join(wsDir, "src", "pages")
 	slug = strings.Trim(slug, "/")
 	if slug == "" {
-		return filepath.Join(wsDir, "src", "pages", "index.astro")
+		return filepath.Join(base, "index.astro"), nil
 	}
-	return filepath.Join(wsDir, "src", "pages", slug+".astro")
+	p := filepath.Join(base, slug+".astro")
+	rel, err := filepath.Rel(base, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("page slug %q escapes the pages directory", slug)
+	}
+	return p, nil
 }
 
 // pageDepth returns how many subdirectories deep under src/pages the page

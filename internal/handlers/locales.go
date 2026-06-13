@@ -286,6 +286,10 @@ func (h *LocalesHandler) UpsertPageLocale(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "status must be draft|published|archived")
 		return
 	}
+	if err := validatePageSlug(strings.TrimSpace(in.SlugOverride)); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Sprint 3 slice B (2026-05-24): snapshot any existing row before
 	// the upsert so the locale rollback path works through
 	// restore_revision.
@@ -576,6 +580,9 @@ func (h *LocalesHandler) ApplyTranslationForAgent(ctx context.Context, siteID, p
 	}
 	if status != "draft" && status != "published" && status != "archived" {
 		return errors.New("status must be draft|published|archived")
+	}
+	if err := validatePageSlug(strings.TrimSpace(pageOverlay.SlugOverride)); err != nil {
+		return err
 	}
 	// Pre-validate every block overlay's JSON before any write, so a
 	// bad payload in block #5 doesn't leave blocks #1-4 written.
