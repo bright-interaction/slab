@@ -193,3 +193,70 @@ func TestBackfillSiteMembersForAdmin_Idempotent(t *testing.T) {
 		t.Errorf("second backfill must be idempotent; got %d rows, want 2", len(ids2))
 	}
 }
+
+// TestSiteAccess_WorkspaceIsolation is the audit-#5 regression guard for
+// the multi-tenant path (sites carrying a real workspace_id). It proves:
+// a member of the site's own workspace passes; an outsider with neither a
+// site grant nor workspace membership is denied; and a global platform
+// admin who is NOT in the site's workspace still passes but is audited
+// (matching WorkspaceAccessMiddleware). Pre-fix, any user.Role=="admin"
+// silently read/mutated every tenant's site with no membership and no log.
+func TestSiteAccess_WorkspaceIsolation(t *testing.T) {
+	sqlDB, q := openTestDB(t)
+	ctx := context.Background()
+	wsA := "aaaa1111aaaa1111aaaa1111"
+	wsB := "bbbb2222bbbb2222bbbb2222"
+	siteB := "cccc3333cccc3333cccc3333"
+	for _, ws := range []string{wsA, wsB} {
+		if _, err := sqlDB.Exec(`INSERT INTO workspaces (id, name, slug) VALUES (?, ?, ?)`, ws, ws, ws); err != nil {
+			t.Fatalf("seed workspace %s: %v", ws, err)
+		}
+	}
+	if _, err := sqlDB.Exec(`INSERT INTO sites (id, workspace_id, name, slug) VALUES (?, ?, 'B', 'site-b')`, siteB, wsB); err != nil {
+		t.Fatalf("seed site B: %v", err)
+	}
+	mkUser := func(id, role string) {
+		if _, err := sqlDB.Exec(`INSERT INTO users (id, email, password_hash, name, role) VALUES (?, ?, '', '', ?)`, id, id+"@e.com", role); err != nil {
+			t.Fatalf("seed user %s: %v", id, err)
+		}
+	}
+	mkUser("memberb", "editor")
+	mkUser("outsider", "editor")
+	mkUser("opsadmin", "admin")
+	if err := q.AddWorkspaceMember(ctx, store.AddWorkspaceMemberParams{WorkspaceID: wsB, UserID: "memberb", Role: "member"}); err != nil {
+		t.Fatalf("add ws member: %v", err)
+	}
+	if err := q.AddWorkspaceMember(ctx, store.AddWorkspaceMemberParams{WorkspaceID: wsA, UserID: "opsadmin", Role: "owner"}); err != nil {
+		t.Fatalf("add ws admin member: %v", err)
+	}
+
+	// (1) Member of the site's own workspace passes.
+	if rr := runRouted(t, SiteAccessMiddleware(q), &AuthUser{ID: "memberb", Role: "editor"}, siteB); rr.Code != http.StatusOK {
+		t.Errorf("workspace member on own site: got %d, want 200", rr.Code)
+	}
+	// (2) Outsider (non-admin, no site grant, not a workspace member) denied.
+	if rr := runRouted(t, SiteAccessMiddleware(q), &AuthUser{ID: "outsider", Role: "editor"}, siteB); rr.Code != http.StatusForbidden {
+		t.Errorf("outsider on foreign site: got %d, want 403 (cross-tenant isolation)", rr.Code)
+	}
+	if rows, _ := q.ListAuditLogGlobal(ctx, 10); len(rows) != 0 {
+		t.Fatalf("no audit row expected before admin cross-access; got %d", len(rows))
+	}
+	// (3) Platform admin not in the site's workspace passes BUT is audited.
+	if rr := runRouted(t, SiteAccessMiddleware(q), &AuthUser{ID: "opsadmin", Role: "admin"}, siteB); rr.Code != http.StatusOK {
+		t.Errorf("platform admin cross-workspace: got %d, want 200 (audited)", rr.Code)
+	}
+	rows, err := q.ListAuditLogGlobal(ctx, 10)
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Action != "cross_workspace_site_admin" {
+		got := ""
+		if len(rows) > 0 {
+			got = rows[0].Action
+		}
+		t.Fatalf("want exactly 1 cross_workspace_site_admin audit row; got %d rows, action0=%q", len(rows), got)
+	}
+	if rows[0].ResourceID != wsB {
+		t.Errorf("audit ResourceID=%q, want site's workspace %s", rows[0].ResourceID, wsB)
+	}
+}

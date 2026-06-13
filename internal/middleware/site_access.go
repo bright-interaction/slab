@@ -63,34 +63,80 @@ func SiteAccessMiddleware(queries *store.Queries) func(http.Handler) http.Handle
 				writeAuthError(w, http.StatusBadRequest, "Invalid siteID")
 				return
 			}
-			// Workspace-level admins bypass the membership check. This
-			// preserves the legacy single-admin-owns-everything model
-			// while gating future non-admin users (editors / contributors
-			// invited via the existing members flow).
-			if user.Role == "admin" {
-				next.ServeHTTP(w, r)
-				return
-			}
-			_, err := queries.GetSiteMembership(r.Context(), store.GetSiteMembershipParams{
+
+			// (1) Direct per-site grant always passes (the explicit
+			// site_members invite). The role lives in the row; owner-only
+			// operations re-check it inside their handlers.
+			if _, err := queries.GetSiteMembership(r.Context(), store.GetSiteMembershipParams{
 				SiteID: siteID,
 				UserID: user.ID,
-			})
-			if err == nil {
-				// Membership row found — pass through. The role lives in
-				// the row but we don't enforce role-level gates here;
-				// owner-only operations (delete site, manage members)
-				// check role explicitly inside their handlers.
+			}); err == nil {
 				next.ServeHTTP(w, r)
 				return
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				// Infra failure (DB closed, query error). Fail closed.
+				writeAuthError(w, http.StatusInternalServerError, "Authorization check failed")
+				return
 			}
-			if errors.Is(err, sql.ErrNoRows) {
+
+			// The workspace is the tenant isolation boundary, so resolve
+			// the site's workspace before honouring any global-role power.
+			// Pre-fix this used an unconditional user.Role=="admin" bypass,
+			// which let an admin (incl. an over-provisioned SSO admin) read
+			// or mutate ANY tenant's site with no membership and no audit.
+			site, err := queries.GetSiteByID(r.Context(), siteID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					writeAuthError(w, http.StatusForbidden, "No access to this site")
+					return
+				}
+				writeAuthError(w, http.StatusInternalServerError, "Authorization check failed")
+				return
+			}
+
+			// (2) Legacy single-workspace sites (workspace_id not yet
+			// backfilled) keep the original admin-owns-everything model.
+			// New sites always carry a workspace_id.
+			if site.WorkspaceID == "" {
+				if user.Role == "admin" {
+					next.ServeHTTP(w, r)
+					return
+				}
 				writeAuthError(w, http.StatusForbidden, "No access to this site")
 				return
 			}
-			// Infrastructure failure (DB closed, query error). Fail
-			// closed: 500, never grant access. Logging is the auth
-			// middleware's job upstream.
-			writeAuthError(w, http.StatusInternalServerError, "Authorization check failed")
+
+			// (3) Member of the site's own workspace passes (this is the
+			// tenant's own staff reaching their own sites).
+			if _, err := queries.GetWorkspaceMembership(r.Context(), store.GetWorkspaceMembershipParams{
+				WorkspaceID: site.WorkspaceID,
+				UserID:      user.ID,
+			}); err == nil {
+				next.ServeHTTP(w, r)
+				return
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				writeAuthError(w, http.StatusInternalServerError, "Authorization check failed")
+				return
+			}
+
+			// (4) Not a member of the site's workspace. Mirror
+			// WorkspaceAccessMiddleware: a genuine platform admin / support
+			// user may cross workspaces, but the access is audited; every
+			// other caller is denied.
+			switch user.Role {
+			case "admin":
+				writeCrossWorkspaceAudit(r.Context(), queries, user, site.WorkspaceID, r, "cross_workspace_site_admin")
+				next.ServeHTTP(w, r)
+			case "support":
+				if r.Method != http.MethodGet && r.Method != http.MethodHead {
+					writeAuthError(w, http.StatusForbidden, "Support role is read-only across workspaces")
+					return
+				}
+				writeCrossWorkspaceAudit(r.Context(), queries, user, site.WorkspaceID, r, "cross_workspace_site_support")
+				next.ServeHTTP(w, r)
+			default:
+				writeAuthError(w, http.StatusForbidden, "No access to this site")
+			}
 		})
 	}
 }
