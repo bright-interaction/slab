@@ -110,10 +110,10 @@ func (q *Queries) ListPaymentEventsByOrder(ctx context.Context, arg ListPaymentE
 	return items, nil
 }
 
-const markPaymentEventProcessed = `-- name: MarkPaymentEventProcessed :exec
+const markPaymentEventProcessed = `-- name: MarkPaymentEventProcessed :execrows
 UPDATE payment_events
 SET processed = 1
-WHERE provider = ? AND payment_id = ? AND event_type = ?
+WHERE provider = ? AND payment_id = ? AND event_type = ? AND processed = 0
 `
 
 type MarkPaymentEventProcessedParams struct {
@@ -122,7 +122,10 @@ type MarkPaymentEventProcessedParams struct {
 	EventType string `json:"event_type"`
 }
 
-func (q *Queries) MarkPaymentEventProcessed(ctx context.Context, arg MarkPaymentEventProcessedParams) error {
-	_, err := q.db.ExecContext(ctx, markPaymentEventProcessed, arg.Provider, arg.PaymentID, arg.EventType)
-	return err
+func (q *Queries) MarkPaymentEventProcessed(ctx context.Context, arg MarkPaymentEventProcessedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markPaymentEventProcessed, arg.Provider, arg.PaymentID, arg.EventType)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
