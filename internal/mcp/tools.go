@@ -97,6 +97,9 @@ func (s *Server) registerTools() {
 			if args.Title == "" {
 				return "", errors.New("title is required")
 			}
+			if err := handlers.ValidatePageSlug(args.Slug); err != nil {
+				return "", err
+			}
 			if args.Layout == "" {
 				args.Layout = "default"
 			}
@@ -184,6 +187,9 @@ func (s *Server) registerTools() {
 				params.Title = *args.Title
 			}
 			if args.NewSlug != nil {
+				if err := handlers.ValidatePageSlug(*args.NewSlug); err != nil {
+					return "", err
+				}
 				params.Slug = *args.NewSlug
 			}
 			if args.Status != nil {

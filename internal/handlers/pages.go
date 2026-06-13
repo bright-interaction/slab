@@ -28,6 +28,12 @@ func encodeWarnings(vs []agent.Violation) string {
 // special case before the regex runs.
 var pageSlugSegment = regexp.MustCompile(`^[a-z0-9][-a-z0-9_]{0,79}$`)
 
+// ValidatePageSlug is the exported entry point so the MCP and locale
+// write paths validate page slugs against the exact same rules as the
+// REST handler, with no second implementation to drift. Empty is allowed
+// (slug auto-derived downstream). See validatePageSlug for the rules.
+func ValidatePageSlug(s string) error { return validatePageSlug(s) }
+
 // validatePageSlug rejects path traversal and chars that would corrupt the
 // builder's slugToFilePath. Allowed: empty (root index), "blog/post-name",
 // "level-1/level-2/level-3". Rejected: "..", "../etc/passwd", trailing
