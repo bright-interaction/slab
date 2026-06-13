@@ -25,9 +25,11 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"strings"
@@ -69,10 +71,15 @@ func canTransition(from, to string) bool {
 type OrderHandler struct {
 	cfg     *config.Config
 	queries *store.Queries
+	db      *sql.DB
+	// mollieBaseURL overrides the Mollie API base in the webhook path.
+	// Empty in production (uses the real api.mollie.com); tests set it
+	// to an httptest stub. Same-package field, no constructor change.
+	mollieBaseURL string
 }
 
-func NewOrderHandler(cfg *config.Config, queries *store.Queries) *OrderHandler {
-	return &OrderHandler{cfg: cfg, queries: queries}
+func NewOrderHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *OrderHandler {
+	return &OrderHandler{cfg: cfg, queries: queries, db: db}
 }
 
 func orderInSite(ctx context.Context, q *store.Queries, w http.ResponseWriter, orderID, siteID string) (store.Order, bool) {
@@ -297,11 +304,11 @@ func (h *OrderHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 
 	// Validate items + recompute prices server-side.
 	type validatedItem struct {
-		Variant     store.ProductVariant
-		Product     store.Product
-		UnitPrice   int64
-		LineTotal   int64
-		Quantity    int64
+		Variant   store.ProductVariant
+		Product   store.Product
+		UnitPrice int64
+		LineTotal int64
+		Quantity  int64
 	}
 	validated := make([]validatedItem, 0, len(in.Items))
 	var subtotal int64
@@ -607,7 +614,11 @@ func (h *OrderHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "no api key configured"})
 		return
 	}
-	pay, err := mollie.NewClient(apiKey).GetPayment(ctx, paymentID)
+	mc := mollie.NewClient(apiKey)
+	if h.mollieBaseURL != "" {
+		mc = mc.WithBaseURL(h.mollieBaseURL)
+	}
+	pay, err := mc.GetPayment(ctx, paymentID)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "mollie get payment failed: "+err.Error())
 		return
@@ -629,19 +640,45 @@ func (h *OrderHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	rawJSON, _ := json.Marshal(pay)
 	eventType := pay.Status
 	eventID := newID()
-	_ = h.queries.CreatePaymentEvent(ctx, store.CreatePaymentEventParams{
-		ID:         eventID,
-		SiteID:     siteID,
-		OrderID:    order.ID,
-		Provider:   "mollie",
-		PaymentID:  paymentID,
-		EventType:  eventType,
-		RawJson:    string(rawJSON),
-	})
-	existing, err := h.queries.GetPaymentEventByLookup(ctx, store.GetPaymentEventByLookupParams{
+
+	// Everything below runs in one transaction on the single SQLite
+	// writer. The (provider, payment_id, event_type) row is the
+	// idempotency key: MarkPaymentEventProcessed is a compare-and-set
+	// (WHERE processed=0) so exactly one of N retried/parallel
+	// deliveries claims the event and runs the side-effects. Wrapping
+	// the claim + status flip + inventory/discount writes together means
+	// a mid-flight failure rolls the whole thing back (processed stays
+	// 0) and Mollie's retry re-processes cleanly, with no double
+	// inventory decrement or double discount increment.
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not start transaction")
+		return
+	}
+	defer tx.Rollback()
+	qtx := h.queries.WithTx(tx)
+
+	if err := qtx.CreatePaymentEvent(ctx, store.CreatePaymentEventParams{
+		ID:        eventID,
+		SiteID:    siteID,
+		OrderID:   order.ID,
+		Provider:  "mollie",
+		PaymentID: paymentID,
+		EventType: eventType,
+		RawJson:   string(rawJSON),
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "could not record payment event")
+		return
+	}
+	claimed, err := qtx.MarkPaymentEventProcessed(ctx, store.MarkPaymentEventProcessedParams{
 		Provider: "mollie", PaymentID: paymentID, EventType: eventType,
 	})
-	if err == nil && existing.Processed == 1 {
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not claim payment event")
+		return
+	}
+	if claimed == 0 {
+		// A prior delivery already processed this exact event.
 		writeJSON(w, http.StatusOK, map[string]string{"status": "already processed"})
 		return
 	}
@@ -650,6 +687,22 @@ func (h *OrderHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	newStatus := order.Status
 	switch pay.Status {
 	case "paid":
+		// Never mark an order paid for an amount/currency that does not
+		// match what we charged. Mollie pins the amount at payment
+		// creation, so a mismatch means the payment does not correspond
+		// to this order; leave it pending for an operator to inspect.
+		if pay.Amount.Value != mollie.FormatAmount(order.TotalCents) || !strings.EqualFold(pay.Amount.Currency, order.Currency) {
+			slog.Warn("mollie webhook: paid amount mismatch; leaving order unpaid",
+				"order_id", order.ID, "site_id", siteID,
+				"want", mollie.FormatAmount(order.TotalCents)+" "+order.Currency,
+				"got", pay.Amount.Value+" "+pay.Amount.Currency)
+			if err := tx.Commit(); err != nil {
+				writeError(w, http.StatusInternalServerError, "commit failed")
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]string{"status": "amount mismatch", "new_order_status": order.Status})
+			return
+		}
 		if canTransition(order.Status, "paid") {
 			newStatus = "paid"
 		}
@@ -659,44 +712,58 @@ func (h *OrderHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if newStatus != order.Status {
-		_ = h.queries.UpdateOrderStatus(ctx, store.UpdateOrderStatusParams{
+		if err := qtx.UpdateOrderStatus(ctx, store.UpdateOrderStatusParams{
 			Status:        newStatus,
 			PaymentStatus: pay.Status,
 			Column3:       newStatus, Column4: newStatus, Column5: newStatus, Column6: newStatus,
 			ID:     order.ID,
 			SiteID: siteID,
-		})
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "could not update order status")
+			return
+		}
 		if newStatus == "paid" {
-			h.applyPaidSideEffects(ctx, order)
+			if err := h.applyPaidSideEffects(ctx, qtx, order); err != nil {
+				writeError(w, http.StatusInternalServerError, "could not apply paid side effects")
+				return
+			}
 		}
 	}
-	_ = h.queries.MarkPaymentEventProcessed(ctx, store.MarkPaymentEventProcessedParams{
-		Provider: "mollie", PaymentID: paymentID, EventType: eventType,
-	})
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "commit failed")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "new_order_status": newStatus})
 }
 
 // applyPaidSideEffects runs the one-time post-payment work:
 // decrement variant inventory, write inventory_adjustments rows,
-// increment discount_codes.used_count. Idempotency comes from the
-// payment_events processed flag; this function is only called when
-// the row transitions to 'paid'.
-func (h *OrderHandler) applyPaidSideEffects(ctx context.Context, order store.Order) {
-	items, err := h.queries.ListOrderItems(ctx, order.ID)
+// increment discount_codes.used_count. It takes the caller's Queries
+// (the webhook passes a tx-bound one) so the writes commit atomically
+// with the status flip + the payment_events claim, and returns an
+// error so a failure rolls the whole transaction back. Idempotency is
+// the payment_events compare-and-set; this only runs for the single
+// delivery that claims the 'paid' event.
+func (h *OrderHandler) applyPaidSideEffects(ctx context.Context, q *store.Queries, order store.Order) error {
+	items, err := q.ListOrderItems(ctx, order.ID)
 	if err != nil {
-		return
+		return err
 	}
 	for _, it := range items {
-		v, err := h.queries.GetProductVariantByID(ctx, it.VariantID)
+		v, err := q.GetProductVariantByID(ctx, it.VariantID)
 		if err != nil {
+			// Variant deleted after purchase: skip its inventory write
+			// rather than fail the whole order.
 			continue
 		}
-		_ = h.queries.AdjustVariantInventoryCount(ctx, store.AdjustVariantInventoryCountParams{
+		if err := q.AdjustVariantInventoryCount(ctx, store.AdjustVariantInventoryCountParams{
 			InventoryCount: -it.Quantity,
 			ID:             it.VariantID,
-		})
+		}); err != nil {
+			return err
+		}
 		newCount := v.InventoryCount - it.Quantity
-		_ = h.queries.CreateInventoryAdjustment(ctx, store.CreateInventoryAdjustmentParams{
+		if err := q.CreateInventoryAdjustment(ctx, store.CreateInventoryAdjustmentParams{
 			ID:        newID(),
 			VariantID: it.VariantID,
 			SiteID:    order.SiteID,
@@ -705,11 +772,16 @@ func (h *OrderHandler) applyPaidSideEffects(ctx context.Context, order store.Ord
 			Reason:    "sale",
 			Note:      "Order " + order.OrderNumber,
 			CreatedBy: "system:checkout",
-		})
+		}); err != nil {
+			return err
+		}
 	}
 	if order.DiscountCodeID != "" {
-		_ = h.queries.IncrementDiscountCodeUsedCount(ctx, store.IncrementDiscountCodeUsedCountParams{
+		if err := q.IncrementDiscountCodeUsedCount(ctx, store.IncrementDiscountCodeUsedCountParams{
 			ID: order.DiscountCodeID, SiteID: order.SiteID,
-		})
+		}); err != nil {
+			return err
+		}
 	}
+	return nil
 }

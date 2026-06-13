@@ -463,7 +463,7 @@ type Querier interface {
 	MarkBillingEventProcessed(ctx context.Context, arg MarkBillingEventProcessedParams) error
 	MarkInviteUsed(ctx context.Context, id string) error
 	MarkPasswordResetUsed(ctx context.Context, id string) error
-	MarkPaymentEventProcessed(ctx context.Context, arg MarkPaymentEventProcessedParams) error
+	MarkPaymentEventProcessed(ctx context.Context, arg MarkPaymentEventProcessedParams) (int64, error)
 	MarkVerifyJobRunning(ctx context.Context, id string) error
 	MarkWaitlistInvited(ctx context.Context, arg MarkWaitlistInvitedParams) error
 	MarkWebhookDeliveryDropped(ctx context.Context, arg MarkWebhookDeliveryDroppedParams) error

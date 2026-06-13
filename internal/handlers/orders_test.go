@@ -3,11 +3,15 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/brightinteraction/atomicsite/internal/payments/mollie"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -46,7 +50,7 @@ func TestOrders_CheckoutHappyPathNoMollie(t *testing.T) {
 	siteID := "ositea0000000000aaaa01"
 	seedSite(t, q, siteID)
 	_, v := seedActiveProductWithVariant(t, q, siteID, "hat", 10)
-	h := NewOrderHandler(nil, q)
+	h := NewOrderHandler(nil, q, nil)
 	r := checkoutRouter(h)
 
 	code, body := postJSON(t, r, "/api/sites/"+siteID+"/checkout", map[string]any{
@@ -79,7 +83,7 @@ func TestOrders_CheckoutRejectsInactiveProduct(t *testing.T) {
 	rawV, _ := json.Marshal(VariantInput{Name: "x", PriceCents: 1000, InventoryCount: 5})
 	v, _ := ph.CreateVariantForAgent(context.Background(), siteID, p.ID, rawV)
 
-	h := NewOrderHandler(nil, q)
+	h := NewOrderHandler(nil, q, nil)
 	r := checkoutRouter(h)
 	code, _ := postJSON(t, r, "/api/sites/"+siteID+"/checkout", map[string]any{
 		"items":    []map[string]any{{"variant_id": v.ID, "quantity": 1}},
@@ -95,7 +99,7 @@ func TestOrders_CheckoutRejectsInsufficientInventory(t *testing.T) {
 	siteID := "ositea0000000000aaaa03"
 	seedSite(t, q, siteID)
 	_, v := seedActiveProductWithVariant(t, q, siteID, "scarce", 2)
-	h := NewOrderHandler(nil, q)
+	h := NewOrderHandler(nil, q, nil)
 	r := checkoutRouter(h)
 	code, _ := postJSON(t, r, "/api/sites/"+siteID+"/checkout", map[string]any{
 		"items":    []map[string]any{{"variant_id": v.ID, "quantity": 5}},
@@ -118,7 +122,7 @@ func TestOrders_CheckoutAppliesDiscountCode(t *testing.T) {
 	if _, err := dh.CreateForAgent(context.Background(), siteID, raw); err != nil {
 		t.Fatalf("seed code: %v", err)
 	}
-	h := NewOrderHandler(nil, q)
+	h := NewOrderHandler(nil, q, nil)
 	r := checkoutRouter(h)
 	code, body := postJSON(t, r, "/api/sites/"+siteID+"/checkout", map[string]any{
 		"items":         []map[string]any{{"variant_id": v.ID, "quantity": 3}},
@@ -145,7 +149,7 @@ func TestOrders_StateMachineRejectsIllegalTransition(t *testing.T) {
 	siteID := "ositea0000000000aaaa05"
 	seedSite(t, q, siteID)
 	_, v := seedActiveProductWithVariant(t, q, siteID, "shirt", 50)
-	h := NewOrderHandler(nil, q)
+	h := NewOrderHandler(nil, q, nil)
 	r := checkoutRouter(h)
 	code, body := postJSON(t, r, "/api/sites/"+siteID+"/checkout", map[string]any{
 		"items":    []map[string]any{{"variant_id": v.ID, "quantity": 1}},
@@ -192,7 +196,7 @@ func TestOrders_PaidSideEffectsDecrementInventoryAndIncrementDiscount(t *testing
 	if err != nil {
 		t.Fatalf("seed code: %v", err)
 	}
-	h := NewOrderHandler(nil, q)
+	h := NewOrderHandler(nil, q, nil)
 	r := checkoutRouter(h)
 	code, body := postJSON(t, r, "/api/sites/"+siteID+"/checkout", map[string]any{
 		"items":         []map[string]any{{"variant_id": v.ID, "quantity": 3}},
@@ -205,7 +209,9 @@ func TestOrders_PaidSideEffectsDecrementInventoryAndIncrementDiscount(t *testing
 	// Apply side-effects (the webhook handler does this on 'paid').
 	orderID := body["order"].(map[string]any)["id"].(string)
 	order, _ := q.GetOrderByID(context.Background(), store.GetOrderByIDParams{ID: orderID, SiteID: siteID})
-	h.applyPaidSideEffects(context.Background(), order)
+	if err := h.applyPaidSideEffects(context.Background(), q, order); err != nil {
+		t.Fatalf("applyPaidSideEffects: %v", err)
+	}
 
 	// Inventory decremented.
 	v2, _ := q.GetProductVariantByID(context.Background(), v.ID)
@@ -248,13 +254,113 @@ func TestOrders_PaymentEventIdempotencyByUniqueIndex(t *testing.T) {
 	if row.Processed != 0 {
 		t.Errorf("processed = %d; want 0 before marker", row.Processed)
 	}
-	_ = q.MarkPaymentEventProcessed(ctx, store.MarkPaymentEventProcessedParams{
+	// CAS claim: the first mark wins (1 row), a second concurrent/retried
+	// mark loses (0 rows). This single-winner guarantee is what stops a
+	// retried Mollie 'paid' delivery from double-applying side-effects.
+	claimed, err := q.MarkPaymentEventProcessed(ctx, store.MarkPaymentEventProcessedParams{
 		Provider: "mollie", PaymentID: "tr_test_abc", EventType: "paid",
 	})
+	if err != nil || claimed != 1 {
+		t.Fatalf("first claim: rows=%d err=%v; want 1", claimed, err)
+	}
+	claimed2, err := q.MarkPaymentEventProcessed(ctx, store.MarkPaymentEventProcessedParams{
+		Provider: "mollie", PaymentID: "tr_test_abc", EventType: "paid",
+	})
+	if err != nil || claimed2 != 0 {
+		t.Fatalf("second claim: rows=%d err=%v; want 0 (already processed)", claimed2, err)
+	}
 	row, _ = q.GetPaymentEventByLookup(ctx, store.GetPaymentEventByLookupParams{
 		Provider: "mollie", PaymentID: "tr_test_abc", EventType: "paid",
 	})
 	if row.Processed != 1 {
 		t.Errorf("processed = %d; want 1", row.Processed)
+	}
+}
+
+// TestOrders_WebhookPaidIdempotentAndAmountChecked drives the real Mollie
+// webhook handler end-to-end against a stub. It is the regression guard
+// for two audit fixes: a retried 'paid' delivery must not double-apply
+// inventory (CAS claim + tx), and a payment whose amount does not match
+// the order total must not mark the order paid.
+func TestOrders_WebhookPaidIdempotentAndAmountChecked(t *testing.T) {
+	db, q := setupDeployTestDB(t)
+	ctx := context.Background()
+	siteID := "ositewh00000000aaaa01"
+	seedSite(t, q, siteID)
+	_, v := seedActiveProductWithVariant(t, q, siteID, "mug", 10)
+
+	if err := q.UpsertSetting(ctx, store.UpsertSettingParams{
+		SiteID: siteID, Category: "payments", Key: "mollie_api_key", Value: "test_key",
+	}); err != nil {
+		t.Fatalf("seed mollie key: %v", err)
+	}
+
+	mkOrder := func(orderID, paymentID string, total int64) {
+		if err := q.CreateOrder(ctx, store.CreateOrderParams{
+			ID: orderID, SiteID: siteID, OrderNumber: orderID, Status: "pending",
+			CustomerEmail: "b@e.com", SubtotalCents: total, TotalCents: total,
+			Currency: "EUR", PaymentProvider: "mollie", PaymentID: paymentID, PaymentStatus: "open",
+		}); err != nil {
+			t.Fatalf("create order: %v", err)
+		}
+		if err := q.CreateOrderItem(ctx, store.CreateOrderItemParams{
+			ID: newID(), OrderID: orderID, VariantID: v.ID, ProductID: "p", ProductName: "Mug",
+			Quantity: 3, UnitPriceCents: total / 3, TotalCents: total,
+		}); err != nil {
+			t.Fatalf("create order item: %v", err)
+		}
+	}
+
+	var payStatus, payValue, payCurrency string
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"id":"%s","status":"%s","amount":{"currency":"%s","value":"%s"}}`,
+			strings.TrimPrefix(r.URL.Path, "/payments/"), payStatus, payCurrency, payValue)
+	}))
+	defer stub.Close()
+
+	h := NewOrderHandler(nil, q, db)
+	h.mollieBaseURL = stub.URL
+	router := chi.NewRouter()
+	router.Post("/webhooks/{siteID}/mollie", h.Webhook)
+
+	fire := func(paymentID string) (int, map[string]string) {
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/"+siteID+"/mollie", strings.NewReader("id="+paymentID))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		var out map[string]string
+		_ = json.Unmarshal(rr.Body.Bytes(), &out)
+		return rr.Code, out
+	}
+
+	// Correct amount, paid: first delivery applies side-effects once.
+	mkOrder("ord-paid-1", "tr_paid_1", 6000)
+	payStatus, payCurrency, payValue = "paid", "EUR", mollie.FormatAmount(6000)
+	if code, out := fire("tr_paid_1"); code != http.StatusOK || out["new_order_status"] != "paid" {
+		t.Fatalf("first paid delivery: code=%d out=%v; want 200 paid", code, out)
+	}
+	if v1, _ := q.GetProductVariantByID(ctx, v.ID); v1.InventoryCount != 7 {
+		t.Fatalf("inventory after first paid = %d; want 7", v1.InventoryCount)
+	}
+	// Retried duplicate delivery: no second decrement.
+	if code, out := fire("tr_paid_1"); code != http.StatusOK || out["status"] != "already processed" {
+		t.Fatalf("duplicate delivery: code=%d out=%v; want 'already processed'", code, out)
+	}
+	if v2, _ := q.GetProductVariantByID(ctx, v.ID); v2.InventoryCount != 7 {
+		t.Fatalf("inventory after duplicate = %d; want still 7 (no double decrement)", v2.InventoryCount)
+	}
+
+	// Wrong amount: order must NOT be marked paid.
+	mkOrder("ord-bad-amt", "tr_bad_amt", 6000)
+	payStatus, payCurrency, payValue = "paid", "EUR", "1.00"
+	if code, out := fire("tr_bad_amt"); code != http.StatusOK || out["status"] != "amount mismatch" {
+		t.Fatalf("amount mismatch delivery: code=%d out=%v; want 'amount mismatch'", code, out)
+	}
+	if ord, _ := q.GetOrderByPaymentID(ctx, "tr_bad_amt"); ord.Status != "pending" {
+		t.Errorf("order with wrong paid amount = %q; want still pending", ord.Status)
+	}
+	if v3, _ := q.GetProductVariantByID(ctx, v.ID); v3.InventoryCount != 7 {
+		t.Errorf("inventory after mismatch = %d; want unchanged 7", v3.InventoryCount)
 	}
 }

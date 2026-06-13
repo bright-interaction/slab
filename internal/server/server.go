@@ -925,7 +925,7 @@ func (s *Server) Router() http.Handler {
 
 		// Orders admin (Sprint 2 slice B). List + Get + state machine
 		// transition + refund. Mounted under siteR (session-auth).
-		s.ordersH = handlers.NewOrderHandler(s.cfg, s.queries)
+		s.ordersH = handlers.NewOrderHandler(s.cfg, s.queries, s.db)
 		siteR.Get("/api/sites/{siteID}/orders", s.ordersH.List)
 		siteR.Get("/api/sites/{siteID}/orders/{orderID}", s.ordersH.Get)
 		siteR.Post("/api/sites/{siteID}/orders/{orderID}/status", s.ordersH.UpdateStatus)
