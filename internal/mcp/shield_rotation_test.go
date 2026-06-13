@@ -8,8 +8,13 @@ import (
 	"testing"
 	"time"
 
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/shield"
 )
+
+// testAgent is a stable server-resolved identity used by the shield
+// session tests; beginShieldSession scopes the session to (SiteID, KeyID).
+var testAgent = &authmw.AgentIdentity{SiteID: "site-1", KeyID: "key-1"}
 
 // TestShieldHotSwap_ExistingSessionsKeepWorking is the safety invariant:
 // rotating SHIELD_KEY must not invalidate an in-flight Session. The
@@ -26,7 +31,7 @@ func TestShieldHotSwap_ExistingSessionsKeepWorking(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodPost, "/", nil)
 	r.Header.Set("Mcp-Session-Id", "sess-1")
-	sess1, err := srv.beginShieldSession(r)
+	sess1, err := srv.beginShieldSession(r, testAgent)
 	if err != nil {
 		t.Fatalf("beginShieldSession #1: %v", err)
 	}
@@ -54,7 +59,7 @@ func TestShieldHotSwap_ExistingSessionsKeepWorking(t *testing.T) {
 	// A NEW session opened post-rotation gets the new key.
 	r2 := httptest.NewRequest(http.MethodPost, "/", nil)
 	r2.Header.Set("Mcp-Session-Id", "sess-2")
-	sess2, err := srv.beginShieldSession(r2)
+	sess2, err := srv.beginShieldSession(r2, testAgent)
 	if err != nil {
 		t.Fatalf("beginShieldSession #2: %v", err)
 	}
@@ -68,6 +73,55 @@ func TestShieldHotSwap_ExistingSessionsKeepWorking(t *testing.T) {
 	}
 	if plain2 != "bob@example.com" {
 		t.Fatalf("Resolve sess2 = %q, want plaintext", plain2)
+	}
+}
+
+// TestShieldSessionIsTenantScoped is the C1 regression guard: two
+// different agent identities that send the IDENTICAL Mcp-Session-Id
+// header must NOT share a token vault. Before the fix the shield session
+// id was taken straight from the client header, so tenant B could
+// present tenant A's session id and resolve A's PII tokens. The session
+// id is now derived from the server-resolved (SiteID, KeyID), so B's
+// resolve of A's token must fail with ErrTokenNotFound.
+func TestShieldSessionIsTenantScoped(t *testing.T) {
+	store := shield.NewMemoryStore()
+	srv := NewServer(nil, nil)
+	srv.WithShield(store, []byte("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), 5*time.Minute, shield.HintFull)
+
+	tenantA := &authmw.AgentIdentity{SiteID: "site-A", KeyID: "key-A"}
+	tenantB := &authmw.AgentIdentity{SiteID: "site-B", KeyID: "key-B"}
+
+	// Both callers send the SAME Mcp-Session-Id header (the spoofing vector).
+	rA := httptest.NewRequest(http.MethodPost, "/", nil)
+	rA.Header.Set("Mcp-Session-Id", "shared-id")
+	sessA, err := srv.beginShieldSession(rA, tenantA)
+	if err != nil {
+		t.Fatalf("beginShieldSession A: %v", err)
+	}
+	rB := httptest.NewRequest(http.MethodPost, "/", nil)
+	rB.Header.Set("Mcp-Session-Id", "shared-id")
+	sessB, err := srv.beginShieldSession(rB, tenantB)
+	if err != nil {
+		t.Fatalf("beginShieldSession B: %v", err)
+	}
+
+	if sessA.ID == sessB.ID {
+		t.Fatalf("tenant A and B share session id %q despite different identities (cross-tenant vault)", sessA.ID)
+	}
+
+	marker, err := sessA.Tokenize(context.Background(), shield.KindEmail, "secret@tenant-a.com", "")
+	if err != nil {
+		t.Fatalf("tenant A Tokenize: %v", err)
+	}
+	tokID := tokenIDFromMarker(t, marker)
+
+	// Tenant B must not be able to resolve tenant A's token.
+	if _, err := sessB.Resolve(context.Background(), tokID); err != shield.ErrTokenNotFound {
+		t.Fatalf("tenant B resolved tenant A's token (got err=%v); cross-tenant PII de-anonymization is still possible", err)
+	}
+	// Sanity: tenant A still resolves its own token.
+	if got, err := sessA.Resolve(context.Background(), tokID); err != nil || got != "secret@tenant-a.com" {
+		t.Fatalf("tenant A self-resolve = %q, err=%v; want own plaintext", got, err)
 	}
 }
 
@@ -107,7 +161,7 @@ func TestShieldHotSwap_ConcurrentReadsWhileSwapping(t *testing.T) {
 				default:
 					r := httptest.NewRequest(http.MethodPost, "/", nil)
 					r.Header.Set("Mcp-Session-Id", "concurrent")
-					_, _ = srv.beginShieldSession(r)
+					_, _ = srv.beginShieldSession(r, testAgent)
 				}
 			}
 		}()
