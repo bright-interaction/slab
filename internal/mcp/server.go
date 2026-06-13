@@ -332,29 +332,39 @@ func (s *Server) UpdateShieldKey(newKey []byte) error {
 // admin AgentSurface to surface the privacy invariant to operators.
 func (s *Server) ShieldEnabled() bool { return s.shieldEnabled }
 
-// beginShieldSession returns the per-request shield Session keyed by
-// the Mcp-Session-Id header (preferred) or a stable hash of the
-// X-Agent-Key when no MCP session id is present. Returns nil + nil
-// when shield is disabled. Returns nil + err on driver / crypto
-// failure; callers should fall back to passthrough on error so a
-// shield outage does not block legitimate MCP traffic (the alternative
-// is silently leaking PII, which is worse).
-func (s *Server) beginShieldSession(r *http.Request) (*shield.Session, error) {
+// beginShieldSession returns the per-request shield Session, scoped to
+// the SERVER-resolved agent identity (site + key). Returns nil + nil
+// when shield is disabled. Returns nil + err on missing identity or
+// driver / crypto failure.
+//
+// The shield session id is NEVER taken from a client-controlled header
+// alone. It is derived from identity.SiteID + identity.KeyID, with the
+// optional Mcp-Session-Id header honoured only as a sub-scope WITHIN
+// that namespace. Because the per-session HMAC subkey and every token
+// store lookup key off this id, binding it here scopes the entire token
+// vault to one tenant: a caller can never present another tenant's
+// session id to resolve their PII tokens. The identity values come from
+// the authenticated X-Agent-Key row (agent_auth middleware), not from
+// the request body or headers, so they cannot be spoofed.
+func (s *Server) beginShieldSession(r *http.Request, identity *authmw.AgentIdentity) (*shield.Session, error) {
 	if !s.shieldEnabled {
 		return nil, nil
 	}
-	id := r.Header.Get("Mcp-Session-Id")
-	if id == "" {
-		// Fall back to a hash of the agent key so the same caller gets
-		// a stable session across requests within the TTL window.
-		// SHA-256 of the raw key keeps the lookup id non-reversible.
-		key := r.Header.Get("X-Agent-Key")
-		if key == "" {
-			return nil, errors.New("shield: no Mcp-Session-Id and no X-Agent-Key")
-		}
-		sum := sha256.Sum256([]byte(key))
-		id = "agent-" + hex.EncodeToString(sum[:8])
+	if identity == nil {
+		// Defense in depth: shield must never run without a server-resolved
+		// identity, or the session below would not be tenant-scoped.
+		return nil, errors.New("shield: no authenticated agent identity")
 	}
+	// Optional client-supplied sub-scope so one agent can keep multiple
+	// independent tokenization contexts; it can only ever scope within
+	// the caller's own (site, key) namespace, never across it.
+	sub := r.Header.Get("Mcp-Session-Id")
+	if sub == "" {
+		sub = "default"
+	}
+	sum := sha256.Sum256([]byte(identity.SiteID + "\x00" + identity.KeyID + "\x00" + sub))
+	id := "s_" + hex.EncodeToString(sum[:16])
+
 	s.shieldMu.RLock()
 	key := s.shieldKey
 	s.shieldMu.RUnlock()
@@ -563,7 +573,7 @@ func (s *Server) handleToolsCall(r *http.Request, identity *authmw.AgentIdentity
 	}
 
 	ctx := r.Context()
-	session, sessErr := s.beginShieldSession(r)
+	session, sessErr := s.beginShieldSession(r, identity)
 	if sessErr != nil {
 		return ToolCallResult{
 			IsError: true,
@@ -641,7 +651,7 @@ func (s *Server) handleResourcesRead(r *http.Request, identity *authmw.AgentIden
 	}
 
 	ctx := r.Context()
-	session, _ := s.beginShieldSession(r)
+	session, _ := s.beginShieldSession(r, identity)
 	if session != nil {
 		ctx = shield.WithSession(ctx, session)
 	}
@@ -698,7 +708,7 @@ func (s *Server) handlePromptsGet(r *http.Request, identity *authmw.AgentIdentit
 	}
 
 	ctx := r.Context()
-	session, _ := s.beginShieldSession(r)
+	session, _ := s.beginShieldSession(r, identity)
 	if session != nil {
 		ctx = shield.WithSession(ctx, session)
 	}
