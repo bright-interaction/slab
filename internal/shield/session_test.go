@@ -552,16 +552,66 @@ func TestHintLevelBucketedCoarsensDomain(t *testing.T) {
 
 func TestParseShieldTagErrors(t *testing.T) {
 	cases := []string{
-		"",                              // empty
-		"keep",                          // missing tokenize
-		"tokenize",                      // missing kind
-		"tokenize,kind=bogus",           // unknown kind
-		"tokenize,kind=email,foo=bar",   // unknown key
-		"tokenize,kind=email,hint",      // malformed hint pair
+		"",                            // empty
+		"keep",                        // missing tokenize
+		"tokenize",                    // missing kind
+		"tokenize,kind=bogus",         // unknown kind
+		"tokenize,kind=email,foo=bar", // unknown key
+		"tokenize,kind=email,hint",    // malformed hint pair
 	}
 	for _, c := range cases {
 		if _, _, err := parseShieldTag(c); err == nil {
 			t.Errorf("expected error for tag %q", c)
 		}
+	}
+}
+
+// TestShieldJSONTokenizesCustomerPIIByKey is the C2 regression guard:
+// a tool/resource response carrying a customer name, a national-format
+// phone, and a postal-address blob must come back tokenized through
+// ShieldJSON, while non-PII fields (product_name, totals) pass through
+// untouched. Before the fix only the regex bank ran here, which cannot
+// catch names, national-format phones, or address blobs, so they
+// reached the LLM in cleartext while shield reported active.
+func TestShieldJSONTokenizesCustomerPIIByKey(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	s, err := NewSession(ctx, store, "sess-pii", testKey(), time.Minute, HintFull)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	in := `{"order":{"customer_name":"Anna Andersson","customer_phone":"070-123 45 67",` +
+		`"customer_email":"anna@law.se","shipping_address_json":"{\"street\":\"Storgatan 1\"}",` +
+		`"total_cents":5000},"items":[{"product_name":"Blue Mug","quantity":2}]}`
+	out, err := s.ShieldJSON(ctx, []byte(in))
+	if err != nil {
+		t.Fatalf("ShieldJSON: %v", err)
+	}
+	got := string(out)
+
+	for _, leak := range []string{"Anna Andersson", "070-123 45 67", "Storgatan 1"} {
+		if strings.Contains(got, leak) {
+			t.Fatalf("plaintext PII %q leaked through ShieldJSON: %s", leak, got)
+		}
+	}
+	for _, want := range []string{"[shield:name:", "[shield:phone:", "[shield:email:", "[shield:freeform:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %s marker in output, got: %s", want, got)
+		}
+	}
+	if !strings.Contains(got, "Blue Mug") {
+		t.Fatalf("product_name should pass through untokenized: %s", got)
+	}
+	if !strings.Contains(got, "5000") {
+		t.Fatalf("total_cents missing/altered: %s", got)
+	}
+
+	// A reissued token must resolve back to plaintext within the session.
+	m := MarkerPattern.FindStringSubmatch(got)
+	if len(m) < 3 {
+		t.Fatalf("no marker matched in output: %s", got)
+	}
+	if pt, err := s.Resolve(ctx, m[2]); err != nil || pt == "" {
+		t.Fatalf("Resolve of issued token: pt=%q err=%v", pt, err)
 	}
 }

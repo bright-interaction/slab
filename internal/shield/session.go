@@ -49,12 +49,12 @@ type Store interface {
 // Session is one MCP connection's token vault. Safe for concurrent
 // use; the Store implementation is responsible for its own locking.
 type Session struct {
-	ID         string
-	store      Store
-	key        []byte // master key (used for value encryption)
-	subkey     []byte // per-session HMAC key (used for deterministic token ids)
-	ttl        time.Duration
-	hintLevel  HintLevel
+	ID        string
+	store     Store
+	key       []byte // master key (used for value encryption)
+	subkey    []byte // per-session HMAC key (used for deterministic token ids)
+	ttl       time.Duration
+	hintLevel HintLevel
 }
 
 // NewSession looks up an existing session and touches expires_at, or
@@ -411,6 +411,20 @@ func (s *Session) shieldAny(ctx context.Context, v any) (any, error) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, val := range t {
+			// Key-aware path: a string under a known customer-PII key is
+			// tokenized by its declared Kind (catches names / national
+			// phones / address blobs the regex bank cannot). Everything
+			// else falls through to the regex redact pass below.
+			if kind, ok := piiFieldKinds[k]; ok {
+				if str, isStr := val.(string); isStr {
+					red, err := s.shieldKeyedString(ctx, kind, str)
+					if err != nil {
+						return nil, err
+					}
+					out[k] = red
+					continue
+				}
+			}
 			r, err := s.shieldAny(ctx, val)
 			if err != nil {
 				return nil, err
@@ -421,6 +435,17 @@ func (s *Session) shieldAny(ctx context.Context, v any) (any, error) {
 	default:
 		return v, nil
 	}
+}
+
+// shieldKeyedString tokenizes one customer-PII field value by its Kind.
+// Empty strings and values that already carry a marker pass through
+// (ShieldJSON is idempotent and may run over already-shielded content).
+func (s *Session) shieldKeyedString(ctx context.Context, kind Kind, raw string) (string, error) {
+	if raw == "" || strings.Contains(raw, "[shield:") {
+		return raw, nil
+	}
+	hint := buildHintAtLevel(kind, raw, defaultHintKeys[kind], s.hintLevel)
+	return s.Tokenize(ctx, kind, raw, hint)
 }
 
 func (s *Session) unshieldAny(ctx context.Context, v any) (any, error) {

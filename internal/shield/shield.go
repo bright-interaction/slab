@@ -66,6 +66,38 @@ var HintRules = map[Kind]map[string]bool{
 	KindFreeform:     {"len": true, "len_bucket": true},
 }
 
+// piiFieldKinds maps unambiguous customer-PII JSON object keys to the
+// Kind their string value is tokenized as. ShieldJSON consults this on
+// every tool/resource response so PII that no regex can reliably catch
+// (a person's name, a national-format phone, a postal address blob) is
+// still tokenized before the response reaches the LLM. Keys are specific
+// on purpose: "customer_name", not "name", so non-PII fields like
+// product_name, variant_name, or a site/page name are never tokenized.
+// Email is included so its marker carries a proper domain hint via the
+// typed path rather than the coarser regex fallback.
+var piiFieldKinds = map[string]Kind{
+	"customer_name":         KindName,
+	"customer_email":        KindEmail,
+	"customer_phone":        KindPhone,
+	"customer_company":      KindCompany,
+	"shipping_name":         KindName,
+	"billing_name":          KindName,
+	"shipping_address_json": KindFreeform,
+	"billing_address_json":  KindFreeform,
+}
+
+// defaultHintKeys is the ordered hint-key list used when tokenizing a
+// key-mapped field (the struct-tag path supplies its own list). Ordered
+// so the emitted marker hint is deterministic; buildHintAtLevel drops
+// any key that yields no value or is coarsened away at the active level.
+var defaultHintKeys = map[Kind][]string{
+	KindName:     {"initials", "len"},
+	KindEmail:    {"domain", "len"},
+	KindPhone:    {"country", "len"},
+	KindCompany:  {"len"},
+	KindFreeform: {"len"},
+}
+
 // MarkerPattern matches a [shield:...] marker for unshield + redact
 // passes. Groups: 1 = kind, 2 = token id (tok_<hex>), 3 = hint (or empty).
 var MarkerPattern = regexp.MustCompile(`\[shield:([a-z]+):(tok_[0-9a-f]+)(?::([^\]]*))?\]`)
