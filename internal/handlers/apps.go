@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/bright-interaction/slab/internal/apps"
+	"github.com/bright-interaction/slab/internal/atrest"
 	"github.com/bright-interaction/slab/internal/config"
 	"github.com/bright-interaction/slab/internal/store"
 )
@@ -35,6 +36,28 @@ type AppsHandler struct {
 
 func NewAppsHandler(cfg *config.Config, queries *store.Queries) *AppsHandler {
 	return &AppsHandler{cfg: cfg, queries: queries}
+}
+
+// credsCipher builds the at-rest cipher from ATOMICSITE_SHIELD_KEY. A
+// nil cfg or unset key yields a passthrough cipher so deployments
+// without the key keep working with plaintext credentials_json.
+func (h *AppsHandler) credsCipher() *atrest.Cipher {
+	if h.cfg == nil {
+		return atrest.New(nil)
+	}
+	return atrest.New([]byte(h.cfg.ShieldKey))
+}
+
+// decryptCreds returns the plaintext credentials_json, tolerating empty
+// and legacy-plaintext rows. On an unreadable value it returns "" so a
+// display path shows no keys rather than leaking ciphertext; the use_app
+// path checks the error separately so it never calls upstream blind.
+func (h *AppsHandler) decryptCreds(stored string) string {
+	pt, err := h.credsCipher().Decrypt(stored)
+	if err != nil {
+		return ""
+	}
+	return pt
 }
 
 // SeedCuratedApps idempotently upserts the curated catalogue defined
@@ -72,17 +95,17 @@ func (h *AppsHandler) SeedCuratedApps(ctx context.Context) error {
 // --- marketplace listing -------------------------------------------------
 
 type appOut struct {
-	ID                   string                  `json:"id"`
-	Slug                 string                  `json:"slug"`
-	Name                 string                  `json:"name"`
-	Description          string                  `json:"description"`
-	Category             string                  `json:"category"`
-	Publisher            string                  `json:"publisher"`
-	IconURL              string                  `json:"icon_url"`
-	DocsURL              string                  `json:"docs_url"`
-	Version              string                  `json:"version"`
-	CredentialFields     []apps.CredentialField  `json:"credential_fields"`
-	IsCurated            bool                    `json:"is_curated"`
+	ID               string                 `json:"id"`
+	Slug             string                 `json:"slug"`
+	Name             string                 `json:"name"`
+	Description      string                 `json:"description"`
+	Category         string                 `json:"category"`
+	Publisher        string                 `json:"publisher"`
+	IconURL          string                 `json:"icon_url"`
+	DocsURL          string                 `json:"docs_url"`
+	Version          string                 `json:"version"`
+	CredentialFields []apps.CredentialField `json:"credential_fields"`
+	IsCurated        bool                   `json:"is_curated"`
 }
 
 func toAppOut(row store.App) appOut {
@@ -135,14 +158,14 @@ func (h *AppsHandler) GetApp(w http.ResponseWriter, r *http.Request) {
 // --- per-site installs ---------------------------------------------------
 
 type siteInstallOut struct {
-	SiteID         string                  `json:"site_id"`
-	AppID          string                  `json:"app_id"`
-	Status         string                  `json:"status"`
-	InstalledBy    string                  `json:"installed_by"`
-	LastUsedAt     string                  `json:"last_used_at"`
-	Notes          string                  `json:"notes"`
-	UpdatedAt      string                  `json:"updated_at"`
-	App            appOut                  `json:"app"`
+	SiteID      string `json:"site_id"`
+	AppID       string `json:"app_id"`
+	Status      string `json:"status"`
+	InstalledBy string `json:"installed_by"`
+	LastUsedAt  string `json:"last_used_at"`
+	Notes       string `json:"notes"`
+	UpdatedAt   string `json:"updated_at"`
+	App         appOut `json:"app"`
 	// CredentialsSet is the list of field keys that have a value
 	// stored on this install. Values themselves are NEVER returned to
 	// the client; the dialog uses this to show which fields are
@@ -169,7 +192,7 @@ func (h *AppsHandler) toInstallOut(row store.ListSiteAppInstallsRow) siteInstall
 			IconURL:     row.AppIconUrl,
 			Version:     row.AppVersion,
 		},
-		CredentialsSet: credentialsKeySet(row.CredentialsJson),
+		CredentialsSet: credentialsKeySet(h.decryptCreds(row.CredentialsJson)),
 	}
 	return out
 }
@@ -262,12 +285,17 @@ func (h *AppsHandler) Install(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	credsJSON, _ := json.Marshal(clean)
+	encCreds, err := h.credsCipher().Encrypt(string(credsJSON))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to protect credentials")
+		return
+	}
 	installedBy := requesterID(r)
 	if err := h.queries.UpsertSiteAppInstall(r.Context(), store.UpsertSiteAppInstallParams{
 		SiteID:          siteID,
 		AppID:           appID,
 		Status:          "active",
-		CredentialsJson: string(credsJSON),
+		CredentialsJson: encCreds,
 		InstalledBy:     installedBy,
 		Notes:           strings.TrimSpace(in.Notes),
 	}); err != nil {
@@ -336,7 +364,7 @@ func (h *AppsHandler) ListAgentInstalls(ctx context.Context, siteID string) ([]A
 			AppName:        row.AppName,
 			Category:       row.AppCategory,
 			Status:         row.Status,
-			CredentialsSet: credentialsKeySet(row.CredentialsJson),
+			CredentialsSet: credentialsKeySet(h.decryptCreds(row.CredentialsJson)),
 			LastUsedAt:     row.LastUsedAt,
 		})
 	}
@@ -372,7 +400,11 @@ func (h *AppsHandler) CallAppForAgent(ctx context.Context, siteID, appSlug, tool
 	}
 	creds := map[string]string{}
 	if install.CredentialsJson != "" {
-		_ = json.Unmarshal([]byte(install.CredentialsJson), &creds)
+		plain, err := h.credsCipher().Decrypt(install.CredentialsJson)
+		if err != nil {
+			return nil, fmt.Errorf("app credentials are unreadable (shield key changed?): %s", appSlug)
+		}
+		_ = json.Unmarshal([]byte(plain), &creds)
 	}
 	var fields []apps.CredentialField
 	if app.CredentialsSchemaJson != "" {

@@ -1,22 +1,22 @@
 // TOTP MFA flow.
 //
-//   POST /api/auth/totp/setup       (auth required)
-//     Stages a fresh secret on the user row, returns the
-//     base32 secret + otpauth:// URI. The admin SPA renders the
-//     URI as a QR code. Until ConfirmEnrollment fires, the secret
-//     is "staged" (saved on the row) but enrollment isn't locked
-//     in, so a botched scan can be retried by calling Setup again.
+//	POST /api/auth/totp/setup       (auth required)
+//	  Stages a fresh secret on the user row, returns the
+//	  base32 secret + otpauth:// URI. The admin SPA renders the
+//	  URI as a QR code. Until ConfirmEnrollment fires, the secret
+//	  is "staged" (saved on the row) but enrollment isn't locked
+//	  in, so a botched scan can be retried by calling Setup again.
 //
-//   POST /api/auth/totp/verify      (auth required)
-//     Body: { code }. Validates against the staged secret. On
-//     success: writes 8 single-use recovery codes (returned
-//     plaintext ONCE), bumps token_version (every other session
-//     loses its cookie), and locks enrollment in.
+//	POST /api/auth/totp/verify      (auth required)
+//	  Body: { code }. Validates against the staged secret. On
+//	  success: writes 8 single-use recovery codes (returned
+//	  plaintext ONCE), bumps token_version (every other session
+//	  loses its cookie), and locks enrollment in.
 //
-//   POST /api/auth/totp/disable     (auth required)
-//     Body: { current_password, code? }. Re-confirms password to
-//     stop a stolen-cookie attacker from disabling MFA. Clears
-//     the secret + recovery codes + enrollment timestamp.
+//	POST /api/auth/totp/disable     (auth required)
+//	  Body: { current_password, code? }. Re-confirms password to
+//	  stop a stolen-cookie attacker from disabling MFA. Clears
+//	  the secret + recovery codes + enrollment timestamp.
 //
 // Login enforcement: the existing Login handler doesn't yet read
 // totp_enrolled_at; this commit adds that gate so an enrolled
@@ -30,12 +30,23 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/bright-interaction/slab/internal/atrest"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/store"
 	"github.com/bright-interaction/slab/internal/totp"
 )
 
 const totpIssuer = "Atomic Site"
+
+// secretCipher builds the at-rest cipher from ATOMICSITE_SHIELD_KEY. A
+// nil cfg or unset key yields a passthrough cipher (stores/reads
+// plaintext), so deployments without the key are never locked out.
+func (h *AuthHandler) secretCipher() *atrest.Cipher {
+	if h.cfg == nil {
+		return atrest.New(nil)
+	}
+	return atrest.New([]byte(h.cfg.ShieldKey))
+}
 
 // TOTPSetup stages a new secret + returns the otpauth URI for QR
 // rendering. Re-callable: each call replaces the staged secret so
@@ -66,8 +77,15 @@ func (h *AuthHandler) TOTPSetup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to generate TOTP secret")
 		return
 	}
+	// Store the seed encrypted at rest; the plaintext below is returned
+	// to the user (for the QR / manual entry) but never persisted raw.
+	encSecret, err := h.secretCipher().Encrypt(secret)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to protect TOTP secret")
+		return
+	}
 	if err := h.queries.SetUserTOTPSecret(r.Context(), store.SetUserTOTPSecretParams{
-		TotpSecret: secret,
+		TotpSecret: encSecret,
 		ID:         user.ID,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to stage TOTP secret")
@@ -109,7 +127,12 @@ func (h *AuthHandler) TOTPVerify(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "No TOTP secret staged. Call /api/auth/totp/setup first.")
 		return
 	}
-	if !totp.ValidateCode(row.TotpSecret, strings.TrimSpace(req.Code)) {
+	stagedSecret, err := h.secretCipher().Decrypt(row.TotpSecret)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to read TOTP secret")
+		return
+	}
+	if !totp.ValidateCode(stagedSecret, strings.TrimSpace(req.Code)) {
 		writeError(w, http.StatusUnauthorized, "Invalid TOTP code")
 		return
 	}
@@ -193,9 +216,9 @@ func (h *AuthHandler) TOTPStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"enrolled":     row.TotpEnrolledAt != "",
-		"enrolled_at":  row.TotpEnrolledAt,
-		"has_staged":   row.TotpSecret != "" && row.TotpEnrolledAt == "",
+		"enrolled":    row.TotpEnrolledAt != "",
+		"enrolled_at": row.TotpEnrolledAt,
+		"has_staged":  row.TotpSecret != "" && row.TotpEnrolledAt == "",
 	})
 }
 
@@ -209,9 +232,11 @@ func (h *AuthHandler) validateTOTPForLogin(r *http.Request, user store.User, sup
 	if supplied == "" {
 		return false
 	}
-	// Prefer fast TOTP path.
-	if totp.ValidateCode(user.TotpSecret, supplied) {
-		return true
+	// Prefer fast TOTP path. The stored seed is encrypted at rest.
+	if storedSecret, err := h.secretCipher().Decrypt(user.TotpSecret); err == nil {
+		if totp.ValidateCode(storedSecret, supplied) {
+			return true
+		}
 	}
 	// Fall back to recovery code consumption.
 	var hashes []string
