@@ -19,6 +19,15 @@ import (
 // letters, and hyphens. Length capped at 253 like RFC 1035.
 var hostnamePattern = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-\.]{0,251}[a-zA-Z0-9])?$`)
 
+// rsyncUserPattern + rsyncPathPattern keep shell metacharacters out of the
+// remote-shell spec. Even with --protect-args (which stops rsync expanding the
+// remote path), validating here is defence in depth: a user/path with `;`, `$`,
+// backticks or spaces never reaches the ssh argv.
+var (
+	rsyncUserPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,64}$`)
+	rsyncPathPattern = regexp.MustCompile(`^/[a-zA-Z0-9._/-]{0,255}$`)
+)
+
 // rsyncTimeout caps a single rsync invocation. The context the caller passes
 // in still wins if it's tighter.
 const rsyncTimeout = 5 * time.Minute
@@ -45,6 +54,13 @@ type rsyncConfig struct {
 	Path          string
 	PrivateKeyPEM string
 	PublicURL     string
+	// HostKey is the optional expected SSH host public key line (e.g.
+	// "ssh-ed25519 AAAA..."). When set, the host key is pinned
+	// (StrictHostKeyChecking=yes against a known_hosts file). When empty we
+	// fall back to accept-new (trust-on-first-use) instead of the old
+	// blanket-ignore (StrictHostKeyChecking=no + /dev/null), which accepted
+	// any key on every connect and gave zero MITM protection.
+	HostKey string
 }
 
 // parseRsyncConfig pulls and normalises the rsync-specific fields from a
@@ -61,6 +77,7 @@ func parseRsyncConfig(cfg map[string]any) (rsyncConfig, error) {
 	out.Path = strings.TrimSpace(stringFrom(cfg["path"]))
 	out.PrivateKeyPEM = stringFrom(cfg["private_key_pem"])
 	out.PublicURL = strings.TrimSpace(stringFrom(cfg["public_url"]))
+	out.HostKey = strings.TrimSpace(stringFrom(cfg["host_key"]))
 
 	if v, ok := cfg["port"]; ok && v != nil {
 		switch n := v.(type) {
@@ -122,8 +139,17 @@ func (d *RsyncDeployer) Validate(target Target) error {
 	if cfg.User == "" {
 		return errors.New("rsync deploy: user is required")
 	}
+	if !rsyncUserPattern.MatchString(cfg.User) {
+		return fmt.Errorf("rsync deploy: user %q contains invalid characters (allowed: letters, digits, . _ -)", cfg.User)
+	}
 	if cfg.Path == "" {
 		return errors.New("rsync deploy: path is required")
+	}
+	if !rsyncPathPattern.MatchString(cfg.Path) {
+		return fmt.Errorf("rsync deploy: path %q must be absolute and free of shell metacharacters", cfg.Path)
+	}
+	if cfg.HostKey != "" && !strings.HasPrefix(cfg.HostKey, "ssh-") && !strings.HasPrefix(cfg.HostKey, "ecdsa-") {
+		return errors.New("rsync deploy: host_key must be an SSH host public key line (e.g. \"ssh-ed25519 AAAA...\")")
 	}
 	if cfg.Port < 1 || cfg.Port > 65535 {
 		return fmt.Errorf("rsync deploy: port %d is out of range (1..65535)", cfg.Port)
@@ -140,22 +166,62 @@ func (d *RsyncDeployer) Validate(target Target) error {
 // buildRsyncArgs returns the argv for the rsync invocation. Pulled out so
 // unit tests can verify the command shape without spawning a process.
 //
-// TODO(known-hosts): swap StrictHostKeyChecking=no for a per-target
-// known-hosts file once the UI lets the operator pin a server fingerprint.
-func buildRsyncArgs(cfg rsyncConfig, distDir, keyfile string) []string {
+// Host-key handling: when cfg.HostKey is set the key is pinned
+// (StrictHostKeyChecking=yes against knownHostsFile); otherwise accept-new
+// (trust-on-first-use) replaces the old blanket-ignore. --protect-args stops
+// rsync handing the remote path to a remote shell (injection guard);
+// --delay-updates stages the new tree and swaps it into place at the end so a
+// half-synced site is never served.
+func buildRsyncArgs(cfg rsyncConfig, distDir, keyfile, knownHostsFile string) []string {
+	strict := "accept-new"
+	if cfg.HostKey != "" {
+		strict = "yes"
+	}
 	sshCmd := fmt.Sprintf(
-		"ssh -i %s -p %d -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
-		keyfile, cfg.Port,
+		"ssh -i %s -p %d -o StrictHostKeyChecking=%s -o UserKnownHostsFile=%s",
+		keyfile, cfg.Port, strict, knownHostsFile,
 	)
 	src := strings.TrimRight(distDir, "/") + "/"
 	dst := fmt.Sprintf("%s@%s:%s/", cfg.User, cfg.Host, strings.TrimRight(cfg.Path, "/"))
 	return []string{
 		"-avz",
 		"--delete",
+		"--delay-updates",
+		"--protect-args",
 		"-e", sshCmd,
 		src,
 		dst,
 	}
+}
+
+// writeKnownHosts drops a 0600 known_hosts file into its own tempdir. When
+// cfg.HostKey is set the file pins that key for the host (and [host]:port for a
+// non-standard port); otherwise it is empty and accept-new fills it on first
+// connect. Returns the path plus a cleanup closure.
+func writeKnownHosts(cfg rsyncConfig) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "atomicsite-rsync-kh-")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("rsync deploy: mkdir known_hosts temp: %w", err)
+	}
+	cleanup := func() {
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("rsync deploy: cleanup known_hosts tempdir failed", "dir", dir, "err", err)
+		}
+	}
+	var content string
+	if cfg.HostKey != "" {
+		hostspec := cfg.Host
+		if cfg.Port != 22 {
+			hostspec = fmt.Sprintf("[%s]:%d", cfg.Host, cfg.Port)
+		}
+		content = hostspec + " " + strings.TrimSpace(cfg.HostKey) + "\n"
+	}
+	path := filepath.Join(dir, "known_hosts")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("rsync deploy: write known_hosts: %w", err)
+	}
+	return path, cleanup, nil
 }
 
 // Deploy syncs distDir to the remote target using rsync over SSH.
@@ -183,10 +249,16 @@ func (d *RsyncDeployer) Deploy(ctx context.Context, distDir string, target Targe
 	}
 	defer cleanup()
 
+	knownHosts, khCleanup, err := writeKnownHosts(cfg)
+	if err != nil {
+		return Result{}, err
+	}
+	defer khCleanup()
+
 	cmdCtx, cancel := context.WithTimeout(ctx, rsyncTimeout)
 	defer cancel()
 
-	args := buildRsyncArgs(cfg, distDir, keyfile)
+	args := buildRsyncArgs(cfg, distDir, keyfile, knownHosts)
 	cmd := exec.CommandContext(cmdCtx, "rsync", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

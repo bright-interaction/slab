@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -50,6 +52,12 @@ type BuildHandler struct {
 	// build per site_id runs at a time.
 	siteMu   sync.Mutex
 	siteLock map[string]*sync.Mutex
+
+	// buildSem caps builds running concurrently across ALL sites. The per-site
+	// lock only serializes same-site builds; without a global cap, N tenants
+	// triggering at once spawn N bun/astro processes and OOM the host. Default
+	// 3, override with ATOMICSITE_BUILD_CONCURRENCY.
+	buildSem chan struct{}
 }
 
 type buildState struct {
@@ -62,6 +70,12 @@ type buildState struct {
 }
 
 func NewBuildHandler(cfg *config.Config, queries *store.Queries, quota *QuotaHandler) *BuildHandler {
+	maxConc := 3
+	if v := strings.TrimSpace(os.Getenv("ATOMICSITE_BUILD_CONCURRENCY")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxConc = n
+		}
+	}
 	return &BuildHandler{
 		cfg:      cfg,
 		queries:  queries,
@@ -69,6 +83,19 @@ func NewBuildHandler(cfg *config.Config, queries *store.Queries, quota *QuotaHan
 		builds:   make(map[string]*buildState),
 		cancels:  make(map[string]context.CancelFunc),
 		siteLock: make(map[string]*sync.Mutex),
+		buildSem: make(chan struct{}, maxConc),
+	}
+}
+
+// acquireBuildSlot blocks until a global build slot is free or ctx is done.
+// Returns a release func (nil + false when ctx ended first). Bounds total
+// concurrent bun/astro processes regardless of how many sites build at once.
+func (h *BuildHandler) acquireBuildSlot(ctx context.Context) (func(), bool) {
+	select {
+	case h.buildSem <- struct{}{}:
+		return func() { <-h.buildSem }, true
+	case <-ctx.Done():
+		return nil, false
 	}
 }
 
@@ -198,6 +225,19 @@ func (h *BuildHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 		// interrupt the goroutine before BuildTimeout elapses.
 		h.registerCancel(deployID, cancel)
 		defer h.clearCancel(deployID)
+		// Global concurrency cap (after the per-site lock so a queued build
+		// never holds a slot): bound total simultaneous bun/astro processes.
+		release, ok := h.acquireBuildSlot(bgCtx)
+		if !ok {
+			h.mu.Lock()
+			if st := h.builds[deployID]; st != nil {
+				st.Status = "failed"
+				st.Error = "cancelled while waiting for a build slot"
+			}
+			h.mu.Unlock()
+			return
+		}
+		defer release()
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 
 		// Run evaluation against the built dist/ if compile succeeded.
@@ -289,6 +329,19 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 		defer cancel()
 		h.registerCancel(deployID, cancel)
 		defer h.clearCancel(deployID)
+		// Global concurrency cap (after the per-site lock so a queued build
+		// never holds a slot): bound total simultaneous bun/astro processes.
+		release, ok := h.acquireBuildSlot(bgCtx)
+		if !ok {
+			h.mu.Lock()
+			if st := h.builds[deployID]; st != nil {
+				st.Status = "failed"
+				st.Error = "cancelled while waiting for a build slot"
+			}
+			h.mu.Unlock()
+			return
+		}
+		defer release()
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 		if result.Success && result.DistDir != "" {
 			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
