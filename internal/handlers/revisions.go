@@ -18,6 +18,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -286,6 +287,17 @@ func (h *RevisionsHandler) restorePage(w http.ResponseWriter, r *http.Request, s
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to apply snapshot")
 		return
+	}
+
+	// UpdatePage does not carry the archetype column (it has its own setter), so
+	// restore it separately or the vibe-archetype lock desyncs after a restore.
+	// Best-effort: the page content is already restored; a rare archetype-set
+	// error should not fail the whole restore.
+	if err := h.queries.SetPageArchetype(r.Context(), store.SetPageArchetypeParams{
+		Archetype: snap.Archetype,
+		ID:        pageID,
+	}); err != nil {
+		slog.Warn("restore: failed to restore page archetype", "page_id", pageID, "err", err)
 	}
 
 	updated, _ := h.queries.GetPageByID(r.Context(), pageID)
