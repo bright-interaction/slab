@@ -46,9 +46,10 @@ type PreviewTokenMinter interface {
 // prompts) and the JSON-RPC dispatch loop. One instance is constructed at
 // startup and mounted under /mcp behind the existing AgentAuthMiddleware.
 type Server struct {
-	queries *store.Queries
-	context *agent.ContextBuilder
-	builds  BuildTrigger
+	queries    *store.Queries
+	context    *agent.ContextBuilder
+	guardrails *agent.GuardrailEngine
+	builds     BuildTrigger
 
 	// fontsDir is the on-disk root the upload_font tool writes woff2
 	// files to, mirroring the FontsHandler's storage path. Optional;
@@ -380,14 +381,48 @@ func (s *Server) beginShieldSession(r *http.Request, identity *authmw.AgentIdent
 // builds may be nil for unit tests — the build-trigger / status / eval
 // tools handle nil with a clean "not wired" error so the rest of the
 // surface stays callable.
+// guardrailBlockWrite runs the SECURITY guardrail engine for an MCP block write
+// (the same checks the REST agent handler runs at agent.go:371): forbid_pattern,
+// allow_block_type, and the per-site block-count cap. The design lint that the
+// MCP tools already run is NOT a security control. Returns the blocking
+// violations and whether the write must be refused. Defined here so the tool
+// handlers (whose param shadows the `agent` package name) can call it.
+func (s *Server) guardrailBlockWrite(ctx context.Context, siteID, blockType, dataJSON, pageID string) ([]agent.Violation, bool) {
+	v := s.guardrails.ValidateBlock(ctx, siteID, blockType, dataJSON)
+	if pageID != "" {
+		v = append(v, s.guardrails.ValidateBlockCount(ctx, siteID, pageID)...)
+	}
+	return v, agent.HasErrors(v)
+}
+
+// maskSecretSettings blanks the value of any secret setting (Mollie key, CRM
+// webhook secret, *_token/*_secret/...) so list_settings never returns a
+// bearer-equivalent secret to the LLM. Defined here so the tool handler (whose
+// param shadows the `agent` package) can call agent.IsSecretSetting.
+func (s *Server) maskSecretSettings(rows []store.SiteSetting) []store.SiteSetting {
+	for i := range rows {
+		if agent.IsSecretSetting(rows[i].Category, rows[i].Key) && rows[i].Value != "" {
+			rows[i].Value = "***redacted***"
+		}
+	}
+	return rows
+}
+
+// guardrailPageSlug runs the security slug guardrail for an MCP page write.
+func (s *Server) guardrailPageSlug(ctx context.Context, siteID, slug string) ([]agent.Violation, bool) {
+	v := s.guardrails.ValidatePageSlug(ctx, siteID, slug)
+	return v, agent.HasErrors(v)
+}
+
 func NewServer(queries *store.Queries, builds BuildTrigger) *Server {
 	s := &Server{
-		queries:   queries,
-		context:   agent.NewContextBuilder(queries),
-		builds:    builds,
-		tools:     map[string]Tool{},
-		resources: map[string]Resource{},
-		prompts:   map[string]Prompt{},
+		queries:    queries,
+		context:    agent.NewContextBuilder(queries),
+		guardrails: agent.NewGuardrailEngine(queries),
+		builds:     builds,
+		tools:      map[string]Tool{},
+		resources:  map[string]Resource{},
+		prompts:    map[string]Prompt{},
 	}
 	s.registerTools()
 	s.registerResources()

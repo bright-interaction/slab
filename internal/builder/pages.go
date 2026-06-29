@@ -347,8 +347,11 @@ func renderBlock(bl store.Block, components map[string]string, mediaByID map[str
 	case compName != "" && hasComp:
 		inner = renderComponentBlock(compName, data)
 	case dataHasHTML(data):
-		// Check for raw HTML
-		inner = fmt.Sprintf("  %s\n", data["html"])
+		// Raw HTML, sanitized at this render choke point so agent-authored
+		// markup cannot inject <script>/event-handlers/javascript: into the
+		// built page or the editor preview (both renderers route through here).
+		rawHTML, _ := data["html"].(string)
+		inner = fmt.Sprintf("  %s\n", sanitizeRawHTML(rawHTML))
 	default:
 		// Default: render as a section with data-driven content
 		inner = renderDataBlock(bl.BlockType, data, mediaByID, siteID)

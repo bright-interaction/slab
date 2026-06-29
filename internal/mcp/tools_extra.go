@@ -79,6 +79,10 @@ func (s *Server) registerExtraTools() {
 			if strings.TrimSpace(args.Name) == "" || strings.TrimSpace(args.Template) == "" {
 				return "", errors.New("name and template are required")
 			}
+			// Path-traversal guard: the name becomes a filename under src/components/.
+			if err := handlers.ValidateComponentName(args.Name); err != nil {
+				return "", err
+			}
 			id := newID()
 			if err := s.queries.CreateComponent(ctx, store.CreateComponentParams{
 				ID:          id,

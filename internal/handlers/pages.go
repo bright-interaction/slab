@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -33,6 +34,21 @@ var pageSlugSegment = regexp.MustCompile(`^[a-z0-9][-a-z0-9_]{0,79}$`)
 // REST handler, with no second implementation to drift. Empty is allowed
 // (slug auto-derived downstream). See validatePageSlug for the rules.
 func ValidatePageSlug(s string) error { return validatePageSlug(s) }
+
+// componentNameRE accepts a safe component identifier. The name becomes a
+// filename under the generated src/components/ dir, so it must never contain a
+// path separator or "..". Mirrors builder.ValidComponentName (the last-line
+// guard at file write); this is the write-time rejection with a clear error.
+var componentNameRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
+
+// ValidateComponentName rejects component names that are not safe filename
+// identifiers (path traversal, separators, leading non-letter).
+func ValidateComponentName(name string) error {
+	if !componentNameRE.MatchString(name) {
+		return errors.New("component name must start with a letter and contain only letters, digits, hyphen or underscore (max 64)")
+	}
+	return nil
+}
 
 // validatePageSlug rejects path traversal and chars that would corrupt the
 // builder's slugToFilePath. Allowed: empty (root index), "blog/post-name",

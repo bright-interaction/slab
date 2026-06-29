@@ -100,6 +100,11 @@ func (s *Server) registerTools() {
 			if err := handlers.ValidatePageSlug(args.Slug); err != nil {
 				return "", err
 			}
+			// SECURITY guardrail: per-site forbid_pattern / max-url-depth slug rules,
+			// same as the REST handler (syntactic ValidatePageSlug alone is not enough).
+			if gv, bad := s.guardrailPageSlug(ctx, agent.SiteID, args.Slug); bad {
+				return mustJSON(map[string]any{"error": "guardrail_violations", "violations": gv}), nil
+			}
 			if args.Layout == "" {
 				args.Layout = "default"
 			}
@@ -367,6 +372,14 @@ func (s *Server) registerTools() {
 				return "", fmt.Errorf("page not found: %s", args.PageSlug)
 			}
 
+			// SECURITY guardrail (forbid_pattern / allow_block_type / block-count
+			// cap): the MCP write path must run the same security checks as the
+			// REST handler, not just the design lint below.
+			dataJSON := marshalJSON(args.Data)
+			if gv, bad := s.guardrailBlockWrite(ctx, agent.SiteID, args.BlockType, dataJSON, page.ID); bad {
+				return mustJSON(map[string]any{"error": "guardrail_violations", "violations": gv}), nil
+			}
+
 			findings := runBlockLint(args.BlockType, page.Archetype, args.Data)
 			if !args.Force && strictDesignLintEnabled(ctx, s.queries, agent.SiteID) {
 				if blockers := critique.FilterBlocking(findings); len(blockers) > 0 {
@@ -390,7 +403,7 @@ func (s *Server) registerTools() {
 				ID:        id,
 				PageID:    page.ID,
 				BlockType: args.BlockType,
-				DataJson:  marshalJSON(args.Data),
+				DataJson:  dataJSON,
 				StyleJson: marshalJSON(args.Style),
 				SortOrder: so,
 				IsVisible: 1,
@@ -454,6 +467,13 @@ func (s *Server) registerTools() {
 			data := existing.DataJson
 			if args.Data != nil {
 				data = marshalJSON(args.Data)
+			}
+
+			// SECURITY guardrail (forbid_pattern / allow_block_type) on the
+			// post-update block_type+data, same as the REST handler. pageID
+			// empty: an update does not change the block count.
+			if gv, bad := s.guardrailBlockWrite(ctx, agent.SiteID, bt, data, ""); bad {
+				return mustJSON(map[string]any{"error": "guardrail_violations", "violations": gv}), nil
 			}
 
 			// Run lint against the incoming data BEFORE the UpdateBlock call so
@@ -798,13 +818,13 @@ func (s *Server) registerTools() {
 				if err != nil {
 					return "", err
 				}
-				return mustJSON(rows), nil
+				return mustJSON(s.maskSecretSettings(rows)), nil
 			}
 			rows, err := s.queries.ListSettingsBySite(ctx, agent.SiteID)
 			if err != nil {
 				return "", err
 			}
-			return mustJSON(rows), nil
+			return mustJSON(s.maskSecretSettings(rows)), nil
 		},
 	})
 
@@ -865,7 +885,7 @@ func (s *Server) registerTools() {
 			}
 			rows, _ := s.queries.ListSettingsBySite(ctx, agent.SiteID)
 			return mustJSON(map[string]any{
-				"settings":              rows,
+				"settings":              s.maskSecretSettings(rows),
 				"rejected_admin_only":   rejected,
 				"writable_categories":   []string{"analytics", "general", "seo"},
 			}), nil

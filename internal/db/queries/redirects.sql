@@ -73,6 +73,11 @@ DELETE FROM form_submissions WHERE id = ?;
 -- name: ListEvaluationsByBuild :many
 SELECT * FROM evaluations WHERE build_id = ? ORDER BY category;
 
+-- name: ListEvaluationsByBuildAndSite :many
+-- Site-scoped variant so the agent API can only read its own site's
+-- evaluation results, never another tenant's by guessing a build_id.
+SELECT * FROM evaluations WHERE build_id = ? AND site_id = ? ORDER BY category;
+
 -- name: ListEvaluationsBySite :many
 SELECT * FROM evaluations WHERE site_id = ? ORDER BY created_at DESC LIMIT ?;
 
