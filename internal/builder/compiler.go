@@ -6,10 +6,58 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+// secretEnvNames are server secrets that must never be inherited by a build
+// subprocess (bun install / astro build run tenant-influenced JS and dependency
+// scripts). Kept alongside a suffix heuristic so a future secret-shaped var is
+// stripped by default.
+var secretEnvNames = map[string]bool{
+	"ADMIN_PASSWORD": true, "JWT_SECRET": true, "VAULT_KEY": true,
+	"ATOMICSITE_SHIELD_KEY": true, "ANALYTICS_SALT": true,
+	"MOLLIE_API_KEY": true, "MAILERSEND_API_TOKEN": true,
+	"ATOMICSITE_CLOUDFLARE_TOKEN": true, "CLOUDFLARE_TOKEN": true,
+	"SESSION_SECRET": true, "DATABASE_URL": true, "DB_PATH": true,
+}
+
+func isSecretEnvName(name string) bool {
+	if secretEnvNames[name] {
+		return true
+	}
+	u := strings.ToUpper(name)
+	for _, suffix := range []string{"_SECRET", "_TOKEN", "_API_KEY", "_APIKEY", "_PASSWORD", "_PASS", "_PRIVATE_KEY", "_CREDENTIAL", "_CREDENTIALS"} {
+		if strings.HasSuffix(u, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// buildEnv returns the server environment with secrets stripped, so the build
+// (and any transitive dependency script) cannot read server secrets to
+// exfiltrate them. A denylist preserves the toolchain variables the build
+// legitimately needs (PATH/HOME/caches/locale) while removing anything
+// secret-shaped.
+func buildEnv() []string {
+	src := os.Environ()
+	env := make([]string, 0, len(src))
+	for _, kv := range src {
+		name := kv
+		if i := strings.IndexByte(kv, '='); i >= 0 {
+			name = kv[:i]
+		}
+		if isSecretEnvName(name) {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return env
+}
 
 // BuildTimeout caps a single end-to-end Compile() (bun install + bun run
 // build). 10 minutes is generous for a fresh install on a multi-page site
@@ -60,6 +108,7 @@ func Compile(ctx context.Context, wsDir string) *CompileResult {
 	slog.Info("build: installing dependencies", "workspace", wsDir)
 	installCmd := exec.CommandContext(ctx, "bun", "install", "--frozen-lockfile")
 	installCmd.Dir = wsDir
+	installCmd.Env = buildEnv()
 	installOut, err := installCmd.CombinedOutput()
 	appendLogSection(&logBuf, "bun install", installOut)
 
@@ -69,6 +118,7 @@ func Compile(ctx context.Context, wsDir string) *CompileResult {
 		}
 		installCmd = exec.CommandContext(ctx, "bun", "install")
 		installCmd.Dir = wsDir
+		installCmd.Env = buildEnv()
 		installOut, err = installCmd.CombinedOutput()
 		appendLogSection(&logBuf, "bun install (no lockfile)", installOut)
 		if err != nil {
@@ -83,6 +133,7 @@ func Compile(ctx context.Context, wsDir string) *CompileResult {
 	slog.Info("build: compiling astro project", "workspace", wsDir)
 	buildCmd := exec.CommandContext(ctx, "bun", "run", "build")
 	buildCmd.Dir = wsDir
+	buildCmd.Env = buildEnv()
 	buildOut, err := buildCmd.CombinedOutput()
 	appendLogSection(&logBuf, "bun run build", buildOut)
 

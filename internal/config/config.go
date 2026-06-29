@@ -243,12 +243,12 @@ type Config struct {
 	// OIDCAllowDomains is a comma-separated list of email domains that
 	// are allowed to log in via SSO when no matching local user exists.
 	// Empty = SSO requires a pre-existing user (shipping default).
-	OIDCEnabled       bool
-	OIDCIssuerURL     string
-	OIDCClientID      string
-	OIDCClientSecret  string
-	OIDCRedirectURL   string
-	OIDCAllowDomains  string
+	OIDCEnabled      bool
+	OIDCIssuerURL    string
+	OIDCClientID     string
+	OIDCClientSecret string
+	OIDCRedirectURL  string
+	OIDCAllowDomains string
 }
 
 func Load() *Config {
@@ -271,7 +271,7 @@ func Load() *Config {
 		BrightCRMWebhookSecret:         envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),
 		BrightCRMWebhookSecretPrevious: envOr("BRIGHTCRM_WEBHOOK_SECRET_PREVIOUS", ""),
 		AdminReloadToken:               envOr("ADMIN_RELOAD_TOKEN", ""),
-		CRMSyncMinInterval:     time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
+		CRMSyncMinInterval:             time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
 
 		PrimaryDomain:   envOr("ATOMICSITE_PRIMARY_DOMAIN", ""),
 		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ""),
@@ -366,6 +366,15 @@ func (c *Config) Validate() error {
 
 	if c.AnalyticsSalt == "" || c.AnalyticsSalt == DefaultAnalyticsSalt {
 		problems = append(problems, "ANALYTICS_SALT is unset or equal to the documented default; set a random value (visitor fingerprints become predictable otherwise)")
+	}
+
+	// At-rest crypto + the MCP shield key off the same 32-byte key. Without it
+	// atrest.New runs as a passthrough (TOTP seeds, app-install credentials and
+	// Stripe/Mollie keys stored PLAINTEXT) and the shield silently forwards
+	// order PII to the LLM. Required in production: a missing crypto key must
+	// refuse to start, not fail open.
+	if len(c.ShieldKey) != 32 {
+		problems = append(problems, "ATOMICSITE_SHIELD_KEY is unset or not 32 bytes; production must set a 32-byte key or at-rest encryption (TOTP seeds, app credentials) and MCP PII redaction are silently disabled. Generate one with: head -c 24 /dev/urandom | base64")
 	}
 
 	// HTTPS scheme guard. The auth cookie's Secure attribute is gated on

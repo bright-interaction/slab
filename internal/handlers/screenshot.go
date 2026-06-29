@@ -232,30 +232,61 @@ func validateScreenshotURL(raw string) error {
 	if host == "" {
 		return errors.New("url missing host")
 	}
-	if isLoopbackScreenshotHost(host) {
-		return nil
-	}
 	cur := screenshotAllowedSuffixes.Load()
 	if cur == nil || len(*cur) == 0 {
+		// No allow-list configured = local dev: permit ONLY loopback (any port,
+		// so a contributor can screenshot their `make dev` server). Nothing else
+		// resolves here (no public allow-list to match against).
+		if isLoopbackScreenshotHost(host) {
+			return nil
+		}
 		return errors.New("screenshot disabled: configure ATOMICSITE_PRIMARY_DOMAIN or BUILT_SITE_SUFFIX to enable public-domain screenshots")
 	}
+
+	// Production (allow-list configured). Port restriction: only the standard
+	// web ports, so a tenant agent cannot screenshot http://127.0.0.1:8091 (the
+	// admin API) or any internal service on an arbitrary port.
+	if p := parsed.Port(); p != "" && p != "80" && p != "443" {
+		return fmt.Errorf("screenshot port %q not allowed (only 80/443)", p)
+	}
+
+	// loopback is NOT auto-allowed in production (that was an SSRF hole into
+	// co-located internal services). The host must be in the allow-list AND must
+	// not resolve to a private/loopback/link-local address (defends
+	// DNS-rebinding: an allow-listed built-site subdomain whose A record points
+	// at 169.254.169.254 / 10.x).
+	matched := false
 	for _, entry := range *cur {
-		// Suffix-style entries (".tenants.example.com") match any
-		// hostname that ends with the suffix; bare entries
-		// ("example.com") match the apex AND any subdomain
-		// (foo.example.com) without bleeding into siblings
-		// (sister-example.com).
+		// Suffix-style entries (".tenants.example.com") match any hostname that
+		// ends with the suffix; bare entries ("example.com") match the apex AND
+		// any subdomain (foo.example.com) without bleeding into siblings.
 		if strings.HasPrefix(entry, ".") {
 			if strings.HasSuffix(host, entry) {
-				return nil
+				matched = true
+				break
 			}
 			continue
 		}
 		if host == entry || strings.HasSuffix(host, "."+entry) {
-			return nil
+			matched = true
+			break
 		}
 	}
-	return fmt.Errorf("host %q not in screenshot allow-list", host)
+	if !matched {
+		return fmt.Errorf("host %q not in screenshot allow-list", host)
+	}
+	// A non-resolving host is not an SSRF vector (chromedp navigation will just
+	// fail), and blocking on a transient DNS hiccup would break legitimate
+	// screenshots, so only reject when the host actually resolves to a
+	// private/loopback/link-local address (the DNS-rebind case).
+	if ips, err := net.LookupIP(host); err == nil {
+		for _, ip := range ips {
+			if isPrivateIP(ip) {
+				return fmt.Errorf("screenshot host %q resolves to a non-public address", host)
+			}
+		}
+	}
+	return nil
 }
 
 // isLoopbackScreenshotHost returns true for localhost / 127.x / ::1.
