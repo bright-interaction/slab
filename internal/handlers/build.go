@@ -87,6 +87,40 @@ func NewBuildHandler(cfg *config.Config, queries *store.Queries, quota *QuotaHan
 	}
 }
 
+// gradeRank orders eval letter grades (higher = better) so a configured
+// publish-gate threshold can be compared. N/A and unknown grades are absent
+// (rank 0) and are ignored by belowPublishGrade rather than treated as failing.
+var gradeRank = map[string]int{
+	"A+": 13, "A": 12, "A-": 11,
+	"B+": 10, "B": 9, "B-": 8,
+	"C+": 7, "C": 6, "C-": 5,
+	"D+": 4, "D": 3, "D-": 2,
+	"F": 1,
+}
+
+// belowPublishGrade reports whether the worst category grade in reports falls
+// below ATOMICSITE_MIN_PUBLISH_GRADE. Returns (false, "") when the gate is unset
+// (advisory mode, the default) or the threshold/grades can't be ranked, so the
+// existing unconditional-publish behavior is preserved unless an operator opts
+// in. This resolves the audit's "eval grade gates nothing" finding without
+// changing default behavior or risking a tenant's publish.
+func belowPublishGrade(reports []eval.CategoryReport) (bool, string) {
+	want, ok := gradeRank[strings.TrimSpace(os.Getenv("ATOMICSITE_MIN_PUBLISH_GRADE"))]
+	if !ok {
+		return false, ""
+	}
+	worst, worstRank := "", 1<<30
+	for _, r := range reports {
+		if rk, ok := gradeRank[r.Grade]; ok && rk < worstRank {
+			worst, worstRank = r.Grade, rk
+		}
+	}
+	if worst == "" {
+		return false, ""
+	}
+	return worstRank < want, worst
+}
+
 // acquireBuildSlot blocks until a global build slot is free or ctx is done.
 // Returns a release func (nil + false when ctx ended first). Bounds total
 // concurrent bun/astro processes regardless of how many sites build at once.
@@ -344,15 +378,19 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 		defer release()
 		result := builder.Build(bgCtx, h.queries, siteID, h.cfg.DataDir)
 		if result.Success && result.DistDir != "" {
-			if _, err := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
-				result.BuildLog += "\n=== eval ===\nfailed: " + err.Error() + "\n"
+			reports, evalErr := eval.Run(bgCtx, h.queries, siteID, deployID, result.DistDir)
+			if evalErr != nil {
+				result.BuildLog += "\n=== eval ===\nfailed: " + evalErr.Error() + "\n"
 			}
 			if _, err := critique.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
 				result.BuildLog += "\n=== critique ===\nfailed: " + err.Error() + "\n"
 			}
-			// Auto-deploy to the site's default deploy target so trigger_build
-			// is a true publish verb, not just "build to workspace + eval".
-			if targetID, deployURL, deployErr := h.autoDeployDefault(bgCtx, siteID, result.DistDir); deployErr != nil {
+			// Opt-in publish gate: when ATOMICSITE_MIN_PUBLISH_GRADE is set, a
+			// build whose worst category grade is below it is built + graded but
+			// NOT auto-published. Unset (default) keeps publish unconditional.
+			if blocked, worst := belowPublishGrade(reports); blocked {
+				result.BuildLog += "\n=== deploy ===\nskipped: worst grade " + worst + " is below ATOMICSITE_MIN_PUBLISH_GRADE; published nothing\n"
+			} else if targetID, deployURL, deployErr := h.autoDeployDefault(bgCtx, siteID, result.DistDir); deployErr != nil {
 				result.BuildLog += "\n=== deploy ===\nfailed: " + deployErr.Error() + "\n"
 			} else if targetID != "" {
 				result.BuildLog += "\n=== deploy ===\npublished to " + deployURL + "\n"

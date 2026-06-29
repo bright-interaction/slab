@@ -415,6 +415,15 @@ func (s *Server) guardrailPageSlug(ctx context.Context, siteID, slug string) ([]
 	return v, agent.HasErrors(v)
 }
 
+// guardrailRequiredBlocks runs the require_block guardrail before an MCP block
+// delete, so the MCP path can't remove a page's last required block (e.g. the
+// hero). Mirrors the REST DeleteBlock handler. Defined here so the tool handler
+// (whose param shadows the agent package) can reach agent.HasErrors.
+func (s *Server) guardrailRequiredBlocks(ctx context.Context, siteID, pageSlug, pageID, deletingBlockID string) ([]agent.Violation, bool) {
+	v := s.guardrails.ValidateRequiredBlocks(ctx, siteID, pageSlug, pageID, deletingBlockID)
+	return v, agent.HasErrors(v)
+}
+
 // maxComponentsPerSite is a runaway-loop backstop for the agent (MCP) write
 // path. There is no human in the loop, so an agent bug or hostile key could
 // otherwise drive unbounded INSERTs + build cost. Components have no billing

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/brightinteraction/atomicsite/internal/store"
@@ -383,6 +384,11 @@ func dataHasHTML(data map[string]any) bool {
 	return false
 }
 
+// componentPropKeyRE matches a safe Astro/HTML prop name. Keys outside this
+// shape are dropped (not written into the .astro tag) to prevent markup
+// injection through a prop key.
+var componentPropKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_:-]*$`)
+
 func renderComponentBlock(name string, data map[string]any) string {
 	pascal := pascalCase(name)
 	props, ok := data["props"].(map[string]any)
@@ -395,6 +401,12 @@ func renderComponentBlock(name string, data map[string]any) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("  <%s", pascal))
 	for k, v := range props {
+		// The prop KEY is written into the .astro tag verbatim; an unsafe key
+		// (e.g. "onload=x " or "><script>") would inject markup. Only the value
+		// was being escaped. Skip keys that aren't a safe attribute/prop name.
+		if !componentPropKeyRE.MatchString(k) {
+			continue
+		}
 		switch val := v.(type) {
 		case string:
 			b.WriteString(fmt.Sprintf(" %s=\"%s\"", k, escapeAttr(val)))

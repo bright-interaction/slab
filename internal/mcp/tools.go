@@ -547,6 +547,11 @@ func (s *Server) registerTools() {
 			if err != nil || page.SiteID != agent.SiteID {
 				return "", fmt.Errorf("block does not belong to this site")
 			}
+			// require_block guardrail: don't let the MCP path delete a page's
+			// last required block (REST DeleteBlock already enforces this).
+			if gv, bad := s.guardrailRequiredBlocks(ctx, agent.SiteID, page.Slug, page.ID, args.BlockID); bad {
+				return mustJSON(map[string]any{"error": "guardrail_violations", "violations": gv}), nil
+			}
 			if err := s.queries.DeleteBlock(ctx, args.BlockID); err != nil {
 				return "", err
 			}
