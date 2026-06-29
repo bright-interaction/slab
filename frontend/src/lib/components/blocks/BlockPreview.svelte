@@ -144,6 +144,13 @@ ${'<'}/script>
 	{#if error}
 		<p class="px-3 py-3 text-[12px] text-danger">{error}</p>
 	{/if}
+	<!--
+		SECURITY: this iframe renders agent-authored block HTML. NEVER add
+		`allow-scripts` to the sandbox: combined with `allow-same-origin` it
+		would let injected script run in the admin's authed origin (stored XSS).
+		If preview height ever needs JS, resize via postMessage + ResizeObserver
+		from a SEPARATE origin, not by relaxing this sandbox.
+	-->
 	<iframe
 		bind:this={iframeEl}
 		title="Block preview"

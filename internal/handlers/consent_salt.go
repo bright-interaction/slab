@@ -95,7 +95,7 @@ func getOrCreateConsentSalt(ctx context.Context, queries *store.Queries) (string
 // hashIPWithSalt returns SHA-256(ip || salt) hex-encoded. ip is normalised by
 // trimming whitespace and lowercasing IPv6 zones. Empty ip yields empty
 // hash (caller may store "" when fingerprint already provides uniqueness).
-func hashIPWithSalt(ip, salt string) string {
+func hashIPWithSalt(ip, salt, siteID string) string {
 	ip = strings.TrimSpace(strings.ToLower(ip))
 	if ip == "" {
 		return ""
@@ -104,5 +104,10 @@ func hashIPWithSalt(ip, salt string) string {
 	h.Write([]byte(ip))
 	h.Write([]byte(":"))
 	h.Write([]byte(salt))
+	// Per-tenant: mixing the site id means the same IP hashes differently on
+	// each site, so a query that ever forgets its site_id filter still cannot
+	// link a visitor across tenants (the daily consent salt is otherwise global).
+	h.Write([]byte(":"))
+	h.Write([]byte(siteID))
 	return hex.EncodeToString(h.Sum(nil))
 }
