@@ -152,7 +152,7 @@ func (k *b2bServicesKit) applyKnowledgebase(ctx context.Context, q *store.Querie
 	entries := []kbDef{
 		{Category: "brand", Title: "Voice for B2B services", Content: "Confident, specific, plain. Lead with the problem the buyer recognises (procurement questionnaires, missed deadlines, audit risk). Avoid abstract value words ('synergy', 'leverage', 'best in class'). Use we / us in first person."},
 		{Category: "brand", Title: "Proof beats promises", Content: "B2B buyers verify before signing. Every claim should be backed by a metric, named client, or case study link. Testimonials with full name + role + company > anonymous quotes."},
-		{Category: "structure", Title: "Page set", Content: "B2B services sites work with: home, services hub + per-service detail pages, case studies, about / team, insights / blog, contact. Keep URLs shallow (max 3 levels). Every page has one primary CTA — usually 'book a discovery call' or 'request an audit'."},
+		{Category: "structure", Title: "Page set", Content: "B2B services sites work with: home, services hub + per-service detail pages, case studies, about / team, insights / blog, contact. Keep URLs shallow (max 3 levels). Every page has one primary CTA, usually 'book a discovery call' or 'request an audit'."},
 		{Category: "conversion", Title: "Lead magnet pattern", Content: "On every page, offer a tangible artefact in exchange for an email: industry report, audit checklist, ROI calculator. Atomicsite's form blocks integrate with BrightCRM webhook so submissions appear in the CRM with attribution."},
 	}
 	return seedKB(ctx, q, siteID, entries, 200)

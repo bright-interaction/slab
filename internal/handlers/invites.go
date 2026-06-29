@@ -255,7 +255,12 @@ func validateInvite(row store.Invite) error {
 		return errors.New("invite has already been used")
 	}
 	exp, err := time.Parse("2006-01-02 15:04:05", row.ExpiresAt)
-	if err == nil && time.Now().UTC().After(exp) {
+	if err != nil {
+		// Fail CLOSED: an unparseable expiry must not pass as "valid forever"
+		// (the password-reset path already fails closed; this matches it).
+		return errors.New("invite has an invalid expiry")
+	}
+	if time.Now().UTC().After(exp) {
 		return errors.New("invite has expired")
 	}
 	return nil
