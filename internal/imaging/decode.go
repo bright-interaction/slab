@@ -3,6 +3,7 @@
 package imaging
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -13,6 +14,17 @@ import (
 
 	_ "golang.org/x/image/webp"
 )
+
+// maxImagePixels caps the decoded pixel count. A small compressed file can
+// declare enormous dimensions (a decompression bomb: a few-KB PNG that decodes
+// to 50000x50000 = gigabytes of RAM). 40MP comfortably covers pro-camera photos
+// (~24MP) while refusing to allocate for a bomb. image.DecodeConfig reads only
+// the header, so the check is cheap and happens before any pixel allocation.
+const maxImagePixels = 40_000_000
+
+// maxImageBytes bounds the in-memory buffer Decode reads. Sits above the
+// default 20MB upload cap so it only ever fires on pathological standalone use.
+const maxImageBytes = 64 << 20
 
 // Sniff detects the MIME type from the first 512 bytes using http.DetectContentType.
 // Trust this over client-supplied Content-Type headers.
@@ -56,8 +68,29 @@ func ExtFromFormat(format string) string {
 
 // Decode reads an image from r. Returns the decoded image and the format string.
 // Supports jpeg, png, gif, webp (decode only; encode separately).
+//
+// Decompression-bomb guard: the input is buffered (byte-capped), the header is
+// read with DecodeConfig to learn the declared dimensions, and decode is
+// refused when width*height exceeds maxImagePixels, BEFORE image.Decode
+// allocates the pixel buffer.
 func Decode(r io.Reader) (image.Image, string, error) {
-	img, format, err := image.Decode(r)
+	data, err := io.ReadAll(io.LimitReader(r, maxImageBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("read image: %w", err)
+	}
+	if int64(len(data)) > maxImageBytes {
+		return nil, "", fmt.Errorf("image exceeds %d byte cap", maxImageBytes)
+	}
+
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", fmt.Errorf("decode image config: %w", err)
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > maxImagePixels {
+		return nil, "", fmt.Errorf("image too large: %dx%d exceeds %d-pixel cap", cfg.Width, cfg.Height, maxImagePixels)
+	}
+
+	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, "", fmt.Errorf("decode image: %w", err)
 	}

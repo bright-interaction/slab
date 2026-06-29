@@ -133,41 +133,51 @@ func TestBuildRsyncArgs(t *testing.T) {
 		Port: 2222,
 		Path: "/var/www/example",
 	}
-	args := buildRsyncArgs(cfg, "/tmp/dist", "/tmp/keyfile")
+	args := buildRsyncArgs(cfg, "/tmp/dist", "/tmp/keyfile", "/tmp/known_hosts")
 
-	if len(args) < 5 {
-		t.Fatalf("buildRsyncArgs returned %d args, want >= 5: %v", len(args), args)
+	if len(args) < 7 {
+		t.Fatalf("buildRsyncArgs returned %d args, want >= 7: %v", len(args), args)
 	}
 	if args[0] != "-avz" {
 		t.Errorf("args[0] = %q, want -avz", args[0])
 	}
-	if args[1] != "--delete" {
-		t.Errorf("args[1] = %q, want --delete", args[1])
-	}
-	if args[2] != "-e" {
-		t.Errorf("args[2] = %q, want -e", args[2])
+	// Atomicity + injection guards must be present.
+	for _, flag := range []string{"--delete", "--delay-updates", "--protect-args"} {
+		if !containsArg(args, flag) {
+			t.Errorf("args missing %q: %v", flag, args)
+		}
 	}
 
-	sshCmd := args[3]
+	sshCmd := sshArg(t, args)
 	for _, want := range []string{
 		"ssh -i /tmp/keyfile",
 		"-p 2222",
-		"StrictHostKeyChecking=no",
-		"UserKnownHostsFile=/dev/null",
+		"StrictHostKeyChecking=accept-new", // no host_key pinned -> TOFU, never blanket-ignore
+		"UserKnownHostsFile=/tmp/known_hosts",
 	} {
 		if !strings.Contains(sshCmd, want) {
 			t.Errorf("ssh cmd %q missing %q", sshCmd, want)
 		}
 	}
+	if strings.Contains(sshCmd, "StrictHostKeyChecking=no") || strings.Contains(sshCmd, "/dev/null") {
+		t.Errorf("ssh cmd must not blanket-ignore host keys: %q", sshCmd)
+	}
 
-	src := args[4]
+	// src + dst are always the last two argv elements.
+	src, dst := args[len(args)-2], args[len(args)-1]
 	if src != "/tmp/dist/" {
 		t.Errorf("src = %q, want trailing-slash form /tmp/dist/", src)
 	}
-
-	dst := args[5]
 	if dst != "deployer@deploy.example.com:/var/www/example/" {
 		t.Errorf("dst = %q, want deployer@deploy.example.com:/var/www/example/", dst)
+	}
+}
+
+func TestBuildRsyncArgs_PinsHostKey(t *testing.T) {
+	cfg := rsyncConfig{Host: "h", User: "u", Port: 22, Path: "/srv/site", HostKey: "ssh-ed25519 AAAAC3..."}
+	sshCmd := sshArg(t, buildRsyncArgs(cfg, "/dist", "/k", "/kh"))
+	if !strings.Contains(sshCmd, "StrictHostKeyChecking=yes") {
+		t.Errorf("with a pinned host_key, expected StrictHostKeyChecking=yes; got %q", sshCmd)
 	}
 }
 
@@ -175,13 +185,35 @@ func TestBuildRsyncArgs_StripsTrailingSlashes(t *testing.T) {
 	cfg := rsyncConfig{
 		Host: "h", User: "u", Port: 22, Path: "/srv/site/",
 	}
-	args := buildRsyncArgs(cfg, "/tmp/dist////", "/k")
-	if args[4] != "/tmp/dist/" {
-		t.Errorf("src = %q, want /tmp/dist/", args[4])
+	args := buildRsyncArgs(cfg, "/tmp/dist////", "/k", "/kh")
+	src, dst := args[len(args)-2], args[len(args)-1]
+	if src != "/tmp/dist/" {
+		t.Errorf("src = %q, want /tmp/dist/", src)
 	}
-	if args[5] != "u@h:/srv/site/" {
-		t.Errorf("dst = %q, want u@h:/srv/site/", args[5])
+	if dst != "u@h:/srv/site/" {
+		t.Errorf("dst = %q, want u@h:/srv/site/", dst)
 	}
+}
+
+func containsArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
+}
+
+// sshArg returns the value passed to rsync's -e flag.
+func sshArg(t *testing.T, args []string) string {
+	t.Helper()
+	for i, a := range args {
+		if a == "-e" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	t.Fatalf("no -e flag in args: %v", args)
+	return ""
 }
 
 func TestWalkDist(t *testing.T) {

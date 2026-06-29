@@ -280,6 +280,13 @@ func substituteAstroProps(body string, props map[string]any) string {
 
 func wrapAttrIfNeeded(prefix, val string) string {
 	if prefix == "=" {
+		// val arrives already HTML-escaped (& < >) but NOT quote-escaped.
+		// Inside ="..." an unescaped quote breaks out of the attribute and
+		// injects new attributes (e.g. `" onmouseover=...`). Escape the quotes
+		// the text-context escaper skipped to make this attribute-safe. Not
+		// re-running the full escaper avoids double-encoding the & it handled.
+		val = strings.ReplaceAll(val, `"`, "&quot;")
+		val = strings.ReplaceAll(val, "'", "&#39;")
 		return `="` + val + `"`
 	}
 	return val
