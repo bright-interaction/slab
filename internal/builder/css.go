@@ -122,8 +122,8 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	if site.OnPrimaryColor != "" {
 		b.WriteString(fmt.Sprintf("  --color-on-primary: %s;\n", site.OnPrimaryColor))
 	}
-	b.WriteString(fmt.Sprintf("  --font-heading: '%s', system-ui, sans-serif;\n", site.FontHeading))
-	b.WriteString(fmt.Sprintf("  --font-body: '%s', system-ui, sans-serif;\n", site.FontBody))
+	b.WriteString("  --font-heading: " + cssFontFamilyDecl(site.FontHeading) + ";\n")
+	b.WriteString("  --font-body: " + cssFontFamilyDecl(site.FontBody) + ";\n")
 	// Monospace family used for brand wordmarks, eyebrows, code labels.
 	// Space Mono is loaded by the layout (Google Fonts); falls back through
 	// system mono fonts when offline. Not a per-site setting yet.
@@ -489,7 +489,6 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	b.WriteString(".site-footer.is-dark .footer-social a { background: color-mix(in oklab, white 10%, transparent); width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; color: white; }\n")
 	b.WriteString(".site-footer.is-dark .footer-social a:hover { background: var(--color-primary); color: white; }\n\n")
 
-
 	// --- New block layouts (split_hero, stat_grid, accordion_faq, pricing, logo_strip, code_block, form, embed) ---
 	// split_hero: side-by-side on desktop (image right, text left), stacks on mobile.
 	b.WriteString(".block--split_hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 3.5rem; align-items: center; padding-block: 6rem 5rem; max-width: var(--container-width); }\n")
@@ -779,7 +778,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 				b.WriteString(fmt.Sprintf("/* %s */\n", currentCategory))
 			}
 			if cc.UsageNote != "" {
-				b.WriteString(fmt.Sprintf("/* %s */\n", cc.UsageNote))
+				b.WriteString(fmt.Sprintf("/* %s */\n", cssCommentSafe(cc.UsageNote)))
 			}
 			b.WriteString(cc.Css)
 			b.WriteString("\n\n")

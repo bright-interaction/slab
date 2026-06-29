@@ -47,12 +47,12 @@ import (
 // Event types. Add to this list when wiring a new emit point. Keep
 // names lowercase, dot-separated, hierarchical (resource.verb).
 const (
-	EventPageCreated   = "page.created"
-	EventPageUpdated   = "page.updated"
-	EventPageDeleted   = "page.deleted"
-	EventItemCreated   = "collection_item.created"
-	EventItemUpdated   = "collection_item.updated"
-	EventItemDeleted   = "collection_item.deleted"
+	EventPageCreated    = "page.created"
+	EventPageUpdated    = "page.updated"
+	EventPageDeleted    = "page.deleted"
+	EventItemCreated    = "collection_item.created"
+	EventItemUpdated    = "collection_item.updated"
+	EventItemDeleted    = "collection_item.deleted"
 	EventBuildSucceeded = "build.succeeded"
 	EventBuildFailed    = "build.failed"
 	EventFormSubmitted  = "form.submitted"
@@ -175,9 +175,10 @@ type DeliveryManager struct {
 func NewDeliveryManager(queries *store.Queries) *DeliveryManager {
 	return &DeliveryManager{
 		queries: queries,
-		client: &http.Client{
-			Timeout: deliveryHTTPTimeout,
-		},
+		// SSRF-safe: the delivery target is a tenant-controlled URL, so the
+		// dialer refuses to connect to private/loopback/link-local addresses
+		// (defends DNS-rebinding to the cloud metadata service / internal net).
+		client: ssrfSafeClient(deliveryHTTPTimeout),
 	}
 }
 

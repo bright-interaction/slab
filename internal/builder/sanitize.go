@@ -2,6 +2,7 @@ package builder
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
 )
@@ -14,6 +15,31 @@ var componentNameRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 // ValidComponentName reports whether name is safe to use as a component filename.
 func ValidComponentName(name string) bool {
 	return componentNameRE.MatchString(name)
+}
+
+// fontFamilyRE accepts a safe CSS font-family name. The value is interpolated
+// into `--font-heading: '<name>', ...` so it must not contain quotes, braces or
+// semicolons that could break out of the declaration and inject arbitrary CSS.
+var fontFamilyRE = regexp.MustCompile(`^[A-Za-z0-9 _-]{1,64}$`)
+
+// cssFontFamilyDecl returns a safe `'<name>', system-ui, sans-serif` stack for a
+// site-supplied font name. An empty or unsafe name (CSS injection via the
+// branding API or a figma import) falls back to the system stack rather than
+// emitting attacker-controlled CSS.
+func cssFontFamilyDecl(name string) string {
+	if fontFamilyRE.MatchString(name) {
+		return "'" + name + "', system-ui, sans-serif"
+	}
+	return "system-ui, sans-serif"
+}
+
+// cssCommentSafe neutralizes a string before it is placed inside a `/* ... */`
+// CSS comment, so a usage note (e.g. seeded from raw figma style names) cannot
+// close the comment with `*/` and inject live CSS.
+func cssCommentSafe(s string) string {
+	s = strings.ReplaceAll(s, "*/", "* /")
+	s = strings.ReplaceAll(s, "/*", "/ *")
+	return s
 }
 
 // rawHTMLPolicy sanitizes agent-authored raw-HTML block content. The raw-HTML
