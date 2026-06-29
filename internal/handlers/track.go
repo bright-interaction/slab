@@ -295,6 +295,12 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		gpcActive = 1
 	}
 	createdAtMs := time.Now().UTC().UnixMilli()
+	// Privacy promise (/analytics/tracked-fields): "Raw UA is never stored."
+	// Parse the UA into the coarse browser/os/device triple and persist only
+	// that summary so the consent proof keeps useful context without retaining
+	// the fingerprintable raw string for the 730d window.
+	uaBrowser, uaOS, uaDevice := analytics.ParseUA(r.UserAgent())
+	uaSummary := strings.TrimSpace(uaBrowser + " / " + uaOS + " / " + uaDevice)
 	if err := h.queries.RecordConsent(r.Context(), store.RecordConsentParams{
 		ID:             newID(),
 		SiteID:         siteID,
@@ -303,7 +309,7 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		Domain:         truncateString(auditDomain, 255),
 		PageUrl:        truncateString(req.Page, 2000),
 		Referrer:       truncateString(req.Referrer, 2000),
-		UserAgent:      truncateString(r.UserAgent(), 500),
+		UserAgent:      truncateString(uaSummary, 500),
 		IpHash:         ipHash,
 		ConsentMethod:  method,
 		ConsentVersion: int64(req.Consent.Version),

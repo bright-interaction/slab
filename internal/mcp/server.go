@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/billing"
 	"github.com/bright-interaction/slab/internal/handlers"
 	authmw "github.com/bright-interaction/slab/internal/middleware"
 	"github.com/bright-interaction/slab/internal/migration"
@@ -412,6 +413,30 @@ func (s *Server) maskSecretSettings(rows []store.SiteSetting) []store.SiteSettin
 func (s *Server) guardrailPageSlug(ctx context.Context, siteID, slug string) ([]agent.Violation, bool) {
 	v := s.guardrails.ValidatePageSlug(ctx, siteID, slug)
 	return v, agent.HasErrors(v)
+}
+
+// maxComponentsPerSite is a runaway-loop backstop for the agent (MCP) write
+// path. There is no human in the loop, so an agent bug or hostile key could
+// otherwise drive unbounded INSERTs + build cost. Components have no billing
+// plan resource, so this generous hard ceiling only fires on a runaway loop.
+const maxComponentsPerSite = 300
+
+// pageQuota returns the site's plan cap for pages, or -1 (unlimited) when the
+// site/workspace/plan cannot be resolved (so a transient lookup miss never
+// refuses a paid customer). Resolves the workspace from the site because MCP
+// auth is by agent key, not a user session, so handlers.planLimitForRequest
+// (which needs the request user) does not apply. Gives the MCP create_page path
+// the same per-site cap the migration Apply path already enforces.
+func (s *Server) pageQuota(ctx context.Context, siteID string) int64 {
+	site, err := s.queries.GetSiteByID(ctx, siteID)
+	if err != nil || site.WorkspaceID == "" {
+		return -1
+	}
+	ws, err := s.queries.GetWorkspaceByID(ctx, site.WorkspaceID)
+	if err != nil {
+		return -1
+	}
+	return billing.Limit(ws.Plan, "max_pages_per_site")
 }
 
 func NewServer(queries *store.Queries, builds BuildTrigger) *Server {

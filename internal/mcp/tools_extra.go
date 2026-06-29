@@ -83,6 +83,10 @@ func (s *Server) registerExtraTools() {
 			if err := handlers.ValidateComponentName(args.Name); err != nil {
 				return "", err
 			}
+			// Per-site component cap (runaway-loop / DoS backstop on the MCP path).
+			if rows, err := s.queries.ListComponentsBySite(ctx, agent.SiteID); err == nil && len(rows) >= maxComponentsPerSite {
+				return "", fmt.Errorf("component cap reached (%d per site). Remove unused components before adding more", maxComponentsPerSite)
+			}
 			id := newID()
 			if err := s.queries.CreateComponent(ctx, store.CreateComponentParams{
 				ID:          id,
