@@ -22,6 +22,43 @@ import (
 //
 // Write tools are RequiresWrite. Nil handler disables the tools with
 // a clean "not configured" error.
+// orderForAgent projects an order to the fields safe to expose over MCP. It
+// drops the buyer's phone, shipping/billing addresses, payment ids + checkout
+// URL, refund id, and the free-text notes/metadata (which can carry PII the
+// field-level shield does not key on). customer_name/email remain so the agent
+// can identify the order; the shield redacts those when enabled.
+func orderForAgent(o store.Order) map[string]any {
+	return map[string]any{
+		"id":               o.ID,
+		"order_number":     o.OrderNumber,
+		"status":           o.Status,
+		"customer_name":    o.CustomerName,
+		"customer_email":   o.CustomerEmail,
+		"subtotal_cents":   o.SubtotalCents,
+		"discount_cents":   o.DiscountCents,
+		"shipping_cents":   o.ShippingCents,
+		"tax_cents":        o.TaxCents,
+		"total_cents":      o.TotalCents,
+		"currency":         o.Currency,
+		"payment_provider": o.PaymentProvider,
+		"payment_status":   o.PaymentStatus,
+		"created_at":       o.CreatedAt,
+		"updated_at":       o.UpdatedAt,
+		"paid_at":          o.PaidAt,
+		"fulfilled_at":     o.FulfilledAt,
+		"cancelled_at":     o.CancelledAt,
+		"refunded_at":      o.RefundedAt,
+	}
+}
+
+func ordersForAgent(rows []store.Order) []map[string]any {
+	out := make([]map[string]any, len(rows))
+	for i, o := range rows {
+		out[i] = orderForAgent(o)
+	}
+	return out
+}
+
 func (s *Server) registerOrderTools() {
 	register := func(t Tool) { s.tools[t.Name] = t }
 
@@ -55,7 +92,7 @@ func (s *Server) registerOrderTools() {
 			if err != nil {
 				return "", err
 			}
-			return mustJSON(map[string]any{"orders": rows, "count": len(rows)}), nil
+			return mustJSON(map[string]any{"orders": ordersForAgent(rows), "count": len(rows)}), nil
 		},
 	})
 
@@ -82,7 +119,7 @@ func (s *Server) registerOrderTools() {
 				return "", errors.New("order not found")
 			}
 			items, _ := s.queries.ListOrderItems(ctx, args.OrderID)
-			return mustJSON(map[string]any{"order": o, "items": items}), nil
+			return mustJSON(map[string]any{"order": orderForAgent(o), "items": items}), nil
 		},
 	})
 
