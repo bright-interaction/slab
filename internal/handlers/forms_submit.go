@@ -177,7 +177,7 @@ func (h *FormHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	subID := newID()
-	ipHash := hashIPWithSalt(ip, h.cfg.AnalyticsSalt)
+	ipHash := hashIPWithSalt(ip, h.cfg.AnalyticsSalt, form.SiteID)
 	if err := h.queries.CreateFormSubmission(r.Context(), store.CreateFormSubmissionParams{
 		ID:       subID,
 		FormID:   form.ID,

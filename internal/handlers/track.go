@@ -58,6 +58,21 @@ const trackBodyMaxBytes = 16 * 1024
 // fingerprint. The handlers only validate that the posted siteId actually
 // belongs to a real site row; everything else is best-effort to keep the
 // receiver fast and tolerant of malformed clients.
+//
+// Consent model (audit P2-D): analytics consent is gated CLIENT-SIDE by the
+// CookieProof widget, which does not emit pageview/event/engagement/cwv until
+// the visitor grants the analytics category. The server trusts that gate (it
+// has no independent per-request consent state to re-check). /t/identify stores
+// an email only when the visitor volunteered it (a form submission or an
+// explicit, post-consent identify call), i.e. under a separate lawful basis
+// than cookie consent, so it is deliberately NOT gated on the cookie-consent
+// flag here. Cross-tenant linkability (audit P2-E): the consent ip_hash is
+// salted with site_id (hashIPWithSalt) so the same IP hashes differently per
+// tenant; the visitor fingerprint is host-scoped by the browser cookie and
+// always stored alongside site_id, so cross-tenant linkage is prevented at the
+// storage + query layer (every visit query is site-scoped). The raw fingerprint
+// algorithm is intentionally left site-agnostic so the bidirectional CRM
+// re-derivation (/t/visitor, /t/inbound) keeps matching existing cookies.
 type TrackHandler struct {
 	cfg       *config.Config
 	queries   *store.Queries
@@ -284,7 +299,7 @@ func (h *TrackHandler) Consent(w http.ResponseWriter, r *http.Request) {
 	}
 	ipHash := ""
 	if salt != "" {
-		ipHash = hashIPWithSalt(clientIP(r), salt)
+		ipHash = hashIPWithSalt(clientIP(r), salt, siteID)
 	}
 
 	// Append the proof. Truncate long strings defensively .  the schema
