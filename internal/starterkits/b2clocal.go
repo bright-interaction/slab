@@ -146,9 +146,9 @@ func (k *b2cLocalKit) applyCSS(ctx context.Context, q *store.Queries, siteID str
 func (k *b2cLocalKit) applyKnowledgebase(ctx context.Context, q *store.Queries, siteID string) error {
 	entries := []kbDef{
 		{Category: "schema", Title: "LocalBusiness schema essentials", Content: "B2C local sites need LocalBusiness JSON-LD with: name, address (PostalAddress), telephone, geo (latitude, longitude), openingHoursSpecification (per-day), priceRange ('$', '$$', '$$$'), and aggregateRating when reviews are public. Atomicsite emits this when site_profile.address + new settings local.opening_hours and local.geo are filled."},
-		{Category: "local-seo", Title: "Google Business Profile parity", Content: "Site NAP (Name, Address, Phone) must EXACTLY match Google Business Profile. Mismatches sink local rankings. Same applies to Apple Business Connect, Bing Places. Atomicsite's site profile is the single source — copy it verbatim into other directories."},
+		{Category: "local-seo", Title: "Google Business Profile parity", Content: "Site NAP (Name, Address, Phone) must EXACTLY match Google Business Profile. Mismatches sink local rankings. Same applies to Apple Business Connect, Bing Places. Atomicsite's site profile is the single source: copy it verbatim into other directories."},
 		{Category: "conversion", Title: "Above-the-fold actions", Content: "Local visitors want one of: book a table / appointment, call, see hours, see directions. Hero must surface these in <2 taps. Tap-to-call (tel: links) and tap-to-map (maps: or geo: links) on mobile."},
-		{Category: "content", Title: "Reviews + UGC", Content: "Pull verified reviews from Google / Tripadvisor / Trustpilot via API where allowed. Display 3-6 on home, full grid on /reviews. Always include reviewer name (first name + initial OK), date, and star rating in schema. Never fabricate reviews — Google penalises and many jurisdictions criminalise."},
+		{Category: "content", Title: "Reviews + UGC", Content: "Pull verified reviews from Google / Tripadvisor / Trustpilot via API where allowed. Display 3-6 on home, full grid on /reviews. Always include reviewer name (first name + initial OK), date, and star rating in schema. Never fabricate reviews: Google penalises and many jurisdictions criminalise."},
 	}
 	return seedKB(ctx, q, siteID, entries, 300)
 }
