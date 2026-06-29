@@ -4,6 +4,32 @@ import (
 	"strings"
 )
 
+// secretSettingKeys are the "<category>.<key>" settings whose VALUE is a
+// bearer-equivalent secret and must never be returned to an LLM/agent (the
+// agent may read the descriptor, not the value). Kept in sync with the catalog
+// entries marked sensitive (Mollie key, CRM webhook HMAC secret).
+var secretSettingKeys = map[string]bool{
+	"payments.mollie_api_key":      true,
+	"analytics.crm_webhook_secret": true,
+}
+
+// IsSecretSetting reports whether the value for category.key is a secret that
+// must be masked before exposure over the agent API / MCP. It checks the
+// explicit allowlist plus a defensive suffix heuristic so a future secret key
+// is masked by default rather than leaked.
+func IsSecretSetting(category, key string) bool {
+	if secretSettingKeys[category+"."+key] {
+		return true
+	}
+	k := strings.ToLower(key)
+	for _, suffix := range []string{"_secret", "_api_key", "_apikey", "_token", "_password", "_private_key"} {
+		if strings.HasSuffix(k, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 // SettingDescriptor describes one setting key the agent can reason about.
 // The catalog covers every key that has a real backend consumer. Settings
 // that exist only on the human admin UI (no backend wiring) are deliberately

@@ -374,6 +374,9 @@ type Querier interface {
 	ListEntityRevisions(ctx context.Context, arg ListEntityRevisionsParams) ([]EntityRevision, error)
 	// Evaluations
 	ListEvaluationsByBuild(ctx context.Context, buildID string) ([]Evaluation, error)
+	// Site-scoped variant so the agent API can only read its own site's
+	// evaluation results, never another tenant's by guessing a build_id.
+	ListEvaluationsByBuildAndSite(ctx context.Context, arg ListEvaluationsByBuildAndSiteParams) ([]Evaluation, error)
 	ListEvaluationsBySite(ctx context.Context, arg ListEvaluationsBySiteParams) ([]Evaluation, error)
 	// Sprint 4 (2026-05-06): used by the migration upsert path so the
 	// plan-quota gate can subtract pages whose slug already exists from

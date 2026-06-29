@@ -416,9 +416,12 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	blockID := urlParam(r, "blockID")
-	existing, err := h.queries.GetBlockByID(r.Context(), blockID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Block not found")
+	// Scope the block to the agent's site: an agent key for site A must not be
+	// able to update a block whose parent page belongs to site B (cross-tenant
+	// IDOR). blockInSite verifies block.page.site_id == a.SiteID, returning 404
+	// otherwise. The REST block routes already use this helper.
+	existing, ok := blockInSite(r.Context(), h.queries, w, blockID, a.SiteID)
+	if !ok {
 		return
 	}
 
@@ -469,7 +472,7 @@ func (h *AgentHandler) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.queries.UpdateBlock(r.Context(), store.UpdateBlockParams{
+	err := h.queries.UpdateBlock(r.Context(), store.UpdateBlockParams{
 		ID:        blockID,
 		BlockType: blockType,
 		Name:      name,
@@ -499,10 +502,10 @@ func (h *AgentHandler) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 
 	blockID := urlParam(r, "blockID")
 
-	// Look up the block to find its page for required blocks check
-	block, err := h.queries.GetBlockByID(r.Context(), blockID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Block not found")
+	// Scope the block to the agent's site (cross-tenant IDOR guard): an agent key
+	// for site A must not delete a block whose parent page belongs to site B.
+	block, ok := blockInSite(r.Context(), h.queries, w, blockID, a.SiteID)
+	if !ok {
 		return
 	}
 
@@ -552,6 +555,11 @@ func (h *AgentHandler) CreateComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" || req.Template == "" {
 		writeError(w, http.StatusBadRequest, "name and template are required")
+		return
+	}
+	// Path-traversal guard: the name becomes a filename under src/components/.
+	if err := ValidateComponentName(req.Name); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if req.Category == "" {
@@ -881,7 +889,12 @@ func (h *AgentHandler) GetEvaluation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	buildID := urlParam(r, "buildID")
-	evals, err := h.queries.ListEvaluationsByBuild(r.Context(), buildID)
+	// Scope to the agent's site so a site-A key cannot read another tenant's
+	// evaluation results by guessing a build_id (cross-tenant read IDOR).
+	evals, err := h.queries.ListEvaluationsByBuildAndSite(r.Context(), store.ListEvaluationsByBuildAndSiteParams{
+		BuildID: buildID,
+		SiteID:  a.SiteID,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get evaluations")
 		return

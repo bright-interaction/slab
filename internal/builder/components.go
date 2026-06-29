@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -23,6 +24,15 @@ func RenderComponents(ctx context.Context, queries *store.Queries, siteID string
 	}
 
 	for _, comp := range components {
+		// Path-traversal guard: comp.Name becomes a filename under
+		// src/components/. A name like "../pages/index" would escape the
+		// directory and overwrite other workspace files, so skip anything that
+		// is not a safe identifier (write tools reject these too; this is the
+		// last-line guard at the actual file write).
+		if !ValidComponentName(comp.Name) {
+			slog.Warn("builder: skipping component with unsafe name", "site_id", siteID, "name", comp.Name)
+			continue
+		}
 		ext := pickComponentExt(comp.Template)
 		path := filepath.Join(wsDir, "src", "components", comp.Name+ext)
 		if err := WriteFile(path, comp.Template); err != nil {

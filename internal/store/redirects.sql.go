@@ -263,6 +263,50 @@ func (q *Queries) ListEvaluationsByBuild(ctx context.Context, buildID string) ([
 	return items, nil
 }
 
+const listEvaluationsByBuildAndSite = `-- name: ListEvaluationsByBuildAndSite :many
+SELECT id, build_id, site_id, category, score, max_score, grade, checks_json, created_at FROM evaluations WHERE build_id = ? AND site_id = ? ORDER BY category
+`
+
+type ListEvaluationsByBuildAndSiteParams struct {
+	BuildID string `json:"build_id"`
+	SiteID  string `json:"site_id"`
+}
+
+// Site-scoped variant so the agent API can only read its own site's
+// evaluation results, never another tenant's by guessing a build_id.
+func (q *Queries) ListEvaluationsByBuildAndSite(ctx context.Context, arg ListEvaluationsByBuildAndSiteParams) ([]Evaluation, error) {
+	rows, err := q.db.QueryContext(ctx, listEvaluationsByBuildAndSite, arg.BuildID, arg.SiteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Evaluation{}
+	for rows.Next() {
+		var i Evaluation
+		if err := rows.Scan(
+			&i.ID,
+			&i.BuildID,
+			&i.SiteID,
+			&i.Category,
+			&i.Score,
+			&i.MaxScore,
+			&i.Grade,
+			&i.ChecksJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEvaluationsBySite = `-- name: ListEvaluationsBySite :many
 SELECT id, build_id, site_id, category, score, max_score, grade, checks_json, created_at FROM evaluations WHERE site_id = ? ORDER BY created_at DESC LIMIT ?
 `
