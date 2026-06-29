@@ -83,8 +83,9 @@ func RunChecks(site *eval.SiteContext, playbook agent.DesignPlaybookInfo) []eval
 	allHTML := concatHTML(site)
 	allText := concatVisibleText(site)
 	allCSS := readSiteCSS(site)
+	headings := extractHeadings(site)
 
-	checks = append(checks, antiPatternChecks(playbook.AntiPatterns, allHTML, allCSS)...)
+	checks = append(checks, antiPatternChecks(playbook.AntiPatterns, allHTML, allCSS, allText, headings)...)
 	checks = append(checks, contentAuthenticityChecks(playbook.ContentAuthenticity, allText, site)...)
 	checks = append(checks, motionChecks(playbook.Motion, allCSS, allHTML)...)
 	checks = append(checks, iconPolicyChecks(playbook.IconPolicy, allHTML)...)
@@ -96,95 +97,6 @@ func RunChecks(site *eval.SiteContext, playbook agent.DesignPlaybookInfo) []eval
 	checks = append(checks, auditChecklistInfo(playbook.AuditChecklist)...)
 
 	return checks
-}
-
-// antiPatternChecks scans HTML + CSS for each banned pattern in the
-// playbook. Each AntiPattern entry becomes one check; matching the
-// banned string triggers a Fail with the playbook's preferred
-// alternative as the recommendation.
-func antiPatternChecks(patterns []agent.AntiPattern, html, css string) []eval.CheckResult {
-	var out []eval.CheckResult
-	combined := html + "\n" + css
-
-	for _, ap := range patterns {
-		needle := extractAntiPatternNeedle(ap.Banned)
-		name := truncate(ap.Banned, 60)
-		section := "anti_patterns"
-		if needle == "" {
-			out = append(out, eval.Info(name, section, ap.Preferred))
-			continue
-		}
-		if antiPatternMatches(needle, combined) {
-			out = append(out, eval.Fail(
-				name, section, 5, eval.SeverityWarning,
-				fmt.Sprintf("Found %q in built output. Banned: %s", needle, ap.Banned),
-				ap.Preferred,
-			))
-		} else {
-			out = append(out, eval.Pass(name, section, 5, "no match in HTML/CSS"))
-		}
-	}
-	return out
-}
-
-// antiPatternMatches dispatches to a needle-specific matcher. Font
-// names need word-boundary matching so "Inter" doesn't false-positive
-// on "Interaction"; gradient/backdrop-filter rules can use a plain
-// substring scan because their tokens never collide with prose.
-var fontNameNeedles = map[string]bool{
-	"inter": true, "roboto": true, "arial": true, "space grotesk": true,
-}
-
-func antiPatternMatches(needle, combined string) bool {
-	low := strings.ToLower(combined)
-	n := strings.ToLower(needle)
-	if fontNameNeedles[n] {
-		// Match font-family declarations that name the banned font.
-		// Covers `font-family: Inter`, `font-family:'Inter'`, "Inter,"
-		// and Google-Fonts URLs that include the banned family.
-		patterns := []string{
-			"font-family:" + n,
-			"font-family: " + n,
-			"font-family:'" + n + "'",
-			"font-family: '" + n + "'",
-			"font-family:\"" + n + "\"",
-			"font-family: \"" + n + "\"",
-			"family=" + n,
-			"family=" + strings.ReplaceAll(n, " ", "+"),
-			"\"" + n + "\",",
-			"'" + n + "',",
-		}
-		for _, p := range patterns {
-			if strings.Contains(low, p) {
-				return true
-			}
-		}
-		return false
-	}
-	return strings.Contains(low, n)
-}
-
-// extractAntiPatternNeedle pulls a literal substring out of an anti-pattern
-// description. Many entries use prose like 'Inter font everywhere' or
-// 'Pure black (#000)'; we extract the most-grep-able token.
-func extractAntiPatternNeedle(banned string) string {
-	low := strings.ToLower(banned)
-	known := []string{
-		"inter", "roboto", "arial", "space grotesk",
-		"#000000", "#000", "rgb(0,0,0)", "rgb(0, 0, 0)",
-		"backdrop-filter", "linear-gradient",
-		"box-shadow: 0 0",
-	}
-	for _, k := range known {
-		if strings.Contains(low, k) {
-			return k
-		}
-	}
-	// Single-quoted literal inside the banned string, e.g. `Use 'Elevate'`.
-	if a, b := strings.Index(banned, "'"), strings.LastIndex(banned, "'"); a >= 0 && b > a+1 {
-		return banned[a+1 : b]
-	}
-	return ""
 }
 
 // contentAuthenticityChecks scans visible text for banned slop terms
