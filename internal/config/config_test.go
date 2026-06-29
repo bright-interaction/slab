@@ -53,6 +53,16 @@ func TestValidate_ProductionRejectsDefaults(t *testing.T) {
 			want: "ANALYTICS_SALT",
 		},
 		{
+			name: "empty shield key",
+			mut:  func(c *Config) { c.ShieldKey = "" },
+			want: "ATOMICSITE_SHIELD_KEY",
+		},
+		{
+			name: "short shield key",
+			mut:  func(c *Config) { c.ShieldKey = "tooshort" },
+			want: "ATOMICSITE_SHIELD_KEY",
+		},
+		{
 			name: "non-https base url",
 			mut:  func(c *Config) { c.BaseURL = "http://prod.example.com" },
 			want: "not HTTPS",
@@ -191,6 +201,7 @@ func goodConfig() *Config {
 		BaseURL:        "https://atomicsite.example.com",
 		JWTSecret:      "this-is-a-strong-32-byte-secret-value-here",
 		AnalyticsSalt:  "this-is-a-random-32-byte-fingerprint-salt-value",
+		ShieldKey:      "0123456789abcdef0123456789abcdef",
 		PrimaryDomain:  "example.com",
 		DeploymentMode: DeploymentModeSingle,
 	}

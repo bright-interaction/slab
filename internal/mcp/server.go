@@ -645,12 +645,17 @@ func (s *Server) handleToolsCall(r *http.Request, identity *authmw.AgentIdentity
 		shielded, sErr := session.ShieldJSON(ctx, []byte(body))
 		if sErr == nil {
 			body = string(shielded)
+		} else if json.Valid([]byte(body)) {
+			// The body is JSON but the redaction safety-net errored: fail
+			// CLOSED rather than forward a potentially-unredacted body (which
+			// may carry PII the tagged-struct path missed) to the LLM.
+			return ToolCallResult{
+				IsError: true,
+				Content: []Content{{Type: "text", Text: "shield redaction failed; response withheld"}},
+			}, nil
 		}
-		// On ShieldJSON parse error, fall through with the raw body.
-		// This typically means the handler returned non-JSON (e.g. a
-		// plain "ok"), which is safe because the redact pass was the
-		// safety net; tagged-struct shielding is the primary path and
-		// happens inside the handler.
+		// Non-JSON body (e.g. a plain "ok"): the JSON safety-net does not apply;
+		// the handler's tagged-struct shielding is the primary path for those.
 	}
 
 	return ToolCallResult{
@@ -700,6 +705,10 @@ func (s *Server) handleResourcesRead(r *http.Request, identity *authmw.AgentIden
 		shielded, sErr := session.ShieldJSON(ctx, []byte(body))
 		if sErr == nil {
 			body = string(shielded)
+		} else if json.Valid([]byte(body)) {
+			// Fail CLOSED: a JSON resource body whose redaction errored may carry
+			// PII; withhold it rather than forward the raw body to the LLM.
+			return nil, &ResponseError{Code: ErrInternal, Message: "shield redaction failed; resource withheld"}
 		}
 	}
 
