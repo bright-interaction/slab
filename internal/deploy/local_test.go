@@ -79,7 +79,7 @@ func TestLocalDeployer_Deploy_HappyPath(t *testing.T) {
 	})
 
 	parent := t.TempDir()
-	dest := filepath.Join(parent, "site")
+	dest := filepath.Join(parent, "s1", "site")
 
 	d := &LocalDeployer{}
 	res, err := d.Deploy(context.Background(), dist, Target{
@@ -116,7 +116,7 @@ func TestLocalDeployer_Deploy_HappyPath(t *testing.T) {
 
 func TestLocalDeployer_Deploy_AtomicSwap(t *testing.T) {
 	parent := t.TempDir()
-	dest := filepath.Join(parent, "site")
+	dest := filepath.Join(parent, "s1", "site")
 
 	// Pre-existing tree with stale content + a sentinel file that should disappear.
 	if err := os.MkdirAll(dest, 0o755); err != nil {

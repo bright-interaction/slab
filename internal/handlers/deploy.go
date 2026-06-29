@@ -9,6 +9,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/config"
 	"github.com/brightinteraction/atomicsite/internal/deploy"
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -105,6 +106,12 @@ type createDeployTargetRequest struct {
 // CreateTarget validates the payload (including a kind-specific Validate)
 // and inserts a new deploy_targets row.
 func (h *DeployHandler) CreateTarget(w http.ResponseWriter, r *http.Request) {
+	// Deploy targets control where the built site is written (including a path
+	// on our own host for the `local` kind), so only the site owner (or a
+	// platform admin) may create/modify them, not every editor member.
+	if !authmw.RequireOwnerOrAdmin(w, r, h.queries) {
+		return
+	}
 	siteID := urlParam(r, "siteID")
 
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -231,6 +238,9 @@ type updateDeployTargetRequest struct {
 
 // UpdateTarget patches an existing target row.
 func (h *DeployHandler) UpdateTarget(w http.ResponseWriter, r *http.Request) {
+	if !authmw.RequireOwnerOrAdmin(w, r, h.queries) {
+		return
+	}
 	siteID := urlParam(r, "siteID")
 	targetID := urlParam(r, "targetID")
 
@@ -330,6 +340,9 @@ func (h *DeployHandler) UpdateTarget(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTarget removes a deploy_targets row.
 func (h *DeployHandler) DeleteTarget(w http.ResponseWriter, r *http.Request) {
+	if !authmw.RequireOwnerOrAdmin(w, r, h.queries) {
+		return
+	}
 	siteID := urlParam(r, "siteID")
 	targetID := urlParam(r, "targetID")
 
@@ -353,6 +366,9 @@ func (h *DeployHandler) DeleteTarget(w http.ResponseWriter, r *http.Request) {
 // SetDefault flips the chosen target to is_default=1 and clears the flag on
 // every other target for the site, all inside a single transaction.
 func (h *DeployHandler) SetDefault(w http.ResponseWriter, r *http.Request) {
+	if !authmw.RequireOwnerOrAdmin(w, r, h.queries) {
+		return
+	}
 	siteID := urlParam(r, "siteID")
 	targetID := urlParam(r, "targetID")
 

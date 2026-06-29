@@ -16,6 +16,7 @@ import (
 
 	"github.com/brightinteraction/atomicsite/internal/config"
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/store"
 )
 
@@ -49,6 +50,16 @@ func seedSite(t *testing.T, q *store.Queries, id string) {
 
 func deployRouter(h *DeployHandler) chi.Router {
 	r := chi.NewRouter()
+	// In production these routes sit behind AuthMiddleware + SiteAccessMiddleware.
+	// The CRUD handlers now also call RequireOwnerOrAdmin, so inject an
+	// authenticated admin (admin bypasses the per-site role check) to exercise
+	// the handler logic in isolation.
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			ctx := context.WithValue(req.Context(), authmw.UserContextKey, &authmw.AuthUser{ID: "u-admin", Role: "admin"})
+			next.ServeHTTP(w, req.WithContext(ctx))
+		})
+	})
 	r.Get("/api/sites/{siteID}/deploy-targets", h.ListTargets)
 	r.Post("/api/sites/{siteID}/deploy-targets", h.CreateTarget)
 	r.Get("/api/sites/{siteID}/deploy-targets/{targetID}", h.GetTarget)
@@ -89,7 +100,9 @@ func TestDeployHandler_E2E_LocalTargetFlow(t *testing.T) {
 	sqlDB, q := setupDeployTestDB(t)
 	seedSite(t, q, "site1")
 	parent := t.TempDir()
-	dest := filepath.Join(parent, "site")
+	// Local target paths must be scoped to the site (include the site id as a
+	// path segment) per the cross-tenant isolation guard in LocalDeployer.Validate.
+	dest := filepath.Join(parent, "site1", "site")
 
 	h := NewDeployHandler(&config.Config{}, q, sqlDB)
 	r := deployRouter(h)
@@ -152,7 +165,7 @@ func TestDeployHandler_E2E_LocalTargetFlow(t *testing.T) {
 		"kind":       "local",
 		"is_default": true,
 		"config": map[string]any{
-			"path": filepath.Join(parent, "backup-site"),
+			"path": filepath.Join(parent, "site1", "backup-site"),
 		},
 	}
 	code, resp = doJSON(t, r, http.MethodPost, "/api/sites/site1/deploy-targets", createBody2)

@@ -63,20 +63,30 @@ func (g *GuardrailEngine) ValidateBlock(ctx context.Context, siteID string, bloc
 		})
 	}
 
-	// Built-in security checks (always active, regardless of rules)
-	if strings.Contains(unescaped, "<script") {
+	// Built-in security checks (always active, regardless of rules).
+	// Render-time sanitization (the builder's bluemonday pass) is the
+	// authoritative defense; these input-boundary checks give the agent fast
+	// feedback and reject the obvious vectors before a build. Match on a
+	// lowercased haystack so mixed-case (<ScRiPt>, JavaScript:, onTOGGLE) and
+	// slash-separated handlers (<svg/onload=>) can't slip past a naive
+	// case-sensitive Contains.
+	low := strings.ToLower(unescaped)
+	if scriptTagRE.MatchString(low) {
 		violations = append(violations, Violation{
 			Rule:     "security",
 			Message:  "Inline <script> tags are not allowed in block data. Use components or allowed external scripts.",
 			Severity: "error",
 		})
 	}
-	if strings.Contains(unescaped, "javascript:") {
-		violations = append(violations, Violation{
-			Rule:     "security",
-			Message:  "javascript: URLs are not allowed. Use proper href links.",
-			Severity: "error",
-		})
+	for _, scheme := range dangerousURLSchemes {
+		if strings.Contains(low, scheme) {
+			violations = append(violations, Violation{
+				Rule:     "security",
+				Message:  fmt.Sprintf("Dangerous URL scheme %q is not allowed. Use plain https:// links.", scheme),
+				Severity: "error",
+			})
+			break
+		}
 	}
 	if hasInsecureURL(unescaped) {
 		violations = append(violations, Violation{
@@ -85,15 +95,12 @@ func (g *GuardrailEngine) ValidateBlock(ctx context.Context, siteID string, bloc
 			Severity: "error",
 		})
 	}
-	for _, evt := range []string{"onclick=", "onerror=", "onload=", "onmouseover=", "onfocus="} {
-		if strings.Contains(unescaped, evt) {
-			violations = append(violations, Violation{
-				Rule:     "security",
-				Message:  fmt.Sprintf("Inline event handler %q is not allowed. Use components with proper event handling.", evt),
-				Severity: "error",
-			})
-			break
-		}
+	if inlineEventHandlerRE.MatchString(low) {
+		violations = append(violations, Violation{
+			Rule:     "security",
+			Message:  "Inline event handlers (on*= inside HTML tags) are not allowed. Use components with proper event handling.",
+			Severity: "error",
+		})
 	}
 
 	// Built-in eval-engine alignment checks (Site Inspector parity).
@@ -498,6 +505,21 @@ var ctaKeywordsRE = regexp.MustCompile(`(?i)\b(learn|get|discover|find|try|start
 // emailLeakRE matches plaintext email addresses in agent-supplied copy.
 // Block-time enforcement of the eval-engine "No Plaintext Emails" check.
 var emailLeakRE = regexp.MustCompile(`[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}`)
+
+// Security-filter patterns. All run against an already-lowercased haystack.
+//   - scriptTagRE catches <script with optional whitespace (<  script).
+//   - inlineEventHandlerRE catches an on*= handler that sits inside an HTML
+//     tag, separated from the preceding token by whitespace OR a slash, so
+//     both <div onload=> and <svg/onload=> match while plain prose ("x = y")
+//     does not.
+//   - dangerousURLSchemes are the script-capable URL schemes. Plain data:
+//     is deliberately allowed (inline raster images use data:image/png); only
+//     the executable variants are blocked.
+var (
+	scriptTagRE          = regexp.MustCompile(`<\s*script`)
+	inlineEventHandlerRE = regexp.MustCompile(`<[^>]*[\s/]on[a-z]+\s*=`)
+	dangerousURLSchemes  = []string{"javascript:", "vbscript:", "data:text/html"}
+)
 
 var genericAnchors = []string{
 	"click here",

@@ -105,6 +105,12 @@ func (s *Server) registerTools() {
 			if gv, bad := s.guardrailPageSlug(ctx, agent.SiteID, args.Slug); bad {
 				return mustJSON(map[string]any{"error": "guardrail_violations", "violations": gv}), nil
 			}
+			// Per-site page cap (DoS backstop + plan parity with migration Apply).
+			if limit := s.pageQuota(ctx, agent.SiteID); limit >= 0 {
+				if pages, err := s.queries.ListPagesBySite(ctx, agent.SiteID); err == nil && int64(len(pages)) >= limit {
+					return "", fmt.Errorf("plan cap reached: site already has %d pages (plan caps at %d). Remove pages or upgrade the plan", len(pages), limit)
+				}
+			}
 			if args.Layout == "" {
 				args.Layout = "default"
 			}

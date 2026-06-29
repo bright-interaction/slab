@@ -90,7 +90,7 @@ func TestBuildHandler_Deploy_LocalTarget_Success(t *testing.T) {
 	}
 
 	// Create local deploy target.
-	dest := filepath.Join(t.TempDir(), "site")
+	dest := filepath.Join(t.TempDir(), testSiteID, "site")
 	dh := NewDeployHandler(&config.Config{}, q, sqlDB)
 	dr := deployRouter(dh)
 	createBody := map[string]any{
@@ -174,7 +174,7 @@ func TestBuildHandler_Deploy_RejectsCrossSiteBuild(t *testing.T) {
 	// Target belongs to testSiteID.
 	dh := NewDeployHandler(&config.Config{}, q, sqlDB)
 	dr := deployRouter(dh)
-	dest := filepath.Join(t.TempDir(), "site")
+	dest := filepath.Join(t.TempDir(), testSiteID, "site")
 	code, resp := doJSON(t, dr, http.MethodPost, "/api/sites/"+testSiteID+"/deploy-targets", map[string]any{
 		"name":   "primary",
 		"kind":   "local",
@@ -210,7 +210,7 @@ func TestBuildHandler_Deploy_RejectsMissingDistDir(t *testing.T) {
 
 	dh := NewDeployHandler(&config.Config{}, q, sqlDB)
 	dr := deployRouter(dh)
-	dest := filepath.Join(t.TempDir(), "site")
+	dest := filepath.Join(t.TempDir(), testSiteID, "site")
 	code, resp := doJSON(t, dr, http.MethodPost, "/api/sites/"+testSiteID+"/deploy-targets", map[string]any{
 		"name":   "primary",
 		"kind":   "local",

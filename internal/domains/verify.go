@@ -29,7 +29,7 @@ func VerifyHostnameOwnership(ctx context.Context, hostname, expectedToken string
 		return fmt.Errorf("hostname is empty")
 	}
 
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	dialer := &net.Dialer{Timeout: 5 * time.Second, Control: ssrfDialControl}
 	transport := &http.Transport{
 		DialContext:           dialer.DialContext,
 		ResponseHeaderTimeout: 5 * time.Second,
@@ -84,7 +84,7 @@ func VerifyHostnameLive(ctx context.Context, hostname string) error {
 	if hostname == "" {
 		return fmt.Errorf("hostname is empty")
 	}
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	dialer := &net.Dialer{Timeout: 5 * time.Second, Control: ssrfDialControl}
 	transport := &http.Transport{
 		DialContext:           dialer.DialContext,
 		ResponseHeaderTimeout: 5 * time.Second,

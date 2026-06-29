@@ -56,6 +56,14 @@ func (d *LocalDeployer) Validate(target Target) error {
 	if cleaned == "/" {
 		return errors.New("local deploy: path must not be \"/\"")
 	}
+	// Cross-tenant isolation: a local target must write inside the site's own
+	// directory so one tenant cannot point `path` at /srv/atomicsite/<other>/dist
+	// and overwrite another tenant's served files. Require the site ID to appear
+	// as a path segment. target.SiteID is set from the authenticated route, so a
+	// member of site A can only ever supply A's ID here.
+	if target.SiteID != "" && !pathHasSegment(cleaned, target.SiteID) {
+		return fmt.Errorf("local deploy: path %q must be scoped to this site (include the site id %q as a path segment)", cleaned, target.SiteID)
+	}
 	parent := filepath.Dir(cleaned)
 	if parent == "/" {
 		return errors.New("local deploy: parent dir must not be \"/\"")
@@ -72,6 +80,17 @@ func (d *LocalDeployer) Validate(target Target) error {
 		return fmt.Errorf("local deploy: ensure parent dir %q: %w", parent, err)
 	}
 	return nil
+}
+
+// pathHasSegment reports whether seg appears as a full path component of p
+// (so "/srv/atomicsite/<id>/dist" matches <id>, but "/srv/<id>extra" does not).
+func pathHasSegment(p, seg string) bool {
+	for _, s := range strings.Split(p, string(filepath.Separator)) {
+		if s == seg {
+			return true
+		}
+	}
+	return false
 }
 
 // Deploy copies distDir to {path}.next, then atomically swaps it in:
