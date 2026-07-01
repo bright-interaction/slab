@@ -31,6 +31,7 @@ import (
 	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
 	"github.com/brightinteraction/atomicsite/internal/domains"
 	"github.com/brightinteraction/atomicsite/internal/handlers"
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/migration"
 	"github.com/brightinteraction/atomicsite/internal/retention"
 	"github.com/brightinteraction/atomicsite/internal/server"
@@ -68,6 +69,10 @@ func main() {
 		slog.Error("config validation failed; refusing to start", "error", err.Error())
 		os.Exit(1)
 	}
+	// Error reporting to Flare (no-op unless FLARE_DSN is set; the DSN is
+	// injected by the the deploy pipeline flare-provision deploy step). This binary
+	// has no build-time version var, so the release is pinned to "dev".
+	authmw.InitFlare("atomicsite", "dev")
 	// Default admin base URL for the personalization hydration script
 	// (Phase 18.2). Per-site override via the analytics.admin_base_url
 	// setting; falls back to cfg.BaseURL otherwise.
