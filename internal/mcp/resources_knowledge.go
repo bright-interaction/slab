@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 	"github.com/brightinteraction/atomicsite/internal/knowledge"
+	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
 )
 
 // registerKnowledgeResources exposes the curriculum in
