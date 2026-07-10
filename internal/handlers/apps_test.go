@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/apps"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/apps"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Sprint 4 slice A (MCP-as-Apps platform, 2026-05-24): apps handler

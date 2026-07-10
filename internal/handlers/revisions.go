@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/revisions"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/revisions"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 const revisionsListDefaultLimit = 50

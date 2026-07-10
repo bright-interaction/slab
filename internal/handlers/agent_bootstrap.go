@@ -19,9 +19,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // agentBootstrapResponse is the JSON shape returned by the admin bootstrap

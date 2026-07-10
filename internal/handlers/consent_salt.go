@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // consentSaltCache caches the day -> salt lookup for the current process so

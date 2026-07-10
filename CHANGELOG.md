@@ -121,7 +121,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.0] - 2026-05-08
 
-First public release as Apache 2.0 open core.
+First public release as fair-code open core under the Atomicsite Sustainable Use License.
 
 ### What's in this release
 
@@ -159,5 +159,6 @@ First public release as Apache 2.0 open core.
   secrets in non-localhost deploys, SSRF guards in every fetch path,
   shield-tokenizer LLM boundary, audit log on every cross-workspace
   bypass.
-- **Apache 2.0 open core**: cloud-only multi-tenant edge code lives
-  behind the `ee` build tag.
+- **Fair-code open core (Atomicsite Sustainable Use License)**:
+  cloud-only multi-tenant edge code is the held-back enterprise (`ee`)
+  layer, not published in this repository.

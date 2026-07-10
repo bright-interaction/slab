@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // seedWorkspaceWithStorage creates a workspace + a site under it +

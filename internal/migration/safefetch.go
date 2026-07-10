@@ -15,7 +15,7 @@ import (
 // their logs. Same ethos as Googlebot: explicit, includes a contact channel
 // (the project home, so operators can opt out via robots.txt and look up
 // what the crawler does).
-const userAgent = "AtomicSite-Migrator/1.0 (+https://github.com/brightinteraction/atomicsite)"
+const userAgent = "AtomicSite-Migrator/1.0 (+https://github.com/bright-interaction/atomicsite)"
 
 // FetchOptions controls the SSRF-guarded HTTP fetch. Defaults via Default*
 // constants are sized for HTML pages, which is what every importer needs.

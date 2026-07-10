@@ -27,7 +27,7 @@ import (
 // rotation hot-swaps without a restart.
 type CloudflareClient struct {
 	APIToken string
-	// Zones maps a zone apex (e.g. "brightinteraction.com") to its
+	// Zones maps a zone apex (e.g. "example.com") to its
 	// Cloudflare zone ID. Configured at boot; populated from env or
 	// from a Dockyard /vault export. Empty map disables the helper.
 	Zones map[string]string

@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // WebhookHandler owns the per-site webhook CRUD endpoints.

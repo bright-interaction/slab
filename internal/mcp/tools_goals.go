@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/conversions"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/conversions"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 func (s *Server) registerGoalTools() {

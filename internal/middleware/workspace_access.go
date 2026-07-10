@@ -30,7 +30,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // workspaceIDPattern matches the 24-hex-char site-id shape (workspaces

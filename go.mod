@@ -1,4 +1,4 @@
-module github.com/brightinteraction/atomicsite
+module github.com/bright-interaction/atomicsite
 
 go 1.26.3
 

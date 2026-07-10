@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/config"
 )
 
 func prodCfg() *config.Config {

@@ -10,9 +10,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // openTestDB matches the helper pattern used in internal/retention/retention_test.go

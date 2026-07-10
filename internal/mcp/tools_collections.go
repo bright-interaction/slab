@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/handlers"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/handlers"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // FieldDef mirrors handlers.FieldDef. Duplicated to avoid a circular

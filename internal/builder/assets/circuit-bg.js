@@ -5,7 +5,7 @@
    pattern in the site's primary color, and animates data signals along
    traces. Pauses when off-screen via IntersectionObserver. Honours
    prefers-reduced-motion: reduce by drawing one static frame.
-   Adapted from brightinteraction.com/src/scripts/hero-circuit.ts (MIT). */
+   Adapted from example.com/src/scripts/hero-circuit.ts (MIT). */
 (function () {
   function rgbFromCss(varName, fallback) {
     var raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback;

@@ -3,7 +3,7 @@ package mcp
 import (
 	"sort"
 
-	"github.com/brightinteraction/atomicsite/internal/knowledge"
+	"github.com/bright-interaction/atomicsite/internal/knowledge"
 )
 
 // AgentSurface is the operator-facing inventory of what an agent

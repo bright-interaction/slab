@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // RenderLayouts generates Astro layout files from site settings and global blocks.
@@ -648,8 +648,8 @@ func renderHeaderHTML(data map[string]any) string {
 		}
 		// Wordmark: optional text wordmark next to the badge. accent_from
 		// flags the substring that should render in --color-primary.
-		// Example: wordmark="brightinteraction" + accent_from="interaction"
-		// → "bright<span class=accent>interaction</span>".
+		// Example: wordmark="acmestudio" + accent_from="studio"
+		// → "acme<span class=accent>studio</span>".
 		if wordmark != "" {
 			b.WriteString(`<span class="brand-wordmark">`)
 			if accentFrom != "" && strings.Contains(wordmark, accentFrom) {
@@ -670,7 +670,7 @@ func renderHeaderHTML(data map[string]any) string {
 		b.WriteString(`</a>`)
 	}
 
-	// 3-zone header layout (mirrors brightinteraction.com / Linear / Vercel):
+	// 3-zone header layout (mirrors example.com / Linear / Vercel):
 	//   [brand-mark]  [primary nav (centred)]  [actions: lang switchers + CTA]
 	// Splitting links into primary + actions lets CSS grid place each zone
 	// without flex-wrap rescuing overflow on narrow viewports. Locale links

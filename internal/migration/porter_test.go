@@ -12,8 +12,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // fakeUploader returns deterministic atomicsite URLs without hitting disk.

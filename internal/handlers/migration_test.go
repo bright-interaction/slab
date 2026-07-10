@@ -18,10 +18,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/migration"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/migration"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // fakeUploaderForHandlers mirrors fakeUploader in the migration package

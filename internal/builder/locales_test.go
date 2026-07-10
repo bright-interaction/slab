@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Sprint 3 slice A (2026-05-22): 2-locale build smoke test. Verifies

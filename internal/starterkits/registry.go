@@ -10,7 +10,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Kit is the interface every starter kit must implement.

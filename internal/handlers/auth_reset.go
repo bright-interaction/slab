@@ -40,8 +40,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // MailSender is the optional interface a real mail integration

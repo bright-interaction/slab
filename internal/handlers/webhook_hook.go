@@ -12,7 +12,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/brightinteraction/atomicsite/internal/webhook"
+	"github.com/bright-interaction/atomicsite/internal/webhook"
 )
 
 // activeEmitter is set once at boot. nil = webhook delivery is

@@ -7,5 +7,5 @@ contact_links:
     url: mailto:conduct@brightinteraction.com
     about: Report behaviour that violates our Code of Conduct.
   - name: General questions
-    url: https://github.com/brightinteraction/atomicsite/discussions
+    url: https://github.com/bright-interaction/atomicsite/discussions
     about: Use Discussions for usage questions, design ideas, or "how do I...".

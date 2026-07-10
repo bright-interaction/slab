@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // visitorResponse is the shape /t/visitor returns to the browser hydration

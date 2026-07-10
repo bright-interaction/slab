@@ -31,7 +31,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // siteIDPattern mirrors handlers.isSafeSiteID. We duplicate it here so the

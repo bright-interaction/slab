@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/critique"
-	"github.com/brightinteraction/atomicsite/internal/deploy"
-	"github.com/brightinteraction/atomicsite/internal/eval"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/critique"
+	"github.com/bright-interaction/atomicsite/internal/deploy"
+	"github.com/bright-interaction/atomicsite/internal/eval"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // safeSiteIDPattern matches the format newID() produces (24-char hex). Blocks

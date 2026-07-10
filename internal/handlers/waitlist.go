@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/email"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/email"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // WaitlistHandler covers the public capture + admin review surface.

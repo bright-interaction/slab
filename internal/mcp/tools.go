@@ -8,12 +8,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/critique"
-	"github.com/brightinteraction/atomicsite/internal/handlers"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/revisions"
-	"github.com/brightinteraction/atomicsite/internal/settingspolicy"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/critique"
+	"github.com/bright-interaction/atomicsite/internal/handlers"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/revisions"
+	"github.com/bright-interaction/atomicsite/internal/settingspolicy"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // registerTools wires up every MCP tool. The list is curated, NOT

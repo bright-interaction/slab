@@ -23,10 +23,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/eval"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/eval"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Timeout caps total critique time per build.

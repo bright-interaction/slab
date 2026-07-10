@@ -1,6 +1,6 @@
 # `ee/` cloud (Enterprise Edition) build boundary
 
-This directory holds the cloud-only code paths, gated behind the Go build tag `ee`. The OSS distribution compiles with the `!ee` stubs in `cloud_oss.go`. Setting `-tags ee` swaps in the real implementations from `cloud_ee.go`.
+This directory documents the cloud-only build boundary, gated behind the Go build tag `ee`. The public fair-code distribution compiles with the `!ee` stubs in `cloud_oss.go` (the default `go build ./...`). The real `-tags ee` implementations are the held-back commercial enterprise layer and are NOT published in this repository, so `-tags ee` is not buildable from the public core; only the interface (`cloud.go`) and the `!ee` stubs ship here to document the seam.
 
 ## What lives here
 
@@ -30,24 +30,22 @@ Anything the single-deployment-per-customer operator needs. That stays in `inter
 Two files, one interface:
 
 ```
-ee/cloud.go            // shared types and the Provider interface
-ee/cloud_oss.go        // //go:build !ee, no-op stubs
-ee/cloud_ee.go         // //go:build ee,  real implementations (or stubs that compile)
+ee/cloud.go            // shared types and the Provider interface (ships here)
+ee/cloud_oss.go        // //go:build !ee, no-op stubs (ships here)
+ee/cloud_ee.go         // //go:build ee,  real implementations (HELD BACK, not in this repo)
 ```
 
-Build the OSS variant (default):
+Build the public fair-code variant (default):
 
 ```bash
 go build ./...
 ```
 
-Build the cloud variant:
-
-```bash
-go build -tags ee ./...
-```
-
-The cloud variant currently links the same stubs as OSS. As real cloud features land, they replace the stub bodies in `cloud_ee.go` (or get pulled in from a private cloud repo via Go modules).
+The `-tags ee` variant is the held-back commercial enterprise layer. Its real
+implementations (and the tenant subscription billing, multi-tenant edge, and
+cross-tenant aggregation packages it links) are not published in this
+repository, so `go build -tags ee ./...` does not build from the public core.
+The interface and the `!ee` stubs ship here purely to document the seam.
 
 ## Why a build tag and not a runtime flag
 
@@ -55,6 +53,19 @@ Both. The build tag controls **what code is linked into the binary**: a stock OS
 
 This keeps the OSS distribution provably free of the closed-source surface area while letting operators who want to self-build the cloud variant do so without forking core.
 
-## Why Apache 2.0 covers this directory too
+## Licensing: fair-code core, held-back commercial enterprise layer
 
-The build-tag stubs ARE Apache 2.0. They define the interface. Any real cloud implementations Bright Interaction publishes here are also Apache 2.0. The proprietary value of Atomic Site Cloud is in the operation (multi-tenant infra, on-call, SLA, billing relationships), not in the code. If you self-build with `-tags ee` and run it for your own multi-tenant SaaS, you're not violating any license, you're just running unsupported software with no commercial backing.
+The public core of Atomic Site (everything in this repository, including the
+`ee/` interface and the `!ee` stubs) is licensed under the Atomicsite
+Sustainable Use License, a fair-code license: read, run, modify, and self-host
+it for free, including for your own clients. The one limit is that you may not
+resell it or run it as a hosted service for third parties. See
+[../LICENSE](../LICENSE) and [../LICENSING.md](../LICENSING.md).
+
+The real `-tags ee` code paths (multi-tenant edge orchestration, tenant
+subscription billing, cross-tenant aggregation, cert pre-issuance across many
+tenants) are the commercial enterprise layer. That code is held back: it is not
+published in this repository and is offered under a separate commercial license.
+The public core builds and runs fully on its own without it. If you want the
+hosted Atomic Site Cloud or a commercial license for the enterprise layer,
+contact licensing@brightinteraction.com.

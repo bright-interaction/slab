@@ -34,7 +34,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // ExportDistZip streams a ZIP of the dist/ tree for the latest

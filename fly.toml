@@ -11,10 +11,10 @@
 #     BASE_URL=https://your-atomicsite-app.fly.dev \
 #     ADMIN_PASSWORD=$(openssl rand -hex 16)
 #
-# This config uses the repo's Dockerfile which expects the parent build
-# context (it pulls in the sibling CookieProof checkout for the embedded
-# widget). For a clean Fly deploy from a fork that only contains
-# atomicsite/, swap to a single-stage Dockerfile. See README.md.
+# This config uses the repo's Dockerfile, which is self-contained: the
+# CookieProof consent widget is vendored and embedded into the binary via
+# go:embed, so there is no build-time dependency on any sibling checkout.
+# See README.md.
 
 app = "your-atomicsite-app"
 primary_region = "fra"

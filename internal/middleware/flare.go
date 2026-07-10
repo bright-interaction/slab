@@ -9,10 +9,10 @@ import (
 	sentry "github.com/getsentry/sentry-go"
 )
 
-// InitFlare wires error reporting to the house Flare instance (Sentry-wire
-// protocol) when FLARE_DSN is set in the environment. The DSN is injected by
-// the the deploy pipeline flare-provision deploy step; without it this is a no-op so
-// dev runs and self-hosts boot unchanged.
+// InitFlare wires error reporting to a Sentry-wire-compatible backend (e.g.
+// Flare or Sentry) when FLARE_DSN is set in the environment. The DSN is
+// injected by your deploy pipeline; without it this is a no-op so dev runs
+// and self-hosts boot unchanged.
 func InitFlare(service, release string) bool {
 	dsn := os.Getenv("FLARE_DSN")
 	if dsn == "" {

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // inboundRequest is the body the CRM POSTs to /t/inbound. The CRM has

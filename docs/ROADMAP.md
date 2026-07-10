@@ -113,10 +113,10 @@ A sprint is DONE only when ALL of these are true:
 4. `go test ./... -count=1` clean.
 5. Em-dash sweep on every new file passes (no `-` characters).
 6. Playwright e2e spec covers the happy path + at least one edge case.
-7. Pushed via `git psync`. the deploy pipeline deploy verified live: container restart timestamp newer than push timestamp.
+7. Deployed via CI. Deploy verified live: container restart timestamp newer than the release commit.
 8. Live smoke: log in to production, exercise the feature end-to-end, verify the data round-trip survives a page refresh.
-9. Hive entity entry refined into a long-form retrospective (no `auto-stub` lines left for the sprint).
-10. Graphify rebuilt (automatic via psync post-push).
+9. Documentation updated with a short retrospective for the sprint.
+10. CHANGELOG updated for the release.
 
 ## Estimated calendar
 

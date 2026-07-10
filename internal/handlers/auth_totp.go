@@ -30,10 +30,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/brightinteraction/atomicsite/internal/atrest"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
-	"github.com/brightinteraction/atomicsite/internal/totp"
+	"github.com/bright-interaction/atomicsite/internal/atrest"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/totp"
 )
 
 const totpIssuer = "Atomic Site"

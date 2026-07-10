@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // TestRenderBlock_DataBlock confirms the default data-driven branch emits a

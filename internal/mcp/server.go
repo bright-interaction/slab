@@ -15,14 +15,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/billing"
-	"github.com/brightinteraction/atomicsite/internal/handlers"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/migration"
-	"github.com/brightinteraction/atomicsite/internal/revisions"
-	"github.com/brightinteraction/atomicsite/internal/shield"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/billing"
+	"github.com/bright-interaction/atomicsite/internal/handlers"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/migration"
+	"github.com/bright-interaction/atomicsite/internal/revisions"
+	"github.com/bright-interaction/atomicsite/internal/shield"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // BuildTrigger is the small interface the MCP server depends on for the

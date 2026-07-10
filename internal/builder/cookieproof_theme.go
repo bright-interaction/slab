@@ -3,7 +3,7 @@ package builder
 import (
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // cookieProofThemeFromBranding maps a site row's branding palette to the CSS

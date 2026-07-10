@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/atrest"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/deploy"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/atrest"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/deploy"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // DeployHandler handles deploy_target CRUD plus default selection.

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/eval"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/eval"
 )
 
 // TestHeroQualityChecks_FailsOnPlainHero asserts that a landing page

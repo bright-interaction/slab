@@ -72,7 +72,7 @@ var Curated = []CuratedApp{
 		ID:          "app_calcom_v1",
 		Slug:        "calcom",
 		Name:        "Cal.com",
-		Description: "Scheduling. Embed event-type booking forms on the public site; the agent can list / create events via MCP. Self-hosted at cal.example.com for BI tenants.",
+		Description: "Scheduling. Embed event-type booking forms on the public site; the agent can list / create events via MCP. Point the MCP URL at your own self-hosted or cloud Cal.com instance.",
 		Category:    "scheduling",
 		Publisher:   "Cal.com Inc.",
 		IconURL:     "https://cal.com/api/logo?type=icon",

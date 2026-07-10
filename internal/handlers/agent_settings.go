@@ -10,9 +10,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/settingspolicy"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/settingspolicy"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // agentWritableSettingsCategories reports whether an agent may write the

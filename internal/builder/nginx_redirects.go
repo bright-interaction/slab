@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // BuildRedirectBlock turns the per-site redirects table into nginx location

@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/conversions"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/conversions"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // ConversionGoalsHandler owns the admin + aggregate routes.

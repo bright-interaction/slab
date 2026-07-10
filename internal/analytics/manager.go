@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Manager owns one Parser goroutine per site with analytics enabled.

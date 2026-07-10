@@ -5,9 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/brightinteraction/atomicsite/internal/billing"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/billing"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // resolveUserWorkspace returns the workspace ID for the authenticated user

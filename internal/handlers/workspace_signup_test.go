@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 func seedWorkspaceInvite(t *testing.T, sqlDB *sql.DB, q *store.Queries, token, email, expiresAt string) string {

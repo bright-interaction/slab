@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // renderHeroGraphic emits the markup for one of the curated hero
@@ -1410,7 +1410,7 @@ func renderLogoCarouselBlock(data map[string]any, mediaByID map[string]store.Med
 // strikethrough on the "from" name + arrow + bold replacement, plus a
 // short description below. Some items can span 2 columns via
 // items[i].span ("wide") to break up the grid rhythm. Matches the
-// brightinteraction.com /#services bento pattern.
+// example.com /#services bento pattern.
 //
 // Each item: {from, to, description, span?, icon?}.
 // span values: "" (1 col, default), "wide" (2 cols on md+).
@@ -1637,7 +1637,7 @@ func renderCustomBlock(data map[string]any) string {
 // renderRawAstroBlock emits author-supplied Astro/HTML/Tailwind code
 // verbatim into the page Astro source. The escape hatch for sections
 // where the typed block_types can't reach pixel parity (e.g. cloning
-// brightinteraction.com's hero exactly).
+// example.com's hero exactly).
 //
 // Data:
 //

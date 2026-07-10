@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/agent"
 )
 
 // TestBlockLint_HeroQualityFires asserts the headline write-time check:

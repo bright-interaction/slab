@@ -1,0 +1,50 @@
+# gitleaks config for Atomicsite (used by the public-mirror publish gate and
+# any local scan). Extends the default ruleset, then allowlists
+# documentation/config-example PLACEHOLDERS and known TEST-FIXTURE fake secrets.
+# The .env.example uses obvious change-me markers, never real secrets, and the
+# test fixtures (fake PEM keys, "sk_live_SECRET123", e2e JWT/CRM stubs) live in
+# *_test.go / tests/e2e/ by design. A real leaked credential would not carry
+# these markers nor live in a fixture path, so it is still caught. GitHub push
+# protection is the independent backstop for real provider-shaped secrets.
+title = "atomicsite"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Config placeholders + test fixtures: obvious markers or fixture-only paths, not real secrets"
+paths = [
+  # Go test files carry fixture secrets (fake JWT/HMAC constants, fake PEM
+  # private keys in internal/deploy/*_test.go, "sk_live_SECRET123" in the
+  # atrest wiring/roundtrip tests) by design.
+  '''.*_test\.go$''',
+  # Playwright E2E fixtures + specs (JWT_SECRET, BRIGHTCRM_WEBHOOK_SECRET,
+  # STUB_CRM_SECRET stubs, base64 1x1 PNG in fixtures/data.ts, fake PEM in
+  # the deploy spec).
+  '''tests/e2e/.*''',
+  # Curated apps catalogue: credential-field PLACEHOLDER strings only
+  # (sk_test_..., xoxb-..., whsec_..., cal_live_...), never real values.
+  '''internal/apps/curated\.go$''',
+  # Deploy target form: the SSH-key <Textarea> uses the bare PEM header
+  # "-----BEGIN OPENSSH PRIVATE KEY-----" as its input placeholder (no key
+  # body); it is display text, not a secret.
+  '''frontend/src/lib/components/deploy/TargetForm\.svelte$''',
+]
+regexes = [
+  '''changeme''',
+  '''change[_-]?me''',
+  '''your_[a-z0-9_]*''',
+  '''base64_32_bytes_here''',
+  '''min_16_char_org_key''',
+  '''_from_vault''',
+  '''EXAMPLE''',
+  # Explicit fixture literals (belt-and-suspenders alongside the fixture paths).
+  '''sk_live_SECRET123''',
+  '''sk_live_123''',
+  '''e2e-[a-z0-9-]*''',
+  '''not-for-production''',
+  '''DefaultJWTSecret''',
+  '''test-jwt-secret[a-z0-9-]*''',
+  '''test-secret-32-bytes[a-z-]*''',
+  '''this-is-a-strong-32-byte-secret[a-z-]*''',
+]

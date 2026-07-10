@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/personalization"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/personalization"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // GuardrailEngine validates agent operations against site rules.

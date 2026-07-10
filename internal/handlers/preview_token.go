@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // PreviewTokenTTL is how long a minted token stays valid before being

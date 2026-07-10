@@ -8,13 +8,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/revisions"
-	"github.com/brightinteraction/atomicsite/internal/store"
-	"github.com/brightinteraction/atomicsite/internal/webhook"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/revisions"
+	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/webhook"
 )
 
 func encodeWarnings(vs []agent.Violation) string {

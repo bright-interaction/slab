@@ -12,13 +12,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/billing"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/perfectfoundation"
-	"github.com/brightinteraction/atomicsite/internal/starterkits"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/billing"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/perfectfoundation"
+	"github.com/bright-interaction/atomicsite/internal/starterkits"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 type SiteHandler struct {

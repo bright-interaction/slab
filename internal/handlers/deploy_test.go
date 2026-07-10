@@ -14,10 +14,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 func setupDeployTestDB(t *testing.T) (*sql.DB, *store.Queries) {

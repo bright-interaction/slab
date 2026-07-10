@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/crmsync"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/crmsync"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Recorder owns the queries + crmsync handles. nil-safe: a nil

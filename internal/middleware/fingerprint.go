@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/config"
 )
 
 // FingerprintCookieName is the HttpOnly cookie used to identify a returning

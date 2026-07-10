@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/settingspolicy"
+	"github.com/bright-interaction/atomicsite/internal/settingspolicy"
 )
 
 // secretSettingKeys are the "<category>.<key>" settings whose VALUE is a
@@ -140,7 +140,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		{
 			Category: "general", Key: "container_width",
 			Label:         "Page container max-width",
-			Description:   "Maximum width of the centred content column on every page. \"narrow\" = 64rem (good for editorial), \"default\" = 72rem (matches most marketing sites including brightinteraction.com), \"wide\" = 80rem (dashboard-style), \"fluid\" = 100% (full-bleed; rely on per-block max-widths). Renders into a CSS custom property the .block, .container, .site-header, .site-footer all read.",
+			Description:   "Maximum width of the centred content column on every page. \"narrow\" = 64rem (good for editorial), \"default\" = 72rem (matches most marketing sites), \"wide\" = 80rem (dashboard-style), \"fluid\" = 100% (full-bleed; rely on per-block max-widths). Renders into a CSS custom property the .block, .container, .site-header, .site-footer all read.",
 			ValueType:     "enum",
 			EnumValues:    []string{"narrow", "default", "wide", "fluid"},
 			AgentWritable: true,
@@ -166,7 +166,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		{
 			Category: "general", Key: "hero_layout",
 			Label:         "Default hero layout",
-			Description:   "How hero blocks render when image_id is set. \"centered\" = traditional centred hero with image below the headline (good for product launches), \"split\" = side-by-side image right + text left on desktop (good for SaaS marketing, matches brightinteraction.com). Per-page override via the hero block's data.layout key.",
+			Description:   "How hero blocks render when image_id is set. \"centered\" = traditional centred hero with image below the headline (good for product launches), \"split\" = side-by-side image right + text left on desktop (good for SaaS marketing, matches example.com). Per-page override via the hero block's data.layout key.",
 			ValueType:     "enum",
 			EnumValues:    []string{"centered", "split"},
 			AgentWritable: true,

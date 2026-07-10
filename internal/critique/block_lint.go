@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/agent"
 )
 
 // LintFinding is one warning the block-level linter emits at write time

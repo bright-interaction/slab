@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
 )
 
 // seedTestDB writes a complete fixture mirroring the production schema:

@@ -1,6 +1,6 @@
 package handlers
 
-import "github.com/brightinteraction/atomicsite/internal/settingspolicy"
+import "github.com/bright-interaction/atomicsite/internal/settingspolicy"
 
 // validateSetting checks one {category, key, value} write. The actual
 // validators live in internal/settingspolicy, the single source of

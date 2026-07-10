@@ -41,7 +41,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // Protocol is the version of MCP we speak.

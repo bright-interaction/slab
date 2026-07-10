@@ -28,8 +28,8 @@ import (
 	"strconv"
 	"time"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // AccountGDPRHandler owns the per-user GDPR endpoints. Mounted under

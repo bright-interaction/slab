@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // readFeedXML returns the parsed atomFeed for the given collection

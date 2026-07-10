@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Sprint 2 slice C (2026-05-22): renderer + resolver tests for the

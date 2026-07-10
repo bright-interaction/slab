@@ -19,8 +19,8 @@ import (
 	"net/http"
 	"strconv"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // AuditAction enumerates the handful of verbs we currently log.

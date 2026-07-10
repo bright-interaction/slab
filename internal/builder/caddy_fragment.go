@@ -13,7 +13,7 @@
 //     to import not found"). The wildcard block therefore serves via
 //     root + file_server only; per-tenant headers come from the
 //     _headers-aware host config or pattern 2. This matches the
-//     production host setup (root with {labels.N}, no import):
+//     production reverse-proxy setup (root with {labels.N}, no import):
 //
 //     *<BUILT_SITE_SUFFIX> {
 //     tls { on_demand }
@@ -49,7 +49,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // RenderCaddyFragment writes a per-tenant Caddyfile fragment based on

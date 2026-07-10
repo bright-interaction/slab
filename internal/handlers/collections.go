@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/store"
-	"github.com/brightinteraction/atomicsite/internal/webhook"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/webhook"
 )
 
 // CollectionHandler exposes the AI-native Custom Collections CRUD

@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/handlers"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/handlers"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // registerTranslateTools wires the Sprint 3 slice B translate_entity

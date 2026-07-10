@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/agent"
 )
 
 // CTA keywords used by Site Inspector's Meta Description Has CTA check.

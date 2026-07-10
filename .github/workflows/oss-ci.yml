@@ -1,56 +1,45 @@
 # Atomic Site: OSS CI
 #
-# Fast feedback loop on every PR: vet + tests on the OSS build,
-# vet + tests on the cloud (ee) build, and a frontend build.
-# The slower Playwright E2E suite lives in e2e.yml.
+# Fast feedback loop on every PR: vet + tests on the fair-code core build
+# and a frontend build. The slower Playwright E2E suite lives in e2e.yml.
 #
 # Notes:
 # - The analyticsdb package uses marcboeker/go-duckdb/v2 which requires
 #   CGO and a C++ toolchain. ubuntu-latest already has build-essential.
 # - Tests run with -race -count=1 to catch data races and avoid stale
 #   cached results.
+# - The enterprise (ee) cloud layer is held back and not published in this
+#   repository, so the CI builds only the default fair-code core.
 
 name: Atomicsite OSS CI
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'atomicsite/**'
   pull_request:
-    paths:
-      - 'atomicsite/**'
   workflow_dispatch:
-
-defaults:
-  run:
-    working-directory: atomicsite
 
 jobs:
   go-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        build_tags: ['', 'ee']
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: atomicsite/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: atomicsite/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install C++ toolchain (DuckDB CGO)
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends build-essential
 
-      - name: go vet (tags=${{ matrix.build_tags }})
-        run: go vet -tags='${{ matrix.build_tags }}' ./...
+      - name: go vet
+        run: go vet ./...
 
-      - name: go test (tags=${{ matrix.build_tags }})
-        run: go test -tags='${{ matrix.build_tags }}' -race -count=1 ./...
+      - name: go test
+        run: go test -race -count=1 ./...
 
   frontend-check:
     runs-on: ubuntu-latest
@@ -63,15 +52,15 @@ jobs:
           bun-version: 1.3.9
 
       - name: Install frontend deps
-        working-directory: atomicsite/frontend
+        working-directory: frontend
         run: bun install --frozen-lockfile
 
       - name: svelte-check (zero errors gate)
-        working-directory: atomicsite/frontend
+        working-directory: frontend
         run: bunx svelte-check --tsconfig ./tsconfig.json --threshold error
 
       - name: TypeScript noEmit
-        working-directory: atomicsite/frontend
+        working-directory: frontend
         run: bunx tsc --noEmit
 
   frontend-build:
@@ -86,18 +75,18 @@ jobs:
           bun-version: 1.3.9
 
       - name: Install frontend deps
-        working-directory: atomicsite/frontend
+        working-directory: frontend
         run: bun install --frozen-lockfile
 
       - name: Build SvelteKit admin SPA
-        working-directory: atomicsite/frontend
+        working-directory: frontend
         run: bun run build
 
       - name: Upload frontend build artifact
         uses: actions/upload-artifact@v4
         with:
           name: atomicsite-frontend-build
-          path: atomicsite/frontend/build/
+          path: frontend/build/
           retention-days: 7
 
   go-build:
@@ -109,9 +98,9 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: atomicsite/go.mod
+          go-version-file: go.mod
           cache: true
-          cache-dependency-path: atomicsite/go.sum
+          cache-dependency-path: go.sum
 
       - name: Install C++ toolchain (DuckDB CGO)
         run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends build-essential
@@ -120,21 +109,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: atomicsite-frontend-build
-          path: atomicsite/cmd/server/frontend/build/
+          path: cmd/server/frontend/build/
 
-      - name: Build Go binary (OSS)
+      - name: Build Go binary (core)
         run: go build -o bin/atomicsite ./cmd/server
 
-      - name: Build Go binary (cloud, -tags ee)
-        run: go build -tags ee -o bin/atomicsite-cloud ./cmd/server
-
-      - name: Upload binaries
+      - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: atomicsite-binaries
           path: |
-            atomicsite/bin/atomicsite
-            atomicsite/bin/atomicsite-cloud
+            bin/atomicsite
           retention-days: 7
 
   quickstart-smoke:
@@ -151,15 +136,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: atomicsite-binaries
-          path: atomicsite/bin/
+          path: bin/
 
       - name: Make binary executable
-        run: chmod +x atomicsite/bin/atomicsite
+        run: chmod +x bin/atomicsite
 
       - name: Boot atomicsite
         run: |
-          mkdir -p atomicsite/data
-          ./atomicsite/bin/atomicsite > /tmp/atomicsite.log 2>&1 &
+          mkdir -p data
+          ./bin/atomicsite > /tmp/atomicsite.log 2>&1 &
           echo $! > /tmp/atomicsite.pid
 
       - name: Wait for /api/health to respond
@@ -203,17 +188,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: atomicsite-binaries
-          path: atomicsite/bin/
+          path: bin/
 
       - name: Make binary executable
-        run: chmod +x atomicsite/bin/atomicsite
+        run: chmod +x bin/atomicsite
 
       - name: Boot first server + seed a row
         run: |
           mkdir -p /tmp/atomicsite-source/data
           (cd /tmp/atomicsite-source && \
             DATA_DIR=/tmp/atomicsite-source/data \
-            $GITHUB_WORKSPACE/atomicsite/bin/atomicsite > /tmp/source.log 2>&1) &
+            $GITHUB_WORKSPACE/bin/atomicsite > /tmp/source.log 2>&1) &
           echo $! > /tmp/source.pid
           # Wait for boot.
           for i in $(seq 1 30); do
@@ -238,7 +223,7 @@ jobs:
         run: |
           mkdir -p /tmp/atomicsite-backup
           DATA_DIR=/tmp/atomicsite-source/data \
-            $GITHUB_WORKSPACE/atomicsite/bin/atomicsite backup-db \
+            $GITHUB_WORKSPACE/bin/atomicsite backup-db \
             --output=/tmp/atomicsite-backup/snapshot.db
           ls -la /tmp/atomicsite-backup/snapshot.db
           test -s /tmp/atomicsite-backup/snapshot.db
@@ -251,7 +236,7 @@ jobs:
             DATA_DIR=/tmp/atomicsite-restored/data \
             PORT=8090 \
             BASE_URL=http://localhost:8090 \
-            $GITHUB_WORKSPACE/atomicsite/bin/atomicsite > /tmp/restored.log 2>&1) &
+            $GITHUB_WORKSPACE/bin/atomicsite > /tmp/restored.log 2>&1) &
           echo $! > /tmp/restored.pid
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8090/api/health >/dev/null; then break; fi

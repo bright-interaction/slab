@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // registerRevisionTools wires list_revisions + get_revision +

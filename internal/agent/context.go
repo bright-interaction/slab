@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/blocks"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/blocks"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // ContextBuilder assembles the full context response for an AI agent.
@@ -1741,7 +1741,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			{Banned: "Edge-to-edge sticky navbars glued to top", Preferred: "Floating glass pill or detached fixed bar with mt-6. backdrop-blur on fixed elements only.", HowInAtomicsite: "Atomicsite ships a sticky h-14 header with backdrop-blur. Don't author custom navbars."},
 			{Banned: "Filling sections with full-width container + max char count", Preferred: "Narrow content columns. Subheading max-width 36-50ch. Heroic whitespace.", HowInAtomicsite: "Renderer enforces max-width per block (.block--text 42rem, .block--accordion_faq 56rem). Don't override."},
 			// Content
-			{Banned: "John Doe / Jane Smith / Sarah Chan in testimonials", Preferred: "Realistic, specific names (e.g. Anna Lindqvist, Mehdi Ahmadi, Tom Isgren).", HowInAtomicsite: "Quote blocks + about_split. Author real names, never the AI defaults."},
+			{Banned: "John Doe / Jane Smith / Sarah Chan in testimonials", Preferred: "Realistic, specific names (e.g. Anna Lindqvist, Mehdi Ahmadi, Johan Berg).", HowInAtomicsite: "Quote blocks + about_split. Author real names, never the AI defaults."},
 			{Banned: "Round fake numbers: 99.99%, 50%, $100.00, 1234567", Preferred: "Organic data: 47.2%, 599 audited, +46 76 297 80 35, $4,892.", HowInAtomicsite: "stat_grid items[].value, replacement_grid descriptions, FAQ answers. Specific > round."},
 			{Banned: "Acme Corp / Nexus / SmartFlow / TechFlow in logo bars", Preferred: "Real customer names (with consent) or a 'Founder previously worked with' frame using real prior employers.", HowInAtomicsite: "logo_carousel items[].label OR logo_strip items[].alt. Real names build trust; fakes destroy it."},
 			{Banned: "Title Case On Every Heading", Preferred: "Sentence case for headlines (better readability), Title Case only for product names + section eyebrows.", HowInAtomicsite: "headline + heading + eyebrow fields. Default to sentence case."},

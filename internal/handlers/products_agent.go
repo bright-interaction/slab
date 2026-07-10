@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // CreateForAgent scaffolds a product from an agent-supplied input.

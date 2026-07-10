@@ -14,9 +14,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 func newMissingURLsHandlerForTest(t *testing.T) (*MissingURLsHandler, *store.Queries, string) {

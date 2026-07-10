@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	agentpkg "github.com/brightinteraction/atomicsite/internal/agent"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	agentpkg "github.com/bright-interaction/atomicsite/internal/agent"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // registerServiceContextResources adds the surface that lets an agent

@@ -3,7 +3,7 @@ package mcp
 import (
 	"context"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // registerResources wires read-only resources accessible by URI. Same

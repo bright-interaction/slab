@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/config"
 )
 
 // AdminReloadHandler accepts authenticated POSTs from Dockyard's rotation

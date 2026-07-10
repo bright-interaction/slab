@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // RenderSingleBlock returns the rendered Astro source for a single block.
@@ -652,7 +652,7 @@ func renderHeadlineWithAccent(headline, accent string) string {
 	convertNewlines := func(s string) string {
 		// Authors writing multi-line headlines (e.g. "Stop renting\nyour
 		// business.\nOwn [[it]].") want each segment on its own visual line
-		// like brightinteraction.com. Render each \n as <br>; CSS handles
+		// like example.com. Render each \n as <br>; CSS handles
 		// the wrapping otherwise.
 		return strings.ReplaceAll(s, "\n", "<br>")
 	}

@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/brightinteraction/atomicsite/internal/billing"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/billing"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // gigabyte is the unit billing.Plan.StorageGB encodes; the workspace

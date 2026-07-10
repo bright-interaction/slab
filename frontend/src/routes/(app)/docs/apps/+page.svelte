@@ -395,8 +395,8 @@
 						name: 'CI deploy pipeline (any)',
 						status: 'shipped',
 						body:
-							'Push to main triggers your CI workflow: Bun build, Docker build with frontend embedded via go:embed, container push, container restart. End-to-end ~2-3 minutes from push to live. Reference workflow lives at .github/workflows/oss-ci.yml; a the CI system equivalent ships in this repo for self-hosted the CI system deployments.',
-						setup: 'Operator-configured. the CI system, GitHub Actions, GitLab CI all work.',
+							'Push to main triggers your CI workflow: Bun build, Docker build with frontend embedded via go:embed, container push, container restart. End-to-end ~2-3 minutes from push to live. Reference workflow lives at .github/workflows/oss-ci.yml; adapt it to whichever CI you run.',
+						setup: 'Operator-configured. GitHub Actions, GitLab CI, and other CI systems all work.',
 						linkLabel: null,
 						linkHref: null
 					},

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/revisions"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/revisions"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // TestRevisions_RecorderWritesSnapshotOnPageUpdate exercises the

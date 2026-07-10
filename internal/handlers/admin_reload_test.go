@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/config"
 )
 
 // fakeShieldUpdater implements ShieldKeyUpdater for tests so we can

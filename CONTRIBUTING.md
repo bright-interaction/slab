@@ -90,4 +90,4 @@ Email **security@brightinteraction.com** with details. Please do not file public
 
 ## License grant
 
-By contributing, you agree your contributions are licensed under the [Apache License 2.0](LICENSE). Inbound = outbound; we don't require a separate CLA.
+By contributing, you agree your contributions are licensed under the [Atomicsite Sustainable Use License](LICENSE). Inbound = outbound (DCO-style: you certify you have the right to submit the work under this license); we don't require a separate CLA.

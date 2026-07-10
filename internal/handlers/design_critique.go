@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // DesignCritiqueRequest is the MCP tool input shape.

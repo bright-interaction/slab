@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // RenderPageDraft assembles a complete, browser-renderable HTML document

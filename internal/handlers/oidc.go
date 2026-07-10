@@ -1,8 +1,8 @@
 package handlers
 
 // OIDC SSO (#5, 2026-05-10). Authorization Code + PKCE against a
-// generic OIDC provider; production stack uses Zitadel at
-// auth.example.com. State + PKCE verifier ride a single
+// generic OIDC provider (point OIDC_ISSUER_URL at your issuer, e.g.
+// Authentik, Auth0, Keycloak, Zitadel). State + PKCE verifier ride a single
 // HMAC-signed cookie so we don't need server-side session storage.
 // On callback success we mint the same atomicsite_token JWT that the
 // password login issues, so the rest of the app sees an SSO user
@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 const (

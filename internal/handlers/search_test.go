@@ -13,8 +13,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // newSearchHandlerForTest builds a SearchHandler against an in-memory

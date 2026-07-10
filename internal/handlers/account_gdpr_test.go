@@ -15,9 +15,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // newGDPRTestStack spins up a fresh DB with a seeded user. Returns

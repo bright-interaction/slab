@@ -40,7 +40,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // DefaultAnalyticsDays is the per-site fallback when general.analytics_retention_days

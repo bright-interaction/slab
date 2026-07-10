@@ -12,7 +12,7 @@ The IMY 2026 rule says Reject must be as visually prominent as Accept. Atomic Si
 
 ## Pre-consent cookie sweep
 
-Some parent domains (`.brightinteraction.com`, customer apex domains) set tracker cookies that subdomains inherit on first visit. The widget walks a default 20-entry list of patterns (`_ga`, `_ga_*`, `ph_*`, `rl_*`, `_fbp`, `_hj*`, etc.) and expires them on init when analytics + marketing are not granted. The list is overridable via `CookieConsentConfig.cleanupTrackingCookies` in custom embeds, but the default covers the common bleed.
+Some parent domains (`.example.com`, customer apex domains) set tracker cookies that subdomains inherit on first visit. The widget walks a default 20-entry list of patterns (`_ga`, `_ga_*`, `ph_*`, `rl_*`, `_fbp`, `_hj*`, etc.) and expires them on init when analytics + marketing are not granted. The list is overridable via `CookieConsentConfig.cleanupTrackingCookies` in custom embeds, but the default covers the common bleed.
 
 ## Cookie tables
 

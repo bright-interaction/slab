@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // DesignFidelity is the per-site design-freedom dial. It decides which

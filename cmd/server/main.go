@@ -21,23 +21,23 @@ import (
 	"syscall"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"golang.org/x/crypto/bcrypt"
+	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/analytics"
-	"github.com/brightinteraction/atomicsite/internal/analyticsdb"
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/domains"
-	"github.com/brightinteraction/atomicsite/internal/handlers"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/migration"
-	"github.com/brightinteraction/atomicsite/internal/retention"
-	"github.com/brightinteraction/atomicsite/internal/server"
-	"github.com/brightinteraction/atomicsite/internal/storage"
-	"github.com/brightinteraction/atomicsite/internal/store"
-	"github.com/brightinteraction/atomicsite/internal/webhook"
+	"github.com/bright-interaction/atomicsite/internal/analytics"
+	"github.com/bright-interaction/atomicsite/internal/analyticsdb"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/domains"
+	"github.com/bright-interaction/atomicsite/internal/handlers"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/migration"
+	"github.com/bright-interaction/atomicsite/internal/retention"
+	"github.com/bright-interaction/atomicsite/internal/server"
+	"github.com/bright-interaction/atomicsite/internal/storage"
+	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/webhook"
 )
 
 //go:embed all:frontend/build
@@ -69,9 +69,9 @@ func main() {
 		slog.Error("config validation failed; refusing to start", "error", err.Error())
 		os.Exit(1)
 	}
-	// Error reporting to Flare (no-op unless FLARE_DSN is set; the DSN is
-	// injected by the the deploy pipeline flare-provision deploy step). This binary
-	// has no build-time version var, so the release is pinned to "dev".
+	// Error reporting (no-op unless FLARE_DSN is set; the DSN is injected
+	// by your deploy pipeline's error-reporting provisioning step). This
+	// binary has no build-time version var, so the release is pinned to "dev".
 	authmw.InitFlare("atomicsite", "dev")
 	// Default admin base URL for the personalization hydration script
 	// (Phase 18.2). Per-site override via the analytics.admin_base_url
@@ -731,8 +731,8 @@ func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 //     and plan "oss". The workspace id flows into the sites backfill
 //     in step 3 so every existing site lands inside it.
 //  3. Backfill: every user with role='admin' becomes a workspace owner;
-//     every site with workspace_id='' is moved into the new workspace.
-//     Both queries are idempotent (NOT EXISTS / WHERE = '').
+//     every site with workspace_id=” is moved into the new workspace.
+//     Both queries are idempotent (NOT EXISTS / WHERE = ”).
 //
 // Phase 30, Cloud Tier MVP, 2026-05-05.
 func ensureDefaultWorkspace(queries *store.Queries) {
@@ -916,10 +916,11 @@ func parseZoneMap(s string) map[string]string {
 // SQLite docs: https://sqlite.org/lang_vacuum.html#vacuuminto
 //
 // Usage:
-//   atomicsite backup-db                        # /data/backups/atomicsite-{ts}.db
-//   atomicsite backup-db --output=/path/file.db
-//   atomicsite backup-db --gzip                 # appends .gz, gzip stream
-//   atomicsite backup-db --output=/dev/stdout   # pipe to S3, B2, age, gpg
+//
+//	atomicsite backup-db                        # /data/backups/atomicsite-{ts}.db
+//	atomicsite backup-db --output=/path/file.db
+//	atomicsite backup-db --gzip                 # appends .gz, gzip stream
+//	atomicsite backup-db --output=/dev/stdout   # pipe to S3, B2, age, gpg
 func backupDBCLI(args []string) {
 	cfg := config.Load()
 

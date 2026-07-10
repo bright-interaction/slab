@@ -31,9 +31,9 @@ import (
 	"time"
 	"unicode"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/migration"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/migration"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // registerMigrationTools wires the migration / missing-urls / verify-job

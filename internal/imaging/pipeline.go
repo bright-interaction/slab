@@ -8,7 +8,7 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/brightinteraction/atomicsite/internal/storage"
+	"github.com/bright-interaction/atomicsite/internal/storage"
 )
 
 // Variant describes one processed image file (original-format or WebP at a given width).

@@ -12,11 +12,11 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/migration"
-	"github.com/brightinteraction/atomicsite/internal/storage"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/migration"
+	"github.com/bright-interaction/atomicsite/internal/storage"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // tinyPNG is a real 1x1 transparent PNG. Decodes successfully through

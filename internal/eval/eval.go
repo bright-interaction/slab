@@ -26,9 +26,9 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/builder"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/builder"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // MaxHTMLFileSize bounds memory for any single page. Prevents OOM on a

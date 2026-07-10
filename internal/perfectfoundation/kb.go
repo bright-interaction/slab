@@ -3,7 +3,7 @@ package perfectfoundation
 import (
 	"context"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // referenceKnowledgebase is the canonical knowledgebase derived from

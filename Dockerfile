@@ -7,8 +7,8 @@
 # CookieProof source. To refresh the widget bundle from source, run a
 # CookieProof build separately and commit the regenerated asset.
 #
-# Local build:
-#   cd atomicsite && docker build -f Dockerfile -t atomicsite .
+# Local build (from the repo root):
+#   docker build -f Dockerfile -t atomicsite .
 
 # Stage 1: SvelteKit admin SPA.
 FROM oven/bun:1-alpine AS frontend
@@ -23,7 +23,7 @@ RUN bun run build
 #
 # CGO note: the analyticsdb package uses marcboeker/go-duckdb/v2 which
 # requires CGO + libduckdb. duckdb-go-bindings 0.1.21+ links against
-# `backtrace`, `backtrace_symbols`, and `malloc_trim` — backtrace ships
+# `backtrace`, `backtrace_symbols`, and `malloc_trim`. Backtrace ships
 # in glibc (and on alpine via libexecinfo, removed in alpine 3.17+) and
 # malloc_trim is glibc-only. Building against musl fails to link, so
 # this stage uses the debian-based golang image. The runtime stage

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 type fakeKit struct {

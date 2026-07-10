@@ -17,8 +17,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // woff2Magic is the signature at offset 0 of every woff2 file.

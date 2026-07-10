@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/brightinteraction/atomicsite/internal/eval"
+	"github.com/bright-interaction/atomicsite/internal/eval"
 )
 
 // fixtureCannotTrigger lists CheckOwnership entries the fixture site

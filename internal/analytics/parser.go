@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // newID generates a random 12-byte hex ID, matching the convention used by

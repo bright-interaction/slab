@@ -3,7 +3,7 @@ package critique
 import (
 	"testing"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/agent"
 )
 
 // TestHasBlockingFindings covers the curated allowlist of finding names that

@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/analytics"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	"github.com/brightinteraction/atomicsite/internal/conversions"
-	"github.com/brightinteraction/atomicsite/internal/crmsync"
-	"github.com/brightinteraction/atomicsite/internal/identify"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/sharedsecret"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/analytics"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/atomicsite/internal/conversions"
+	"github.com/bright-interaction/atomicsite/internal/crmsync"
+	"github.com/bright-interaction/atomicsite/internal/identify"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/sharedsecret"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // normaliseCFCountry mirrors internal/analytics.normaliseCountry without

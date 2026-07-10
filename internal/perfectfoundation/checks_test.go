@@ -42,7 +42,7 @@ func TestCategoryCounts(t *testing.T) {
 	}
 }
 
-// TestReferenceKBNonEmpty ensures the brightinteraction-derived reference KB
+// TestReferenceKBNonEmpty ensures the curated reference KB
 // has substantive content for every entry.
 func TestReferenceKBNonEmpty(t *testing.T) {
 	entries := ReferenceEntries()

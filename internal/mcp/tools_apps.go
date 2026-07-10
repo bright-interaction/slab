@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // registerAppsTools wires the Sprint 4 apps platform MCP surface.

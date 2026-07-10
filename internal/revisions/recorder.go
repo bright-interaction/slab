@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Entity types stored in entity_revisions.entity_type. Must match the

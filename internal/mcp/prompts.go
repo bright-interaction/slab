@@ -3,7 +3,7 @@ package mcp
 import (
 	"context"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // registerPrompts wires reusable prompt templates the user picks from a

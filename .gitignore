@@ -5,12 +5,15 @@ node_modules/
 
 # Build artifacts (run `make frontend` to regenerate before `go build`)
 dist/
-build/
+/build/
 .next/
 out/
 frontend/.svelte-kit/
 frontend/build/
-cmd/server/frontend/build/
+# Embedded frontend build target for cmd/server/main.go's go:embed. Keep only
+# the .gitkeep so the embed compiles on a fresh checkout / the public mirror.
+/cmd/server/frontend/build/*
+!/cmd/server/frontend/build/.gitkeep
 
 # Environment
 .env
@@ -61,6 +64,6 @@ tests/e2e/.tmp/
 # not ship a binary). Run `make build` to produce bin/atomicsite locally.
 /server
 
-# the CI system CI rebuild marker. Edit + push to force a deploy in this repo.
+# CI rebuild marker. Edit + push to force a deploy in an internal deployment.
 # Not relevant for OSS users / GitHub mirror.
 .deploy-trigger

@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // EdgeWriter writes per-domain nginx fragments to disk. Paths come

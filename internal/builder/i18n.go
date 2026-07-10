@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // HreflangAlternate is one entry in the alternates list emitted as

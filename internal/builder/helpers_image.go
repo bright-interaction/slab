@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/imaging"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/imaging"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // RenderPicture emits a <picture> with srcset, sizes, and lazy loading. Kept

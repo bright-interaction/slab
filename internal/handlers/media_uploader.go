@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/migration"
+	"github.com/bright-interaction/atomicsite/internal/migration"
 )
 
 // productionMediaUploader is the real migration.MediaUploader used at boot.

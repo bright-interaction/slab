@@ -11,9 +11,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/brightinteraction/atomicsite/internal/config"
-	dbpkg "github.com/brightinteraction/atomicsite/internal/db"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 func newOIDCHandlerForTest(t *testing.T, allowDomains string) (*OIDCHandler, *store.Queries) {
@@ -120,13 +120,13 @@ func TestOIDC_DomainAllowlist(t *testing.T) {
 }
 
 func TestOIDC_ResolveUser_AutoCreatesWhenDomainAllowed(t *testing.T) {
-	h, q := newOIDCHandlerForTest(t, "brightinteraction.com")
+	h, q := newOIDCHandlerForTest(t, "example.com")
 
-	user, err := h.resolveUser(context.Background(), "user@example.com", "Tom Isgren")
+	user, err := h.resolveUser(context.Background(), "user@example.com", "Test User")
 	if err != nil {
 		t.Fatalf("resolveUser: %v", err)
 	}
-	if user.Email != "user@example.com" || user.Name != "Tom Isgren" || user.Role != "admin" {
+	if user.Email != "user@example.com" || user.Name != "Test User" || user.Role != "admin" {
 		t.Errorf("created user shape: %+v", user)
 	}
 	if user.PasswordHash != "" {

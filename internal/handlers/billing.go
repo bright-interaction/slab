@@ -20,10 +20,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/billing"
-	"github.com/brightinteraction/atomicsite/internal/config"
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/billing"
+	"github.com/bright-interaction/atomicsite/internal/config"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // BillingHandler wires Mollie checkout + webhook + workspace plan

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
 )
 
 // withTestAgent attaches a synthetic AgentIdentity to the request

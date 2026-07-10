@@ -36,7 +36,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // SearchKind is one of the supported indexable resource types.

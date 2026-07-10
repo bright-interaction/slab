@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	authmw "github.com/brightinteraction/atomicsite/internal/middleware"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // validArchetypes is the curated set of vibe archetypes a page can be

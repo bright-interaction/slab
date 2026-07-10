@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // Recorder writes conversion_events for goals that match an in-flight

@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // GetVisitorMetadata returns the visit_sessions row for a given fingerprint

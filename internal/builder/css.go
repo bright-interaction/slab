@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/brightinteraction/atomicsite/internal/agent"
-	"github.com/brightinteraction/atomicsite/internal/store"
+	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/atomicsite/internal/store"
 )
 
 // CanonicalRadiiRem is the allowlist of border-radius values the
@@ -79,7 +79,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 
 	// Container width: enum value -> CSS unit. Operator picks via
 	// general.container_width setting. Default 72rem matches most marketing
-	// sites including brightinteraction.com.
+	// sites including example.com.
 	containerWidth := "72rem"
 	switch sm["general.container_width"] {
 	case "narrow":
@@ -220,7 +220,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 
 	// Visual rhythm: every other major content block gets a faint "elevated
 	// surface" tint so consecutive sections don't blur together. Tone is
-	// deliberately whisper-quiet, matches brightinteraction.com's #f5f5f4
+	// deliberately whisper-quiet, matches example.com's #f5f5f4
 	// against #fafaf9, which is roughly a 2-3% step away from --color-bg.
 	// Heavier tints turn into stripes that fight the content.
 	b.WriteString(":root { --color-surface-elevated: color-mix(in oklab, var(--color-bg) 97.5%, var(--color-text)); }\n")
@@ -230,12 +230,12 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	// Site-wide spacing: more generous block padding so sections breathe.
 	b.WriteString(".block + .block { margin-block-start: 0; }\n\n")
 
-	// --- Editorial eyebrow pattern (used by every block with .eyebrow). Mono + uppercase + tracking-widest matches brightinteraction.com's typographic system. ---
+	// --- Editorial eyebrow pattern (used by every block with .eyebrow). Mono + uppercase + tracking-widest matches example.com's typographic system. ---
 	b.WriteString(".block .eyebrow, .block-eyebrow { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-primary); margin-block-end: 1rem; }\n\n")
 
 	// --- Section header pattern: eyebrow (mono-uppercase, color-primary) above
 	// any h2, then optional subheading. Used by every block that opens with
-	// .eyebrow + h2. Spacing matches brightinteraction.com's section heads. ---
+	// .eyebrow + h2. Spacing matches example.com's section heads. ---
 	b.WriteString(".block > .eyebrow + h2 { margin-block: 0 1rem; font-size: clamp(1.875rem, 3.5vw, 2.5rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }\n")
 	b.WriteString(".block > h2 + .subheading { margin-block-end: 2.5rem; font-size: 1.0625rem; max-width: 36rem; }\n\n")
 
@@ -433,7 +433,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 
 	// --- Improved navbar: compact h-14, white/90 + backdrop-blur, mono brand wordmark style. Last nav link auto-styles as a primary CTA pill. ---
 	// --- Header: sticky h-14 bar with backdrop-blur. 3-zone grid layout
-	// matching brightinteraction.com / Linear / Vercel:
+	// matching example.com / Linear / Vercel:
 	//   [brand-mark]  [primary nav (centred)]  [actions: lang + CTA]
 	// Renderer emits each zone as a separate child so the grid columns
 	// don't fight flex-wrap. Below 1024px the primary nav hides, only
@@ -463,7 +463,7 @@ func BuildCSS(ctx context.Context, queries *store.Queries, siteID string) (strin
 	// Primary nav: centred row of links between brand and actions.
 	// 2026-05-20: explicit Space Grotesk fallback + slightly tighter
 	// letter-spacing + medium weight gives the nav the premium feel of
-	// brightinteraction.com instead of looking like default system sans.
+	// example.com instead of looking like default system sans.
 	b.WriteString(".site-nav-primary ul { display: flex; gap: 0.125rem; justify-content: center; align-items: center; list-style: none; padding: 0; margin: 0; }\n")
 	b.WriteString(".site-nav-primary a { padding: 0.5rem 0.875rem; font-family: var(--font-heading), 'Space Grotesk', system-ui, sans-serif; font-size: 0.9375rem; font-weight: 500; letter-spacing: -0.005em; color: color-mix(in oklab, var(--color-text) 70%, transparent); transition: color 150ms ease-out; white-space: nowrap; }\n")
 	b.WriteString(".site-nav-primary a:hover { color: var(--color-text); text-decoration: none; }\n")

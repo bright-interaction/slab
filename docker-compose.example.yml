@@ -5,10 +5,11 @@
 # CookieProof checkout). The CookieProof widget is already embedded into
 # the binary at compile time, so no extra build context is needed.
 #
-# Bright Interaction's production deployment uses docker-compose.yml in
-# this same directory, which is wired for the BI multi-tenant edge with
-# host bind-mounts to /srv/atomicsite and /var/log/atomicsite. Don't
-# copy that file for self-host; copy this one.
+# This is the reference self-host Compose file. For a multi-tenant edge
+# deployment you would add host bind-mounts (e.g. /srv/atomicsite for the
+# built-site output and /var/log/atomicsite for per-site access logs) and
+# put a TLS-terminating reverse proxy in front; this example stays minimal
+# so a single-root deployment works out of the box.
 #
 # Quickstart:
 #   cp .env.example .env       # fill in JWT_SECRET, ANALYTICS_SALT,
