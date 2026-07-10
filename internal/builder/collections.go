@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // collectionSettings is the shape stored in collections.settings_json.

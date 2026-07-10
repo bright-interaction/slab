@@ -46,7 +46,7 @@ export interface WizardState {
 	designFidelity: WizardDesignFidelity;
 }
 
-const STORAGE_KEY = 'atomicsite_wizard_state';
+const STORAGE_KEY = 'slab_wizard_state';
 
 function defaultState(): WizardState {
 	return {

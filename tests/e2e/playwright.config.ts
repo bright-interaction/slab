@@ -6,10 +6,10 @@ const STUB_COOKIEPROOF_PORT = process.env.STUB_COOKIEPROOF_PORT ?? '18291';
 const STUB_CRM_PORT = process.env.STUB_CRM_PORT ?? '18292';
 const STUB_DOCKYARD_PORT = process.env.STUB_DOCKYARD_PORT ?? '18293';
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${TEST_PORT}`;
-const DATA_DIR = process.env.E2E_DATA_DIR ?? `/tmp/atomicsite-e2e`;
+const DATA_DIR = process.env.E2E_DATA_DIR ?? `/tmp/slab-e2e`;
 
 export const E2E_CONSTANTS = {
-	ADMIN_EMAIL: 'admin@atomicsite.dev',
+	ADMIN_EMAIL: 'admin@slab.dev',
 	ADMIN_PASSWORD: 'changeme123',
 	API_BASE: BASE_URL,
 	TEST_PORT,
@@ -19,7 +19,7 @@ export const E2E_CONSTANTS = {
 	STUB_CRM: `http://127.0.0.1:${STUB_CRM_PORT}`,
 	STUB_DOCKYARD: `https://127.0.0.1:${STUB_DOCKYARD_PORT}`,
 	STUB_CRM_SECRET: 'e2e-crm-hmac-secret',
-	COOKIE_NAME: 'atomicsite_token'
+	COOKIE_NAME: 'slab_token'
 };
 
 export default defineConfig({
@@ -46,7 +46,7 @@ export default defineConfig({
 	webServer: [
 		{
 			// Stubs for CookieProof / BrightCRM / Dockyard. Must come up before
-			// the atomicsite binary so it sees the env-injected URLs.
+			// the slab binary so it sees the env-injected URLs.
 			command: 'bun fixtures/stubs.ts',
 			cwd: __dirname,
 			url: `http://127.0.0.1:${STUB_COOKIEPROOF_PORT}/__health`,
@@ -63,7 +63,7 @@ export default defineConfig({
 		{
 			// Wipe the test DB on every run so the seed step always starts fresh
 			// (the slug uniqueness check would 409 on a re-run otherwise).
-			command: `bash -lc 'rm -rf "$DATA_DIR" && ./bin/atomicsite'`,
+			command: `bash -lc 'rm -rf "$DATA_DIR" && ./bin/slab'`,
 			cwd: path.resolve(__dirname, '../..'),
 			url: `${BASE_URL}/api/health`,
 			reuseExistingServer: false,
@@ -90,9 +90,9 @@ export default defineConfig({
 				// internal/deploy/dockyard.go's outbound HTTPS calls succeed.
 				SSL_CERT_FILE: path.resolve(__dirname, 'fixtures/certs/stub-cert.pem'),
 				// Override the per-site nginx access log dir so the analytics parser
-				// can tail a path the test can append to (default /var/log/atomicsite
+				// can tail a path the test can append to (default /var/log/slab
 				// is unwritable in CI).
-				ATOMICSITE_LOG_DIR: `${DATA_DIR}/nginx-logs`
+				SLAB_LOG_DIR: `${DATA_DIR}/nginx-logs`
 			}
 		}
 	]

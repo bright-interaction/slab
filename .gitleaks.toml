@@ -1,4 +1,4 @@
-# gitleaks config for Atomicsite (used by the public-mirror publish gate and
+# gitleaks config for Slab (used by the public-mirror publish gate and
 # any local scan). Extends the default ruleset, then allowlists
 # documentation/config-example PLACEHOLDERS and known TEST-FIXTURE fake secrets.
 # The .env.example uses obvious change-me markers, never real secrets, and the
@@ -6,7 +6,7 @@
 # *_test.go / tests/e2e/ by design. A real leaked credential would not carry
 # these markers nor live in a fixture path, so it is still caught. GitHub push
 # protection is the independent backstop for real provider-shaped secrets.
-title = "atomicsite"
+title = "slab"
 
 [extend]
 useDefault = true

@@ -126,7 +126,7 @@ func TestSafeFetch_BodySizeCap(t *testing.T) {
 
 func TestSafeFetch_HappyPath(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("User-Agent"); !strings.Contains(got, "AtomicSite-Migrator") {
+		if got := r.Header.Get("User-Agent"); !strings.Contains(got, "Slab-Migrator") {
 			t.Errorf("User-Agent not set: %q", got)
 		}
 		w.Header().Set("Content-Type", "text/html")

@@ -7,7 +7,7 @@ import (
 )
 
 // SQLStore is a Store implementation backed by *sql.DB using SQLite-
-// flavored SQL. atomicsite + dockyard both run SQLite so they can use
+// flavored SQL. slab + dockyard both run SQLite so they can use
 // this directly. Postgres-backed services (brightcrm) provide their
 // own pgx-flavored Store.
 type SQLStore struct {

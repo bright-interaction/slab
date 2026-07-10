@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/slab/internal/agent"
 )
 
 // CTA keywords used by Site Inspector's Meta Description Has CTA check.
@@ -315,7 +315,7 @@ func RunSEOChecks(site *SiteContext) []CheckResult {
 			return true, "" // covered by Canonical URL
 		}
 		// Scheme-tolerant compare: normalize the canonical's path tail vs the
-		// page's slug. Site Inspector requires equality of the path; atomicsite
+		// page's slug. Site Inspector requires equality of the path; slab
 		// likewise expects the canonical to point at the page's own slug.
 		canonPath := canon
 		if i := strings.Index(canon, "://"); i >= 0 {
@@ -478,7 +478,7 @@ func RunSEOChecks(site *SiteContext) []CheckResult {
 		}
 		// x-default is a soft signal: warn-only if missing on the home page.
 		return true, ""
-	}, "Multi-language pages need <link rel=\"alternate\" hreflang=\"X\"> for every locale that has a counterpart, plus a self-referencing entry. Atomicsite emits these automatically when general.additional_langs is set."))
+	}, "Multi-language pages need <link rel=\"alternate\" hreflang=\"X\"> for every locale that has a counterpart, plus a self-referencing entry. Slab emits these automatically when general.additional_langs is set."))
 
 	// GEO / AEO checks (AI search readiness), same category, distinct section.
 	checks = append(checks, RunGEOChecks(site)...)
@@ -672,7 +672,7 @@ func validateHeadingOrder(doc *html.Node) (bool, string) {
 func checkRobotsTxt(site *SiteContext) CheckResult {
 	if site.RobotsTxt == "" {
 		return Fail("robots.txt", "files", 2, SeverityError,
-			"no robots.txt in dist/", "Atomicsite generates this -- check build pipeline.")
+			"no robots.txt in dist/", "Slab generates this -- check build pipeline.")
 	}
 	if !strings.Contains(strings.ToLower(site.RobotsTxt), "user-agent") {
 		return Fail("robots.txt", "files", 2, SeverityWarning,
@@ -694,7 +694,7 @@ func checkSitemap(site *SiteContext) CheckResult {
 func checkLLMsTxt(site *SiteContext) CheckResult {
 	if site.LLMsTxt == "" {
 		return Fail("llms.txt", "files", 1, SeverityInfo,
-			"no /llms.txt", "Atomicsite generates this from site profile + pages.")
+			"no /llms.txt", "Slab generates this from site profile + pages.")
 	}
 	return Pass("llms.txt", "files", 1, "llms.txt present (AI search readiness)")
 }

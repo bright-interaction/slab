@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/slab/internal/handlers"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 // registerTranslateTools wires the Sprint 3 slice B translate_entity
@@ -33,7 +33,7 @@ import (
 // keys.
 //
 // Sprint 3 of the WP/Webflow replacement roadmap (see
-// atomicsite/docs/ROADMAP.md).
+// slab/docs/ROADMAP.md).
 func (s *Server) registerTranslateTools() {
 	register := func(t Tool) { s.tools[t.Name] = t }
 

@@ -14,7 +14,7 @@
 // Cooling-off rationale: legal teams treat the request as a 30-day
 // fulfillment window per GDPR Art. 12(3); we use 7 days for the
 // soft-delete-then-cascade window so users who change their mind
-// have a real recovery path. The ATOMICSITE_GDPR_DELETE_COOLING_DAYS
+// have a real recovery path. The SLAB_GDPR_DELETE_COOLING_DAYS
 // env var overrides the default if a deployment needs to align with
 // a specific privacy policy.
 
@@ -28,8 +28,8 @@ import (
 	"strconv"
 	"time"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // AccountGDPRHandler owns the per-user GDPR endpoints. Mounted under
@@ -67,7 +67,7 @@ func (h *AccountGDPRHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := "atomicsite-export-" + time.Now().UTC().Format("20060102T150405Z") + ".zip"
+	filename := "slab-export-" + time.Now().UTC().Format("20060102T150405Z") + ".zip"
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.Header().Set("Cache-Control", "no-store")
@@ -175,10 +175,10 @@ func (h *AccountGDPRHandler) Export(w http.ResponseWriter, r *http.Request) {
 // top of the export ZIP. Mentions the redactions so a recipient
 // doesn't go hunting for password hashes.
 func gdprReadmeBody(email string, sites, pages int) string {
-	return "# Atomic Site GDPR export\n\n" +
+	return "# Slab GDPR export\n\n" +
 		"Account: " + email + "\n" +
 		"Generated: " + time.Now().UTC().Format(time.RFC3339) + "\n\n" +
-		"This archive contains every record Atomic Site holds about the " +
+		"This archive contains every record Slab holds about the " +
 		"requesting user, served under GDPR Article 20 (right to data " +
 		"portability). The files are JSON for portability:\n\n" +
 		"- user.json: profile (passwords/MFA secrets redacted)\n" +

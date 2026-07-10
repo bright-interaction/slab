@@ -1,4 +1,4 @@
-// Package shield is the LLM-boundary tokenizer for atomicsite's MCP server.
+// Package shield is the LLM-boundary tokenizer for slab's MCP server.
 //
 // When the MCP server returns data to an external agent (Claude on Anthropic,
 // Groq, etc.), every PII field gets replaced with a marker of the form
@@ -19,7 +19,7 @@
 // leak the raw value.
 //
 // Storage: per-MCP-connection rows in shield_sessions + shield_tokens.
-// Ciphertext = base64(AES-256-GCM(value, ATOMICSITE_SHIELD_KEY)).
+// Ciphertext = base64(AES-256-GCM(value, SLAB_SHIELD_KEY)).
 //
 // Privacy invariant: when shield_enabled is on, no MCP tool response
 // leaves this server with a tagged PII field in plaintext, and no MCP

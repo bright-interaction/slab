@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/shield"
+	"github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/shield"
 )
 
 // TestShieldEndToEndOnToolCall verifies the moat: every PII string

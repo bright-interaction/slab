@@ -10,8 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // TestPageDraftPreview_RendersFullPageHTML covers the happy path: a page
@@ -103,8 +103,8 @@ func TestPageDraftPreview_RendersFullPageHTML(t *testing.T) {
 		`Own it`,
 		`Why open source`,
 		`Receipts, not promises.`,
-		`<style data-atomicsite-preview="reset">`,
-		`<style data-atomicsite-preview="site">`,
+		`<style data-slab-preview="reset">`,
+		`<style data-slab-preview="site">`,
 	}
 	for _, s := range wantSubstrings {
 		if !strings.Contains(html, s) {

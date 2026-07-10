@@ -343,7 +343,7 @@
 							label="Extra directives"
 							rows={3}
 							placeholder="report-uri /csp-report"
-							hint="Appended to the auto-built CSP. Use this for report-uri, sandbox, or anything atomicsite doesn't expose as its own field. Trailing semicolons are stripped."
+							hint="Appended to the auto-built CSP. Use this for report-uri, sandbox, or anything slab doesn't expose as its own field. Trailing semicolons are stripped."
 							bind:value={cspExtra}
 						/>
 						<p class="rounded-lg border border-border-light bg-bg-elevated/50 px-3 py-2 text-[12px] text-text-muted">

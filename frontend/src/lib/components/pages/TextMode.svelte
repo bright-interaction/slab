@@ -11,7 +11,7 @@
 		onFieldChange: (blockID: string, fieldKey: string, nextValue: string) => void;
 	} = $props();
 
-	// Canonical text-bearing keys across atomicsite block types. Order
+	// Canonical text-bearing keys across slab block types. Order
 	// determines display order inside each block. Ordered most-prominent
 	// first so a writer reads top-to-bottom the way the page reads.
 	const TEXT_KEYS: { key: string; label: string; multiline?: boolean }[] = [

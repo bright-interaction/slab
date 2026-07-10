@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // TestPreviewTokenManager_MintReturnsUniqueTokens locks the lifecycle

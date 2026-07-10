@@ -16,7 +16,7 @@
 			Architecture
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			How Atomic Site works, end to end.
+			How Slab works, end to end.
 		</p>
 	</header>
 
@@ -28,7 +28,7 @@
 				evaluation engine.
 			</p>
 			<p class="mt-2 text-[13px] text-text-secondary">
-				Atomic Site is not another AI website builder competing with Lovable, Bolt, or v0. It is a
+				Slab is not another AI website builder competing with Lovable, Bolt, or v0. It is a
 				structured canvas that any AI agent can paint on. You connect your own Claude CLI, Cursor,
 				or any agent via an open API. The platform provides organisation, guardrails,
 				knowledgebase, and a build pipeline that outputs pure SSR or static Astro code.
@@ -123,7 +123,7 @@
 					</dd>
 					<p class="mt-1 text-[12px] text-text-secondary">
 						A reverse proxy (nginx, Caddy, Traefik) terminates TLS and forwards to the
-						atomicsite container on its internal port (default :8080).
+						slab container on its internal port (default :8080).
 					</p>
 				</div>
 				<div>
@@ -143,7 +143,7 @@
 				class="mt-4 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[11px] text-text-primary"
 			>{`# example wildcard Caddy block for multi-tenant deployments
 http://*.tenants.example.com {
-  root * /srv/atomicsite/{labels.3}/dist
+  root * /srv/slab/{labels.3}/dist
   file_server
 }`}</pre>
 		</Card>

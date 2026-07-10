@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Sprint 2 slice A (WP/Webflow roadmap): catalog tests.

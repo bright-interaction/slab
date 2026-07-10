@@ -24,7 +24,7 @@
 	let loading = $state(true);
 	let saving = $state(false);
 
-	let atomicsiteTrackingEnabled = $state(true);
+	let slabTrackingEnabled = $state(true);
 	let ga4Enabled = $state(false);
 	let ga4Id = $state('');
 	let umamiEnabled = $state(false);
@@ -38,7 +38,7 @@
 	let identityMaxAgeDays = $state('30');
 
 	type State = {
-		atomicsiteTrackingEnabled: boolean;
+		slabTrackingEnabled: boolean;
 		ga4Enabled: boolean;
 		ga4Id: string;
 		umamiEnabled: boolean;
@@ -53,7 +53,7 @@
 	};
 
 	let initial: State = $state({
-		atomicsiteTrackingEnabled: true,
+		slabTrackingEnabled: true,
 		ga4Enabled: false,
 		ga4Id: '',
 		umamiEnabled: false,
@@ -73,10 +73,10 @@
 			const rows = await settingsApi.listByCategory(siteID, 'analytics');
 			const m = categoryMap(rows);
 
-			atomicsiteTrackingEnabled =
-				m.atomicsite_tracking_enabled === undefined
+			slabTrackingEnabled =
+				m.slab_tracking_enabled === undefined
 					? true
-					: toBool(m.atomicsite_tracking_enabled);
+					: toBool(m.slab_tracking_enabled);
 			ga4Id = m.ga4_id || '';
 			ga4Enabled = ga4Id.length > 0 || toBool(m.ga4_enabled);
 			umamiUrl = m.umami_url || '';
@@ -90,7 +90,7 @@
 			cwvEnabled = toBool(m.cwv_enabled);
 
 			initial = {
-				atomicsiteTrackingEnabled,
+				slabTrackingEnabled,
 				ga4Enabled,
 				ga4Id,
 				umamiEnabled,
@@ -115,7 +115,7 @@
 	});
 
 	const dirty = $derived(
-		atomicsiteTrackingEnabled !== initial.atomicsiteTrackingEnabled ||
+		slabTrackingEnabled !== initial.slabTrackingEnabled ||
 			ga4Enabled !== initial.ga4Enabled ||
 			ga4Id !== initial.ga4Id ||
 			umamiEnabled !== initial.umamiEnabled ||
@@ -130,7 +130,7 @@
 	);
 
 	function discard() {
-		atomicsiteTrackingEnabled = initial.atomicsiteTrackingEnabled;
+		slabTrackingEnabled = initial.slabTrackingEnabled;
 		ga4Enabled = initial.ga4Enabled;
 		ga4Id = initial.ga4Id;
 		umamiEnabled = initial.umamiEnabled;
@@ -155,8 +155,8 @@
 			const items: settingsApi.SettingUpsertInput[] = [
 				{
 					category: 'analytics',
-					key: 'atomicsite_tracking_enabled',
-					value: b(atomicsiteTrackingEnabled)
+					key: 'slab_tracking_enabled',
+					value: b(slabTrackingEnabled)
 				},
 				{ category: 'analytics', key: 'ga4_enabled', value: b(ga4Enabled) },
 				{ category: 'analytics', key: 'ga4_id', value: ga4Enabled ? ga4Id : '' },
@@ -185,7 +185,7 @@
 			await settingsApi.bulkUpsert(siteID, items);
 
 			initial = {
-				atomicsiteTrackingEnabled,
+				slabTrackingEnabled,
 				ga4Enabled,
 				ga4Id,
 				umamiEnabled,
@@ -257,7 +257,7 @@
 
 			<Card padding="md">
 				<h2 class="text-[11px] font-mono uppercase tracking-[0.2em] text-text-muted">
-					Atomicsite tracking
+					Slab tracking
 				</h2>
 				<div class="mt-4 flex items-center justify-between gap-4">
 					<div class="flex flex-col">
@@ -266,7 +266,7 @@
 							Logs page views from Nginx access logs. No client-side script.
 						</span>
 					</div>
-					<Switch bind:checked={atomicsiteTrackingEnabled} ariaLabel="Enable Atomicsite tracking" />
+					<Switch bind:checked={slabTrackingEnabled} ariaLabel="Enable Slab tracking" />
 				</div>
 				<div class="mt-4 border-t border-border-light pt-4 flex items-center justify-between gap-4">
 					<div class="flex flex-col">
@@ -306,7 +306,7 @@
 					Cookie consent banner
 				</h2>
 				<p class="mt-2 text-[12px] text-text-muted">
-					Atomic Site ships a same-origin cookie banner that auto-styles to your brand and
+					Slab ships a same-origin cookie banner that auto-styles to your brand and
 					stores consent proofs in your own database. Configure it on the dedicated
 					<a class="underline" href={`/sites/${siteID}/cookies`}>Cookies page</a>.
 				</p>
@@ -380,7 +380,7 @@
 						label="Webhook secret"
 						type="password"
 						placeholder="shared signing secret"
-						hint="Sent as X-Atomicsite-Signature for HMAC verification."
+						hint="Sent as X-Slab-Signature for HMAC verification."
 						bind:value={crmWebhookSecret}
 					/>
 				</div>

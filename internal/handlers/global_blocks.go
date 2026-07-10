@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // GlobalBlockHandler exposes admin CRUD for the site-wide blocks that the

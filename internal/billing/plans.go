@@ -4,9 +4,9 @@
 // (unlimited) for every limit. Cloud builds (-tags ee) read from the
 // same map and gate quotas accordingly.
 //
-// Pricing is in EUR cents (atomicsite is EU-sovereign by design):
+// Pricing is in EUR cents (slab is EU-sovereign by design):
 //
-//	solo   = €19/mo  (1 site, atomicsite subdomain only, 1GB media)
+//	solo   = €19/mo  (1 site, slab subdomain only, 1GB media)
 //	studio = €79/mo  (5 sites, custom domain, 10GB media, 3000 build mins)
 //	agency = €299/mo (25 sites, white-label, 50GB media, 12000 build mins)
 //	oss    = free    (no limits, self-hosted)

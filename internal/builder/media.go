@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // CopyMedia hardlinks (or copies) the site's processed media into the Astro

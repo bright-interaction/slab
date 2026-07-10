@@ -1,10 +1,10 @@
-Atomicsite Sustainable Use License
+Slab Sustainable Use License
 
 Version 1.0
 
 This is a "fair-code" license (https://faircode.io). The source is open
 and free to read, run, and modify. It is NOT an OSI "open source" license,
-because it places one limit on commercial use: you may not resell Atomicsite
+because it places one limit on commercial use: you may not resell Slab
 itself or run it as a service for third parties. The plain-English summary
 below is not part of the legal terms; the terms that follow it govern.
 
@@ -12,24 +12,24 @@ below is not part of the legal terms; the terms that follow it govern.
 Plain-English summary (informational, not the license)
 
 You CAN:
-  - Run Atomicsite on your own servers / VPS, for free, forever.
+  - Run Slab on your own servers / VPS, for free, forever.
   - Use it for your own business, internally and commercially.
   - Use it to build and host sites for your own clients (e.g. an agency
-    or freelancer building and hosting a client's website on Atomicsite).
+    or freelancer building and hosting a client's website on Slab).
   - Read, modify, and self-distribute the source, keeping this license.
 
 You CANNOT, without a separate commercial agreement from the Licensor:
-  - Sell Atomicsite, or offer it to third parties as a hosted or managed
-    service whose value derives substantially from Atomicsite's own
-    functionality (i.e. a competing "Atomicsite cloud" / SaaS).
+  - Sell Slab, or offer it to third parties as a hosted or managed
+    service whose value derives substantially from Slab's own
+    functionality (i.e. a competing "Slab cloud" / SaaS).
   - Remove or obscure the licensing, copyright, or attribution notices,
-    or use the "Atomicsite" or "Bright Interaction" names or logos for a
+    or use the "Slab" or "Bright Interaction" names or logos for a
     fork without permission.
 ------------------------------------------------------------------------
 
 1. Definitions
 
-   "Software" means the Atomicsite source code, binaries, and documentation
+   "Software" means the Slab source code, binaries, and documentation
    distributed under this license.
 
    "Licensor" means Bright Interaction, the copyright holder.
@@ -44,7 +44,7 @@ You CANNOT, without a separate commercial agreement from the Licensor:
    version of it, available to third parties as a hosted, managed, or
    white-labeled product or service whose value derives substantially from
    the Software's own functionality, including any offering that competes
-   with a hosted Atomicsite product offered by the Licensor.
+   with a hosted Slab product offered by the Licensor.
 
 2. Grant
 
@@ -79,7 +79,7 @@ You CANNOT, without a separate commercial agreement from the Licensor:
        who receives any part of the Software from You also receives a copy
        of this license.
 
-   (d) "Atomicsite" and "Bright Interaction", and associated logos, are
+   (d) "Slab" and "Bright Interaction", and associated logos, are
        trademarks of the Licensor. This license grants no rights to use
        those marks. A fork must be clearly renamed and must not imply
        endorsement by or affiliation with the Licensor.

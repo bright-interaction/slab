@@ -1,7 +1,7 @@
 // Package sharedsecret implements HMAC-SHA256 signing + verification with a
 // dual-secret accept window. Mirror of the brightcrm-side package: same wire
 // format, same dual-secret semantics, so Dockyard's rotation engine can roll
-// the BrightCRM <-> atomicsite shared secret without taking the loop down.
+// the BrightCRM <-> slab shared secret without taking the loop down.
 //
 // During a rotation grace window, primary holds the new value and secondary
 // holds the previous one. Outbound signing always uses primary. Inbound

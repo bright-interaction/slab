@@ -57,9 +57,9 @@ func (d *LocalDeployer) Validate(target Target) error {
 		return errors.New("local deploy: path must not be \"/\"")
 	}
 	// Cross-tenant isolation: a local target must write inside the site's own
-	// directory so one tenant cannot point `path` at /srv/atomicsite/<other>/dist
+	// directory so one tenant cannot point `path` at /srv/slab/<other>/dist
 	// and overwrite another tenant's served files. The wildcard host serves a
-	// tenant from /srv/atomicsite/{slug}/dist, so the legitimate path contains
+	// tenant from /srv/slab/{slug}/dist, so the legitimate path contains
 	// the site's slug; some setups use the site id instead. Accept either as a
 	// full path segment. Both are set from the authenticated site, so a member
 	// of site A can only ever supply A's slug/id here.
@@ -91,7 +91,7 @@ func (d *LocalDeployer) Validate(target Target) error {
 }
 
 // pathHasSegment reports whether seg appears as a full path component of p
-// (so "/srv/atomicsite/<id>/dist" matches <id>, but "/srv/<id>extra" does not).
+// (so "/srv/slab/<id>/dist" matches <id>, but "/srv/<id>extra" does not).
 func pathHasSegment(p, seg string) bool {
 	for _, s := range strings.Split(p, string(filepath.Separator)) {
 		if s == seg {

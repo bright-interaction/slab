@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 
 	_ "modernc.org/sqlite"
 )

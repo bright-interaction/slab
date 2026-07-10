@@ -10,8 +10,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // openTestDB spins up a fresh SQLite DB in a temp dir, applies the schema,

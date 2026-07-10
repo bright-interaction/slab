@@ -58,7 +58,7 @@ test.describe('agent-api: MCP server', () => {
 			capabilities: {}
 		});
 		expect(r.error).toBeUndefined();
-		expect(r.result.serverInfo.name).toBe('atomicsite');
+		expect(r.result.serverInfo.name).toBe('slab');
 		expect(r.result.protocolVersion).toBe('2025-03-26');
 		expect(r.result.capabilities.tools).toBeDefined();
 		expect(r.result.capabilities.resources).toBeDefined();
@@ -113,12 +113,12 @@ test.describe('agent-api: MCP server', () => {
 		expect(r.error).toBeUndefined();
 		const uris = (r.result.resources as Array<{ uri: string }>).map((res) => res.uri);
 		for (const required of [
-			'atomicsite://site/context',
-			'atomicsite://site/settings_catalog',
-			'atomicsite://site/security_posture',
-			'atomicsite://site/i18n',
-			'atomicsite://site/pending_setup',
-			'atomicsite://site/structure'
+			'slab://site/context',
+			'slab://site/settings_catalog',
+			'slab://site/security_posture',
+			'slab://site/i18n',
+			'slab://site/pending_setup',
+			'slab://site/structure'
 		]) {
 			expect(uris).toContain(required);
 		}

@@ -1,6 +1,6 @@
 import type { Site } from '$lib/api/types';
 
-const STORAGE_KEY = 'atomicsite_last_site_id';
+const STORAGE_KEY = 'slab_last_site_id';
 
 let active = $state<Site | null>(null);
 

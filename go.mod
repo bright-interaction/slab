@@ -1,4 +1,4 @@
-module github.com/bright-interaction/atomicsite
+module github.com/bright-interaction/slab
 
 go 1.26.3
 

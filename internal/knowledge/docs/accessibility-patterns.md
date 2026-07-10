@@ -1,6 +1,6 @@
 # Accessibility patterns
 
-Atomic Site's accessibility eval (`internal/eval/accessibility.go`) checks WCAG 2.1 AA conformance plus a few atomicsite-specific rules. The agent's job is to write blocks that pass the eval out of the box.
+Slab's accessibility eval (`internal/eval/accessibility.go`) checks WCAG 2.1 AA conformance plus a few slab-specific rules. The agent's job is to write blocks that pass the eval out of the box.
 
 ## Landmarks
 
@@ -12,7 +12,7 @@ One `<h1>` per page. Subsequent headings descend in order: `<h2>`, then `<h3>`, 
 
 ## focus-visible (the modern pattern)
 
-Atomic Site's `internal/builder/css.go:432` emits this exact pattern, which the agent must preserve in custom CSS:
+Slab's `internal/builder/css.go:432` emits this exact pattern, which the agent must preserve in custom CSS:
 
 ```css
 button:focus,
@@ -91,11 +91,11 @@ When a brand color fails contrast, do not silently lower the requirement. Either
 - Derive a darker variant for text-on-background uses
 - Switch to a foreground neutral and use the brand as a border
 
-See `atomicsite://knowledge/color-system` for the derivation pattern.
+See `slab://knowledge/color-system` for the derivation pattern.
 
 ## Motion
 
-Respect `prefers-reduced-motion`. See `atomicsite://knowledge/motion-curves`.
+Respect `prefers-reduced-motion`. See `slab://knowledge/motion-curves`.
 
 ## Touch targets
 

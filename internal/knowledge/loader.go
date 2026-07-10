@@ -1,5 +1,5 @@
 // Package knowledge owns the curriculum the AI agent reads through MCP
-// resources. It exists so that an agent connecting to atomicsite via MCP
+// resources. It exists so that an agent connecting to slab via MCP
 // can become a working expert in:
 //
 //   - the stack the builder emits (Astro, TypeScript, the CSS-variable
@@ -15,8 +15,8 @@
 // update atomically.
 //
 // Surface: every Doc becomes one MCP resource at
-// atomicsite://knowledge/<slug> with mimeType text/markdown. The
-// generated catalog is served at atomicsite://knowledge/index. See
+// slab://knowledge/<slug> with mimeType text/markdown. The
+// generated catalog is served at slab://knowledge/index. See
 // internal/mcp/resources.go for the wiring.
 package knowledge
 

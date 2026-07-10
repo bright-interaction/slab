@@ -1,6 +1,6 @@
 # The CSS variable system
 
-Atomic Site sites are styled with vanilla CSS plus a small set of custom properties. There is no Tailwind, no CSS-in-JS, no utility framework. The whole visual system fits in `internal/builder/css.go` and the per-block CSS the renderers emit. Once you know the variables, you can style anything without touching the global stylesheet.
+Slab sites are styled with vanilla CSS plus a small set of custom properties. There is no Tailwind, no CSS-in-JS, no utility framework. The whole visual system fits in `internal/builder/css.go` and the per-block CSS the renderers emit. Once you know the variables, you can style anything without touching the global stylesheet.
 
 ## The six color slots
 
@@ -46,7 +46,7 @@ Reference them in media queries as `@media (min-width: var(--bp-tablet))`. Hard-
 --motion-normal  /* 200ms; default transition duration */
 ```
 
-Combined with hardware-accelerated properties only (`transform`, `opacity`), this keeps motion smooth on low-end devices. See `atomicsite://knowledge/motion-curves` for the full discipline.
+Combined with hardware-accelerated properties only (`transform`, `opacity`), this keeps motion smooth on low-end devices. See `slab://knowledge/motion-curves` for the full discipline.
 
 ## How to write a block style
 
@@ -97,4 +97,4 @@ Do not paste pre-Tailwind utility classes (`flex flex-col gap-4`). They will not
 
 ## How dark mode hooks in
 
-When a site enables dark mode, the same variables flip values under `[data-theme="dark"]`. Use the variables, not hard-coded values, and your block adapts for free. The full pattern is in `atomicsite://knowledge/dark-mode`.
+When a site enables dark mode, the same variables flip values under `[data-theme="dark"]`. Use the variables, not hard-coded values, and your block adapts for free. The full pattern is in `slab://knowledge/dark-mode`.

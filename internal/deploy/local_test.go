@@ -71,7 +71,7 @@ func TestLocalDeployer_Validate(t *testing.T) {
 }
 
 // TestLocalDeployer_Validate_AcceptsSlugPath covers the wildcard serving
-// convention: a tenant is served from /srv/atomicsite/{slug}/dist, so a path
+// convention: a tenant is served from /srv/slab/{slug}/dist, so a path
 // carrying the site's slug (not its 24-hex id) must validate. Also confirms a
 // path scoped to neither slug nor id is rejected (cross-tenant guard).
 func TestLocalDeployer_Validate_AcceptsSlugPath(t *testing.T) {

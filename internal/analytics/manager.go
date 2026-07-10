@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Manager owns one Parser goroutine per site with analytics enabled.
@@ -120,7 +120,7 @@ func (m *Manager) spawn(ctx context.Context, ts trackedSite) {
 
 // desiredSites returns the set of sites where analytics tracking is enabled,
 // keyed by site_id with the slug attached so the parser can derive the right
-// log path. We only spawn parsers when atomicsite_tracking_enabled=true
+// log path. We only spawn parsers when slab_tracking_enabled=true
 // (cookieproof alone doesn't write to our log; it lives client-side).
 func (m *Manager) desiredSites(ctx context.Context) (map[string]trackedSite, error) {
 	sites, err := m.queries.ListSites(ctx)
@@ -137,7 +137,7 @@ func (m *Manager) desiredSites(ctx context.Context) (map[string]trackedSite, err
 			continue
 		}
 		for _, kv := range settings {
-			if kv.Key == "atomicsite_tracking_enabled" && isTrue(kv.Value) {
+			if kv.Key == "slab_tracking_enabled" && isTrue(kv.Value) {
 				out[s.ID] = trackedSite{ID: s.ID, Slug: s.Slug}
 				break
 			}

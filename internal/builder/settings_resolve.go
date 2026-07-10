@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // resolveDefaultOgImageURL turns the operator-set default OG image into a

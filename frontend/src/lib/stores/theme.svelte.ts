@@ -1,6 +1,6 @@
 export type Theme = 'light' | 'dark';
 
-const STORAGE_KEY = 'atomicsite_theme';
+const STORAGE_KEY = 'slab_theme';
 
 function readInitial(): Theme {
 	if (typeof window === 'undefined') return 'light';

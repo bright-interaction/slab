@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // WebhookHandler owns the per-site webhook CRUD endpoints.
@@ -153,7 +153,7 @@ func (h *WebhookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"webhook": resp,
 		"secret":  secret,
-		"_note":   "Save this secret now. It is returned ONCE; subsequent reads omit it. Use it to verify the X-Atomicsite-Signature header on incoming POSTs.",
+		"_note":   "Save this secret now. It is returned ONCE; subsequent reads omit it. Use it to verify the X-Slab-Signature header on incoming POSTs.",
 	})
 }
 

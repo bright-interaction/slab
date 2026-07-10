@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // SettingsHandler handles per-site settings CRUD.
@@ -181,7 +181,7 @@ func (h *SettingsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
-// CookiePresets returns the cookie declarations atomicsite auto-derives from
+// CookiePresets returns the cookie declarations slab auto-derives from
 // the site's enabled trackers (GA4, language settings, etc.). The admin
 // Cookies page calls this to show the read-only "from your stack" rows
 // alongside the user-edited list. Computed on the fly from current

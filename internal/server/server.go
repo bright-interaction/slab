@@ -19,20 +19,20 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/bright-interaction/atomicsite/ee"
-	"github.com/bright-interaction/atomicsite/internal/analyticsdb"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/domains"
-	"github.com/bright-interaction/atomicsite/internal/email"
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	"github.com/bright-interaction/atomicsite/internal/mcp"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/migration"
-	"github.com/bright-interaction/atomicsite/internal/retention"
-	"github.com/bright-interaction/atomicsite/internal/revisions"
-	"github.com/bright-interaction/atomicsite/internal/shield"
-	"github.com/bright-interaction/atomicsite/internal/storage"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/ee"
+	"github.com/bright-interaction/slab/internal/analyticsdb"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/domains"
+	"github.com/bright-interaction/slab/internal/email"
+	"github.com/bright-interaction/slab/internal/handlers"
+	"github.com/bright-interaction/slab/internal/mcp"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/migration"
+	"github.com/bright-interaction/slab/internal/retention"
+	"github.com/bright-interaction/slab/internal/revisions"
+	"github.com/bright-interaction/slab/internal/shield"
+	"github.com/bright-interaction/slab/internal/storage"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // FrontendFS is the embedded frontend dist. Populated by cmd/server/main.go.
@@ -154,7 +154,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID)
 	// Trusted-proxy XFF middleware (replaces chi.middleware.RealIP).
 	// Honours X-Forwarded-For / X-Real-IP only when the immediate TCP
-	// peer is in the configured ATOMICSITE_TRUSTED_PROXIES list. Empty
+	// peer is in the configured SLAB_TRUSTED_PROXIES list. Empty
 	// list = ignore those headers entirely (the safe default for OSS
 	// deploys directly exposed to the internet).
 	r.Use(authmw.TrustedProxyRealIP(s.cfg.TrustedProxies))
@@ -263,7 +263,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/t/identify", trackH.Identify)
 		// Bidirectional CRM personalization (Phase 18.1).
 		// /t/inbound accepts CRM-pushed metadata for a known visitor;
-		// HMAC-SHA256 (same secret as outbound) on X-Atomicsite-Signature.
+		// HMAC-SHA256 (same secret as outbound) on X-Slab-Signature.
 		r.Post("/t/inbound", trackH.Inbound)
 		// /t/visitor (Phase 18.2): per-visitor metadata read endpoint for
 		// the built-site hydration script. Re-derives fingerprint from
@@ -278,7 +278,7 @@ func (s *Server) Router() http.Handler {
 	adminReloadH := handlers.NewAdminReloadHandler(s.cfg, trackH)
 	r.Post("/admin/reload-secrets", adminReloadH.ReloadSecrets)
 
-	// Public domain-verify endpoint. The host nginx atomicsite-acme.conf
+	// Public domain-verify endpoint. The host nginx slab-acme.conf
 	// block proxies /.well-known/atomic-verify/* here. No auth: the
 	// token is the credential. We expose it BEFORE the auth middleware
 	// group so a freshly-pointed custom domain can prove ownership
@@ -357,7 +357,7 @@ func (s *Server) Router() http.Handler {
 		// refill 1/s = 60 writes/min sustained per (user, IP).
 		r.Use(authmw.AdminWriteRateLimit(s.adminWriteLim))
 		// MFA enrollment enforcement (feature #14). Pass-through when
-		// ATOMICSITE_REQUIRE_MFA is empty; otherwise blocks writes
+		// SLAB_REQUIRE_MFA is empty; otherwise blocks writes
 		// from users who haven't enrolled. Whitelists the TOTP setup
 		// + change-password + logout flows so an unenrolled user can
 		// still complete enrollment.
@@ -553,10 +553,10 @@ func (s *Server) Router() http.Handler {
 		// Sprint 4.7.4 (2026-05-09): expose edge IP + Cloudflare zone
 		// list to the admin UI so the "Add an A record" instructions
 		// show real values instead of "[your edge IP]" placeholder.
-		// ATOMICSITE_CLOUDFLARE_ZONES is a comma-separated apex=zone_id
+		// SLAB_CLOUDFLARE_ZONES is a comma-separated apex=zone_id
 		// list (matches the format parseZoneMap in cmd/server/main.go uses).
 		cfZoneApexes := []string{}
-		for _, pair := range strings.Split(os.Getenv("ATOMICSITE_CLOUDFLARE_ZONES"), ",") {
+		for _, pair := range strings.Split(config.Env("SLAB_CLOUDFLARE_ZONES"), ",") {
 			pair = strings.TrimSpace(pair)
 			if pair == "" {
 				continue
@@ -827,7 +827,7 @@ func (s *Server) Router() http.Handler {
 		siteR.Get("/api/sites/{siteID}/analytics/tracked-fields", anH.AnalyticsTrackedFields)
 		siteR.Get("/api/sites/{siteID}/analytics/cwv", anH.AnalyticsCWV)
 
-		// Consent records (GDPR proof log). atomicsite became system of record
+		// Consent records (GDPR proof log). slab became system of record
 		// for tenant consent after the CookieProof fold-in (2026-04-30); these
 		// endpoints back the dashboard's Cookies section.
 		coH := handlers.NewConsentHandler(s.cfg, s.queries)
@@ -989,7 +989,7 @@ func (s *Server) Router() http.Handler {
 
 	// Public font serving (no auth, long cache, CORS *).
 	publicFontsH := handlers.NewFontsHandler(s.cfg, s.queries)
-	r.Get("/atomicsite-fonts/{siteID}/{fontID}.woff2", publicFontsH.Serve)
+	r.Get("/slab-fonts/{siteID}/{fontID}.woff2", publicFontsH.Serve)
 
 	// Storefront public endpoints (Sprint 2 slice B). No session auth
 	// because checkout is from an anonymous visitor browser; Mollie's
@@ -1103,22 +1103,22 @@ func (s *Server) Router() http.Handler {
 			// per-session and the X-Agent-Key auth is the real boundary;
 			// the TTL is just a housekeeping cap, not a security gate.
 			//
-			// Store backend: Redis when ATOMICSITE_SHIELD_REDIS_URL is set
+			// Store backend: Redis when SLAB_SHIELD_REDIS_URL is set
 			// (unlocks multi-node SaaS - every cluster member sees the same
 			// session+token state). SQLStore fallback for single-node OSS
 			// installs which still scale to dozens of concurrent MCP sessions
 			// per box without distributed coordination.
 			shieldStore, storeKind, err := buildShieldStore(s.cfg, s.db)
 			if err != nil {
-				slog.Error("atomicsite: shield store init failed; shield disabled", "err", err)
+				slog.Error("slab: shield store init failed; shield disabled", "err", err)
 			} else {
 				mcpServer.WithShield(shieldStore, []byte(s.cfg.ShieldKey), 24*time.Hour, level)
-				slog.Info("atomicsite: shield enabled on MCP boundary",
-					"key_id", "atomicsite", "ttl_hours", 24,
+				slog.Info("slab: shield enabled on MCP boundary",
+					"key_id", "slab", "ttl_hours", 24,
 					"hint_level", s.cfg.ShieldHintLevel, "store", storeKind)
 			}
 		} else if s.cfg.ShieldKey != "" {
-			slog.Warn("atomicsite: ATOMICSITE_SHIELD_KEY set but not 32 bytes; shield disabled",
+			slog.Warn("slab: SLAB_SHIELD_KEY set but not 32 bytes; shield disabled",
 				"len", len(s.cfg.ShieldKey))
 		}
 		// Wire the MCP shield-key updater into the admin reload handler

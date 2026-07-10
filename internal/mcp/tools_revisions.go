@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 // registerRevisionTools wires list_revisions + get_revision +
@@ -20,7 +20,7 @@ import (
 // exactly once. Nil handler disables the tools with a clean error.
 //
 // Sprint 1 of the WP/Webflow replacement roadmap (see
-// atomicsite/docs/ROADMAP.md).
+// slab/docs/ROADMAP.md).
 func (s *Server) registerRevisionTools() {
 	register := func(t Tool) { s.tools[t.Name] = t }
 

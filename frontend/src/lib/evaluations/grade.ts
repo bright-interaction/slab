@@ -1,7 +1,7 @@
-// Single source of truth for the 13-grade scale used by atomicsite
+// Single source of truth for the 13-grade scale used by slab
 // evaluations. Mirrors internal/eval/grading.go.ScoreToGrade.
 //
-// Colours map to atomicsite's own Swiss Minimal palette declared in
+// Colours map to slab's own Swiss Minimal palette declared in
 // app.css. We use the existing --t-success / --t-warning / --t-danger
 // tokens rather than inventing new accents so the score badges read
 // in the same vocabulary as every other status surface in the admin.

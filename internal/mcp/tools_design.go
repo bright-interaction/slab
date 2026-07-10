@@ -1,5 +1,5 @@
 // Package mcp: tools_design.go wires two design-skill MCP tools that
-// expose atomicsite's existing design surfaces to agents:
+// expose slab's existing design surfaces to agents:
 //
 //   - search_design_corpus  : ripgrep-style search over the bundled
 //     MIT-licensed reference repos
@@ -21,9 +21,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/handlers"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 func (s *Server) registerDesignTools() {

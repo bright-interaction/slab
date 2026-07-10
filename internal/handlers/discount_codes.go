@@ -18,9 +18,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 var discountCodeRE = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{1,49}$`)

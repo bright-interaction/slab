@@ -23,9 +23,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 var productSlugRE = regexp.MustCompile(`^[a-z0-9][-a-z0-9_]{0,79}$`)

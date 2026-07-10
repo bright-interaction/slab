@@ -35,7 +35,7 @@ const rsyncTimeout = 5 * time.Minute
 // RsyncDeployer pushes a built site to a remote server over SSH using rsync.
 //
 // private_key_pem is encrypted at rest inside targets.config_json via
-// internal/atrest (AES-256-GCM under ATOMICSITE_SHIELD_KEY, enc:v1:
+// internal/atrest (AES-256-GCM under SLAB_SHIELD_KEY, enc:v1:
 // prefix); the handlers decrypt it before constructing the Target this
 // deployer receives, so this package always sees a real PEM. Legacy
 // plaintext rows keep working and upgrade on their next save.
@@ -201,7 +201,7 @@ func buildRsyncArgs(cfg rsyncConfig, distDir, keyfile, knownHostsFile string) []
 // non-standard port); otherwise it is empty and accept-new fills it on first
 // connect. Returns the path plus a cleanup closure.
 func writeKnownHosts(cfg rsyncConfig) (string, func(), error) {
-	dir, err := os.MkdirTemp("", "atomicsite-rsync-kh-")
+	dir, err := os.MkdirTemp("", "slab-rsync-kh-")
 	if err != nil {
 		return "", func() {}, fmt.Errorf("rsync deploy: mkdir known_hosts temp: %w", err)
 	}
@@ -294,7 +294,7 @@ func (d *RsyncDeployer) Deploy(ctx context.Context, distDir string, target Targe
 // the path plus a cleanup closure. Parent dir is created via MkdirTemp so
 // even the directory itself is private to the current user.
 func writeKeyfile(pem string) (string, func(), error) {
-	dir, err := os.MkdirTemp("", "atomicsite-rsync-key-")
+	dir, err := os.MkdirTemp("", "slab-rsync-key-")
 	if err != nil {
 		return "", func() {}, fmt.Errorf("rsync deploy: mkdir temp: %w", err)
 	}

@@ -16,7 +16,7 @@ import (
 // vhosts; we own those files and want certbot to stay in its lane.
 //
 // Webroot flow:
-//  1. atomicsite-acme.conf (written by EdgeWriter) serves
+//  1. slab-acme.conf (written by EdgeWriter) serves
 //     /.well-known/acme-challenge/ from AcmeWebrootDir on port 80.
 //  2. We exec `certbot certonly --webroot -w <dir> -d <host>`.
 //  3. certbot drops a challenge file in

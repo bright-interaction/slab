@@ -3,7 +3,7 @@ package mcp
 import (
 	"sort"
 
-	"github.com/bright-interaction/atomicsite/internal/knowledge"
+	"github.com/bright-interaction/slab/internal/knowledge"
 )
 
 // AgentSurface is the operator-facing inventory of what an agent
@@ -12,7 +12,7 @@ import (
 // page (handlers/agent_admin_surface.go), so an operator can view the
 // surface without speaking JSON-RPC.
 //
-// Distinct from atomicsite://meta/capabilities (which is agent-facing
+// Distinct from slab://meta/capabilities (which is agent-facing
 // and includes the agent identity context). This is admin-facing and
 // site-scoped: same site_id from the route, but no agent key required
 // because the page is gated by the regular admin session + site

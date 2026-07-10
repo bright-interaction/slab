@@ -12,7 +12,7 @@
 //     retry with exponential backoff.
 //
 // HMAC signing: SHA-256 of the request body, hex-encoded, sent as
-// `X-Atomicsite-Signature: sha256=<hex>`. The receiver computes the
+// `X-Slab-Signature: sha256=<hex>`. The receiver computes the
 // same digest with their copy of the secret and constant-time-
 // compares. Standard pattern (Stripe, GitHub, Shopify all use this
 // shape).
@@ -20,7 +20,7 @@
 // Retry schedule: 5 attempts total. Backoff in seconds:
 // 60, 300, 1800, 7200, 86400 (1 min, 5 min, 30 min, 2 h, 24 h).
 // After attempt 5 the delivery is marked 'dropped'. The receiver's
-// idempotency contract is to deduplicate on `X-Atomicsite-Delivery`
+// idempotency contract is to deduplicate on `X-Slab-Delivery`
 // (the delivery ID, stable across retries).
 
 package webhook
@@ -41,7 +41,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Event types. Add to this list when wiring a new emit point. Keep
@@ -277,10 +277,10 @@ func (m *DeliveryManager) deliver(ctx context.Context, row store.WebhookDelivery
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Atomicsite-Event", row.EventType)
-	req.Header.Set("X-Atomicsite-Delivery", row.ID)
-	req.Header.Set("X-Atomicsite-Signature", "sha256="+sig)
-	req.Header.Set("X-Atomicsite-Attempt", strconv.FormatInt(row.Attempts+1, 10))
+	req.Header.Set("X-Slab-Event", row.EventType)
+	req.Header.Set("X-Slab-Delivery", row.ID)
+	req.Header.Set("X-Slab-Signature", "sha256="+sig)
+	req.Header.Set("X-Slab-Attempt", strconv.FormatInt(row.Attempts+1, 10))
 
 	resp, err := m.client.Do(req)
 	if err != nil {

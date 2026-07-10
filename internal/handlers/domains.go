@@ -30,9 +30,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/billing"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/billing"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // hostnamePattern matches RFC 1123 hostnames for the admin "Add domain"
@@ -66,13 +66,13 @@ type DomainHandler struct {
 	reservedSuffix string
 	// edgeIP is the public A-record target the admin shows when an
 	// operator adds a custom hostname. Read once at boot from
-	// ATOMICSITE_EDGE_IP. Empty falls back to "[your edge IP]" placeholder
+	// SLAB_EDGE_IP. Empty falls back to "[your edge IP]" placeholder
 	// in the UI so single-tenant dev runs without an edge surface stay
 	// honest about what's missing.
 	edgeIP string
 	// cloudflareZones is the list of zone apex hostnames whose DNS we
 	// auto-update via the Cloudflare API. Read from
-	// ATOMICSITE_CLOUDFLARE_ZONES (comma-separated apex=zone_id list).
+	// SLAB_CLOUDFLARE_ZONES (comma-separated apex=zone_id list).
 	// Empty means "manual A records only", which is the default
 	// experience for customer-owned domains.
 	cloudflareZones []string
@@ -105,7 +105,7 @@ func (h *DomainHandler) WithCloudflareZones(zones []string) *DomainHandler {
 // Frontend reads it once on the Domains page so the "Add an A record"
 // instructions show real values instead of placeholders.
 type HelpResponse struct {
-	// EdgeIP is the public A-record target. Empty when ATOMICSITE_EDGE_IP
+	// EdgeIP is the public A-record target. Empty when SLAB_EDGE_IP
 	// is unset on the server (dev / single-tenant).
 	EdgeIP string `json:"edge_ip"`
 	// CloudflareZones is the list of zone apex hostnames whose DNS we
@@ -205,7 +205,7 @@ func (h *DomainHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Plan gate: workspace plan must allow custom domains. The "solo"
-	// tier doesn't (atomicsite-suffix subdomain only); studio + agency
+	// tier doesn't (slab-suffix subdomain only); studio + agency
 	// do. OSS workspaces always pass (Limit returns -1). Cloud builds
 	// hit this gate because every workspace lands on a paid plan after
 	// signup.

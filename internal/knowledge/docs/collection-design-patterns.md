@@ -1,6 +1,6 @@
 # Collection design patterns
 
-Custom Collections are atomicsite's CMS layer. A Collection is a user-defined content type (case studies, products, team members, FAQ entries, events, jobs, recipes, reviews) with a schema. Items conform to the schema and either render as standalone pages or feed into a `collection_list` block on a page.
+Custom Collections are slab's CMS layer. A Collection is a user-defined content type (case studies, products, team members, FAQ entries, events, jobs, recipes, reviews) with a schema. Items conform to the schema and either render as standalone pages or feed into a `collection_list` block on a page.
 
 This doc tells you when to reach for a Collection, how to design its field schema, and how to wire its items so the rest of the platform (Astro renderer, eval engine, hreflang, personalization) does the heavy lifting for you.
 

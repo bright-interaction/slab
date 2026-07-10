@@ -24,9 +24,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/revisions"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/revisions"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // localeRegex enforces BCP-47-lite locale codes the builder + nginx

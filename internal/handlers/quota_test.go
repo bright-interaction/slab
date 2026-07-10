@@ -13,8 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // newQuotaHandlerForTest spins up an in-memory SQLite DB with the

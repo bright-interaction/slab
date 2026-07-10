@@ -23,7 +23,7 @@ async function waitForServer(baseURL: string, maxMs = 60_000): Promise<void> {
 		await new Promise((r) => setTimeout(r, 250));
 	}
 	await ctx.dispose();
-	throw new Error(`atomicsite did not become healthy at ${baseURL} within ${maxMs}ms`);
+	throw new Error(`slab did not become healthy at ${baseURL} within ${maxMs}ms`);
 }
 
 function extractCookieValue(setCookie: string | null, name: string): string | null {
@@ -61,7 +61,7 @@ export default async function globalSetup() {
 	const cookieValue = extractCookieValue(setCookieHeader?.value ?? null, E2E_CONSTANTS.COOKIE_NAME);
 	if (!cookieValue) {
 		await ctx.dispose();
-		throw new Error('admin login did not set atomicsite_token cookie');
+		throw new Error('admin login did not set slab_token cookie');
 	}
 
 	await ctx.dispose();

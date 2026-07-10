@@ -661,7 +661,7 @@
 					{/if}
 					<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 						<p class="text-[11px] text-text-muted">
-							Self-hosted from /atomicsite-fonts. No external CDN.
+							Self-hosted from /slab-fonts. No external CDN.
 						</p>
 						<Button
 							variant="primary"
@@ -720,7 +720,7 @@
 							Design references
 						</h2>
 						<p class="mt-1 text-[12px] text-text-muted">
-							Public GitHub repos that the AI agent reads as design vocabulary. Atomicsite
+							Public GitHub repos that the AI agent reads as design vocabulary. Slab
 							pre-fetches package.json, README, tailwind config, global stylesheet, and a few
 							component files. Read-only pattern reference, never code copy.
 						</p>

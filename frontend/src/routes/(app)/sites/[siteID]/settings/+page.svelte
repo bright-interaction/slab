@@ -25,7 +25,7 @@
 
 	const siteID = $derived(data.site.id);
 
-	// Files atomicsite generates on every build. Each entry is rendered once
+	// Files slab generates on every build. Each entry is rendered once
 	// the site goes live; the path is what curl <domain>/<path> would hit.
 	// Keep this list in sync with internal/builder/{config,security,layouts}.go.
 	const generatedFiles: { path: string; label: string; description: string; icon: typeof FileCode }[] = [
@@ -192,7 +192,7 @@
 				Generated files
 			</h2>
 			<p class="text-[13px] text-text-secondary">
-				Atomicsite builds these for every site automatically. Most pull
+				Slab builds these for every site automatically. Most pull
 				values from your Profile, SEO settings, and Branding so there's
 				nothing to maintain by hand. The build pipeline writes them on
 				every deploy.

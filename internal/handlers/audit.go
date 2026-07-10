@@ -19,8 +19,8 @@ import (
 	"net/http"
 	"strconv"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // AuditAction enumerates the handful of verbs we currently log.
@@ -89,7 +89,7 @@ func AuditLog(
 // only r.RemoteAddr because the trusted-proxy middleware
 // (TrustedProxyRealIP) at the top of the stack has already
 // canonicalized RemoteAddr: when the immediate peer is in
-// ATOMICSITE_TRUSTED_PROXIES, RemoteAddr was rewritten from XFF;
+// SLAB_TRUSTED_PROXIES, RemoteAddr was rewritten from XFF;
 // otherwise it stays as the actual TCP peer. Reading XFF or
 // CF-Connecting-IP directly here would let any direct peer spoof the
 // audit log.

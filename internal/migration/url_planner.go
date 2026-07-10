@@ -6,13 +6,13 @@ import (
 	"strings"
 )
 
-// URLPlan is the proposed shape of the new atomicsite site once a manifest
+// URLPlan is the proposed shape of the new slab site once a manifest
 // is committed. Built from a MigrationManifest plus the existing-page set
 // for collision detection. The agent or operator reviews this BEFORE the
 // porter writes anything to the DB; the verify endpoint (Layer 2) reads
 // from the same plan to surface "X URLs will 404 after launch".
 type URLPlan struct {
-	// Pages: source-page paths and their proposed atomicsite slug.
+	// Pages: source-page paths and their proposed slab slug.
 	Pages []PagePlan `json:"pages"`
 
 	// CollectionItems: keyed by collection slug; the planner doesn't
@@ -23,18 +23,18 @@ type URLPlan struct {
 
 	// Redirects: every from->to pair the porter must insert. A row
 	// appears here when (a) the source path differs from the proposed
-	// atomicsite path, or (b) the source page was explicitly skipped
+	// slab path, or (b) the source page was explicitly skipped
 	// (status_code 410, "gone").
 	Redirects []RedirectPlan `json:"redirects"`
 
 	// Conflicts: source URLs whose proposed slug collides with an
-	// existing live atomicsite page or another item in the same plan.
+	// existing live slab page or another item in the same plan.
 	// Non-empty Conflicts blocks Apply unless the operator picks an
 	// override per row.
 	Conflicts []PlanConflict `json:"conflicts,omitempty"`
 }
 
-// PagePlan is one source page mapped to its target atomicsite slug.
+// PagePlan is one source page mapped to its target slab slug.
 type PagePlan struct {
 	SourcePath string `json:"source_path"`
 	SourceURL  string `json:"source_url,omitempty"`
@@ -82,7 +82,7 @@ type PlanOptions struct {
 	CollapseDateArchives bool
 
 	// PreserveLocalePrefix keeps `/sv/about` mapped to `/sv/about` so
-	// hreflang alternates already in atomicsite stay intact. Default true.
+	// hreflang alternates already in slab stay intact. Default true.
 	PreserveLocalePrefix bool
 
 	// SkipPaths is the operator's allow-list of source paths to NOT import.
@@ -160,14 +160,14 @@ func PlanURLs(m *MigrationManifest, existingSlugs map[string]bool, opts PlanOpti
 
 		newSlug, reason := proposeSlug(src, opts)
 
-		// Collision check: existing live atomicsite page wins, the
+		// Collision check: existing live slab page wins, the
 		// porter would then create a redirect not a page (handled
 		// below as a Conflict so the operator can decide).
 		if existingSlugs[strings.TrimPrefix(newSlug, "/")] {
 			plan.Conflicts = append(plan.Conflicts, PlanConflict{
 				SourcePath: src, ProposedSlug: newSlug,
 				ExistingKind: "page",
-				Detail:       "atomicsite already serves a page at this slug",
+				Detail:       "slab already serves a page at this slug",
 			})
 			continue
 		}

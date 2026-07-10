@@ -334,7 +334,7 @@ Authorization: Bearer atomic_<hex>`}</pre>
 			</p>
 			<pre
 				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
-			>{`curl -H "X-Agent-Key: $ATOMICSITE_KEY" \\
+			>{`curl -H "X-Agent-Key: $SLAB_KEY" \\
   https://admin.example.com/api/agent/context | jq .`}</pre>
 		</Card>
 
@@ -489,26 +489,26 @@ Authorization: Bearer atomic_<hex>`}</pre>
 			<pre
 				class="mt-3 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
 			>{`# 1. Bootstrap context
-curl -sH "X-Agent-Key: $ATOMICSITE_KEY" "$ATOMICSITE_API/api/agent/context" | jq .
+curl -sH "X-Agent-Key: $SLAB_KEY" "$SLAB_API/api/agent/context" | jq .
 
 # 2. Create a page
-curl -sH "X-Agent-Key: $ATOMICSITE_KEY" -H "Content-Type: application/json" \\
+curl -sH "X-Agent-Key: $SLAB_KEY" -H "Content-Type: application/json" \\
   -d '{"slug":"/about","title":"About us: what we do and why","status":"draft"}' \\
-  "$ATOMICSITE_API/api/agent/pages"
+  "$SLAB_API/api/agent/pages"
 
 # 3. Add a hero block
-curl -sH "X-Agent-Key: $ATOMICSITE_KEY" -H "Content-Type: application/json" \\
+curl -sH "X-Agent-Key: $SLAB_KEY" -H "Content-Type: application/json" \\
   -d '{"type":"hero","data":{"heading":"Welcome","cta_label":"Get started"}}' \\
-  "$ATOMICSITE_API/api/agent/pages/about/blocks"
+  "$SLAB_API/api/agent/pages/about/blocks"
 
 # 4. Trigger a build
-BUILD=$(curl -sH "X-Agent-Key: $ATOMICSITE_KEY" -X POST "$ATOMICSITE_API/api/agent/build" | jq -r .build_id)
+BUILD=$(curl -sH "X-Agent-Key: $SLAB_KEY" -X POST "$SLAB_API/api/agent/build" | jq -r .build_id)
 
 # 5. Poll status
-until [ "$(curl -sH "X-Agent-Key: $ATOMICSITE_KEY" "$ATOMICSITE_API/api/agent/build/$BUILD/status" | jq -r .status)" = "done" ]; do sleep 2; done
+until [ "$(curl -sH "X-Agent-Key: $SLAB_KEY" "$SLAB_API/api/agent/build/$BUILD/status" | jq -r .status)" = "done" ]; do sleep 2; done
 
 # 6. Read evaluation
-curl -sH "X-Agent-Key: $ATOMICSITE_KEY" "$ATOMICSITE_API/api/agent/evaluation/$BUILD" | jq .
+curl -sH "X-Agent-Key: $SLAB_KEY" "$SLAB_API/api/agent/evaluation/$BUILD" | jq .
 
 # 7. Fix any failing checks, repeat from step 2.`}</pre>
 		</Card>

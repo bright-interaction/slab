@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 const AgentContextKey contextKey = "agent_key"

@@ -23,7 +23,7 @@ type Target struct {
 	ID     string
 	SiteID string
 	// Slug is the site's slug. The wildcard host serves a tenant from
-	// /srv/atomicsite/{slug}/dist, so a local target's path legitimately
+	// /srv/slab/{slug}/dist, so a local target's path legitimately
 	// contains the slug (not the site ID). LocalDeployer.Validate accepts the
 	// path's tenant segment matching either SiteID or Slug. Optional: when
 	// empty, only SiteID is checked.

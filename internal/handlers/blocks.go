@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/bright-interaction/atomicsite/internal/blocks"
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/revisions"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/blocks"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/revisions"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 type BlockHandler struct {

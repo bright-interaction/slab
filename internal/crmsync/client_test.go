@@ -16,7 +16,7 @@ import (
 const testSecret = "test-secret-32-bytes-x-x-x-x-x-x"
 
 // TestClientSend_SignsAndPosts confirms the signature is computed over the
-// raw JSON body (in hex) and shipped in X-Atomicsite-Signature, and that
+// raw JSON body (in hex) and shipped in X-Slab-Signature, and that
 // the server-side payload matches what we sent.
 func TestClientSend_SignsAndPosts(t *testing.T) {
 	var (

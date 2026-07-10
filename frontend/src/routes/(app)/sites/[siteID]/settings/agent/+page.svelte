@@ -200,7 +200,7 @@
 				</h2>
 			</header>
 			<p class="mb-4 text-[12px] text-text-secondary">
-				Read-only URIs the agent fetches via <code>resources/read</code>. The curriculum is exposed under <code>atomicsite://knowledge/*</code>; the cross-reference graph at <code>atomicsite://meta/knowledge-graph</code> lets the agent navigate the surface in one fetch.
+				Read-only URIs the agent fetches via <code>resources/read</code>. The curriculum is exposed under <code>slab://knowledge/*</code>; the cross-reference graph at <code>slab://meta/knowledge-graph</code> lets the agent navigate the surface in one fetch.
 			</p>
 			<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
 				{#each surface.resources as r (r.uri)}

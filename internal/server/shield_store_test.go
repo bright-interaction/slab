@@ -6,8 +6,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/shield"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/shield"
 )
 
 func TestBuildShieldStore_DefaultsToSQLStore(t *testing.T) {

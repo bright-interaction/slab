@@ -74,7 +74,7 @@
 			{
 				title: 'CRM connectors',
 				intro:
-					'Bring your own CRM via the generic webhook. Form submissions, identification events, and consent updates POST to your endpoint, signed with HMAC-SHA256 in the X-Atomicsite-Signature header.',
+					'Bring your own CRM via the generic webhook. Form submissions, identification events, and consent updates POST to your endpoint, signed with HMAC-SHA256 in the X-Slab-Signature header.',
 				apps: [
 					{
 						name: 'HubSpot',
@@ -217,7 +217,7 @@
 					{
 						name: 'Claude Code / Claude CLI',
 						status: 'shipped',
-						body: 'One-click setup. Generate the bundle, drop CLAUDE.md + atomicsite.env at your project root, run claude. The agent walks pending_setup with you, then builds.',
+						body: 'One-click setup. Generate the bundle, drop CLAUDE.md + slab.env at your project root, run claude. The agent walks pending_setup with you, then builds.',
 						setup: 'Documentation -> Connect your agent -> Generate key & download CLAUDE.md.',
 						linkLabel: 'Connect your agent',
 						linkHref: '/docs/connect-your-agent'
@@ -225,7 +225,7 @@
 					{
 						name: 'Cursor / VS Code agents',
 						status: 'byo',
-						body: 'Same bundle. Rename CLAUDE.md to .cursorrules and feed atomicsite.env into the agent runtime.',
+						body: 'Same bundle. Rename CLAUDE.md to .cursorrules and feed slab.env into the agent runtime.',
 						setup: 'Documentation -> Connect your agent.',
 						linkLabel: 'Connect your agent',
 						linkHref: '/docs/connect-your-agent'
@@ -359,7 +359,7 @@
 						name: 'DNS provider (any)',
 						status: 'shipped',
 						body:
-							'For multi-tenant deployments, point a wildcard record (e.g. *.tenants.example.com) at the host running atomicsite. Wildcard TLS works the same way. Single-root deployments only need an A/AAAA record for ATOMICSITE_PRIMARY_DOMAIN. Custom domains route via the deploy target you configure (Dockyard, Fly, Vercel, plain VPS).',
+							'For multi-tenant deployments, point a wildcard record (e.g. *.tenants.example.com) at the host running slab. Wildcard TLS works the same way. Single-root deployments only need an A/AAAA record for SLAB_PRIMARY_DOMAIN. Custom domains route via the deploy target you configure (Dockyard, Fly, Vercel, plain VPS).',
 						setup: 'Automatic. Inspect at /docs/architecture for the topology.',
 						linkLabel: 'Architecture',
 						linkHref: '/docs/architecture'
@@ -368,7 +368,7 @@
 						name: 'Self-hosted woff2 fonts',
 						status: 'shipped',
 						body:
-							'POST /api/sites/{id}/fonts. Magic header (wOF2 at offset 0) validated; woff/ttf/otf rejected. 2 MB cap per file. Served at /atomicsite-fonts/{site_id}/{font_id}.woff2 with Cache-Control: immutable + crossorigin. Builder emits @font-face + rel="preload" hints.',
+							'POST /api/sites/{id}/fonts. Magic header (wOF2 at offset 0) validated; woff/ttf/otf rejected. 2 MB cap per file. Served at /slab-fonts/{site_id}/{font_id}.woff2 with Cache-Control: immutable + crossorigin. Builder emits @font-face + rel="preload" hints.',
 						setup: 'Branding -> Custom fonts.',
 						linkLabel: 'Branding',
 						linkHref: site('branding')
@@ -386,7 +386,7 @@
 						name: 'Wildcard static host (Caddy / nginx)',
 						status: 'shipped',
 						body:
-							'For multi-tenant deployments, a wildcard route on Caddy or nginx serves built sites straight from a dist/ directory on disk (e.g. /srv/atomicsite/<slug>/dist). Local-kind deploy targets land here. Single-root deployments push the dist/ output to any static host instead.',
+							'For multi-tenant deployments, a wildcard route on Caddy or nginx serves built sites straight from a dist/ directory on disk (e.g. /srv/slab/<slug>/dist). Local-kind deploy targets land here. Single-root deployments push the dist/ output to any static host instead.',
 						setup: 'Operator-configured. See /docs/architecture for an example Caddy block.',
 						linkLabel: null,
 						linkHref: null

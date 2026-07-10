@@ -4,7 +4,7 @@ This directory documents the cloud-only build boundary, gated behind the Go buil
 
 ## What lives here
 
-Anything that only matters when Atomic Site is hosting **multiple unrelated tenants** as a SaaS, rather than serving a single root domain for a single operator:
+Anything that only matters when Slab is hosting **multiple unrelated tenants** as a SaaS, rather than serving a single root domain for a single operator:
 
 - Multi-tenant edge orchestration (Vercel API client, Caddy admin client)
 - Domain verification poller (DNS challenge, ownership checks)
@@ -49,14 +49,14 @@ The interface and the `!ee` stubs ship here purely to document the seam.
 
 ## Why a build tag and not a runtime flag
 
-Both. The build tag controls **what code is linked into the binary**: a stock OSS build can't accidentally instantiate a Stripe client or a Vercel API caller, no matter what env vars are set. The `ATOMICSITE_DEPLOYMENT_MODE` runtime flag (in `internal/config`) controls **which behaviour is selected** at startup, and the `Validate()` guard refuses to start in `cloud` mode unless `ee.IsAvailable()` returns true (i.e. the binary was actually built with `-tags ee`).
+Both. The build tag controls **what code is linked into the binary**: a stock OSS build can't accidentally instantiate a Stripe client or a Vercel API caller, no matter what env vars are set. The `SLAB_DEPLOYMENT_MODE` runtime flag (in `internal/config`) controls **which behaviour is selected** at startup, and the `Validate()` guard refuses to start in `cloud` mode unless `ee.IsAvailable()` returns true (i.e. the binary was actually built with `-tags ee`).
 
 This keeps the OSS distribution provably free of the closed-source surface area while letting operators who want to self-build the cloud variant do so without forking core.
 
 ## Licensing: fair-code core, held-back commercial enterprise layer
 
-The public core of Atomic Site (everything in this repository, including the
-`ee/` interface and the `!ee` stubs) is licensed under the Atomicsite
+The public core of Slab (everything in this repository, including the
+`ee/` interface and the `!ee` stubs) is licensed under the Slab
 Sustainable Use License, a fair-code license: read, run, modify, and self-host
 it for free, including for your own clients. The one limit is that you may not
 resell it or run it as a hosted service for third parties. See
@@ -67,5 +67,5 @@ subscription billing, cross-tenant aggregation, cert pre-issuance across many
 tenants) are the commercial enterprise layer. That code is held back: it is not
 published in this repository and is offered under a separate commercial license.
 The public core builds and runs fully on its own without it. If you want the
-hosted Atomic Site Cloud or a commercial license for the enterprise layer,
+hosted Slab Cloud or a commercial license for the enterprise layer,
 contact licensing@brightinteraction.com.

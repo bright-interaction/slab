@@ -1,14 +1,14 @@
-# Atomic Site Dockerfile (self-contained).
+# Slab Dockerfile (self-contained).
 #
-# Builds entirely from the atomicsite/ directory. The CookieProof widget
+# Builds entirely from the slab/ directory. The CookieProof widget
 # bundle is vendored at internal/builder/assets/cookieproof.embed.esm.js
 # and embedded into the Go binary via go:embed (see widget_embed.go), so
-# Atomic Site has zero runtime or build-time dependency on the sibling
+# Slab has zero runtime or build-time dependency on the sibling
 # CookieProof source. To refresh the widget bundle from source, run a
 # CookieProof build separately and commit the regenerated asset.
 #
 # Local build (from the repo root):
-#   docker build -f Dockerfile -t atomicsite .
+#   docker build -f Dockerfile -t slab .
 
 # Stage 1: SvelteKit admin SPA.
 FROM oven/bun:1-alpine AS frontend
@@ -81,24 +81,24 @@ ENV CHROMEDP_HEADLESS_FLAGS="" \
     CHROMEDP_NO_SANDBOX=1
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 # Run as a stable non-root UID:GID 1000:1000. The existing
-# atomicsite_atomicsite-data named volume was originally written by an
+# slab_slab-data named volume was originally written by an
 # alpine system user (100:101); operators upgrading from the alpine
 # image must one-shot chown the volume to 1000:1000 before the first
 # debian-image deploy:
-#   docker run --rm -v atomicsite_atomicsite-data:/data \
+#   docker run --rm -v slab_slab-data:/data \
 #     debian:bookworm-slim chown -R 1000:1000 /data
 # 1000:1000 was picked to dodge the GID 101 collision (systemd-journal
 # in debian:bookworm-slim) without hardcoding a non-portable system
 # UID. New deployments don't need any chown; the entrypoint creates
 # /app/data with the right ownership.
-RUN groupadd -g 1000 atomicsite && useradd -u 1000 -g atomicsite -m -d /app atomicsite
-RUN mkdir -p /app/data && chown -R atomicsite:atomicsite /app
+RUN groupadd -g 1000 slab && useradd -u 1000 -g slab -m -d /app slab
+RUN mkdir -p /app/data && chown -R slab:slab /app
 COPY --from=backend /server /app/server
 COPY litestream.yml /app/litestream.yml
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 WORKDIR /app
-USER atomicsite
+USER slab
 ENV DATA_DIR=/app/data
 EXPOSE 8080
 ENTRYPOINT ["/app/entrypoint.sh"]

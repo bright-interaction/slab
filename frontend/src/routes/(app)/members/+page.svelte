@@ -143,7 +143,7 @@
 				Workspace members
 			</h1>
 			<p class="mt-1 text-[13px] text-text-secondary">
-				Atomicsite is invite-only. Mint a one-time signup link below and share it with your teammate.
+				Slab is invite-only. Mint a one-time signup link below and share it with your teammate.
 			</p>
 		</div>
 		{#if isAdmin}

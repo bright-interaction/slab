@@ -2,7 +2,7 @@
 // and MCP tools can list, inspect, and restore prior states.
 //
 // Sprint 1 of the WP/Webflow replacement roadmap (see
-// atomicsite/docs/ROADMAP.md): trust foundation. Operators edit more
+// slab/docs/ROADMAP.md): trust foundation. Operators edit more
 // aggressively when undo is one click away.
 //
 // Scope: pages + blocks. Future sprints add global_blocks,
@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Entity types stored in entity_revisions.entity_type. Must match the

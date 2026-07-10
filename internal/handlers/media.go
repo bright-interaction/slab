@@ -17,11 +17,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/imaging"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/storage"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/imaging"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/storage"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // MediaHandler handles media CRUD + upload + public serving.

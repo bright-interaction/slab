@@ -11,12 +11,12 @@ import {
 import { E2E_CONSTANTS } from '../../playwright.config';
 
 // internal/crmsync/client.go signs every outbound webhook with HMAC-SHA256
-// over the JSON body, hex-encoded, in the header `X-Atomicsite-Signature`.
+// over the JSON body, hex-encoded, in the header `X-Slab-Signature`.
 // We re-compute the signature here from the stub's recorded body and verify
 // it matches the header the server sent. Same algorithm + secret (configured
 // in playwright.config.ts as BRIGHTCRM_WEBHOOK_SECRET) -> same hex digest.
 
-const SIGNATURE_HEADER = 'x-atomicsite-signature';
+const SIGNATURE_HEADER = 'x-slab-signature';
 
 test.describe('analytics: BrightCRM HMAC signature is valid', () => {
 	let site: Site;
@@ -31,7 +31,7 @@ test.describe('analytics: BrightCRM HMAC signature is valid', () => {
 		for (const id of cleanup) await deleteSite(adminApi, id);
 	});
 
-	test('every recorded CRM call carries a valid X-Atomicsite-Signature', async () => {
+	test('every recorded CRM call carries a valid X-Slab-Signature', async () => {
 		await resetStub('crm');
 
 		const ctx = await request.newContext({
@@ -68,7 +68,7 @@ test.describe('analytics: BrightCRM HMAC signature is valid', () => {
 		const secret = E2E_CONSTANTS.STUB_CRM_SECRET;
 		for (const c of calls) {
 			const sig = c.headers[SIGNATURE_HEADER];
-			expect(sig, 'X-Atomicsite-Signature missing on CRM call').toBeTruthy();
+			expect(sig, 'X-Slab-Signature missing on CRM call').toBeTruthy();
 			// crmsync.Client serialises Event with Go's encoding/json. Replay the
 			// same byte sequence to verify the signature.
 			const bodyBytes = Buffer.from(JSON.stringify(c.body), 'utf8');

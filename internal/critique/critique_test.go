@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/eval"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/eval"
 )
 
 // fakeSite builds a minimal SiteContext with one page so RunChecks can
@@ -150,8 +150,8 @@ func TestRunChecks_DetectsMissingMeta(t *testing.T) {
 // check under test without tripping the meta gate.
 func minimalHeadedHTML(body string) string {
 	return `<!doctype html><html><head>` +
-		`<title>Atomicsite Inspector, 599 sites audited, A+ on 47.2%</title>` +
-		`<meta name="description" content="Atomicsite inspector grades 128 checks across security, performance, accessibility, SEO, privacy. Industry average is 62 of 100. Run yours.">` +
+		`<title>Slab Inspector, 599 sites audited, A+ on 47.2%</title>` +
+		`<meta name="description" content="Slab inspector grades 128 checks across security, performance, accessibility, SEO, privacy. Industry average is 62 of 100. Run yours.">` +
 		`<meta property="og:image" content="https://example.com/og.png">` +
 		`<link rel="canonical" href="https://example.com/">` +
 		`</head><body>` + body + `</body></html>`

@@ -1,6 +1,6 @@
 // Self-hosted woff2 font uploads (Phase 12.8). Storage path:
 //   {DataDir}/fonts/{site_id}/{id}.woff2
-// Public serving path on the built site is /_atomicsite/fonts/{id}.woff2,
+// Public serving path on the built site is /_slab/fonts/{id}.woff2,
 // emitted as @font-face by the Astro Layout generator.
 
 package handlers
@@ -17,8 +17,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // woff2Magic is the signature at offset 0 of every woff2 file.
@@ -200,7 +200,7 @@ func (h *FontsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Serve streams a font file at its public URL. Long cache because the
 // content addresses by id (immutable per upload).
-// GET /atomicsite-fonts/{siteID}/{fontID}.woff2
+// GET /slab-fonts/{siteID}/{fontID}.woff2
 func (h *FontsHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
 	fontID := urlParam(r, "fontID")
@@ -254,7 +254,7 @@ func newFontID() string {
 // for inlining into the Astro Layout. The src points at the public font
 // URL served by Serve(). Used by the builder.
 func (h *FontsHandler) EmitFontFace(siteID string, row store.SiteFont) string {
-	src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, row.ID)
+	src := fmt.Sprintf("/slab-fonts/%s/%s.woff2", siteID, row.ID)
 	return fmt.Sprintf(
 		"@font-face { font-family: %q; font-style: %s; font-weight: %d; font-display: swap; src: url(%q) format('woff2'); }\n",
 		row.FamilyName, row.Style, row.Weight, src,

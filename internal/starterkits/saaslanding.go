@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func init() {

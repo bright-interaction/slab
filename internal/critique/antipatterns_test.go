@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/slab/internal/agent"
 )
 
 func lc(html, css, text string, headings ...string) antiPatternInput {

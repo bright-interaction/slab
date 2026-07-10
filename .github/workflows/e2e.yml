@@ -1,4 +1,4 @@
-name: Atomicsite E2E
+name: Slab E2E
 
 on:
   push:
@@ -30,8 +30,8 @@ jobs:
       - name: Build frontend (embedded into Go binary)
         run: make frontend
 
-      - name: Build atomicsite Go binary
-        run: go build -o bin/atomicsite ./cmd/server
+      - name: Build slab Go binary
+        run: go build -o bin/slab ./cmd/server
 
       - name: Install E2E deps
         working-directory: tests/e2e

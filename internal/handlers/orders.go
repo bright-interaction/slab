@@ -35,10 +35,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/payments/mollie"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/payments/mollie"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Order status transition map. Empty target list = terminal.
@@ -562,7 +562,7 @@ func (h *OrderHandler) setOrderPayment(ctx context.Context, siteID, orderID, pay
 // own hostname rather than ours:
 //  1. The canonical site_domains row for this site (operator-configured,
 //     always the right answer when present).
-//  2. cfg.PrimaryDomain (env: ATOMICSITE_PRIMARY_DOMAIN), the multi-tenant
+//  2. cfg.PrimaryDomain (env: SLAB_PRIMARY_DOMAIN), the multi-tenant
 //     apex set at boot.
 //  3. cfg.BaseURL (env: BASE_URL), the dev / single-site fallback.
 //  4. Empty string. Caller-side checkout flow logs and skips Mollie when

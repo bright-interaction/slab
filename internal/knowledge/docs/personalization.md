@@ -1,6 +1,6 @@
 # Personalization
 
-Atomic Site supports light personalization: small per-visitor variations on the static site without breaking the no-PII boundary. The agent can configure rules that the build pipeline emits as runtime hooks; it cannot, ever, read identified-tier visitor data.
+Slab supports light personalization: small per-visitor variations on the static site without breaking the no-PII boundary. The agent can configure rules that the build pipeline emits as runtime hooks; it cannot, ever, read identified-tier visitor data.
 
 ## What you can personalize
 
@@ -28,7 +28,7 @@ A rule has three parts:
 2. **Target**: a block ID and the field to override
 3. **Variant**: the override value
 
-Stored in the `personalization_rules` table; surfaced via `atomicsite://site/context.personalization` on read; written via the agent endpoint that owns this surface.
+Stored in the `personalization_rules` table; surfaced via `slab://site/context.personalization` on read; written via the agent endpoint that owns this surface.
 
 ## Where it runs
 
@@ -46,4 +46,4 @@ When the operator's CRM webhook (`analytics.crm_webhook_url`) pushes visitor ide
 
 ## Why this discipline matters
 
-Atomic Site's privacy posture is the product. The MCP boundary that blocks identified-tier reads is enforced by `internal/mcp/mcp_test.go` and survives every refactor. An agent that quietly leaks lead-score into a page risks every customer's compliance posture. The boundary is non-negotiable.
+Slab's privacy posture is the product. The MCP boundary that blocks identified-tier reads is enforced by `internal/mcp/mcp_test.go` and survives every refactor. An agent that quietly leaks lead-score into a page risks every customer's compliance posture. The boundary is non-negotiable.

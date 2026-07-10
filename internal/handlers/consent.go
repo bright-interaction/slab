@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // ConsentHandler exposes admin-side reads over the consent_records table .
-// the GDPR proof-of-consent log atomicsite became system of record for after
+// the GDPR proof-of-consent log slab became system of record for after
 // the CookieProof fold-in. Reads are site-scoped and require an
 // authenticated admin (mounted behind the auth middleware in server.go).
 type ConsentHandler struct {

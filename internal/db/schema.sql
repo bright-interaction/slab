@@ -1,4 +1,4 @@
--- AtomicSite database schema (SQLite)
+-- Slab database schema (SQLite)
 
 CREATE TABLE IF NOT EXISTS users (
     id             TEXT PRIMARY KEY,
@@ -114,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_workspace_invites_workspace ON workspace_invites(
 -- Billing (Phase 30.2, Cloud Tier MVP, 2026-05-06).
 --
 -- Provider-agnostic shape so the same tables work for Mollie today
--- and any future provider. Atomicsite ships with Mollie because the
+-- and any future provider. Slab ships with Mollie because the
 -- EU-sovereign positioning rules out Stripe (US-incorporated, Cloud
 -- Act exposure). The brightcrm payment_config pattern was the
 -- reference for the provider-enum + opaque external-id design.
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 -- ============================================================
--- Atomicsite AI Website Builder: Agent API + Evaluation Engine
+-- Slab AI Website Builder: Agent API + Evaluation Engine
 -- ============================================================
 
 -- Business profile (auto-fills legal pages, schema, security.txt)
@@ -596,7 +596,7 @@ CREATE INDEX IF NOT EXISTS idx_migrations_status ON migrations(status);
 -- Migration verifications (Layer 5 / Sprint 2 of the migration system,
 -- 2026-05-06). Per-source-URL post-launch crawl results - the operator
 -- ran VerifyLive after flipping DNS and we recorded what each old URL
--- now resolves to on the new atomicsite. ok=1 means the chain ended at
+-- now resolves to on the new slab. ok=1 means the chain ended at
 -- 200; ok=0 means somewhere along the redirect chain we hit a 4xx/5xx
 -- or final 200 was missing. The migration UI surfaces failures for
 -- one-click manual redirect creation.
@@ -690,7 +690,7 @@ CREATE INDEX IF NOT EXISTS idx_form_submissions_form ON form_submissions(form_id
 CREATE INDEX IF NOT EXISTS idx_form_submissions_site ON form_submissions(site_id);
 
 -- AI-native Custom Collections (Sprint 4, 2026-05-04). The CMS layer that
--- turns Atomic Site from "landing page builder" into a true content
+-- turns Slab from "landing page builder" into a true content
 -- platform. A Collection is a user-defined content type (case studies,
 -- portfolio items, products, team members, FAQ entries, events, etc.)
 -- with a schema_json field array. Items conform to the schema and can
@@ -877,11 +877,11 @@ CREATE INDEX IF NOT EXISTS idx_site_fonts_site ON site_fonts(site_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_site_fonts_per_family ON site_fonts(site_id, family_name, weight, style);
 
 -- GitHub design references (Phase 12.8). Site owners paste a public
--- repo URL; atomicsite pre-fetches a small bundle of representative
+-- repo URL; slab pre-fetches a small bundle of representative
 -- files (package.json, README.md, tailwind.config, app.css, plus 3-5
 -- component files) and surfaces the bundle to AI agents via the
 -- /api/agent/context endpoint as "design vocabulary the user wants
--- atomicsite to feel like." Read-only pattern reference, not code copy.
+-- slab to feel like." Read-only pattern reference, not code copy.
 CREATE TABLE IF NOT EXISTS design_references (
     id            TEXT PRIMARY KEY,
     site_id       TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
@@ -902,7 +902,7 @@ CREATE INDEX IF NOT EXISTS idx_design_references_site ON design_references(site_
 -- (consent_salts table) so audit lookups within a day work, but the IP
 -- itself never lands on disk.
 --
--- This table is the system of record for tenants of Atomic Site after the
+-- This table is the system of record for tenants of Slab after the
 -- CookieProof fold-in (2026-04-30). Before that, proofs were posted to
 -- consent.example.com; now they live here, same-origin.
 CREATE TABLE IF NOT EXISTS consent_records (
@@ -1013,7 +1013,7 @@ CREATE TABLE IF NOT EXISTS consent_salts (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- site_domains holds custom hostnames pointing at an atomicsite tenant.
+-- site_domains holds custom hostnames pointing at an slab tenant.
 -- One row per (siteID, hostname). Status drives the live-domain pipeline:
 --
 --   pending     - row created, no DNS check has succeeded yet.
@@ -1103,7 +1103,7 @@ CREATE INDEX IF NOT EXISTS idx_conversion_events_fingerprint ON conversion_event
 -- via this table. Tokens are session-scoped, TTL-expired, and
 -- cleaned up by ON DELETE CASCADE when the session row is deleted.
 --
--- ciphertext = base64(AES-256-GCM(value, ATOMICSITE_SHIELD_KEY)).
+-- ciphertext = base64(AES-256-GCM(value, SLAB_SHIELD_KEY)).
 -- Rotating the key invalidates live sessions (forces re-shield on
 -- the next MCP turn). hint is an optional whitelisted metadata
 -- string the agent reads ("domain=lawfirm.se,len=22") that must
@@ -1178,7 +1178,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_del_site ON webhook_deliveries(site_id, c
 -- without an explicit DELETE.
 --
 -- tokenize: unicode61 + remove_diacritics covers Swedish + most EU
--- languages (Atomic Site is EU-sovereign by design); operators
+-- languages (Slab is EU-sovereign by design); operators
 -- running CJK content can drop in their own tokenizer once SQLite
 -- supports them via build flags.
 CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(

@@ -28,7 +28,7 @@ export interface ListDomainsResponse {
 // Sprint 4.7.4 (2026-05-09): help payload the admin UI fetches once on
 // mount so the "Add an A record" instructions show real values instead
 // of "[your edge IP]" placeholder. edge_ip is empty when the server
-// boots without ATOMICSITE_EDGE_IP (single-tenant dev runs); UI falls
+// boots without SLAB_EDGE_IP (single-tenant dev runs); UI falls
 // back to a "ask your operator" line in that case.
 export interface DomainsHelp {
 	edge_ip: string;

@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/migration"
+	"github.com/bright-interaction/slab/internal/migration"
 )
 
 // productionMediaUploader is the real migration.MediaUploader used at boot.
 // It hooks the migration porter into the same imaging + storage pipeline
 // that drives /api/sites/{id}/media/upload-from-url, so a migrated image
-// lands as a fully-processed atomicsite media row (variants, blurhash,
+// lands as a fully-processed slab media row (variants, blurhash,
 // content-addressed storage) instead of staying as a hot-link to the
 // source.
 //
@@ -68,7 +68,7 @@ func defaultMaxUploadBytes(h *MediaHandler) int64 {
 
 // UploadFromURL fetches sourceURL through the SSRF guard, runs it through
 // the imaging pipeline (variants + blurhash + content-addressed storage),
-// inserts a media row, and returns the public URL the rendered atomicsite
+// inserts a media row, and returns the public URL the rendered slab
 // will serve. The porter uses (mediaID, publicURL) to rewrite <img src>
 // references in imported HTML blobs.
 //
@@ -96,7 +96,7 @@ func (p *productionMediaUploader) UploadFromURL(ctx context.Context, siteID, sou
 		return "", "", fmt.Errorf("process %s: %s (status %d)", sourceURL, msg, status)
 	}
 
-	// Public URL the deployed atomicsite serves. The build pipeline
+	// Public URL the deployed slab serves. The build pipeline
 	// (internal/builder/media.go) rewrites these to the per-tenant
 	// /media/{mediaID}/{variant}.{ext} convention; we use original.{ext}
 	// because that's the canonical full-resolution variant the imaging

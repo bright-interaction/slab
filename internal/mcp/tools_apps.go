@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 // registerAppsTools wires the Sprint 4 apps platform MCP surface.
@@ -27,7 +27,7 @@ func (s *Server) registerAppsTools() {
 
 	register(Tool{
 		Name:        "list_apps_marketplace",
-		Description: "Lists every active app in the cross-tenant Atomicsite Apps marketplace. Returns app_id, slug, name, description, category, publisher, version, icon_url, docs_url, plus the credential field schema each app needs at install. Use this to discover what third-party integrations are available before recommending an install to the human. Read-only: install happens via the admin UI in slice A; slice B will gate agent-driven installs behind a per-site flag.",
+		Description: "Lists every active app in the cross-tenant Slab Apps marketplace. Returns app_id, slug, name, description, category, publisher, version, icon_url, docs_url, plus the credential field schema each app needs at install. Use this to discover what third-party integrations are available before recommending an install to the human. Read-only: install happens via the admin UI in slice A; slice B will gate agent-driven installs behind a per-site flag.",
 		InputSchema: schema(`{"type":"object","properties":{}}`),
 		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, raw json.RawMessage) (string, error) {
 			if s.apps == nil {
@@ -59,7 +59,7 @@ func (s *Server) registerAppsTools() {
 
 	register(Tool{
 		Name:        "use_app",
-		Description: "Proxies one JSON-RPC tools/call to an installed app's upstream MCP server using the stored install credentials. Required: app_slug (e.g. 'stripe', 'calcom', 'brevo'), tool (the upstream tool name; call list_installed_apps + the publisher's docs to discover the surface). Optional: arguments (JSON object passed verbatim to the upstream tool). Atomicsite injects the primary secret as a Bearer token and any extra credentials as X-Atomic-Cred-<key> headers; the agent never sees the values. Returns the upstream JSON-RPC result on success or an error envelope (with http_status / error_code / error_message) when the publisher refuses or fails. Updates last_used_at on every dispatch, including upstream errors. Refuses when the app is not installed, not active, or not in the marketplace. Upstream timeout is 30 seconds; responses larger than 256 KB are rejected.",
+		Description: "Proxies one JSON-RPC tools/call to an installed app's upstream MCP server using the stored install credentials. Required: app_slug (e.g. 'stripe', 'calcom', 'brevo'), tool (the upstream tool name; call list_installed_apps + the publisher's docs to discover the surface). Optional: arguments (JSON object passed verbatim to the upstream tool). Slab injects the primary secret as a Bearer token and any extra credentials as X-Atomic-Cred-<key> headers; the agent never sees the values. Returns the upstream JSON-RPC result on success or an error envelope (with http_status / error_code / error_message) when the publisher refuses or fails. Updates last_used_at on every dispatch, including upstream errors. Refuses when the app is not installed, not active, or not in the marketplace. Upstream timeout is 30 seconds; responses larger than 256 KB are rejected.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{

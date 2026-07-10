@@ -29,8 +29,8 @@ async function loginAndGetCookie(): Promise<string> {
 			.filter((h) => h.name.toLowerCase() === 'set-cookie')
 			.map((h) => h.value)
 			.join('\n');
-		const m = setCookie.match(/atomicsite_token=([^;]+)/);
-		expect(m, `expected atomicsite_token in Set-Cookie, got: ${setCookie}`).toBeTruthy();
+		const m = setCookie.match(/slab_token=([^;]+)/);
+		expect(m, `expected slab_token in Set-Cookie, got: ${setCookie}`).toBeTruthy();
 		return m![1];
 	} finally {
 		await ctx.dispose();
@@ -59,7 +59,7 @@ test.describe('security: password change invalidates old JWT (token_version bump
 		// Sanity: the cookie works.
 		{
 			const ctx = await request.newContext({
-				extraHTTPHeaders: { Cookie: `atomicsite_token=${oldCookie}` }
+				extraHTTPHeaders: { Cookie: `slab_token=${oldCookie}` }
 			});
 			try {
 				const res = await ctx.get(u('/api/auth/me'));
@@ -73,7 +73,7 @@ test.describe('security: password change invalidates old JWT (token_version bump
 		{
 			const ctx = await request.newContext({
 				extraHTTPHeaders: {
-					Cookie: `atomicsite_token=${oldCookie}`,
+					Cookie: `slab_token=${oldCookie}`,
 					'Content-Type': 'application/json'
 				}
 			});
@@ -90,7 +90,7 @@ test.describe('security: password change invalidates old JWT (token_version bump
 		// Same JWT must now be rejected.
 		{
 			const ctx = await request.newContext({
-				extraHTTPHeaders: { Cookie: `atomicsite_token=${oldCookie}` }
+				extraHTTPHeaders: { Cookie: `slab_token=${oldCookie}` }
 			});
 			try {
 				const res = await ctx.get(u('/api/auth/me'));
@@ -114,7 +114,7 @@ test.describe('security: password change invalidates old JWT (token_version bump
 				.filter((h) => h.name.toLowerCase() === 'set-cookie')
 				.map((h) => h.value)
 				.join('\n');
-			tempCookie = (sc.match(/atomicsite_token=([^;]+)/) ?? [])[1] ?? '';
+			tempCookie = (sc.match(/slab_token=([^;]+)/) ?? [])[1] ?? '';
 			expect(tempCookie).toBeTruthy();
 		} finally {
 			await tempCtx.dispose();
@@ -122,7 +122,7 @@ test.describe('security: password change invalidates old JWT (token_version bump
 
 		const restoreCtx = await request.newContext({
 			extraHTTPHeaders: {
-				Cookie: `atomicsite_token=${tempCookie}`,
+				Cookie: `slab_token=${tempCookie}`,
 				'Content-Type': 'application/json'
 			}
 		});
@@ -149,7 +149,7 @@ test.describe('security: password change invalidates old JWT (token_version bump
 				.filter((h) => h.name.toLowerCase() === 'set-cookie')
 				.map((h) => h.value)
 				.join('\n');
-			const refreshed = (sc.match(/atomicsite_token=([^;]+)/) ?? [])[1];
+			const refreshed = (sc.match(/slab_token=([^;]+)/) ?? [])[1];
 			expect(refreshed).toBeTruthy();
 			writeFileSync(COOKIE_FILE, refreshed!, 'utf8');
 		} finally {

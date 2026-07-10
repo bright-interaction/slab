@@ -4,7 +4,7 @@ Premium-feeling sites have calibrated color, not enthusiastic color. The agent's
 
 ## The starting point
 
-Branding gives the agent six seed colors via the eight CSS variables in `atomicsite://knowledge/css-variable-system`. The most consequential is `--color-primary`. Treat it as the brand voice, used sparingly: hero CTA, link hover, one or two accent moments per page. A page where every other element is `--color-primary` reads as enthusiastic and amateur.
+Branding gives the agent six seed colors via the eight CSS variables in `slab://knowledge/css-variable-system`. The most consequential is `--color-primary`. Treat it as the brand voice, used sparingly: hero CTA, link hover, one or two accent moments per page. A page where every other element is `--color-primary` reads as enthusiastic and amateur.
 
 ## Neutral foundation
 
@@ -20,7 +20,7 @@ For light-mode neutrals, a clean ladder:
 --color-text    : #111827   /* primary text */
 ```
 
-For dark-mode, invert the relationships, not the values. Dark mode is not light mode with hue rotation; it is its own composition. See `atomicsite://knowledge/dark-mode`.
+For dark-mode, invert the relationships, not the values. Dark mode is not light mode with hue rotation; it is its own composition. See `slab://knowledge/dark-mode`.
 
 ## Contrast ratios
 
@@ -70,7 +70,7 @@ Override per-site only when the brand explicitly requires it. Most marketing sit
 
 ## Figma import path
 
-When the operator uses `import_figma_tokens`, the imported palette overwrites the default slots. The agent should diff before applying: if Figma has 14 colors and Atomic Site has 6 slots, propose a mapping rather than dropping eight values. The Figma handler exposes the raw payload via `atomicsite://figma/imports/<id>`.
+When the operator uses `import_figma_tokens`, the imported palette overwrites the default slots. The agent should diff before applying: if Figma has 14 colors and Slab has 6 slots, propose a mapping rather than dropping eight values. The Figma handler exposes the raw payload via `slab://figma/imports/<id>`.
 
 ## What you must not do
 

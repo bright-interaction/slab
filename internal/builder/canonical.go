@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // CanonicalHostname returns the live canonical hostname for a site.

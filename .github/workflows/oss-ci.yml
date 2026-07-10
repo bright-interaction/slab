@@ -1,4 +1,4 @@
-# Atomic Site: OSS CI
+# Slab: OSS CI
 #
 # Fast feedback loop on every PR: vet + tests on the fair-code core build
 # and a frontend build. The slower Playwright E2E suite lives in e2e.yml.
@@ -11,7 +11,7 @@
 # - The enterprise (ee) cloud layer is held back and not published in this
 #   repository, so the CI builds only the default fair-code core.
 
-name: Atomicsite OSS CI
+name: Slab OSS CI
 
 on:
   push:
@@ -85,7 +85,7 @@ jobs:
       - name: Upload frontend build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: atomicsite-frontend-build
+          name: slab-frontend-build
           path: frontend/build/
           retention-days: 7
 
@@ -108,18 +108,18 @@ jobs:
       - name: Download frontend build
         uses: actions/download-artifact@v4
         with:
-          name: atomicsite-frontend-build
+          name: slab-frontend-build
           path: cmd/server/frontend/build/
 
       - name: Build Go binary (core)
-        run: go build -o bin/atomicsite ./cmd/server
+        run: go build -o bin/slab ./cmd/server
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: atomicsite-binaries
+          name: slab-binaries
           path: |
-            bin/atomicsite
+            bin/slab
           retention-days: 7
 
   quickstart-smoke:
@@ -135,23 +135,23 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: atomicsite-binaries
+          name: slab-binaries
           path: bin/
 
       - name: Make binary executable
-        run: chmod +x bin/atomicsite
+        run: chmod +x bin/slab
 
-      - name: Boot atomicsite
+      - name: Boot slab
         run: |
           mkdir -p data
-          ./bin/atomicsite > /tmp/atomicsite.log 2>&1 &
-          echo $! > /tmp/atomicsite.pid
+          ./bin/slab > /tmp/slab.log 2>&1 &
+          echo $! > /tmp/slab.pid
 
       - name: Wait for /api/health to respond
         run: |
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/api/health > /tmp/health.json; then
-              echo "atomicsite up after ${i}s"
+              echo "slab up after ${i}s"
               cat /tmp/health.json
               # /api/mode is the OSS branding probe.
               curl -fsS http://127.0.0.1:8080/api/mode | grep -q '"mode":"single"'
@@ -159,16 +159,16 @@ jobs:
             fi
             sleep 1
           done
-          echo "atomicsite never came up. Logs:"
-          cat /tmp/atomicsite.log
+          echo "slab never came up. Logs:"
+          cat /tmp/slab.log
           exit 1
 
-      - name: Stop atomicsite
+      - name: Stop slab
         if: always()
-        run: kill $(cat /tmp/atomicsite.pid) || true
+        run: kill $(cat /tmp/slab.pid) || true
 
   backup-verification:
-    # Validates the `atomicsite backup-db` CLI by:
+    # Validates the `slab backup-db` CLI by:
     #   1. Booting a server and seeding a row.
     #   2. Running VACUUM INTO via the backup-db verb.
     #   3. Booting a SECOND server against the restored snapshot.
@@ -187,18 +187,18 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: atomicsite-binaries
+          name: slab-binaries
           path: bin/
 
       - name: Make binary executable
-        run: chmod +x bin/atomicsite
+        run: chmod +x bin/slab
 
       - name: Boot first server + seed a row
         run: |
-          mkdir -p /tmp/atomicsite-source/data
-          (cd /tmp/atomicsite-source && \
-            DATA_DIR=/tmp/atomicsite-source/data \
-            $GITHUB_WORKSPACE/bin/atomicsite > /tmp/source.log 2>&1) &
+          mkdir -p /tmp/slab-source/data
+          (cd /tmp/slab-source && \
+            DATA_DIR=/tmp/slab-source/data \
+            $GITHUB_WORKSPACE/bin/slab > /tmp/source.log 2>&1) &
           echo $! > /tmp/source.pid
           # Wait for boot.
           for i in $(seq 1 30); do
@@ -209,7 +209,7 @@ jobs:
           # via the admin login + sign-out-everywhere flow. Anything
           # that touches the DB works; we just need a verifiable artifact.
           COOKIE=$(curl -sS -i -X POST -H "Content-Type: application/json" \
-            -d '{"email":"admin@atomicsite.dev","password":"changeme123"}' \
+            -d '{"email":"admin@slab.dev","password":"changeme123"}' \
             http://127.0.0.1:8080/api/auth/login | \
             grep -i "set-cookie:" | head -1 | awk '{print $2}' | tr -d ';\r')
           curl -sS -X POST -H "Cookie: $COOKIE" \
@@ -221,22 +221,22 @@ jobs:
 
       - name: Run backup-db CLI
         run: |
-          mkdir -p /tmp/atomicsite-backup
-          DATA_DIR=/tmp/atomicsite-source/data \
-            $GITHUB_WORKSPACE/bin/atomicsite backup-db \
-            --output=/tmp/atomicsite-backup/snapshot.db
-          ls -la /tmp/atomicsite-backup/snapshot.db
-          test -s /tmp/atomicsite-backup/snapshot.db
+          mkdir -p /tmp/slab-backup
+          DATA_DIR=/tmp/slab-source/data \
+            $GITHUB_WORKSPACE/bin/slab backup-db \
+            --output=/tmp/slab-backup/snapshot.db
+          ls -la /tmp/slab-backup/snapshot.db
+          test -s /tmp/slab-backup/snapshot.db
 
       - name: Restore snapshot into a second data dir + boot
         run: |
-          mkdir -p /tmp/atomicsite-restored/data
-          cp /tmp/atomicsite-backup/snapshot.db /tmp/atomicsite-restored/data/atomicsite.db
-          (cd /tmp/atomicsite-restored && \
-            DATA_DIR=/tmp/atomicsite-restored/data \
+          mkdir -p /tmp/slab-restored/data
+          cp /tmp/slab-backup/snapshot.db /tmp/slab-restored/data/slab.db
+          (cd /tmp/slab-restored && \
+            DATA_DIR=/tmp/slab-restored/data \
             PORT=8090 \
             BASE_URL=http://localhost:8090 \
-            $GITHUB_WORKSPACE/bin/atomicsite > /tmp/restored.log 2>&1) &
+            $GITHUB_WORKSPACE/bin/slab > /tmp/restored.log 2>&1) &
           echo $! > /tmp/restored.pid
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8090/api/health >/dev/null; then break; fi
@@ -250,7 +250,7 @@ jobs:
           # here means the snapshot dropped the users row, the
           # password_hash got mangled, or the schema is divergent.
           COOKIE=$(curl -sS -i -X POST -H "Content-Type: application/json" \
-            -d '{"email":"admin@atomicsite.dev","password":"changeme123"}' \
+            -d '{"email":"admin@slab.dev","password":"changeme123"}' \
             http://127.0.0.1:8090/api/auth/login | \
             grep -i "set-cookie:" | head -1)
           if [ -z "$COOKIE" ]; then

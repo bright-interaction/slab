@@ -6,7 +6,7 @@ import { E2E_CONSTANTS } from '../../playwright.config';
 
 // internal/analytics/manager.go spawns a per-site Parser goroutine that tails a
 // JSON-formatted nginx access log and writes visit_events rows. The harness
-// overrides the log dir via ATOMICSITE_LOG_DIR (set by playwright.config.ts) so
+// overrides the log dir via SLAB_LOG_DIR (set by playwright.config.ts) so
 // the parser tails a path the test can append to. We then assert via the
 // admin GET /api/sites/{id}/visit-events that the row landed.
 
@@ -20,11 +20,11 @@ test.describe('analytics: nginx log tail', () => {
 	test('appended JSON log line is ingested into visit_events', async ({ adminApi }) => {
 		site = await createSite(adminApi, { siteType: 'b2b', structureType: 'one-pager' });
 
-		// Enable atomicsite tracking - the manager's settings hook spawns a parser
+		// Enable slab tracking - the manager's settings hook spawns a parser
 		// for this site as soon as the bulk-upsert returns.
 		const enableRes = await adminApi.put(u(`/api/sites/${site.id}/settings/bulk`), {
 			data: [
-				{ category: 'analytics', key: 'atomicsite_tracking_enabled', value: 'true' }
+				{ category: 'analytics', key: 'slab_tracking_enabled', value: 'true' }
 			]
 		});
 		expect(enableRes.ok()).toBeTruthy();

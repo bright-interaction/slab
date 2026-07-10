@@ -6,19 +6,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
-// AtomicSiteConsentCookieName is the first-party cookie + localStorage key
-// every Atomic Site banner uses for the consent record. We deliberately
+// SlabConsentCookieName is the first-party cookie + localStorage key
+// every Slab banner uses for the consent record. We deliberately
 // override the CookieProof default ("ce_consent") so tenants see an
 // Atomic-Site-branded cookie in their DevTools / consent table, and so
-// downstream tooling can recognize "this banner is on Atomic Site" by the
+// downstream tooling can recognize "this banner is on Slab" by the
 // cookie name alone.
 //
 // The widget's storage layer accepts any name matching /^[a-zA-Z0-9_-]+$/
-// and rejects anything else — keep this constant in that shape.
-const AtomicSiteConsentCookieName = "as_consent"
+// and rejects anything else, keep this constant in that shape.
+const SlabConsentCookieName = "as_consent"
 
 // CookieProofConfig captures the per-tenant inputs the snippet generator
 // needs. Most fields are optional and default to widget defaults if empty.
@@ -87,7 +87,7 @@ type CookieProofConfig struct {
 }
 
 // CookieCategory mirrors the relevant subset of the widget's CategoryConfig.
-// Atomicsite stores category preferences flat per site; we render them out as
+// Slab stores category preferences flat per site; we render them out as
 // a list when emitting the inline config.
 //
 // Declarations is the per-category cookie list the widget renders as a
@@ -100,7 +100,7 @@ type CookieCategory struct {
 	Declarations []widgetCookieDecl `json:"declarations,omitempty"`
 }
 
-// CookieDeclaration is atomicsite's storage + admin-API shape for a single
+// CookieDeclaration is slab's storage + admin-API shape for a single
 // cookie row. It carries the routing Category field; we strip it when
 // emitting to the widget (see widgetCookieDecl).
 //
@@ -255,7 +255,7 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 		RespectGPC:       true,
 		FloatingTrigger:  floatingTrigger,
 		Theme:            theme,
-		CookieName:       AtomicSiteConsentCookieName,
+		CookieName:       SlabConsentCookieName,
 		CookieExpiry:     cfg.CookieExpiryDays,
 		Revision:         cfg.Revision,
 		LanguageSelector: langSel,
@@ -311,7 +311,7 @@ func buildCookieProofEmbedConfig(cfg CookieProofConfig) ([]byte, error) {
 
 // RenderCookieProofConfigPrefix builds the JS prefix that gets prepended
 // to the widget bundle: GCM default-denied stub + window.__CCB__ assignment.
-// Returns plain JS bytes — caller writes them ahead of the bundle.
+// Returns plain JS bytes, caller writes them ahead of the bundle.
 //
 // Exported so the admin preview handler can stream "config + widget bundle"
 // bytes directly into the iframe response without going through the
@@ -479,7 +479,7 @@ func BuildCookieProofConfig(site store.Site, settingsMap map[string]string) Cook
 
 // assignDeclarationsToCategories groups merged declarations by Category and
 // writes them onto the matching CookieCategory.Declarations slice. Rows
-// with an unknown category are dropped silently — atomicsite's UI gates
+// with an unknown category are dropped silently, slab's UI gates
 // the input to the four built-in categories, so this is defensive only.
 func assignDeclarationsToCategories(cats []CookieCategory, decls []CookieDeclaration) {
 	idx := make(map[string]int, len(cats))

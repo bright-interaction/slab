@@ -1,14 +1,14 @@
-# Atomic Site: Fly.io reference deploy
+# Slab: Fly.io reference deploy
 #
-# Replace `your-atomicsite-app` with your Fly app name. EU sovereign
+# Replace `your-slab-app` with your Fly app name. EU sovereign
 # default region (fra = Frankfurt); change to your closest region.
 #
 # Before first deploy, set the secrets:
 #   fly secrets set \
 #     JWT_SECRET=$(openssl rand -hex 32) \
 #     ANALYTICS_SALT=$(openssl rand -hex 32) \
-#     ATOMICSITE_PRIMARY_DOMAIN=example.com \
-#     BASE_URL=https://your-atomicsite-app.fly.dev \
+#     SLAB_PRIMARY_DOMAIN=example.com \
+#     BASE_URL=https://your-slab-app.fly.dev \
 #     ADMIN_PASSWORD=$(openssl rand -hex 16)
 #
 # This config uses the repo's Dockerfile, which is self-contained: the
@@ -16,7 +16,7 @@
 # go:embed, so there is no build-time dependency on any sibling checkout.
 # See README.md.
 
-app = "your-atomicsite-app"
+app = "your-slab-app"
 primary_region = "fra"
 
 [build]
@@ -25,7 +25,7 @@ primary_region = "fra"
 [env]
   PORT = "8080"
   DATA_DIR = "/data"
-  ATOMICSITE_DEPLOYMENT_MODE = "single"
+  SLAB_DEPLOYMENT_MODE = "single"
 
 [http_service]
   internal_port = 8080
@@ -47,7 +47,7 @@ primary_region = "fra"
     path = "/health"
 
 [[mounts]]
-  source = "atomicsite_data"
+  source = "slab_data"
   destination = "/data"
   initial_size = "5gb"
 

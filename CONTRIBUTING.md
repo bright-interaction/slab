@@ -1,4 +1,4 @@
-# Contributing to Atomic Site
+# Contributing to Slab
 
 Thanks for your interest. This file covers what you need to send a useful patch.
 
@@ -19,7 +19,7 @@ First-time setup:
 
 ```bash
 git clone <fork-url>
-cd atomicsite
+cd slab
 make frontend-install     # bun install in frontend/
 cp .env.example .env      # fill in JWT_SECRET, ANALYTICS_SALT for prod-ish testing
 
@@ -61,7 +61,7 @@ make frontend-dev         # SvelteKit dev server with proxy on :5173
 
 ## Open Core boundary (read this if you touch the server)
 
-Atomic Site is **Open Core**. The OSS Core (this repo) covers everything needed to self-host one instance for one root domain. Multi-tenant edge orchestration, billing, cross-tenant aggregation, and cert pre-issuance live in the **Cloud** distribution behind the `ee` Go build tag.
+Slab is **Open Core**. The OSS Core (this repo) covers everything needed to self-host one instance for one root domain. Multi-tenant edge orchestration, billing, cross-tenant aggregation, and cert pre-issuance live in the **Cloud** distribution behind the `ee` Go build tag.
 
 Rule of thumb:
 - **OSS Core**: anything one operator running their own marketing site needs. Goes in `internal/`.
@@ -90,4 +90,4 @@ Email **security@brightinteraction.com** with details. Please do not file public
 
 ## License grant
 
-By contributing, you agree your contributions are licensed under the [Atomicsite Sustainable Use License](LICENSE). Inbound = outbound (DCO-style: you certify you have the right to submit the work under this license); we don't require a separate CLA.
+By contributing, you agree your contributions are licensed under the [Slab Sustainable Use License](LICENSE). Inbound = outbound (DCO-style: you certify you have the right to submit the work under this license); we don't require a separate CLA.

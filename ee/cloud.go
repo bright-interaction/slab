@@ -1,4 +1,4 @@
-// Package ee defines the build-tag boundary between Atomic Site OSS Core and
+// Package ee defines the build-tag boundary between Slab OSS Core and
 // the Cloud (Enterprise Edition) distribution. See ee/README.md for the
 // canonical list of what belongs in this package.
 //
@@ -18,7 +18,7 @@ import "errors"
 // Callers in core check `errors.Is(err, ee.ErrNotAvailable)` to decide
 // between "fail loudly because cloud was expected" and "fall through to
 // the OSS path because cloud is optional".
-var ErrNotAvailable = errors.New("atomicsite: cloud feature not available in OSS build")
+var ErrNotAvailable = errors.New("slab: cloud feature not available in OSS build")
 
 // Provider is the cloud control-plane seam. The OSS build returns a stub
 // that no-ops every method. The Cloud build wires real implementations
@@ -30,7 +30,7 @@ var ErrNotAvailable = errors.New("atomicsite: cloud feature not available in OSS
 type Provider interface {
 	// Mode reports the build flavour. Returns "oss" or "cloud". Used by
 	// internal/config Validate() to refuse-to-start when
-	// ATOMICSITE_DEPLOYMENT_MODE=cloud is set on a binary that was not
+	// SLAB_DEPLOYMENT_MODE=cloud is set on a binary that was not
 	// built with -tags ee.
 	Mode() string
 

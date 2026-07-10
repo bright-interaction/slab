@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // TestRenderBlock_DataBlock confirms the default data-driven branch emits a
@@ -215,7 +215,7 @@ func TestRenderPage_Wrapping(t *testing.T) {
 }
 
 // TestRenderPage_NoIndexEmitsRobots confirms a page flagged no_index=1 gets
-// the robots="noindex, nofollow" prop on the Base wrapper, so atomicsite's
+// the robots="noindex, nofollow" prop on the Base wrapper, so slab's
 // auto-noindex flow surfaces in the rendered Astro.
 func TestRenderPage_NoIndexEmitsRobots(t *testing.T) {
 	page := store.Page{

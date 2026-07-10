@@ -27,8 +27,8 @@
 	let copiedMkdir = $state(false);
 	let copiedClaudeRun = $state(false);
 
-	const mkdirCmd = `mkdir ~/Desktop/my-atomicsite-project
-cd ~/Desktop/my-atomicsite-project`;
+	const mkdirCmd = `mkdir ~/Desktop/my-slab-project
+cd ~/Desktop/my-slab-project`;
 	async function copyMkdir() {
 		try {
 			await navigator.clipboard.writeText(mkdirCmd);
@@ -138,11 +138,11 @@ cd ~/Desktop/my-atomicsite-project`;
 		}
 	}
 
-	const fetchClaudeMd = `curl -sH "X-Agent-Key: $ATOMICSITE_KEY" \\
-  "$ATOMICSITE_API/api/agent/bootstrap" -o CLAUDE.md`;
+	const fetchClaudeMd = `curl -sH "X-Agent-Key: $SLAB_KEY" \\
+  "$SLAB_API/api/agent/bootstrap" -o CLAUDE.md`;
 
-	const manualEnv = `export ATOMICSITE_API="https://admin.example.com"
-export ATOMICSITE_KEY="atomic_<your key>"`;
+	const manualEnv = `export SLAB_API="https://admin.example.com"
+export SLAB_KEY="atomic_<your key>"`;
 
 	// MCP card. Default tab is Claude Desktop because that is the most
 	// common host today; Cursor and Cline cover the rest. The snippet
@@ -162,7 +162,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 		// explicit transport key per their own MCP docs.
 		const httpInferred = {
 			mcpServers: {
-				atomicsite: {
+				slab: {
 					url: mcpURL,
 					headers: { 'X-Agent-Key': mcpKey }
 				}
@@ -170,7 +170,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 		};
 		const cline = {
 			mcpServers: {
-				atomicsite: {
+				slab: {
 					transport: 'http',
 					url: mcpURL,
 					headers: { 'X-Agent-Key': mcpKey }
@@ -207,7 +207,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 	// argument 'name'" because the parser consumes the next token after
 	// --header as the header value, not as the name.
 	const mcpCli = $derived(
-		`claude mcp add atomicsite ${mcpURL} --transport http --scope project --header "X-Agent-Key: ${mcpKey}"`
+		`claude mcp add slab ${mcpURL} --transport http --scope project --header "X-Agent-Key: ${mcpKey}"`
 	);
 	async function copyMcp() {
 		try {
@@ -533,7 +533,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 								</li>
 								<li>
 									<p class="font-medium text-text-primary">
-										3. Add the atomicsite MCP server.
+										3. Add the slab MCP server.
 									</p>
 									<p class="mt-0.5 text-text-muted">Paste this command and hit enter.</p>
 									<div class="relative mt-1.5">
@@ -556,7 +556,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 									<p class="mt-1 text-text-muted">
 										Writes a small <code class="font-mono">.mcp.json</code> in
 										the folder. Skip this step and Claude Code starts with no
-										atomicsite tools (the most common mistake).
+										slab tools (the most common mistake).
 									</p>
 								</li>
 								<li>
@@ -590,7 +590,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 										and hit enter.
 									</p>
 									<p class="mt-0.5 text-text-muted">
-										You should see "atomicsite" listed as connected. Now ask the
+										You should see "slab" listed as connected. Now ask the
 										agent something: "Walk me through pending_setup."
 									</p>
 								</li>
@@ -624,7 +624,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 				</div>
 
 				<p class="mt-3 text-[12px] text-text-muted">
-					Restart your client after saving the file. Atomicsite tools should
+					Restart your client after saving the file. Slab tools should
 					appear in its tool picker.
 				</p>
 
@@ -662,7 +662,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 				</h3>
 				<p class="mt-2 text-[12px] text-text-muted">
 					Three pieces: a personalised <code class="font-mono">CLAUDE.md</code>, an
-					<code class="font-mono">atomicsite.env</code> with your API URL and key,
+					<code class="font-mono">slab.env</code> with your API URL and key,
 					and a smoke-test command. Drop them at the root of the project the
 					agent will work in.
 				</p>
@@ -677,7 +677,7 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 					</button>
 					<button
 						type="button"
-						onclick={() => downloadFile('atomicsite.env', bootstrap!.env_file, 'text/plain')}
+						onclick={() => downloadFile('slab.env', bootstrap!.env_file, 'text/plain')}
 						class="inline-flex items-center justify-center gap-1.5 rounded-md border border-border-light bg-bg-elevated px-3 py-2 text-[12px] text-text-primary transition-colors hover:bg-bg-hover"
 					>
 						<Download size={13} strokeWidth={1.75} />
@@ -713,10 +713,10 @@ export ATOMICSITE_KEY="atomic_<your key>"`;
 					<li>
 						Save the two files at your project root:
 						<code class="font-mono">CLAUDE.md</code> and
-						<code class="font-mono">atomicsite.env</code>.
+						<code class="font-mono">slab.env</code>.
 					</li>
 					<li>
-						In Terminal: <code class="font-mono">source ./atomicsite.env</code>.
+						In Terminal: <code class="font-mono">source ./slab.env</code>.
 					</li>
 					<li>
 						Run <code class="font-mono">claude</code>. Claude Code reads

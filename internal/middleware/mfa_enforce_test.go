@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/slab/internal/config"
 )
 
 // fakeLookup returns the given totp_enrolled_at for any user. Lets

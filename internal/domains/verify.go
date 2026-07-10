@@ -17,8 +17,8 @@ import (
 // HTTP (not HTTPS): the cert hasn't been issued yet, and the verifier
 // inside the same nginx that will eventually serve the live site is
 // proof enough that the routing is wired correctly. The verifier
-// listens on the global atomicsite-acme.conf block (port 80), reading
-// from the atomicsite app's /.well-known/atomic-verify/{token} handler.
+// listens on the global slab-acme.conf block (port 80), reading
+// from the slab app's /.well-known/atomic-verify/{token} handler.
 //
 // Timeout, redirects, and IP family are constrained so a malicious
 // hostname can't make us hold connections forever or follow a 302 to
@@ -54,7 +54,7 @@ func VerifyHostnameOwnership(ctx context.Context, hostname, expectedToken string
 	if err != nil {
 		return fmt.Errorf("build verify request: %w", err)
 	}
-	req.Header.Set("User-Agent", "atomicsite-domain-verify/1.0")
+	req.Header.Set("User-Agent", "slab-domain-verify/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -103,7 +103,7 @@ func VerifyHostnameLive(ctx context.Context, hostname string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "atomicsite-domain-live/1.0")
+	req.Header.Set("User-Agent", "slab-domain-live/1.0")
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

@@ -44,7 +44,7 @@ test.describe('analytics: /t/inbound HMAC + identifier resolution', () => {
 		try {
 			const body = JSON.stringify({ site_id: site.id, fingerprint: 'aaaaaaaaaaaaaaaa', metadata: {} });
 			const res = await ctx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': 'deadbeef' },
+				headers: { 'X-Slab-Signature': 'deadbeef' },
 				data: body
 			});
 			expect(res.status()).toBe(401);
@@ -60,7 +60,7 @@ test.describe('analytics: /t/inbound HMAC + identifier resolution', () => {
 		try {
 			const body = JSON.stringify({ site_id: site.id, metadata: { lifecycle: 'SQL' } });
 			const res = await ctx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': sign(body) },
+				headers: { 'X-Slab-Signature': sign(body) },
 				data: body
 			});
 			expect(res.status()).toBe(400);
@@ -80,7 +80,7 @@ test.describe('analytics: /t/inbound HMAC + identifier resolution', () => {
 				metadata: { lifecycle: 'SQL' }
 			});
 			const res = await ctx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': sign(body) },
+				headers: { 'X-Slab-Signature': sign(body) },
 				data: body
 			});
 			expect(res.status()).toBe(404);
@@ -100,7 +100,7 @@ test.describe('analytics: /t/inbound HMAC + identifier resolution', () => {
 				metadata: { lifecycle: 'SQL' }
 			});
 			const res = await ctx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': sign(body) },
+				headers: { 'X-Slab-Signature': sign(body) },
 				data: body
 			});
 			expect(res.status()).toBe(404);
@@ -140,7 +140,7 @@ test.describe('analytics: /t/visitor returns metadata bound to the requester fin
 	test('round-trip: consent creates session, inbound pushes metadata, visitor reads it back', async () => {
 		// Use a stable user-agent so /t/consent and /t/visitor derive the
 		// same fingerprint server-side.
-		const UA = 'AtomicsiteE2E/18.5 (compatible)';
+		const UA = 'SlabE2E/18.5 (compatible)';
 		const sharedHeaders = {
 			'User-Agent': UA,
 			'Accept-Language': 'en-GB,en;q=0.9'
@@ -202,7 +202,7 @@ test.describe('analytics: /t/visitor returns metadata bound to the requester fin
 				}
 			});
 			const res = await inboundCtx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': sign(body) },
+				headers: { 'X-Slab-Signature': sign(body) },
 				data: body
 			});
 			expect(res.status()).toBe(204);
@@ -228,7 +228,7 @@ test.describe('analytics: /t/visitor returns metadata bound to the requester fin
 	});
 
 	test('fresh identity_confirmed_at promotes name to identified tier', async () => {
-		const UA = 'AtomicsiteE2E/18.5 identified (compatible)';
+		const UA = 'SlabE2E/18.5 identified (compatible)';
 		const sharedHeaders = {
 			'User-Agent': UA,
 			'Accept-Language': 'en-GB,en;q=0.9'
@@ -275,7 +275,7 @@ test.describe('analytics: /t/visitor returns metadata bound to the requester fin
 				metadata: { name: 'Joe', lifecycle: 'Customer' }
 			});
 			await inboundCtx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': sign(body) },
+				headers: { 'X-Slab-Signature': sign(body) },
 				data: body
 			});
 		} finally {
@@ -294,7 +294,7 @@ test.describe('analytics: /t/visitor returns metadata bound to the requester fin
 	});
 
 	test('stale identity_confirmed_at scrubs identified tier', async () => {
-		const UA = 'AtomicsiteE2E/18.5 stale (compatible)';
+		const UA = 'SlabE2E/18.5 stale (compatible)';
 		const sharedHeaders = {
 			'User-Agent': UA,
 			'Accept-Language': 'en-GB,en;q=0.9'
@@ -343,7 +343,7 @@ test.describe('analytics: /t/visitor returns metadata bound to the requester fin
 				metadata: { name: 'Stale Joe', lifecycle: 'Customer' }
 			});
 			await inboundCtx.post(u('/t/inbound'), {
-				headers: { 'X-Atomicsite-Signature': sign(body) },
+				headers: { 'X-Slab-Signature': sign(body) },
 				data: body
 			});
 		} finally {

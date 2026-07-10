@@ -93,14 +93,14 @@ func TestRequiredToolsRegistered(t *testing.T) {
 	}
 
 	requiredResources := []string{
-		"atomicsite://site/context",
-		"atomicsite://site/settings_catalog",
-		"atomicsite://site/security_posture",
-		"atomicsite://site/i18n",
-		"atomicsite://site/pending_setup",
-		"atomicsite://site/structure",
+		"slab://site/context",
+		"slab://site/settings_catalog",
+		"slab://site/security_posture",
+		"slab://site/i18n",
+		"slab://site/pending_setup",
+		"slab://site/structure",
 		// Phase 31.1.1 (2026-05-06).
-		"atomicsite://analytics/goals",
+		"slab://analytics/goals",
 	}
 	for _, uri := range requiredResources {
 		if _, ok := s.resources[uri]; !ok {
@@ -168,7 +168,7 @@ func TestAgentWritableCategories(t *testing.T) {
 // --- expansion guards (knowledge curriculum, service context, write tools) ---
 
 // TestKnowledgeResourcesRegistered asserts every doc in
-// internal/knowledge has a matching atomicsite://knowledge/<slug>
+// internal/knowledge has a matching slab://knowledge/<slug>
 // resource, plus the catalog index. This is the expansion that turns
 // the agent into an Astro + TS + custom-CSS + UX/UI expert; if any
 // curriculum doc is missing, the agent is missing a chunk of its
@@ -183,11 +183,11 @@ func TestKnowledgeResourcesRegistered(t *testing.T) {
 	s.registerResources()
 	s.registerPrompts()
 
-	if _, ok := s.resources["atomicsite://knowledge/index"]; !ok {
-		t.Error("atomicsite://knowledge/index resource missing")
+	if _, ok := s.resources["slab://knowledge/index"]; !ok {
+		t.Error("slab://knowledge/index resource missing")
 	}
-	if _, ok := s.resources["atomicsite://meta/knowledge-graph"]; !ok {
-		t.Error("atomicsite://meta/knowledge-graph resource missing (the cross-reference graph)")
+	if _, ok := s.resources["slab://meta/knowledge-graph"]; !ok {
+		t.Error("slab://meta/knowledge-graph resource missing (the cross-reference graph)")
 	}
 
 	requiredKnowledgeSlugs := []string{
@@ -213,7 +213,7 @@ func TestKnowledgeResourcesRegistered(t *testing.T) {
 		"premium-design-principles",
 	}
 	for _, slug := range requiredKnowledgeSlugs {
-		uri := "atomicsite://knowledge/" + slug
+		uri := "slab://knowledge/" + slug
 		if _, ok := s.resources[uri]; !ok {
 			t.Errorf("knowledge resource %q missing; check internal/knowledge/embed.go docMetadataTable", uri)
 		}
@@ -233,18 +233,18 @@ func TestServiceContextResourcesRegistered(t *testing.T) {
 	s.registerPrompts()
 
 	required := []string{
-		"atomicsite://eval/latest",
-		"atomicsite://build/history",
-		"atomicsite://deploy/status",
-		"atomicsite://domains",
-		"atomicsite://members",
-		"atomicsite://knowledgebase",
-		"atomicsite://consent/stats",
-		"atomicsite://retention/status",
-		"atomicsite://integrations",
-		"atomicsite://design-references",
-		"atomicsite://meta/capabilities",
-		"atomicsite://meta/design-playbook",
+		"slab://eval/latest",
+		"slab://build/history",
+		"slab://deploy/status",
+		"slab://domains",
+		"slab://members",
+		"slab://knowledgebase",
+		"slab://consent/stats",
+		"slab://retention/status",
+		"slab://integrations",
+		"slab://design-references",
+		"slab://meta/capabilities",
+		"slab://meta/design-playbook",
 	}
 	for _, uri := range required {
 		if _, ok := s.resources[uri]; !ok {

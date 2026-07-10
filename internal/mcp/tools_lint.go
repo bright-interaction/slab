@@ -6,10 +6,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/critique"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/critique"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // strictDesignLintEnabled reads the per-site `design.strict_lint` setting.

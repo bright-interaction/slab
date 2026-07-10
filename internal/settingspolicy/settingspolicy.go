@@ -129,7 +129,7 @@ func validateSEO(key, value string) error {
 func validateAnalytics(key, value string) error {
 	switch key {
 	case "cookieproof_enabled",
-		"atomicsite_tracking_enabled",
+		"slab_tracking_enabled",
 		"ga4_enabled",
 		"umami_enabled",
 		"personalization_enabled",

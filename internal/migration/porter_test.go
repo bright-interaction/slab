@@ -12,11 +12,11 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
-// fakeUploader returns deterministic atomicsite URLs without hitting disk.
+// fakeUploader returns deterministic slab URLs without hitting disk.
 // Tests can flip failNext to make the next upload return an error so we can
 // exercise the porter's media-warning path.
 type fakeUploader struct {
@@ -34,7 +34,7 @@ func (f *fakeUploader) UploadFromURL(ctx context.Context, siteID, sourceURL, alt
 	}
 	n := f.uploads.Add(1)
 	id := "media_test_" + strings.Repeat("0", 23-len(itoa(int(n)))) + itoa(int(n))
-	url := "https://atomicsite.local/media/" + id + ".jpg"
+	url := "https://slab.local/media/" + id + ".jpg"
 	return id[:24], url, nil
 }
 
@@ -172,7 +172,7 @@ func TestPorter_AppliesPagesCollectionsRedirects(t *testing.T) {
 	}
 
 	// Verify media URL was rewritten in item content.
-	if !strings.Contains(items[0].DataJson, "atomicsite.local/media/") {
+	if !strings.Contains(items[0].DataJson, "slab.local/media/") {
 		t.Errorf("media URL not rewritten in item.data_json: %s", items[0].DataJson)
 	}
 	if strings.Contains(items[0].DataJson, "https://old/img.jpg") {

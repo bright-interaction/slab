@@ -302,7 +302,7 @@ func TestRsyncDeployer_Deploy_ValidatesBeforeRunning(t *testing.T) {
 func TestRsyncDeployer_Deploy_RejectsMissingDistDir(t *testing.T) {
 	d := NewRsyncDeployer()
 	tgt := validRsyncTarget()
-	_, err := d.Deploy(context.Background(), "/nonexistent/path/atomicsite-test", tgt)
+	_, err := d.Deploy(context.Background(), "/nonexistent/path/slab-test", tgt)
 	if err == nil {
 		t.Fatal("expected error for missing dist dir, got nil")
 	}

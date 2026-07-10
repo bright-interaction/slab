@@ -6,14 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/slab/internal/config"
 )
 
 // AdminReloadHandler accepts authenticated POSTs from Dockyard's rotation
 // engine and hot-swaps in-memory secrets without a container restart.
 //
-// Atomicsite uses a single shared HMAC secret for BOTH directions of the
-// BrightCRM webhook flow (signing outbound /webhooks/atomicsite calls
+// Slab uses a single shared HMAC secret for BOTH directions of the
+// BrightCRM webhook flow (signing outbound /webhooks/slab calls
 // and verifying inbound /t/inbound pings) plus the AES-256 SHIELD_KEY
 // the MCP server hands to every new shield.Session.
 //
@@ -66,10 +66,10 @@ type reloadRequest struct {
 	Secrets map[string]string `json:"secrets"`
 }
 
-var atomicsiteReloadAllowlist = map[string]struct{}{
+var slabReloadAllowlist = map[string]struct{}{
 	"BRIGHTCRM_WEBHOOK_SECRET":          {},
 	"BRIGHTCRM_WEBHOOK_SECRET_PREVIOUS": {},
-	"ATOMICSITE_SHIELD_KEY":             {},
+	"SLAB_SHIELD_KEY":                   {},
 }
 
 func (h *AdminReloadHandler) ReloadSecrets(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +101,7 @@ func (h *AdminReloadHandler) ReloadSecrets(w http.ResponseWriter, r *http.Reques
 
 	staged := make(map[string]string, len(req.Secrets))
 	for k, v := range req.Secrets {
-		if _, ok := atomicsiteReloadAllowlist[k]; ok {
+		if _, ok := slabReloadAllowlist[k]; ok {
 			staged[k] = v
 		}
 	}
@@ -128,7 +128,7 @@ func (h *AdminReloadHandler) ReloadSecrets(w http.ResponseWriter, r *http.Reques
 	// SHIELD_KEY that fails to land must produce a 4xx so the rotation
 	// engine records it as last_rotation_error and does not advance
 	// last_rotated_at.
-	if shieldKey, ok := staged["ATOMICSITE_SHIELD_KEY"]; ok {
+	if shieldKey, ok := staged["SLAB_SHIELD_KEY"]; ok {
 		if h.mcp == nil || !h.mcp.ShieldEnabled() {
 			writeError(w, http.StatusServiceUnavailable, "shield not enabled on this instance")
 			return

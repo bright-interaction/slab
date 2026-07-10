@@ -40,7 +40,7 @@ const (
 )
 
 // VerifyResult is what VerifyLive produces per source URL. The deployed
-// atomicsite is expected to either serve the URL directly (final 200) or
+// slab is expected to either serve the URL directly (final 200) or
 // 301 it through to a new live URL. Anything that ends in 4xx/5xx, loops,
 // or fails to connect counts as "ok=false" and the operator gets to fix it.
 type VerifyResult struct {
@@ -52,7 +52,7 @@ type VerifyResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
-// VerifyLive crawls every source URL through the deployed atomicsite, follows
+// VerifyLive crawls every source URL through the deployed slab, follows
 // up to MaxHops redirects, and reports per-URL outcome. The "deployedDomain"
 // is what the operator's DNS now points at; we substitute that host into
 // each source URL before fetching so the crawl exercises the redirect chain
@@ -195,7 +195,7 @@ func verifyOne(ctx context.Context, raw, deployedDomain string, opts VerifyOptio
 }
 
 // rewriteHostToDeployed swaps the host in a source URL with the deployed
-// atomicsite domain so the crawl exercises the new edge. Path + query +
+// slab domain so the crawl exercises the new edge. Path + query +
 // fragment are preserved verbatim. Bare paths (e.g. "/about") are
 // promoted to "https://{deployed}/about".
 func rewriteHostToDeployed(raw, deployedDomain string) (string, error) {

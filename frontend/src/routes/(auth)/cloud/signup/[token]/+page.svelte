@@ -99,7 +99,7 @@
 			Join {info?.workspace_name || 'a workspace'}
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			You've been invited to an Atomicsite Cloud workspace.
+			You've been invited to an Slab Cloud workspace.
 		</p>
 	</div>
 

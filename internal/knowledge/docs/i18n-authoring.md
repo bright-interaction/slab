@@ -1,6 +1,6 @@
 # i18n authoring
 
-Atomic Site supports multi-language sites with three strategies: path-based (`/en/about/`), subdomain-based (`en.example.com/about/`), or off (single language). Pick once per site through `general.hreflang_strategy`; the builder enforces the choice everywhere.
+Slab supports multi-language sites with three strategies: path-based (`/en/about/`), subdomain-based (`en.example.com/about/`), or off (single language). Pick once per site through `general.hreflang_strategy`; the builder enforces the choice everywhere.
 
 ## Default language and additional languages
 
@@ -50,7 +50,7 @@ DNS for each subdomain points at the same edge. The builder writes the right `li
 
 1. Create the default-language page first
 2. Create the translation with the same `slug` and the target `lang`
-3. Verify both appear under `atomicsite://site/structure` before triggering build
+3. Verify both appear under `slab://site/structure` before triggering build
 
 The builder skips emitting alternates that point at unpublished pages, so a half-translated site degrades gracefully.
 

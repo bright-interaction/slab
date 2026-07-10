@@ -14,10 +14,10 @@ import (
 	"regexp"
 	"strings"
 
-	agentpkg "github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	agentpkg "github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/handlers"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // registerExtraTools wires the operator-mutable surfaces beyond pages
@@ -769,7 +769,7 @@ func (s *Server) registerExtraTools() {
 
 	register(Tool{
 		Name:        "get_capabilities",
-		Description: "Returns the same self-describing snapshot as atomicsite://meta/capabilities resource: agent identity, write capability, full tools/resources/prompts surface, eval thresholds, privacy invariants. Use this when a tools/call surface is more convenient than resources/read.",
+		Description: "Returns the same self-describing snapshot as slab://meta/capabilities resource: agent identity, write capability, full tools/resources/prompts surface, eval thresholds, privacy invariants. Use this when a tools/call surface is more convenient than resources/read.",
 		InputSchema: schema(`{"type":"object","properties":{}}`),
 		Handler: func(_ context.Context, agent *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
 			return mustJSON(s.capabilitiesSnapshot(agent)), nil
@@ -778,7 +778,7 @@ func (s *Server) registerExtraTools() {
 
 	register(Tool{
 		Name:        "get_design_playbook",
-		Description: "Returns THIS site's design playbook (same payload as atomicsite://meta/design-playbook resource), adapted to its design.fidelity dial (performance / balanced / showcase): fidelity contract first (what is unlocked, how grading changes, what is never relaxed), then principles, page archetypes, anti-patterns, vibe archetypes, materiality, content authenticity (banned slop terms), motion budget, copy voice, font system, hero graphics catalog, one-shot recipe. This is the rubric the Inspector grades against. Read it BEFORE authoring blocks, and re-read after changing design.fidelity. Free to call, agents should consult it on session start.",
+		Description: "Returns THIS site's design playbook (same payload as slab://meta/design-playbook resource), adapted to its design.fidelity dial (performance / balanced / showcase): fidelity contract first (what is unlocked, how grading changes, what is never relaxed), then principles, page archetypes, anti-patterns, vibe archetypes, materiality, content authenticity (banned slop terms), motion budget, copy voice, font system, hero graphics catalog, one-shot recipe. This is the rubric the Inspector grades against. Read it BEFORE authoring blocks, and re-read after changing design.fidelity. Free to call, agents should consult it on session start.",
 		InputSchema: schema(`{"type":"object","properties":{}}`),
 		Handler: func(ctx context.Context, agent *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
 			fidelity := agentpkg.FidelityForSite(ctx, s.queries, agent.SiteID)
@@ -984,7 +984,7 @@ func (s *Server) registerExtraTools() {
 
 	register(Tool{
 		Name:        "get_figma_import_url",
-		Description: "Returns the admin URL where the user pastes a Figma file URL + personal access token to import design tokens. The agent does NOT receive the access token through MCP (security: tokens stay between user and server). Use this in the build_from_figma flow: call this tool, present the URL + instructions to the user, wait for them to confirm import completed, then read atomicsite://site/context to pick up the new branding tokens and atomicsite://figma/imports for the import record.",
+		Description: "Returns the admin URL where the user pastes a Figma file URL + personal access token to import design tokens. The agent does NOT receive the access token through MCP (security: tokens stay between user and server). Use this in the build_from_figma flow: call this tool, present the URL + instructions to the user, wait for them to confirm import completed, then read slab://site/context to pick up the new branding tokens and slab://figma/imports for the import record.",
 		InputSchema: schema(`{"type":"object","properties":{}}`),
 		Handler: func(_ context.Context, agent *authmw.AgentIdentity, _ json.RawMessage) (string, error) {
 			base := strings.TrimRight(s.baseURL, "/")

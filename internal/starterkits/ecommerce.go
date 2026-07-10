@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func init() {
@@ -17,7 +17,7 @@ func init() {
 // cart drama), and OG product images per SKU.
 //
 // We deliberately stick with Astro instead of forking to Qwik. Reasoning:
-// (a) atomicsite's entire build pipeline is Astro-based (one build target,
+// (a) slab's entire build pipeline is Astro-based (one build target,
 // one eval engine, one set of guardrails), (b) Astro 5 server islands cover
 // the resumability win for catalog / filter use cases, (c) Stripe Checkout
 // (the recommended pattern here) is a redirect, the in-page cart is light
@@ -157,14 +157,14 @@ func (k *ecommerceKit) applyCSS(ctx context.Context, q *store.Queries, siteID st
 
 func (k *ecommerceKit) applyKnowledgebase(ctx context.Context, q *store.Queries, siteID string) error {
 	entries := []kbDef{
-		{Category: "ecom-architecture", Title: "Why Astro instead of Next / Qwik for e-com", Content: "Atomicsite's e-com kit uses Astro because: SSR product pages get real SEO (Product schema rendered on the server, crawlers see the price), the cart is a small Svelte island that hydrates lazily (no full-app hydration cost), and Stripe Checkout is a redirect, so there is no in-page payment JS and checkout latency is bounded by Stripe's servers, not bundle size. Qwik's resumability wins matter most for highly interactive SPAs; storefronts are mostly read-traffic with one interactive widget (the cart)."},
+		{Category: "ecom-architecture", Title: "Why Astro instead of Next / Qwik for e-com", Content: "Slab's e-com kit uses Astro because: SSR product pages get real SEO (Product schema rendered on the server, crawlers see the price), the cart is a small Svelte island that hydrates lazily (no full-app hydration cost), and Stripe Checkout is a redirect, so there is no in-page payment JS and checkout latency is bounded by Stripe's servers, not bundle size. Qwik's resumability wins matter most for highly interactive SPAs; storefronts are mostly read-traffic with one interactive widget (the cart)."},
 		{Category: "ecom-architecture", Title: "Cart state lives in localStorage", Content: "Cart island reads + writes to localStorage. On checkout, the form submits {sku, qty}[] to /api/checkout, which creates a Stripe Checkout Session and returns a 303 redirect to checkout.stripe.com. Never store cart server-side until the user actually checks out: that saves DB writes and avoids cart-abandonment row spam."},
 		{Category: "ecom-payments", Title: "Stripe Checkout vs Stripe Elements", Content: "Always start with Stripe Checkout (redirect to a Stripe-hosted page). Reasons: PCI scope is reduced (Stripe sees the card, not us), forex / 3DS / Apple Pay / Google Pay all handled by Stripe, conversion is similar to embedded Elements for most stores. Switch to Elements only when you need a deeply custom checkout flow that A/B tests show converts measurably better."},
-		{Category: "ecom-schema", Title: "Product / Offer JSON-LD per page", Content: "Every product detail page emits Product schema with: name, description, sku, image (>=3 angles), offers (price, priceCurrency, availability InStock/OutOfStock, priceValidUntil), aggregateRating + review[] when reviews exist, brand. Atomicsite's product-card emits microdata; product detail pages add the full JSON-LD."},
-		{Category: "ecom-images", Title: "Product image strategy", Content: "Three required variants per product: 600x600 thumbnail (grid), 1200x1200 detail (PDP zoom), 1200x630 OG image (social shares). Atomicsite's image pipeline auto-generates all three from one upload. Always set width + height on <img> to prevent CLS. Use loading=\"lazy\" except on the LCP image (first product on a category page or the main image on a PDP)."},
+		{Category: "ecom-schema", Title: "Product / Offer JSON-LD per page", Content: "Every product detail page emits Product schema with: name, description, sku, image (>=3 angles), offers (price, priceCurrency, availability InStock/OutOfStock, priceValidUntil), aggregateRating + review[] when reviews exist, brand. Slab's product-card emits microdata; product detail pages add the full JSON-LD."},
+		{Category: "ecom-images", Title: "Product image strategy", Content: "Three required variants per product: 600x600 thumbnail (grid), 1200x1200 detail (PDP zoom), 1200x630 OG image (social shares). Slab's image pipeline auto-generates all three from one upload. Always set width + height on <img> to prevent CLS. Use loading=\"lazy\" except on the LCP image (first product on a category page or the main image on a PDP)."},
 		{Category: "ecom-search", Title: "On-site search and filtering", Content: "For <500 SKUs: pre-build a JSON index at build time and ship a small Svelte island that filters in-memory. For >500 SKUs: use a hosted search service (Typesense, Meilisearch self-hosted, Algolia). Never use SQL LIKE on every keystroke: it doesn't scale and ranks poorly."},
 		{Category: "ecom-conversion", Title: "Above-the-fold on a PDP", Content: "Product detail page above the fold: image (LCP), title, price, add-to-cart, ships-by-date, free-returns badge if applicable. Below: full description, specs, reviews, related products. Don't hide the price behind a tab. Don't gate add-to-cart behind an account creation step."},
-		{Category: "ecom-legal", Title: "Required pages for e-com", Content: "Beyond the standard privacy / terms / cookies, e-com sites need: shipping policy, returns policy, T&Cs of sale (separate from site terms), VAT info if EU, accessibility statement (mandatory in EU from 2025-06-28). Atomicsite seeds shipping / returns / sale-terms pages on e-com sites in addition to the universal four."},
+		{Category: "ecom-legal", Title: "Required pages for e-com", Content: "Beyond the standard privacy / terms / cookies, e-com sites need: shipping policy, returns policy, T&Cs of sale (separate from site terms), VAT info if EU, accessibility statement (mandatory in EU from 2025-06-28). Slab seeds shipping / returns / sale-terms pages on e-com sites in addition to the universal four."},
 	}
 	return seedKB(ctx, q, siteID, entries, 400)
 }

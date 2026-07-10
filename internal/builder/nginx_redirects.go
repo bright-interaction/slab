@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // BuildRedirectBlock turns the per-site redirects table into nginx location
@@ -56,7 +56,7 @@ func BuildRedirectBlock(redirects []store.Redirect) string {
 	})
 
 	var b strings.Builder
-	b.WriteString("# Redirects (managed by atomicsite migration / slug-change auto-301)\n")
+	b.WriteString("# Redirects (managed by slab migration / slug-change auto-301)\n")
 
 	for _, r := range collapsed {
 		from := r.FromPath

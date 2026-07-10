@@ -55,12 +55,12 @@ func TestValidate_ProductionRejectsDefaults(t *testing.T) {
 		{
 			name: "empty shield key",
 			mut:  func(c *Config) { c.ShieldKey = "" },
-			want: "ATOMICSITE_SHIELD_KEY",
+			want: "SLAB_SHIELD_KEY",
 		},
 		{
 			name: "short shield key",
 			mut:  func(c *Config) { c.ShieldKey = "tooshort" },
-			want: "ATOMICSITE_SHIELD_KEY",
+			want: "SLAB_SHIELD_KEY",
 		},
 		{
 			name: "non-https base url",
@@ -73,7 +73,7 @@ func TestValidate_ProductionRejectsDefaults(t *testing.T) {
 				c.PrimaryDomain = ""
 				c.BuiltSiteSuffix = ""
 			},
-			want: "ATOMICSITE_PRIMARY_DOMAIN",
+			want: "SLAB_PRIMARY_DOMAIN",
 		},
 	}
 	for _, tc := range cases {
@@ -198,11 +198,33 @@ func TestIsLocalDev_RecognisesLoopbackVariants(t *testing.T) {
 
 func goodConfig() *Config {
 	return &Config{
-		BaseURL:        "https://atomicsite.example.com",
+		BaseURL:        "https://slab.example.com",
 		JWTSecret:      "this-is-a-strong-32-byte-secret-value-here",
 		AnalyticsSalt:  "this-is-a-random-32-byte-fingerprint-salt-value",
 		ShieldKey:      "0123456789abcdef0123456789abcdef",
 		PrimaryDomain:  "example.com",
 		DeploymentMode: DeploymentModeSingle,
+	}
+}
+
+// TestEnv_LegacyAtomicsiteFallback proves the SLAB_ env prefix falls back to
+// the pre-rename ATOMICSITE_ name, so an env-file from before the Slab rename
+// keeps working. SLAB_ wins when both are set.
+func TestEnv_LegacyAtomicsiteFallback(t *testing.T) {
+	t.Setenv("SLAB_PRIMARY_DOMAIN", "")
+	t.Setenv("ATOMICSITE_PRIMARY_DOMAIN", "legacy.example.com")
+	if got := Env("SLAB_PRIMARY_DOMAIN"); got != "legacy.example.com" {
+		t.Fatalf("legacy fallback: Env(SLAB_PRIMARY_DOMAIN) = %q, want legacy.example.com", got)
+	}
+
+	t.Setenv("SLAB_PRIMARY_DOMAIN", "current.example.com")
+	if got := Env("SLAB_PRIMARY_DOMAIN"); got != "current.example.com" {
+		t.Fatalf("SLAB_ must win over legacy: got %q, want current.example.com", got)
+	}
+
+	// A non-SLAB_ key has no legacy fallback.
+	t.Setenv("PORT", "9090")
+	if got := Env("PORT"); got != "9090" {
+		t.Fatalf("Env(PORT) = %q, want 9090", got)
 	}
 }

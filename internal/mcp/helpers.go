@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 
-	"github.com/bright-interaction/atomicsite/internal/settingspolicy"
+	"github.com/bright-interaction/slab/internal/settingspolicy"
 )
 
 // newID mirrors handlers.newID() so the MCP package doesn't import the

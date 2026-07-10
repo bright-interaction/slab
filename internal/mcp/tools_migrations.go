@@ -31,9 +31,9 @@ import (
 	"time"
 	"unicode"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/migration"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/migration"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // registerMigrationTools wires the migration / missing-urls / verify-job
@@ -361,7 +361,7 @@ func (s *Server) registerMigrationTools() {
 
 	register(Tool{
 		Name:        "verify_migration_live",
-		Description: "Kicks off an ASYNC post-launch crawl against the deployed atomicsite. Returns a job_id immediately (status=queued); poll get_verify_job for progress. Each URL is fetched, redirects followed up to 3 hops, terminal status recorded. Per-URL results land in migration_verifications (read via list_migration_verifications). The verify_jobs row aggregates total + processed + ok/fail counts. Cap: 25,000 URLs per run. deployed_domain is what DNS now points at (e.g. \"www.acme.com\"). Use AFTER flipping DNS to prove every old URL one-hops to 200 against the live site.",
+		Description: "Kicks off an ASYNC post-launch crawl against the deployed slab. Returns a job_id immediately (status=queued); poll get_verify_job for progress. Each URL is fetched, redirects followed up to 3 hops, terminal status recorded. Per-URL results land in migration_verifications (read via list_migration_verifications). The verify_jobs row aggregates total + processed + ok/fail counts. Cap: 25,000 URLs per run. deployed_domain is what DNS now points at (e.g. \"www.acme.com\"). Use AFTER flipping DNS to prove every old URL one-hops to 200 against the live site.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{

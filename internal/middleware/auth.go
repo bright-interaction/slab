@@ -9,8 +9,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 type contextKey string
@@ -60,7 +60,7 @@ func SignToken(cfg *config.Config, user *AuthUser) (string, error) {
 func SetTokenCookie(w http.ResponseWriter, cfg *config.Config, tokenStr string) {
 	secure := !cfg.IsLocalDev()
 	http.SetCookie(w, &http.Cookie{
-		Name:     "atomicsite_token",
+		Name:     "slab_token",
 		Value:    tokenStr,
 		Path:     "/",
 		MaxAge:   7 * 24 * 60 * 60,
@@ -73,7 +73,7 @@ func SetTokenCookie(w http.ResponseWriter, cfg *config.Config, tokenStr string) 
 // ClearTokenCookie removes the auth cookie.
 func ClearTokenCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "atomicsite_token",
+		Name:     "slab_token",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -124,7 +124,7 @@ func RequireAdmin(next http.Handler) http.Handler {
 }
 
 func (m *AuthMiddleware) authenticate(r *http.Request) (*AuthUser, error) {
-	cookie, err := r.Cookie("atomicsite_token")
+	cookie, err := r.Cookie("slab_token")
 	if err != nil {
 		return nil, errNoAuth
 	}

@@ -7,9 +7,9 @@ import (
 
 func TestRenderComparisonTableBlock(t *testing.T) {
 	data := map[string]any{
-		"heading":    "Atomicsite vs the obvious alternatives",
+		"heading":    "Slab vs the obvious alternatives",
 		"subheading": "What you get out of the box, no plugin marketplace required.",
-		"us_label":   "Atomicsite",
+		"us_label":   "Slab",
 		"columns":    []any{"Lovable", "Webflow"},
 		"rows": []any{
 			map[string]any{
@@ -39,11 +39,11 @@ func TestRenderComparisonTableBlock(t *testing.T) {
 
 	wantContains := []string{
 		`class="block block--comparison_table"`,
-		`<h2>Atomicsite vs the obvious alternatives</h2>`,
+		`<h2>Slab vs the obvious alternatives</h2>`,
 		`<p class="subheading">What you get out of the box, no plugin marketplace required.</p>`,
 		`<table class="comparison-table">`,
 		`class="comparison-us"`,
-		`>Atomicsite<`,
+		`>Slab<`,
 		`>Lovable<`,
 		`>Webflow<`,
 		`>SSR Astro output<`,
@@ -81,13 +81,13 @@ func TestRenderComparisonTableBlock_SkipsRowsWithoutFeature(t *testing.T) {
 
 func TestRenderComparisonTableBlock_NoColumns_StillRendersUs(t *testing.T) {
 	data := map[string]any{
-		"us_label": "Atomicsite",
+		"us_label": "Slab",
 		"rows": []any{
 			map[string]any{"feature": "Feature A", "us": true},
 		},
 	}
 	got := renderComparisonTableBlock(data)
-	if !strings.Contains(got, `>Atomicsite<`) {
+	if !strings.Contains(got, `>Slab<`) {
 		t.Error("us column header missing when no competitors are listed")
 	}
 	if !strings.Contains(got, `>Feature A<`) {

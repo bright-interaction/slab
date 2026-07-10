@@ -195,7 +195,7 @@ func (c *Client) fetchStyleNodesBatch(ctx context.Context, fileKey string, ids [
 }
 
 // HexFromRGBA renders Figma's float-channel color as a #RRGGBB string. The
-// alpha channel is ignored (atomicsite stores opaque colors only at the
+// alpha channel is ignored (slab stores opaque colors only at the
 // site-settings level — gradients/transparency live in CSS classes).
 func HexFromRGBA(c RGBA) string {
 	to := func(f float64) int {

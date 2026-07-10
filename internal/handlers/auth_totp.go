@@ -30,15 +30,15 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/bright-interaction/atomicsite/internal/atrest"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
-	"github.com/bright-interaction/atomicsite/internal/totp"
+	"github.com/bright-interaction/slab/internal/atrest"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
+	"github.com/bright-interaction/slab/internal/totp"
 )
 
-const totpIssuer = "Atomic Site"
+const totpIssuer = "Slab"
 
-// secretCipher builds the at-rest cipher from ATOMICSITE_SHIELD_KEY. A
+// secretCipher builds the at-rest cipher from SLAB_SHIELD_KEY. A
 // nil cfg or unset key yields a passthrough cipher (stores/reads
 // plaintext), so deployments without the key are never locked out.
 func (h *AuthHandler) secretCipher() *atrest.Cipher {

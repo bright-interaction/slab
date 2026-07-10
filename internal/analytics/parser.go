@@ -19,11 +19,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // newID generates a random 12-byte hex ID, matching the convention used by
-// the rest of the atomicsite codebase (internal/handlers.newID).
+// the rest of the slab codebase (internal/handlers.newID).
 func newID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)

@@ -11,7 +11,7 @@ import (
 )
 
 // CloudflareClient is a tiny wrapper over the Cloudflare API v4 surface
-// for the only thing atomicsite needs: "ensure an A record exists for
+// for the only thing slab needs: "ensure an A record exists for
 // hostname pointing at edgeIP". We deliberately do not pull in
 // cloudflare-go because the surface needed is one POST and one GET.
 //
@@ -23,7 +23,7 @@ import (
 //
 // Auth: a scoped Cloudflare API token with Zone.DNS:Edit on the listed
 // zones. Tokens are stored as Dockyard vault entries; the reconciler
-// reads the token via env var (ATOMICSITE_CLOUDFLARE_TOKEN) so vault
+// reads the token via env var (SLAB_CLOUDFLARE_TOKEN) so vault
 // rotation hot-swaps without a restart.
 type CloudflareClient struct {
 	APIToken string
@@ -147,7 +147,7 @@ func (c *CloudflareClient) createRecord(ctx context.Context, zoneID, hostname, i
 		"content": ip,
 		"proxied": false,
 		"ttl":     300,
-		"comment": "managed by atomicsite",
+		"comment": "managed by slab",
 	})
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records", zoneID)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))

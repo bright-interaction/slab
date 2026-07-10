@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Apply seeds the perfect-foundation defaults on a new site: reference KB

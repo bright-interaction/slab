@@ -9,11 +9,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Porter walks a URLPlan + MigrationManifest and writes the corresponding
-// rows into the atomicsite store: collections, items, pages, redirects,
+// rows into the slab store: collections, items, pages, redirects,
 // and (via MediaUploader) re-uploaded media. The porter does not touch
 // blocks - imported HTML stays in collection-item data_json or in the
 // page's settings_json under `imported_html`. The agent then has full
@@ -29,12 +29,12 @@ type Porter struct {
 }
 
 // MediaUploader is the interface the porter uses to re-upload images and
-// other binary assets so the new atomicsite stays self-hosted (no cross-
+// other binary assets so the new slab stays self-hosted (no cross-
 // origin hotlinking, no broken images when the source domain expires).
 //
 // Real implementation: a thin wrapper around the existing handlers/media.go
 // fetchWithSSRFGuard + storage Upload + CreateMedia path. Tests inject a
-// fake that returns deterministic atomicsite URLs without hitting disk.
+// fake that returns deterministic slab URLs without hitting disk.
 type MediaUploader interface {
 	UploadFromURL(ctx context.Context, siteID, sourceURL, alt, caption string) (mediaID, atomicURL string, err error)
 }
@@ -112,7 +112,7 @@ func (p *Porter) ApplyWithOptions(ctx context.Context, siteID string, manifest *
 	createdRedirects := []string{}
 
 	// 1. Media re-upload first.
-	mediaMap := map[string]string{} // sourceURL -> atomicsite URL
+	mediaMap := map[string]string{} // sourceURL -> slab URL
 	mediaIDByURL := map[string]string{}
 	for _, m := range manifest.Media {
 		if m.SourceURL == "" {
@@ -198,7 +198,7 @@ func (p *Porter) ApplyWithOptions(ctx context.Context, siteID string, manifest *
 		}
 		mp := pagesBySource[pp.SourcePath]
 		pageID := newPorterID()
-		// Strip leading slash for the slug column (atomicsite stores slugs
+		// Strip leading slash for the slug column (slab stores slugs
 		// without the leading /, the builder prepends it during render).
 		slug := strings.TrimPrefix(pp.NewSlug, "/")
 		if slug == "" {
@@ -382,7 +382,7 @@ func (p *Porter) rollback(ctx context.Context, redirects, pages, items, colls []
 }
 
 // rewriteMediaInItemData walks an item's data map and rewrites any string
-// value that matches a key in mediaMap to the corresponding atomicsite URL.
+// value that matches a key in mediaMap to the corresponding slab URL.
 // Same-shape rewrite of []string values too. This is what makes the
 // imported posts self-hosted instead of hot-linking the source CDN.
 func rewriteMediaInItemData(data map[string]any, mediaMap map[string]string) map[string]any {
@@ -440,7 +440,7 @@ func rewriteMediaURL(s string, mediaMap map[string]string) string {
 }
 
 // rewriteLinksInItemData rewrites internal links inside HTML strings to
-// point at the new atomicsite slugs decided by the URL planner. Same
+// point at the new slab slugs decided by the URL planner. Same
 // mechanism as rewriteMediaURL but keyed by SourcePath -> NewSlug.
 func rewriteLinksInItemData(data map[string]any, plan URLPlan) map[string]any {
 	if len(plan.Pages) == 0 {

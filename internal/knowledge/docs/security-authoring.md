@@ -1,6 +1,6 @@
 # Security authoring
 
-Atomic Site emits 11 A+ security headers by default. The agent's job is to compose pages that work within those headers, and to whitelist external origins through the right surface (`allowed_scripts` for scripts, settings overrides for everything else) rather than weakening the policy.
+Slab emits 11 A+ security headers by default. The agent's job is to compose pages that work within those headers, and to whitelist external origins through the right surface (`allowed_scripts` for scripts, settings overrides for everything else) rather than weakening the policy.
 
 ## The eleven headers
 
@@ -22,7 +22,7 @@ The full set is computed in `internal/builder/security.go::BuildSecurityHeaders`
 
 When a block embeds a third-party iframe (Cal.com, YouTube, Stripe Checkout), the CSP `frame-src` directive must allow the origin. The flow:
 
-1. Read `atomicsite://site/security_posture` to see current `trusted_domains.frame`
+1. Read `slab://site/security_posture` to see current `trusted_domains.frame`
 2. If the origin is not present, call `register_allowed_script` (despite the name, the table has a `kind` column that routes per directive: `script`, `frame`, `image`, `media`, `connect`, `all`) with `kind: "frame"`
 3. Then `trigger_build`. The builder regenerates `csp_extra_directives` from the table
 
@@ -50,7 +50,7 @@ If you need a small script for a specific page, prefer:
 
 ## Where eval guards this
 
-`internal/eval/security.go` checks: header presence, HSTS max-age >= 1 year for preload eligibility, no `'unsafe-inline'` in `script-src`, no `'unsafe-eval'`, frame ancestors list is finite, all third-party scripts have SRI. The agent reads `atomicsite://eval/latest` after a build and remediates per-finding rather than blanket-relaxing the policy.
+`internal/eval/security.go` checks: header presence, HSTS max-age >= 1 year for preload eligibility, no `'unsafe-inline'` in `script-src`, no `'unsafe-eval'`, frame ancestors list is finite, all third-party scripts have SRI. The agent reads `slab://eval/latest` after a build and remediates per-finding rather than blanket-relaxing the policy.
 
 ## CRLF injection guard
 

@@ -15,9 +15,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func newRedirectHandlerForTest(t *testing.T) (*RedirectHandler, *store.Queries, string) {

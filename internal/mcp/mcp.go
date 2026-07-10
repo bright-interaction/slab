@@ -1,4 +1,4 @@
-// Package mcp implements a Model Context Protocol server for atomicsite.
+// Package mcp implements a Model Context Protocol server for slab.
 //
 // MCP is a JSON-RPC 2.0 dialect that lets AI hosts (Claude Desktop, Cursor,
 // Cline, Windsurf, n8n's MCP node, future Claude Code remote-MCP support)
@@ -6,7 +6,7 @@
 // defines three primitive types we expose:
 //
 //   - tools     callable functions (verb-shaped: create_page, update_block)
-//   - resources read-only data accessible by URI (atomicsite://site/context)
+//   - resources read-only data accessible by URI (slab://site/context)
 //   - prompts   reusable templates the user picks from a dropdown
 //
 // Architecture: the MCP server is a thin protocol translator. tools/call →
@@ -41,7 +41,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 // Protocol is the version of MCP we speak.
@@ -140,7 +140,7 @@ type InitializeResult struct {
 // messages. The MCP spec defines a small set of content types:
 //
 //	"text"     literal string (most common; we use this for JSON-encoded payloads too)
-//	"image"    base64 PNG/JPEG (out of scope for atomicsite today)
+//	"image"    base64 PNG/JPEG (out of scope for slab today)
 //	"resource" reference to a resource URI
 //
 // We standardise on "text" for tool results: the body is the JSON-encoded

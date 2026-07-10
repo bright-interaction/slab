@@ -6,7 +6,7 @@
 // mint a single-use, short-lived, loopback-only token, point chromedp at
 // http://127.0.0.1:{port}/_preview/{token}, consume on first hit, expire
 // after 60s. Fonts resolve via the same loopback origin (the existing
-// public /atomicsite-fonts/{site}/{font}.woff2 route).
+// public /slab-fonts/{site}/{font}.woff2 route).
 //
 // Security guarantees:
 //   - Tokens are 32 bytes from crypto/rand, hex-encoded (64 chars).
@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // PreviewTokenTTL is how long a minted token stays valid before being

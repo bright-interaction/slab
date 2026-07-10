@@ -9,7 +9,7 @@
 
 package retention
 
-import "github.com/bright-interaction/atomicsite/internal/billing"
+import "github.com/bright-interaction/slab/internal/billing"
 
 func init() {
 	billingLimit = billing.Limit

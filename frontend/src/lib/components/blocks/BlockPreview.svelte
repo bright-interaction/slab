@@ -55,7 +55,7 @@ main { display: block; }
 (function () {
   function report() {
     var h = document.body.scrollHeight || document.documentElement.scrollHeight || 0;
-    parent.postMessage({ source: 'atomicsite-preview', height: h }, '*');
+    parent.postMessage({ source: 'slab-preview', height: h }, '*');
   }
   new ResizeObserver(report).observe(document.body);
   window.addEventListener('load', report);
@@ -118,7 +118,7 @@ ${'<'}/script>
 		void refresh();
 		const onMsg = (ev: MessageEvent) => {
 			const data = ev.data as { source?: string; height?: number } | null;
-			if (data && data.source === 'atomicsite-preview' && typeof data.height === 'number') {
+			if (data && data.source === 'slab-preview' && typeof data.height === 'number') {
 				const h = Math.max(120, Math.min(maxHeight, Math.ceil(data.height)));
 				if (Math.abs(h - measuredHeight) > 4) measuredHeight = h;
 			}

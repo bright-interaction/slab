@@ -59,7 +59,7 @@ When the page has anchor sections (pricing, FAQ), nav links target them with `#a
 
 Multi-column on desktop, single-column stack on mobile. Typical columns: Product / Company / Resources / Legal. Each column has a heading and a short link list. The footer is the safety net for SEO internal linking; aim for 12 to 24 internal links across columns, all with descriptive anchor text.
 
-Legal column always has: Privacy Policy, Terms, Cookie Settings (opens the consent preferences modal), and the operator's company name + registration number. The agent reads `atomicsite://site/profile` to populate these.
+Legal column always has: Privacy Policy, Terms, Cookie Settings (opens the consent preferences modal), and the operator's company name + registration number. The agent reads `slab://site/profile` to populate these.
 
 ## Breadcrumbs
 

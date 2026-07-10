@@ -17,11 +17,11 @@ Asymmetry should serve the content hierarchy, not be decoration. When everything
 
 The strongest single signal of taste is the gap between hero typography and body typography. A hero at 80px next to body at 16px (5x ratio) feels confident. A hero at 40px next to body at 16px (2.5x ratio) feels timid. Push the hero. The page will breathe.
 
-Use the modular scale from `atomicsite://knowledge/typography-scale`. Reach for the top of the scale on hero pages.
+Use the modular scale from `slab://knowledge/typography-scale`. Reach for the top of the scale on hero pages.
 
 ## Calibrated color
 
-Premium palettes are slightly desaturated, slightly cool, with high luminance contrast between elements. Saturation reads as cheap; high contrast reads as deliberate. See `atomicsite://knowledge/color-system` for derivation patterns.
+Premium palettes are slightly desaturated, slightly cool, with high luminance contrast between elements. Saturation reads as cheap; high contrast reads as deliberate. See `slab://knowledge/color-system` for derivation patterns.
 
 The accent color appears at one or two moments per page, not seven. The rest is neutral.
 
@@ -41,7 +41,7 @@ Every interactive element responds to hover and focus. The motion is small (1-2p
 .card:hover { transform: translateY(-2px); }
 ```
 
-See `atomicsite://knowledge/motion-curves`.
+See `slab://knowledge/motion-curves`.
 
 ## Hardware-accelerated only
 
@@ -69,7 +69,7 @@ Loading the first viewport with three CTAs, four trust badges, and a video tells
 
 ## Respect the operator
 
-Atomic Site sites belong to operators, not the agent. The agent honors the operator's existing brand: their logo, their primary color, their voice. Premium-feeling does not mean overriding the operator's identity. It means executing their identity at the highest standard.
+Slab sites belong to operators, not the agent. The agent honors the operator's existing brand: their logo, their primary color, their voice. Premium-feeling does not mean overriding the operator's identity. It means executing their identity at the highest standard.
 
 When the operator supplies a Figma file, the agent imports tokens and works within them rather than proposing alternatives. When the operator supplies a brand voice in the knowledgebase, the agent matches it.
 
@@ -77,7 +77,7 @@ When the operator supplies a Figma file, the agent imports tokens and works with
 
 Linear, Stripe, Vercel, Resend, Apple are common references. The agent reads the principles, not the surface. Stripe's trust signals are not "use Stripe's purple"; they are clean typography, calibrated color, generous whitespace, perpetual micro-motion. Apply those, not the colors.
 
-The user's installed taste-skill, high-end-visual-design, brutalist-ui, and minimalist-ui playbooks are external references the agent can register via `add_design_reference` and read through `atomicsite://design-references`.
+The user's installed taste-skill, high-end-visual-design, brutalist-ui, and minimalist-ui playbooks are external references the agent can register via `add_design_reference` and read through `slab://design-references`.
 
 ## What separates premium from generic
 

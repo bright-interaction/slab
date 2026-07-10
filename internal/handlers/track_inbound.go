@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // inboundRequest is the body the CRM POSTs to /t/inbound. The CRM has
@@ -31,7 +31,7 @@ type inboundRequest struct {
 }
 
 // Inbound receives metadata pushes from the CRM. HMAC-SHA256 verified via
-// X-Atomicsite-Signature using the same global webhook secret used outbound,
+// X-Slab-Signature using the same global webhook secret used outbound,
 // so the relationship is symmetric.
 //
 //	401 - missing or invalid signature
@@ -52,7 +52,7 @@ func (h *TrackHandler) Inbound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sig := r.Header.Get("X-Atomicsite-Signature")
+	sig := r.Header.Get("X-Slab-Signature")
 	if sig == "" {
 		writeError(w, http.StatusUnauthorized, "missing signature")
 		return

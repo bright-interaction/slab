@@ -1,7 +1,7 @@
 // Package handlers: entity revisions endpoint.
 //
 // Sprint 1 of the WP/Webflow replacement roadmap (see
-// atomicsite/docs/ROADMAP.md). Lists per-entity history, fetches a
+// slab/docs/ROADMAP.md). Lists per-entity history, fetches a
 // specific snapshot, and restores it onto the live row. Restore is
 // non-destructive: applying snapshot v3 onto a page at v7 creates
 // v8 (the current state) plus v9 (the restored state) so history
@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/revisions"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/revisions"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 const revisionsListDefaultLimit = 50

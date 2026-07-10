@@ -6,9 +6,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/handlers"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // registerOrderTools wires the Sprint 2 slice B orders MCP surface:

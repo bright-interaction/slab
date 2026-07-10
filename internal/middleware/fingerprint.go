@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/slab/internal/config"
 )
 
 // FingerprintCookieName is the HttpOnly cookie used to identify a returning
@@ -17,7 +17,7 @@ import (
 // contact, then echoed back on every subsequent request. It does NOT identify
 // a person: pre-consent it is anonymous, post-consent the analytics layer
 // upgrades it to an identified visitor by writing visit_sessions.visitor_id.
-const FingerprintCookieName = "atomicsite_fp"
+const FingerprintCookieName = "slab_fp"
 
 // FingerprintMaxAge is the cookie lifetime: 1 year. Anything shorter would
 // fragment "returning visitor" stats; anything longer is meaningless because
@@ -45,7 +45,7 @@ func WithFingerprintForTest(ctx context.Context, fingerprint string) context.Con
 	return context.WithValue(ctx, fingerprintContextKey{}, fingerprint)
 }
 
-// FingerprintMiddleware ensures every request has an atomicsite_fp cookie. If
+// FingerprintMiddleware ensures every request has an slab_fp cookie. If
 // the client already sent one, we trust it and pass it through. Otherwise we
 // derive a stable hash from request signals + the server-side AnalyticsSalt,
 // truncate to 16 hex chars (64 bits of entropy, plenty for visitor uniqueness)

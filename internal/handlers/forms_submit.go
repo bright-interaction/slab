@@ -12,11 +12,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/conversions"
-	"github.com/bright-interaction/atomicsite/internal/identify"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/conversions"
+	"github.com/bright-interaction/slab/internal/identify"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // FormHandler serves the public form-submission endpoint and the
@@ -213,7 +213,7 @@ func (h *FormHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// Visitor identification (Phase 31.3, 2026-05-06). When the form
 	// carries an email-shaped value, link it to the visitor's
-	// session so atomicsite's identified-sessions panel + per-email
+	// session so slab's identified-sessions panel + per-email
 	// drill-down work without a separate /t/identify ping. Best-
 	// effort: a missing fingerprint or a no-session-for-this-fp
 	// returns 0 rows and we move on; the form submission itself is

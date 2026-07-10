@@ -16,8 +16,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func newWebhookTestStack(t *testing.T) (*sql.DB, *store.Queries, string) {
@@ -166,9 +166,9 @@ func TestDelivery_HappyPathPostsAndMarksSucceeded(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		mu.Lock()
-		gotEvent = r.Header.Get("X-Atomicsite-Event")
-		gotSig = r.Header.Get("X-Atomicsite-Signature")
-		gotDelivery = r.Header.Get("X-Atomicsite-Delivery")
+		gotEvent = r.Header.Get("X-Slab-Event")
+		gotSig = r.Header.Get("X-Slab-Signature")
+		gotDelivery = r.Header.Get("X-Slab-Delivery")
 		gotBody = body
 		mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
@@ -184,14 +184,14 @@ func TestDelivery_HappyPathPostsAndMarksSucceeded(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	if gotEvent != EventPageCreated {
-		t.Errorf("X-Atomicsite-Event = %q, want %q", gotEvent, EventPageCreated)
+		t.Errorf("X-Slab-Event = %q, want %q", gotEvent, EventPageCreated)
 	}
 	wantSig := "sha256=" + signBody("shh", gotBody)
 	if gotSig != wantSig {
 		t.Errorf("signature mismatch:\n got: %s\nwant: %s", gotSig, wantSig)
 	}
 	if gotDelivery == "" {
-		t.Error("X-Atomicsite-Delivery must be present")
+		t.Error("X-Slab-Delivery must be present")
 	}
 	if !strings.Contains(string(gotBody), `"id":"p1"`) {
 		t.Errorf("body did not contain payload; got %s", gotBody)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // renderHeroGraphic emits the markup for one of the curated hero
@@ -356,7 +356,7 @@ func renderPricingBlock(data map[string]any) string {
 //	{
 //	  "heading": "...",
 //	  "subheading": "...",
-//	  "us_label": "Atomicsite",   // column label for our column (defaults to "Us")
+//	  "us_label": "Slab",   // column label for our column (defaults to "Us")
 //	  "columns": ["Lovable", "Webflow"],
 //	  "rows": [
 //	    {"feature": "SSR Astro output", "us": true,  "values": [false, true]},
@@ -1467,7 +1467,7 @@ func renderReplacementGridBlock(data map[string]any) string {
 
 // renderCalculatorBlock is intentionally NOT registered in renderDataBlock's
 // switch. Calculators are bespoke per customer (the cost formula, the
-// services list, the currency, the layout, all site-specific). Atomicsite
+// services list, the currency, the layout, all site-specific). Slab
 // provides the general primitives (form, feature_grid, replacement_grid,
 // embed, raw) so an agent or developer can hand-build the calculator for
 // the customer who needs one. This function is kept as a reference shape
@@ -1600,15 +1600,15 @@ func intOrDefault(v any, def int) int {
 }
 
 // renderCustomBlock is the agnostic escape-hatch block. The agent writes
-// arbitrary markup (Tailwind classes, atomicsite design tokens, semantic
-// HTML); atomicsite emits it verbatim wrapped in a <section> with auto-id
+// arbitrary markup (Tailwind classes, slab design tokens, semantic
+// HTML); slab emits it verbatim wrapped in a <section> with auto-id
 // from the block's name. Used when a customer needs a layout that doesn't
 // fit the typed templates (hero, feature_grid, pricing, etc.).
 //
 // Data shape: {name, markup, eyebrow?, props?}.
 //   - name: human label, also drives the section id (slugified) so cross-
 //     section anchors resolve.
-//   - markup: full HTML for the section body. atomicsite's design-token
+//   - markup: full HTML for the section body. slab's design-token
 //     CSS variables (--color-primary, --color-text, --color-bg, --bp-*,
 //     --container-width, etc.) are available; baseline utility classes
 //     (.btn-primary, .btn-secondary, .actions, .container) work too.

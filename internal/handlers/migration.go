@@ -24,9 +24,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/migration"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/migration"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // MigrationHandler exposes the migration lifecycle. Crawl invocation and
@@ -210,7 +210,7 @@ type migrationPlanRequest struct {
 }
 
 // Plan re-reads the stored manifest, runs PlanURLs against the live page
-// set (so collisions reflect the current atomicsite state), and returns
+// set (so collisions reflect the current slab state), and returns
 // the URLPlan + conflict count for the agent / operator to review.
 func (h *MigrationHandler) Plan(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")
@@ -448,7 +448,7 @@ func (h *MigrationHandler) VerifyCoverage(w http.ResponseWriter, r *http.Request
 	}
 
 	// Reuse the live page + redirect set so the diff reflects current
-	// atomicsite state plus what THIS migration would add. We don't
+	// slab state plus what THIS migration would add. We don't
 	// actually apply the manifest; we just merge planned slugs into
 	// the existing-page map for the diff.
 	pages, _ := h.queries.ListPagesBySite(r.Context(), siteID)

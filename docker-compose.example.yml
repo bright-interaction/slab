@@ -1,27 +1,27 @@
-# Atomic Site: OSS reference Docker Compose
+# Slab: OSS reference Docker Compose
 #
 # This file is the OSS-friendly example. It expects you to run from the
-# atomicsite/ directory only (no parent-context coupling to a sibling
+# slab/ directory only (no parent-context coupling to a sibling
 # CookieProof checkout). The CookieProof widget is already embedded into
 # the binary at compile time, so no extra build context is needed.
 #
 # This is the reference self-host Compose file. For a multi-tenant edge
-# deployment you would add host bind-mounts (e.g. /srv/atomicsite for the
-# built-site output and /var/log/atomicsite for per-site access logs) and
+# deployment you would add host bind-mounts (e.g. /srv/slab for the
+# built-site output and /var/log/slab for per-site access logs) and
 # put a TLS-terminating reverse proxy in front; this example stays minimal
 # so a single-root deployment works out of the box.
 #
 # Quickstart:
 #   cp .env.example .env       # fill in JWT_SECRET, ANALYTICS_SALT,
-#                              # ATOMICSITE_PRIMARY_DOMAIN, ADMIN_PASSWORD
+#                              # SLAB_PRIMARY_DOMAIN, ADMIN_PASSWORD
 #   docker compose -f docker-compose.example.yml up --build
 
 services:
-  atomicsite:
+  slab:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: atomicsite
+    container_name: slab
     restart: unless-stopped
     ports:
       # Public on the host. Put a TLS-terminating proxy (Caddy, nginx,
@@ -32,13 +32,13 @@ services:
     environment:
       PORT: "8080"
       DATA_DIR: /data
-      ATOMICSITE_DEPLOYMENT_MODE: single
+      SLAB_DEPLOYMENT_MODE: single
     volumes:
       # SQLite database, uploaded media, self-hosted woff2 fonts.
-      - atomicsite-data:/data
+      - slab-data:/data
       # Built-site dist output. Mount this to whatever path your edge
       # serves from. Defaults to a named volume so first run "just works".
-      - atomicsite-dist:/srv/atomicsite
+      - slab-dist:/srv/slab
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -47,5 +47,5 @@ services:
       start_period: 10s
 
 volumes:
-  atomicsite-data:
-  atomicsite-dist:
+  slab-data:
+  slab-dist:

@@ -1,7 +1,7 @@
 // Package handlers — screenshot endpoint.
 //
 // Closes the visual-feedback gap that's been killing iteration speed.
-// Atomicsite renders agent JSON into static Astro pages, but the agent
+// Slab renders agent JSON into static Astro pages, but the agent
 // has historically had no way to see the rendered output — every layout
 // bug had to be reported back by a human. This handler runs headless
 // Chromium against the deployed page, returns base64 PNG, and lets the
@@ -29,12 +29,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/bright-interaction/slab/internal/config"
 	"github.com/chromedp/chromedp"
 )
 
@@ -77,7 +77,7 @@ func ScreenshotAllowedSuffixes() []string {
 
 // ScreenshotHandler executes a headless Chromium navigation + screenshot
 // for an agent-supplied URL. Site-scoped: the URL must belong to the
-// requesting agent's site (or a known atomicsite-hosted subdomain) so
+// requesting agent's site (or a known slab-hosted subdomain) so
 // the handler can't be turned into an open SSRF vector.
 type ScreenshotHandler struct{}
 
@@ -115,11 +115,11 @@ type ScreenshotResult struct {
 // caller (HTTP handler, MCP screenshot + preview_screenshot). Each
 // launch is a full browser process; unbounded parallel agent calls
 // could OOM the host, the same class the global build semaphore closed
-// for bun/astro. Default 2, override with ATOMICSITE_SCREENSHOT_CONCURRENCY.
+// for bun/astro. Default 2, override with SLAB_SCREENSHOT_CONCURRENCY.
 var screenshotSem = make(chan struct{}, screenshotConcurrency())
 
 func screenshotConcurrency() int {
-	if v := strings.TrimSpace(os.Getenv("ATOMICSITE_SCREENSHOT_CONCURRENCY")); v != "" {
+	if v := strings.TrimSpace(config.Env("SLAB_SCREENSHOT_CONCURRENCY")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}
@@ -282,7 +282,7 @@ func validateScreenshotURL(raw string) error {
 		if isLoopbackScreenshotHost(host) {
 			return nil
 		}
-		return errors.New("screenshot disabled: configure ATOMICSITE_PRIMARY_DOMAIN or BUILT_SITE_SUFFIX to enable public-domain screenshots")
+		return errors.New("screenshot disabled: configure SLAB_PRIMARY_DOMAIN or BUILT_SITE_SUFFIX to enable public-domain screenshots")
 	}
 
 	// Production (allow-list configured). Port restriction: only the standard

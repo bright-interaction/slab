@@ -14,7 +14,7 @@ test.describe('smoke: admin fixture', () => {
 		expect(res.ok()).toBe(true);
 		const body = await res.json();
 		const u_ = body.user ?? body;
-		expect(u_.email).toBe('admin@atomicsite.dev');
+		expect(u_.email).toBe('admin@slab.dev');
 		expect(u_.role).toBe('admin');
 	});
 

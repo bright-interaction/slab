@@ -38,7 +38,7 @@ func RunPrivacyChecks(site *SiteContext) []CheckResult {
 	// Aggregate scripts across all pages
 	scripts := []string{}
 	// Track whether ANY script tag carries data-consent-platform so a
-	// platform whose filename gets hashed (e.g. atomicsite's
+	// platform whose filename gets hashed (e.g. slab's
 	// _ccb.{hash}.js bundle) is still detected.
 	hasConsentAttr := false
 	for _, p := range site.Pages {
@@ -94,7 +94,7 @@ func RunPrivacyChecks(site *SiteContext) []CheckResult {
 				fmt.Sprintf("%d tracker(s) detected (budget 2)", len(detectedTrackers))),
 			Fail("Tracker Count (zero-tracker goal)", "tracking", 1, SeverityInfo,
 				fmt.Sprintf("%d tracker(s) present; a tracker-free site scores full marks", len(detectedTrackers)),
-				"Consider the server-side atomicsite tracking (no client trackers) or Umami instead."))
+				"Consider the server-side slab tracking (no client trackers) or Umami instead."))
 	default:
 		checks = append(checks, Fail("Tracker Count", "tracking", 2, SeverityWarning,
 			fmt.Sprintf("%d trackers detected", len(detectedTrackers)),
@@ -114,7 +114,7 @@ func RunPrivacyChecks(site *SiteContext) []CheckResult {
 	// 4. AI training bots blocked in robots.txt
 	if site.RobotsTxt == "" {
 		checks = append(checks, Fail("AI Training Bots Blocked", "robots", 2, SeverityWarning,
-			"No robots.txt to evaluate", "Generate robots.txt; Atomicsite blocks AI bots by default."))
+			"No robots.txt to evaluate", "Generate robots.txt; Slab blocks AI bots by default."))
 	} else {
 		blocked := parseRobotsBlocked(site.RobotsTxt)
 		blockedCount := 0
@@ -174,7 +174,7 @@ func RunPrivacyChecks(site *SiteContext) []CheckResult {
 	// --- New checks ported from upgraded site-inspector (2026-04-27) ---
 
 	// Cookie Count: heuristic on cookie-bearing scripts and document.cookie
-	// writes inside inline <script>. Atomicsite-built sites are static so we
+	// writes inside inline <script>. Slab-built sites are static so we
 	// can't read Set-Cookie headers at eval time; what we CAN do is flag
 	// pages that ship inline scripts that write cookies, which is the same
 	// signal Site Inspector surfaces.

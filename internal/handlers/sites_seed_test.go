@@ -12,11 +12,11 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/starterkits"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/starterkits"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // seedAuthCtx wraps the request with a fake admin user + injects the

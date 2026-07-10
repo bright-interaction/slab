@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func TestRenderTabs_HappyPath(t *testing.T) {

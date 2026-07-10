@@ -11,7 +11,7 @@ import (
 )
 
 // RedisStore is a Store implementation backed by Redis. Unlocks Shield for
-// multi-node atomicsite deploys: SQLStore is single-node (one SQLite + WAL),
+// multi-node slab deploys: SQLStore is single-node (one SQLite + WAL),
 // MemoryStore is per-process (each node has its own map). RedisStore lets
 // every node in a cluster see the same shield_sessions + shield_tokens
 // state with single-digit-ms reads.
@@ -28,7 +28,7 @@ import (
 type RedisStore struct {
 	Client redis.UniversalClient
 	// Prefix is prepended to every key. Empty = "shield:" default. Set
-	// when multiple atomicsite tenants share one Redis instance so the
+	// when multiple slab tenants share one Redis instance so the
 	// keyspace per tenant stays isolated.
 	Prefix string
 }

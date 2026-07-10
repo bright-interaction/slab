@@ -1,5 +1,5 @@
 #!/bin/sh
-# Atomic Site container entrypoint (Phase 30.4, 2026-05-06).
+# Slab container entrypoint (Phase 30.4, 2026-05-06).
 #
 # When LITESTREAM_REPLICA_URL is set, the server runs under litestream
 # replicate so the SQLite WAL streams continuously to the configured
@@ -21,9 +21,9 @@ if [ -n "${LITESTREAM_REPLICA_URL}" ]; then
     # exist yet. Idempotent: if the DB is already present, restore is
     # a no-op. This is the recovery path: a fresh container started
     # against an existing replica picks up where the last one left off.
-    if [ ! -f "/app/data/atomicsite.db" ]; then
+    if [ ! -f "/app/data/slab.db" ]; then
         echo "[entrypoint] No local DB; restoring from ${LITESTREAM_REPLICA_URL}"
-        litestream restore -if-replica-exists -config /app/litestream.yml /app/data/atomicsite.db || true
+        litestream restore -if-replica-exists -config /app/litestream.yml /app/data/slab.db || true
     fi
     echo "[entrypoint] Starting server under litestream replicate"
     exec litestream replicate -config /app/litestream.yml -exec "/app/server"

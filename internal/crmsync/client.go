@@ -17,8 +17,8 @@ import (
 
 // SignatureHeader is the HTTP header BrightCRM expects on every signed
 // payload. Mirrored on the receiver side as VerifyWebhookSignature(...,
-// "X-Atomicsite-Signature").
-const SignatureHeader = "X-Atomicsite-Signature"
+// "X-Slab-Signature").
+const SignatureHeader = "X-Slab-Signature"
 
 // defaultTimeout caps how long a single Send call waits for BrightCRM. The
 // CRM hop must never block the user-facing /t/consent response, so callers

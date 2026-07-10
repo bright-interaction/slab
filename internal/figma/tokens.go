@@ -39,7 +39,7 @@ type TextToken struct {
 }
 
 // ExtractTokens fetches the file metadata + style nodes and produces
-// ImportResult ready for the handler to seed into atomicsite.
+// ImportResult ready for the handler to seed into slab.
 func ExtractTokens(ctx context.Context, c *Client, fileKey string) (*ImportResult, error) {
 	meta, err := c.FetchFileMeta(ctx, fileKey)
 	if err != nil {

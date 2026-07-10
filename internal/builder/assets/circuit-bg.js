@@ -1,4 +1,4 @@
-/* atomicsite circuit-board hero background. Vanilla JS, no deps, ~3.5KB.
+/* slab circuit-board hero background. Vanilla JS, no deps, ~3.5KB.
    Triggered when a block has data-bg="circuit". The block renderer also
    emits a <canvas data-circuit-canvas></canvas> inside the section; this
    script finds it on DOMContentLoaded, draws an organic PCB-style circuit

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/eval"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/eval"
 )
 
 // This file replaces the old prose-substring needle extraction

@@ -58,7 +58,7 @@ test.describe('analytics: engagement beacon', () => {
 	});
 
 	test('rejects unknown siteId with 404', async ({ request }) => {
-		// Atomicsite site IDs are 24 hex chars (12 bytes); use a valid-shape
+		// Slab site IDs are 24 hex chars (12 bytes); use a valid-shape
 		// ID that doesn't exist in the DB so we hit the 404 branch instead
 		// of the 400 (invalid format) branch.
 		const res = await request.post(u('/t/engagement'), {

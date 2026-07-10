@@ -150,7 +150,7 @@
 	<div class="mb-4">
 		<h2 class="text-sm font-medium text-text-primary">Post-launch verification</h2>
 		<p class="text-xs text-text-muted mt-1">
-			Crawl old URLs against the deployed atomicsite. Each URL gets a fresh GET, redirects
+			Crawl old URLs against the deployed slab. Each URL gets a fresh GET, redirects
 			follow up to 3 hops, terminal status is recorded. Cap: 25,000 URLs / run.
 		</p>
 	</div>

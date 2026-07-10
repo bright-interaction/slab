@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // InvitesHandler covers Tier-1 share-link invites: an admin mints a one-time

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 // withTestAgent attaches a synthetic AgentIdentity to the request
@@ -129,15 +129,15 @@ func TestWireResourcesListReturnsKnowledgeAndServiceContext(t *testing.T) {
 	}
 
 	mustHave := []string{
-		"atomicsite://site/context",
-		"atomicsite://knowledge/index",
-		"atomicsite://knowledge/astro-conventions",
-		"atomicsite://knowledge/premium-design-principles",
-		"atomicsite://meta/knowledge-graph",
-		"atomicsite://meta/capabilities",
-		"atomicsite://meta/design-playbook",
-		"atomicsite://eval/latest",
-		"atomicsite://design-references",
+		"slab://site/context",
+		"slab://knowledge/index",
+		"slab://knowledge/astro-conventions",
+		"slab://knowledge/premium-design-principles",
+		"slab://meta/knowledge-graph",
+		"slab://meta/capabilities",
+		"slab://meta/design-playbook",
+		"slab://eval/latest",
+		"slab://design-references",
 	}
 	for _, uri := range mustHave {
 		if !uris[uri] {
@@ -152,7 +152,7 @@ func TestWireResourcesListReturnsKnowledgeAndServiceContext(t *testing.T) {
 func TestWireResourcesReadKnowledgeReturnsMarkdown(t *testing.T) {
 	s := freshTestServer(t)
 	resp, _ := jsonRPCRoundtrip(t, s, "resources/read", map[string]any{
-		"uri": "atomicsite://knowledge/typography-scale",
+		"uri": "slab://knowledge/typography-scale",
 	})
 	result := resp.Result.(map[string]any)
 	contents := result["contents"].([]any)
@@ -182,7 +182,7 @@ func TestWireResourcesReadKnowledgeReturnsMarkdown(t *testing.T) {
 func TestWireResourcesReadKnowledgeGraphHasExpectedShape(t *testing.T) {
 	s := freshTestServer(t)
 	resp, _ := jsonRPCRoundtrip(t, s, "resources/read", map[string]any{
-		"uri": "atomicsite://meta/knowledge-graph",
+		"uri": "slab://meta/knowledge-graph",
 	})
 	result := resp.Result.(map[string]any)
 	contents := result["contents"].([]any)
@@ -234,7 +234,7 @@ func TestWirePromptsListReturnsExpansionPrompts(t *testing.T) {
 
 // TestWireGetCapabilitiesToolReturnsSelfDescribingPayload calls the
 // get_capabilities tool through tools/call and asserts the payload
-// shape mirrors atomicsite://meta/capabilities.
+// shape mirrors slab://meta/capabilities.
 func TestWireGetCapabilitiesToolReturnsSelfDescribingPayload(t *testing.T) {
 	s := freshTestServer(t)
 	resp, _ := jsonRPCRoundtrip(t, s, "tools/call", map[string]any{

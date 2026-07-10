@@ -39,7 +39,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // collectionFeedSettings is the subset of settings_json relevant to

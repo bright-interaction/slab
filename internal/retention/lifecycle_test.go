@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func TestLifecycle_PauseAndDeleteThresholds(t *testing.T) {

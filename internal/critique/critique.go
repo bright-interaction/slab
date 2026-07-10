@@ -23,10 +23,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/eval"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/eval"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Timeout caps total critique time per build.
@@ -187,7 +187,7 @@ func contentAuthenticityChecks(rules agent.ContentRules, text string, site *eval
 }
 
 // motionChecks looks for transition: all and similarly-broad CSS rules
-// the playbook bans. Only CSS is scanned; atomicsite is static-Astro
+// the playbook bans. Only CSS is scanned; slab is static-Astro
 // so JS motion libs aren't a concern here.
 var transitionAllRE = regexp.MustCompile(`(?i)transition\s*:\s*all\b`)
 

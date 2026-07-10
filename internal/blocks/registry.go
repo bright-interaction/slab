@@ -150,7 +150,7 @@ func init() {
 		Fields: []Field{
 			{Key: "heading", Label: "Heading", Kind: KindText},
 			{Key: "subheading", Label: "Subheading", Kind: KindTextarea},
-			{Key: "us_label", Label: "Our column label", Kind: KindText, Placeholder: "Atomicsite"},
+			{Key: "us_label", Label: "Our column label", Kind: KindText, Placeholder: "Slab"},
 			{Key: "columns", Label: "Competitor columns", Kind: KindArray, ItemSchema: []Field{
 				{Key: "", Label: "Name", Kind: KindText, Required: true},
 			}},
@@ -490,7 +490,7 @@ func init() {
 		Fields: []Field{
 			{Key: "name", Label: "Section name", Kind: KindText, Required: true, Help: "Drives the auto-generated section id."},
 			{Key: "eyebrow", Label: "Eyebrow", Kind: KindText},
-			{Key: "markup", Label: "HTML markup", Kind: KindTextarea, Required: true, Help: "Atomicsite design tokens (--color-*, --font-*) and utility classes (.btn-primary, .container) are available."},
+			{Key: "markup", Label: "HTML markup", Kind: KindTextarea, Required: true, Help: "Slab design tokens (--color-*, --font-*) and utility classes (.btn-primary, .container) are available."},
 		},
 	})
 

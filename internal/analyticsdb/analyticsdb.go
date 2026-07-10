@@ -1,5 +1,5 @@
 // Package analyticsdb is a read-only DuckDB layer that ATTACHes the live
-// SQLite database (atomicsite.db) and serves stitched analytical queries.
+// SQLite database (slab.db) and serves stitched analytical queries.
 // SQLite stays the system of record for every write (visit_events from the
 // nginx tail, /t/consent receiver, /t/engagement beacon, all admin CRUD);
 // DuckDB is a second connection on the same file with a columnar query
@@ -45,7 +45,7 @@ type Manager struct {
 }
 
 // Config is the only thing analyticsdb needs to connect: the absolute
-// path to atomicsite.db. The DuckDB instance itself is in-memory; only
+// path to slab.db. The DuckDB instance itself is in-memory; only
 // the ATTACHed SQLite file lands on disk, which is the same file the
 // rest of the server already uses.
 type Config struct {
@@ -92,7 +92,7 @@ func Open(ctx context.Context, cfg Config) (*Manager, error) {
 		return nil, fmt.Errorf("analyticsdb: load sqlite extension: %w", err)
 	}
 
-	// READ_ONLY is critical: every write to atomicsite.db goes through
+	// READ_ONLY is critical: every write to slab.db goes through
 	// the modernc.org/sqlite connection in main.go. If DuckDB writes to
 	// the same file we'd violate WAL's single-writer assumption and
 	// risk corruption.

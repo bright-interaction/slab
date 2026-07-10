@@ -21,7 +21,7 @@ frontend-dev:
 build: frontend build-server
 
 build-server:
-	go build -o bin/atomicsite ./cmd/server
+	go build -o bin/slab ./cmd/server
 
 vet:
 	go vet ./...

@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // mfaEnrollmentLookup loads totp_enrolled_at for a user. The

@@ -54,13 +54,13 @@ func TestBuildGraphMentionEdgesAreFiltered(t *testing.T) {
 }
 
 // TestBuildGraphResourceURIEdges verifies that doc bodies referencing
-// atomicsite:// URIs produce edges to the matching resource nodes when
+// slab:// URIs produce edges to the matching resource nodes when
 // the URI is on the registered set.
 func TestBuildGraphResourceURIEdges(t *testing.T) {
 	knownResources := []string{
-		"atomicsite://site/security_posture",
-		"atomicsite://site/context",
-		"atomicsite://knowledge/typography-scale",
+		"slab://site/security_posture",
+		"slab://site/context",
+		"slab://knowledge/typography-scale",
 	}
 	g := BuildGraph(nil, knownResources, nil)
 	found := map[string]bool{}
@@ -69,8 +69,8 @@ func TestBuildGraphResourceURIEdges(t *testing.T) {
 			found[e.To] = true
 		}
 	}
-	// security-authoring doc references atomicsite://site/security_posture.
-	want := "resource:atomicsite://site/security_posture"
+	// security-authoring doc references slab://site/security_posture.
+	want := "resource:slab://site/security_posture"
 	if !found[want] {
 		t.Errorf("expected mentions edge to %q from security-authoring doc; got %v", want, found)
 	}
@@ -143,7 +143,7 @@ func TestBuildGraphTagEdgesClusterDocs(t *testing.T) {
 // TestBuildGraphStatsConsistent guards the small summary the agent reads
 // alongside the full graph.
 func TestBuildGraphStatsConsistent(t *testing.T) {
-	g := BuildGraph([]string{"trigger_build"}, []string{"atomicsite://site/context"}, nil)
+	g := BuildGraph([]string{"trigger_build"}, []string{"slab://site/context"}, nil)
 	if g.Stats.NodeCount != len(g.Nodes) {
 		t.Errorf("node_count %d does not match len(Nodes) %d", g.Stats.NodeCount, len(g.Nodes))
 	}

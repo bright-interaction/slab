@@ -11,7 +11,7 @@ function b64url(input: Buffer | string): string {
 
 async function attemptMe(cookieValue: string): Promise<number> {
 	const ctx = await request.newContext({
-		extraHTTPHeaders: { Cookie: `atomicsite_token=${cookieValue}` }
+		extraHTTPHeaders: { Cookie: `slab_token=${cookieValue}` }
 	});
 	try {
 		const res = await ctx.get(u('/api/auth/me'));

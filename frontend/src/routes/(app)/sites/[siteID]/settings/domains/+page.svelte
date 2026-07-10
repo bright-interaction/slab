@@ -284,7 +284,7 @@
 						{#if edgeIP}
 							<code class="font-mono text-[11px] text-text-primary">{edgeIP}</code>.
 						{:else}
-							your edge IP (ask your operator; <code class="font-mono text-[11px]">ATOMICSITE_EDGE_IP</code> isn't configured on this server).
+							your edge IP (ask your operator; <code class="font-mono text-[11px]">SLAB_EDGE_IP</code> isn't configured on this server).
 						{/if}
 						{#if cloudflareZones.length > 0}
 							For zones we control ({cloudflareZones.join(', ')}) we auto-create the record.

@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // PasswordBcryptCost is the cost factor used for every bcrypt hash of a
@@ -215,7 +215,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	// Audit L5: bump from 8 to 12 chars. NIST SP 800-63B current
 	// guidance is 8 minimum but 12+ for accounts with system-wide
-	// privileges (atomicsite admins fall in this bucket). bcrypt at
+	// privileges (slab admins fall in this bucket). bcrypt at
 	// cost 10 + a 12-char passphrase puts even a multi-GPU offline
 	// crack out of reach for any realistic attacker.
 	if len(req.NewPassword) < 12 {

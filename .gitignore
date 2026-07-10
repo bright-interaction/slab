@@ -51,7 +51,7 @@ coverage/
 # Compiled Go binary
 bin/
 
-# Atomicsite runtime data (DB, workspaces, media)
+# Slab runtime data (DB, workspaces, media)
 data/
 
 # Playwright e2e artifacts
@@ -61,7 +61,7 @@ tests/e2e/node_modules/
 tests/e2e/.tmp/
 
 # Compiled deploy artifact (tracked historically; OSS distributions should
-# not ship a binary). Run `make build` to produce bin/atomicsite locally.
+# not ship a binary). Run `make build` to produce bin/slab locally.
 /server
 
 # CI rebuild marker. Edit + push to force a deploy in an internal deployment.

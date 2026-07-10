@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Atomic Site land here. Format follows
+All notable changes to Slab land here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -23,13 +23,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rigor; encoding/xml escapes hostile input. Drafts excluded;
   ordered by `published_at` DESC; capped at 50 entries by default.
 - **Audit log retention sweep.** `audit_log` rows older than the
-  configured window (`ATOMICSITE_AUDIT_LOG_RETENTION_DAYS`, default
+  configured window (`SLAB_AUDIT_LOG_RETENTION_DAYS`, default
   365 days, clamped to [7, 3650]) drop in the existing daily
   retention manager. Counts surface in the per-sweep `SweepResult`
   exposed via `/api/admin/metrics`. Closes the
   log-grows-forever gap on the GDPR / ISO 27001 proof-of-controls
   table.
-- **MFA enrollment policy.** New `ATOMICSITE_REQUIRE_MFA` env var:
+- **MFA enrollment policy.** New `SLAB_REQUIRE_MFA` env var:
   `""` (optional, default), `"admin"` (admins must enroll),
   `"all"` (every user must enroll). Login still issues a session
   cookie so the user can complete enrollment; the response carries
@@ -51,15 +51,15 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `mfa_enforce_test.go` (10 cases), `build_export_test.go` (8
   cases).
 - New env vars documented in `.env.example`:
-  `ATOMICSITE_TRUSTED_PROXIES`, `ATOMICSITE_REQUIRE_MFA`,
-  `ATOMICSITE_AUDIT_LOG_RETENTION_DAYS`.
+  `SLAB_TRUSTED_PROXIES`, `SLAB_REQUIRE_MFA`,
+  `SLAB_AUDIT_LOG_RETENTION_DAYS`.
 
 ### Changed
 - **OSS readiness sweep.** Removed every hardcoded reference to the
-  internal SaaS host (`atomicsite.example.com`) from
+  internal SaaS host (`slab.example.com`) from
   production code. The custom-domain edge writer, the route reservation
   guard, and the screenshot tool's SSRF allow-list are now driven by
-  `ATOMICSITE_PRIMARY_DOMAIN` + `BUILT_SITE_SUFFIX`. Loopback hosts
+  `SLAB_PRIMARY_DOMAIN` + `BUILT_SITE_SUFFIX`. Loopback hosts
   always pass the screenshot allow-list so `make dev` works without any
   env vars.
 - **Bcrypt cost standardised to 12.** `seedAdmin`, `resetPassword` CLI,
@@ -75,9 +75,9 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Custom trusted-proxy `RealIP` middleware** replaces
   `chi.middleware.RealIP`. `X-Forwarded-For` and `X-Real-IP` are honored
   only when the immediate TCP peer is in
-  `ATOMICSITE_TRUSTED_PROXIES`. With the env var unset, the headers are
+  `SLAB_TRUSTED_PROXIES`. With the env var unset, the headers are
   ignored entirely so audit logs and rate limiters see the actual peer.
-  This closes the audit-log spoofing vector when atomicsite is exposed
+  This closes the audit-log spoofing vector when slab is exposed
   directly to the internet.
 
 ### Fixed
@@ -121,7 +121,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.0] - 2026-05-08
 
-First public release as fair-code open core under the Atomicsite Sustainable Use License.
+First public release as fair-code open core under the Slab Sustainable Use License.
 
 ### What's in this release
 
@@ -159,6 +159,6 @@ First public release as fair-code open core under the Atomicsite Sustainable Use
   secrets in non-localhost deploys, SSRF guards in every fetch path,
   shield-tokenizer LLM boundary, audit log on every cross-workspace
   bypass.
-- **Fair-code open core (Atomicsite Sustainable Use License)**:
+- **Fair-code open core (Slab Sustainable Use License)**:
   cloud-only multi-tenant edge code is the held-back enterprise (`ee`)
   layer, not published in this repository.

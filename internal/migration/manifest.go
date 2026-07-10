@@ -1,6 +1,6 @@
 // Package migration parses external CMS sources (sitemap-crawl, WordPress,
 // Webflow, Ghost, ...) into a normalised manifest the agent can review and
-// then commit into atomicsite pages, collections, media and redirects.
+// then commit into slab pages, collections, media and redirects.
 //
 // Layer 3a (this file + sitemap.go + safefetch.go) ships only the manifest
 // types and the universal sitemap crawler. Per-platform native importers
@@ -42,7 +42,7 @@ type MigrationManifest struct {
 
 // MigrationPage is one extracted page from the source. Slug is the source-side
 // path (`/about-us`); the URL planner in Layer 3d turns this into the new
-// atomicsite slug + decides whether a redirect row is needed.
+// slab slug + decides whether a redirect row is needed.
 type MigrationPage struct {
 	SourceURL       string    `json:"source_url"`
 	SourcePath      string    `json:"source_path"`
@@ -80,7 +80,7 @@ type MigrationCollectionField struct {
 }
 
 // MigrationCollectionItem is one row in a collection. Data is field-name to
-// value, matching how collection_items.data_json works in atomicsite.
+// value, matching how collection_items.data_json works in slab.
 type MigrationCollectionItem struct {
 	SourceURL   string         `json:"source_url,omitempty"`
 	Slug        string         `json:"slug"`
@@ -103,7 +103,7 @@ type MigrationMediaRef struct {
 
 // MigrationLink records an internal-link edge so the porter can rewrite
 // `<a href>` and `<img src>` after Pages have been imported and the new
-// atomicsite slugs are known. From and To are SourcePath form
+// slab slugs are known. From and To are SourcePath form
 // (`/blog/post-slug`).
 type MigrationLink struct {
 	From string `json:"from"`

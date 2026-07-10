@@ -3,7 +3,7 @@ package perfectfoundation
 import (
 	"context"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // referenceKnowledgebase is the canonical knowledgebase derived from
@@ -24,12 +24,12 @@ var referenceKnowledgebase = []KBEntry{
 
 Format the title as "Specific value | Brand". Example: "Replace SaaS with Open Source You Own | Brand Name" (~58 chars).
 
-Atomicsite's guardrails will refuse a Page create/update with title or description outside these ranges.`,
+Slab's guardrails will refuse a Page create/update with title or description outside these ranges.`,
 	},
 	{
 		Category: "seo",
 		Title:    "Headings (kb.go:headings)",
-		Content: `Every page must have exactly one <h1> with non-empty text. Subsections use <h2>, then <h3>, etc — never skip a level.
+		Content: `Every page must have exactly one <h1> with non-empty text. Subsections use <h2>, then <h3>, etc, never skip a level.
 
 The H1 should match the user's primary intent for the page (not the brand name). Use 1 H2 per ~300 words of content (this also satisfies the AI-friendly-formatting check).`,
 	},
@@ -43,11 +43,11 @@ The eval engine flags pages with < 2 internal links and pages with generic ancho
 	{
 		Category: "seo",
 		Title:    "Robots directives (kb.go:robots)",
-		Content: `Default robots value is "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1". Atomicsite bakes this into every Layout.astro automatically.
+		Content: `Default robots value is "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1". Slab bakes this into every Layout.astro automatically.
 
 Use "noindex, nofollow" only when:
 - The page is intentionally hidden (e.g., demo pages, internal landing pages from cold outreach).
-- A page is an orphan (not linked from any silo) — atomicsite auto-noindexes orphans.
+- A page is an orphan (not linked from any silo), slab auto-noindexes orphans.
 
 Never noindex the homepage. Never noindex pages in the main sitemap.`,
 	},
@@ -56,14 +56,14 @@ Never noindex the homepage. Never noindex pages in the main sitemap.`,
 		Title:    "BreadcrumbList schema (kb.go:schema-breadcrumb)",
 		Content: `Every page deeper than the homepage emits a BreadcrumbList JSON-LD with at least 2 items (Home → current page) so AI search engines can build the navigation context.
 
-Atomicsite's builder generates this automatically from the page's URL path. The home page is exempt and the eval engine skips the check there.`,
+Slab's builder generates this automatically from the page's URL path. The home page is exempt and the eval engine skips the check there.`,
 	},
 	{
 		Category: "geo",
 		Title:    "Content freshness signal (kb.go:content-freshness)",
 		Content: `Articles, blog posts, and news items must include a dateModified ISO-8601 timestamp in their JSON-LD (Article / BlogPosting / NewsArticle schema). Pages older than 18 months without an update are flagged.
 
-When you edit an article, set its updated_at — atomicsite emits this as schema.org dateModified automatically. Do NOT bulk-update the modified date across many articles in one batch — Google flags that as manipulation.`,
+When you edit an article, set its updated_at, slab emits this as schema.org dateModified automatically. Do NOT bulk-update the modified date across many articles in one batch, Google flags that as manipulation.`,
 	},
 	{
 		Category: "geo",
@@ -86,37 +86,37 @@ Common culprits:
 - Pasted SVG icons rendered server-side instead of referenced from a sprite.
 - Long product / data lists rendered in full instead of paginated.
 
-Atomicsite's image pipeline auto-converts to WebP/AVIF and emits responsive variants — never bake images into HTML.`,
+Slab's image pipeline auto-converts to WebP/AVIF and emits responsive variants, never bake images into HTML.`,
 	},
 	{
 		Category: "performance",
 		Title:    "Render-blocking scripts (kb.go:render-blocking)",
 		Content: `Every <script> in <head> must have async or defer (or be type="module"). Inline scripts block paint until they parse.
 
-Atomicsite's Layout.astro adds defer to first-party scripts automatically. For third-party scripts, add them via the allowed-scripts settings page — atomicsite emits them with defer + integrity SRI.
+Slab's Layout.astro adds defer to first-party scripts automatically. For third-party scripts, add them via the allowed-scripts settings page, slab emits them with defer + integrity SRI.
 
 Heavy SDKs (Cal.com, Stripe Elements, chat widgets) should be lazy-loaded on user interaction (button click, scroll-into-view) rather than on page load.`,
 	},
 	{
 		Category: "performance",
 		Title:    "Lazy-loaded images (kb.go:lazy-images)",
-		Content: `Images below the fold should have loading="lazy". Above-the-fold images (hero, LCP candidate) should NOT be lazy — they need priority.
+		Content: `Images below the fold should have loading="lazy". Above-the-fold images (hero, LCP candidate) should NOT be lazy, they need priority.
 
-Atomicsite components use loading="lazy" by default for image blocks. Hero images are excluded. Add fetchpriority="high" to the LCP image when known.`,
+Slab components use loading="lazy" by default for image blocks. Hero images are excluded. Add fetchpriority="high" to the LCP image when known.`,
 	},
 	{
 		Category: "performance",
 		Title:    "Inline CSS budget (kb.go:inline-css)",
-		Content: `Inline <style> blocks must stay under 50KB. Use them only for critical CSS that affects above-the-fold render. Everything else goes in a global CSS class (managed via atomicsite's CSS Classes page).
+		Content: `Inline <style> blocks must stay under 50KB. Use them only for critical CSS that affects above-the-fold render. Everything else goes in a global CSS class (managed via slab's CSS Classes page).
 
-Atomicsite's builder inlines critical CSS automatically and externalises the rest.`,
+Slab's builder inlines critical CSS automatically and externalises the rest.`,
 	},
 	{
 		Category: "accessibility",
 		Title:    "Landmarks (kb.go:landmarks)",
 		Content: `Every page needs four landmarks: <header> (or role="banner"), <nav>, <main>, <footer> (or role="contentinfo"). Screen readers use these to skip between sections.
 
-Atomicsite's default Layout.astro provides header / nav / main / footer wrappers. When you add a top-level component, never use <div> where a semantic tag fits — <main> contains the page's primary content, not the global header.`,
+Slab's default Layout.astro provides header / nav / main / footer wrappers. When you add a top-level component, never use <div> where a semantic tag fits, <main> contains the page's primary content, not the global header.`,
 	},
 	{
 		Category: "accessibility",
@@ -126,12 +126,12 @@ Atomicsite's default Layout.astro provides header / nav / main / footer wrappers
 - Wrap: <label>Email <input type="email" /></label>
 - aria-label="Email" or aria-labelledby="some-id".
 
-Placeholder text is NOT a label — it disappears once the user types. Atomicsite's form components emit proper <label for>. When you build custom forms, follow the same pattern.`,
+Placeholder text is NOT a label, it disappears once the user types. Slab's form components emit proper <label for>. When you build custom forms, follow the same pattern.`,
 	},
 	{
 		Category: "accessibility",
 		Title:    "Tabindex (kb.go:tabindex)",
-		Content: `Never use tabindex="1", "2", "3" etc — positive tabindex breaks keyboard navigation. Only valid values are "0" (focusable in DOM order) and "-1" (programmatically focusable, not in tab order).
+		Content: `Never use tabindex="1", "2", "3" etc, positive tabindex breaks keyboard navigation. Only valid values are "0" (focusable in DOM order) and "-1" (programmatically focusable, not in tab order).
 
 If keyboard order needs to differ from DOM order, restructure the DOM instead of overriding with tabindex.`,
 	},
@@ -140,7 +140,7 @@ If keyboard order needs to differ from DOM order, restructure the DOM instead of
 		Title:    "Table headers (kb.go:table-headers)",
 		Content: `Data tables (not layout tables) need <th> cells in the header row. Use <th scope="col"> for column headers and <th scope="row"> for row headers. Screen readers use scope to associate cells with their headers.
 
-For purely visual layout grids, use CSS grid / flex — never <table>.`,
+For purely visual layout grids, use CSS grid / flex, never <table>.`,
 	},
 	{
 		Category: "accessibility",
@@ -152,10 +152,10 @@ Example: <a data-contact-email aria-label="Send email to Acme Inc"></a>. The eva
 	{
 		Category: "security",
 		Title:    "Subresource Integrity (kb.go:sri)",
-		Content: `Third-party scripts loaded from a CDN must include integrity="sha384-..." so the browser refuses tampered files. Atomicsite computes SRI at build time for first-party and known-stable third-party URLs.
+		Content: `Third-party scripts loaded from a CDN must include integrity="sha384-..." so the browser refuses tampered files. Slab computes SRI at build time for first-party and known-stable third-party URLs.
 
 Skip SRI for:
-- Analytics scripts that ship without versioned URLs (gtag.js, posthog) — they change without warning.
+- Analytics scripts that ship without versioned URLs (gtag.js, posthog), they change without warning.
 - Scripts loaded via consent gating after page load.
 
 The eval engine knows about these exceptions and won't flag them.`,
@@ -168,21 +168,21 @@ The eval engine knows about these exceptions and won't flag them.`,
 Common excessive setups:
 - Google Analytics + GTM + Facebook Pixel + LinkedIn Insight + Hotjar.
 
-Atomicsite's pattern: one analytics provider (Umami or GA4 via consent gating), one consent platform (CookieProof). Add others only with explicit business justification.`,
+Slab's pattern: one analytics provider (Umami or GA4 via consent gating), one consent platform (CookieProof). Add others only with explicit business justification.`,
 	},
 	{
 		Category: "privacy",
 		Title:    "AI training bots blocked",
 		Content: `robots.txt blocks GPTBot, ChatGPT-User, anthropic-ai, Google-Extended, and CCBot by default. This prevents your site content from being scraped for LLM training without consent.
 
-Override only if you actively want your content in LLM training corpora (rare). Atomicsite's RenderRobotsTxt baker handles this automatically.`,
+Override only if you actively want your content in LLM training corpora (rare). Slab's RenderRobotsTxt baker handles this automatically.`,
 	},
 	{
 		Category: "schema",
 		Title:    "Organization JSON-LD completeness",
 		Content: `The Organization schema baked into every page must include: name, url, logo (with width/height), sameAs (>=1 social URL), and one of {founder, address, contactPoint}.
 
-Atomicsite reads these from:
+Slab reads these from:
 - Site profile (BusinessName, address, contact).
 - Settings: seo.same_as (newline-separated social URLs), seo.logo_url.
 
@@ -193,7 +193,7 @@ Fill those in during onboarding to pass the GEO check on first build.`,
 		Title:    "FAQ schema must match visible content",
 		Content: `If a page emits FAQPage JSON-LD, the questions and answers in the schema must match the visible <details> / <h3>+<p> content on the page. Schema-only FAQ (with no visible counterpart) is a Google penalty.
 
-Atomicsite's FAQ component generates both visible content and matching schema from one data source — never edit one without the other.`,
+Slab's FAQ component generates both visible content and matching schema from one data source, never edit one without the other.`,
 	},
 	{
 		Category: "schema",
@@ -211,80 +211,80 @@ For local businesses, add openingHoursSpecification and geo (latitude/longitude)
 3. @font-face with font-display:swap so text renders immediately with a fallback.
 4. Use system-ui as the ultimate fallback in your font-family stack.
 
-Never @import from Google Fonts at build time — it adds a render-blocking request. Atomicsite's onboarding generates these preloads automatically when you set Font Heading / Font Body.`,
+Never @import from Google Fonts at build time, it adds a render-blocking request. Slab's onboarding generates these preloads automatically when you set Font Heading / Font Body.`,
 	},
 	{
 		Category: "design",
 		Title:    "Image dimensions are mandatory",
-		Content: `Every <img> needs width and height attributes (or aspect-ratio CSS) so the browser reserves layout space before the image loads. Without them, the page reflows when images arrive — Cumulative Layout Shift (CLS) penalty + a failing eval check.
+		Content: `Every <img> needs width and height attributes (or aspect-ratio CSS) so the browser reserves layout space before the image loads. Without them, the page reflows when images arrive, Cumulative Layout Shift (CLS) penalty + a failing eval check.
 
-Atomicsite's image upload pipeline records dimensions at upload time and fills width/height attributes automatically. The block-level guardrail will refuse image blocks without dimensions.`,
+Slab's image upload pipeline records dimensions at upload time and fills width/height attributes automatically. The block-level guardrail will refuse image blocks without dimensions.`,
 	},
 	{
 		Category: "ai-search",
-		Title:    "llms.txt — what to include",
-		Content: `Atomicsite generates /llms.txt automatically with: business name, founder, key pages, services, target audience, technical stack, and E-E-A-T signals (Experience, Expertise, Authoritativeness, Trust).
+		Title:    "llms.txt, what to include",
+		Content: `Slab generates /llms.txt automatically with: business name, founder, key pages, services, target audience, technical stack, and E-E-A-T signals (Experience, Expertise, Authoritativeness, Trust).
 
 Treat llms.txt like a README for AI crawlers. Update it when:
 - You add a major service / product.
 - You publish a new pillar article worth citing.
 - Your founder bio or credentials change.
 
-Brief, honest, fact-dense. No marketing fluff — LLMs prefer specifics.`,
+Brief, honest, fact-dense. No marketing fluff, LLMs prefer specifics.`,
 	},
 	{
 		Category: "seo",
 		Title:    "Anchor links must point to real IDs (kb.go:anchor-links)",
 		Content: `Site Inspector now flags broken anchor links. An <a href="#section-3"> only passes if an element on the same page has id="section-3". When you copy headings between pages, regenerate the slug-id pairs so old anchor hrefs don't drift past their targets.
 
-Atomicsite emits stable id attributes for headings in long-form text blocks. Don't hand-write hrefs that point at IDs you didn't introduce. If a section moves, update every page that linked to it (the eval engine surfaces the broken anchor with the page slug).`,
+Slab emits stable id attributes for headings in long-form text blocks. Don't hand-write hrefs that point at IDs you didn't introduce. If a section moves, update every page that linked to it (the eval engine surfaces the broken anchor with the page slug).`,
 	},
 	{
 		Category: "seo",
 		Title:    "FAQ schema must match visible content (kb.go:faq-schema)",
 		Content: `When you emit FAQPage JSON-LD, every Question.name and Answer.acceptedAnswer.text in the schema must appear verbatim in the visible DOM of the same page. Google rejects FAQ schemas that don't align with on-page content; the eval engine treats schema/visible mismatch as an SEO trap.
 
-Pattern: render the FAQ block in <dl><dt><dd> markup AND emit the matching JSON-LD. Atomicsite's faq block does both in lockstep — never emit FAQPage from a custom block without a visible Q&A list to match.`,
+Pattern: render the FAQ block in <dl><dt><dd> markup AND emit the matching JSON-LD. Slab's faq block does both in lockstep, never emit FAQPage from a custom block without a visible Q&A list to match.`,
 	},
 	{
 		Category: "social",
 		Title:    "Open Graph + Twitter Card completeness",
 		Content: `Site Inspector's "OG Completeness" check requires seven properties: og:title, og:description, og:image, og:type, og:url, og:site_name, og:locale. The "Twitter Card" + "Twitter Image" checks add twitter:card=summary_large_image and twitter:image.
 
-Atomicsite's Layout bakes all of these in. og:locale is derived from the site lang (en → en_US, sv → sv_SE). The OG image must be 1200x630 — uploaded images outside that ratio still pass the OG present check but fail OG Image Size. Use the Branding > Brand assets folder to upload a 1200x630 og-image.png.`,
+Slab's Layout bakes all of these in. og:locale is derived from the site lang (en → en_US, sv → sv_SE). The OG image must be 1200x630, uploaded images outside that ratio still pass the OG present check but fail OG Image Size. Use the Branding > Brand assets folder to upload a 1200x630 og-image.png.`,
 	},
 	{
 		Category: "accessibility",
 		Title:    "Skip-to-content link (kb.go:landmarks)",
-		Content: `The first focusable element on every page must be a skip link that jumps to the <main> landmark — keyboard users can't tab past your nav otherwise.
+		Content: `The first focusable element on every page must be a skip link that jumps to the <main> landmark, keyboard users can't tab past your nav otherwise.
 
-Atomicsite's Layout emits <a href="#main"> as the first child of <body> with sr-only-focusable styling (offscreen until focused). The <main> element carries id="main". Don't remove either; the eval engine fails pages where the first in-page anchor doesn't point to a content landmark.`,
+Slab's Layout emits <a href="#main"> as the first child of <body> with sr-only-focusable styling (offscreen until focused). The <main> element carries id="main". Don't remove either; the eval engine fails pages where the first in-page anchor doesn't point to a content landmark.`,
 	},
 	{
 		Category: "accessibility",
 		Title:    "Autocomplete attributes on form inputs (kb.go:autocomplete)",
 		Content: `Form inputs with type="email", "tel", or names like "name", "organization", "country" need an autocomplete attribute. Site Inspector flags missing values; password managers and assistive tech rely on these to autofill correctly.
 
-Common values: email, tel, name, given-name, family-name, organization, organization-title, country-name, postal-code, street-address. Add them on every input atomicsite block — the form_field block already wires this; custom HTML pasted into a text block does not.`,
+Common values: email, tel, name, given-name, family-name, organization, organization-title, country-name, postal-code, street-address. Add them on every input slab block, the form_field block already wires this; custom HTML pasted into a text block does not.`,
 	},
 	{
 		Category: "security",
 		Title:    "HSTS preload submission (kb.go:hsts-preload)",
-		Content: `Strict-Transport-Security must declare max-age >= 31536000 (1 year), includeSubDomains, and the preload directive to qualify for the browser preload list at hstspreload.org. Atomicsite ships max-age and includeSubDomains by default; preload is opt-in via Settings > Security > HSTS preload because submission is one-way.
+		Content: `Strict-Transport-Security must declare max-age >= 31536000 (1 year), includeSubDomains, and the preload directive to qualify for the browser preload list at hstspreload.org. Slab ships max-age and includeSubDomains by default; preload is opt-in via Settings > Security > HSTS preload because submission is one-way.
 
-Only enable preload when you're sure every subdomain serves HTTPS — a misconfigured wildcard will lock visitors out of http://intranet.your-domain. The eval engine reports "preload directive" as Info severity until you opt in.`,
+Only enable preload when you're sure every subdomain serves HTTPS, a misconfigured wildcard will lock visitors out of http://intranet.your-domain. The eval engine reports "preload directive" as Info severity until you opt in.`,
 	},
 	{
 		Category: "accessibility",
 		Title:    "aria-hidden must not contain focusable elements (kb.go:aria-hidden)",
-		Content: `Putting aria-hidden="true" on an element that contains a focusable child (link, button, input, tabindex >= 0) is a real bug — keyboard users can tab into content that screen readers can't see. Site Inspector flags this; atomicsite's eval mirrors.
+		Content: `Putting aria-hidden="true" on an element that contains a focusable child (link, button, input, tabindex >= 0) is a real bug, keyboard users can tab into content that screen readers can't see. Site Inspector flags this; slab's eval mirrors.
 
 If you need to hide a region from assistive tech, also set tabindex=-1 on every focusable descendant, or skip the aria-hidden and use display:none / inert instead.`,
 	},
 	{
 		Category: "security",
 		Title:    "Whitelisting iframes (cal.com, YouTube, Stripe Checkout) and other embeds",
-		Content: `Atomicsite ships a strict Content-Security-Policy by default: third-party iframes and external scripts are blocked unless their domain is registered as a Trusted external domain. The kind column on each row routes the domain into the right CSP directive:
+		Content: `Slab ships a strict Content-Security-Policy by default: third-party iframes and external scripts are blocked unless their domain is registered as a Trusted external domain. The kind column on each row routes the domain into the right CSP directive:
 
 - kind=script: Stripe.js, GA snippets, custom JS. Routes to script-src + connect-src.
 - kind=frame: cal.com booking, YouTube embeds, Stripe Checkout iframe, Tally forms. Routes to frame-src.
@@ -300,7 +300,7 @@ Adding a domain widens the attack surface, so writes are admin-only at /sites/{i
 	},
 	{
 		Category: "security",
-		Title:    "Files atomicsite ships automatically",
+		Title:    "Files slab ships automatically",
 		Content: `Every site auto-generates these on every build:
 
 - /sitemap-index.xml (via @astrojs/sitemap, walks every published page)
@@ -320,19 +320,19 @@ Don't try to manually re-author these as page blocks. The agent should point the
 	{
 		Category: "seo",
 		Title:    "Multi-language sites: hreflang strategy + locale path conventions",
-		Content: `Atomicsite supports three multi-language strategies, picked via the seo.hreflang_strategy setting in Settings -> General:
+		Content: `Slab supports three multi-language strategies, picked via the seo.hreflang_strategy setting in Settings -> General:
 
-- "path" (default, recommended): every locale lives at /<lang>/<slug>; default language sits at root. Atomicsite emits <link rel="alternate" hreflang="X" href="..."> automatically when a page has counterparts in other locales (e.g. /about + /sv/about). One domain, one cert.
-- "subdomain": for sites already running sv.example.com / de.example.com separately. Atomicsite trusts the operator's general.additional_langs CSV; you handle the per-subdomain DNS + TLS. Hreflang URLs use the <lang>.<host> pattern.
+- "path" (default, recommended): every locale lives at /<lang>/<slug>; default language sits at root. Slab emits <link rel="alternate" hreflang="X" href="..."> automatically when a page has counterparts in other locales (e.g. /about + /sv/about). One domain, one cert.
+- "subdomain": for sites already running sv.example.com / de.example.com separately. Slab trusts the operator's general.additional_langs CSV; you handle the per-subdomain DNS + TLS. Hreflang URLs use the <lang>.<host> pattern.
 - "off": disables hreflang emission entirely. Use only when you're managing hreflang from a custom layout.
 
-Authoring convention for path mode (the common case): a page in Swedish lives at slug "/sv/about". The shared identity is "/about"; atomicsite strips the locale prefix, looks for "/about" (English / default) and "/de/about" etc, then emits hreflang to whatever counterparts actually exist. Counterparts that aren't published get no link — never link to a 404.
+Authoring convention for path mode (the common case): a page in Swedish lives at slug "/sv/about". The shared identity is "/about"; slab strips the locale prefix, looks for "/about" (English / default) and "/de/about" etc, then emits hreflang to whatever counterparts actually exist. Counterparts that aren't published get no link, never link to a 404.
 
 When the user asks for a translated page:
 1. Read i18n.default_lang + i18n.additional_langs to see which locales are declared.
 2. If the target lang isn't in additional_langs, ask the user to add it via PATCH /api/agent/settings (general.additional_langs is agent-writable).
 3. Create the page at slug "/<lang>/<shared>" matching the existing default-lang page's slug.
-4. The next build automatically wires hreflang on both pages. You don't author <link rel="alternate"> in page blocks; atomicsite does it for you.
+4. The next build automatically wires hreflang on both pages. You don't author <link rel="alternate"> in page blocks; slab does it for you.
 
 x-default points at the default-lang version automatically when one exists.`,
 	},

@@ -3,18 +3,18 @@ package mcp
 import (
 	"context"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
 )
 
 // registerResources wires read-only resources accessible by URI. Same
 // privacy stance as tools: visitor-metadata + identified-tier reads are
-// explicitly absent. URIs use the atomicsite:// scheme so hosts can
+// explicitly absent. URIs use the slab:// scheme so hosts can
 // distinguish them from web URLs without ambiguity.
 func (s *Server) registerResources() {
 	register := func(r Resource) { s.resources[r.URI] = r }
 
 	register(Resource{
-		URI:         "atomicsite://site/context",
+		URI:         "slab://site/context",
 		Name:        "Site context",
 		Description: "Full site context (the GET /api/agent/context payload). Read this first on every new session.",
 		MimeType:    "application/json",
@@ -28,7 +28,7 @@ func (s *Server) registerResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://site/settings_catalog",
+		URI:         "slab://site/settings_catalog",
 		Name:        "Settings catalog",
 		Description: "Per-key dictionary of every setting the builder consumes, with type, valid range, current value, agent-writable flag, and admin URL. The agent's source of truth for what each setting does.",
 		MimeType:    "application/json",
@@ -42,7 +42,7 @@ func (s *Server) registerResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://site/security_posture",
+		URI:         "slab://site/security_posture",
 		Name:        "Security posture",
 		Description: "Resolved security headers + trusted-domain list (per kind) + auto-generated files inventory. Read-only mirror of the human admin's Security settings preview.",
 		MimeType:    "application/json",
@@ -56,7 +56,7 @@ func (s *Server) registerResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://site/i18n",
+		URI:         "slab://site/i18n",
 		Name:        "i18n configuration",
 		Description: "Default lang, declared additional langs, hreflang strategy, locale roots that have published pages, meta-title/description templates, canonical base. Read this before authoring multi-locale pages.",
 		MimeType:    "application/json",
@@ -70,7 +70,7 @@ func (s *Server) registerResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://site/pending_setup",
+		URI:         "slab://site/pending_setup",
 		Name:        "Pending setup",
 		Description: "Configuration gaps the agent should resolve before declaring the site 'done' (missing business name, contact email, OG image, primary color still wizard-default, etc). The first thing to walk through with a new user.",
 		MimeType:    "application/json",
@@ -84,7 +84,7 @@ func (s *Server) registerResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://site/structure",
+		URI:         "slab://site/structure",
 		Name:        "Site structure",
 		Description: "Pages + global blocks + silos. Use this to navigate the site without calling list_pages + list_blocks per page.",
 		MimeType:    "application/json",
@@ -97,8 +97,8 @@ func (s *Server) registerResources() {
 		},
 	})
 
-	// Curriculum (atomicsite://knowledge/*) and service-context
-	// resources (atomicsite://eval/*, build/history, deploy/status,
+	// Curriculum (slab://knowledge/*) and service-context
+	// resources (slab://eval/*, build/history, deploy/status,
 	// domains, members, knowledgebase, consent/stats, retention/status,
 	// integrations, design-references, meta/capabilities) live in
 	// dedicated files so this one stays focused on the original

@@ -18,11 +18,18 @@ import (
 // subprocess (bun install / astro build run tenant-influenced JS and dependency
 // scripts). Kept alongside a suffix heuristic so a future secret-shaped var is
 // stripped by default.
+//
+// Both the current SLAB_ names and their pre-rename ATOMICSITE_ fallbacks are
+// listed: the app reads a secret under whichever name is set (SLAB_ first,
+// ATOMICSITE_ fallback), so a secret provided under the legacy name must be
+// stripped here too or it would leak into the build subprocess. _TOKEN-suffixed
+// names are also caught by the suffix heuristic below; the *_SHIELD_KEY entries
+// end in _KEY (not a heuristic suffix) so both prefixes must be enumerated.
 var secretEnvNames = map[string]bool{
 	"ADMIN_PASSWORD": true, "JWT_SECRET": true, "VAULT_KEY": true,
-	"ATOMICSITE_SHIELD_KEY": true, "ANALYTICS_SALT": true,
+	"SLAB_SHIELD_KEY": true, "ATOMICSITE_SHIELD_KEY": true, "ANALYTICS_SALT": true,
 	"MOLLIE_API_KEY": true, "MAILERSEND_API_TOKEN": true,
-	"ATOMICSITE_CLOUDFLARE_TOKEN": true, "CLOUDFLARE_TOKEN": true,
+	"SLAB_CLOUDFLARE_TOKEN": true, "ATOMICSITE_CLOUDFLARE_TOKEN": true, "CLOUDFLARE_TOKEN": true,
 	"SESSION_SECRET": true, "DATABASE_URL": true, "DB_PATH": true,
 }
 

@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/settingspolicy"
+	"github.com/bright-interaction/slab/internal/settingspolicy"
 )
 
 // secretSettingKeys are the "<category>.<key>" settings whose VALUE is a
@@ -288,7 +288,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		{
 			Category: "analytics", Key: "cookieproof_enabled",
 			Label:         "Enable cookie consent banner",
-			Description:   "Flips the bundled, same-origin CookieProof banner. When 1, the layout emits the inline-config widget + the /t/consent receiver lands proofs in atomicsite's consent_records table. When 0, no consent UI is injected. Branding colors flow in automatically; copy/categories are configurable in the Cookies panel.",
+			Description:   "Flips the bundled, same-origin CookieProof banner. When 1, the layout emits the inline-config widget + the /t/consent receiver lands proofs in slab's consent_records table. When 0, no consent UI is injected. Branding colors flow in automatically; copy/categories are configurable in the Cookies panel.",
 			ValueType:     "bool",
 			AgentWritable: true,
 		},
@@ -363,8 +363,8 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 			AgentWritable: true,
 		},
 		{
-			Category: "analytics", Key: "atomicsite_tracking_enabled",
-			Label:         "Atomicsite server-side tracking",
+			Category: "analytics", Key: "slab_tracking_enabled",
+			Label:         "Slab server-side tracking",
 			Description:   "When 1 (default), the nginx access log tail emits visit_events to the admin DB. Pure server-side, no client JS, GDPR-aligned legitimate-interest posture.",
 			ValueType:     "bool",
 			AgentWritable: true,
@@ -407,7 +407,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		{
 			Category: "analytics", Key: "crm_webhook_url",
 			Label:         "CRM webhook URL",
-			Description:   "Where outbound visitor + consent events get POSTed (HMAC-SHA256 signed via X-Atomicsite-Signature). The companion CRM endpoint receives identified-visitor pushes and replies on /t/inbound to drive personalization.",
+			Description:   "Where outbound visitor + consent events get POSTed (HMAC-SHA256 signed via X-Slab-Signature). The companion CRM endpoint receives identified-visitor pushes and replies on /t/inbound to drive personalization.",
 			ValueType:     "url",
 			AgentWritable: true,
 		},
@@ -476,7 +476,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		{
 			Category: "security", Key: "csp_extra_directives",
 			Label:         "CSP extra directives",
-			Description:   "Appended to the auto-built CSP. Use for report-uri, sandbox, anything atomicsite doesn't expose as its own field. Trailing semicolons trimmed.",
+			Description:   "Appended to the auto-built CSP. Use for report-uri, sandbox, anything slab doesn't expose as its own field. Trailing semicolons trimmed.",
 			ValueType:     "string",
 			AgentWritable: false,
 		},
@@ -560,7 +560,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		{
 			Category: "security", Key: "https_redirect",
 			Label:         "HTTPS redirect",
-			Description:   "When 1 (default), the deploy target's reverse proxy enforces HTTPS via 301. Atomicsite Deploys terminate TLS at Caddy / Dockyard so this is implicit; the row is kept so self-hosters can read the intent.",
+			Description:   "When 1 (default), the deploy target's reverse proxy enforces HTTPS via 301. Slab Deploys terminate TLS at Caddy / Dockyard so this is implicit; the row is kept so self-hosters can read the intent.",
 			ValueType:     "bool",
 			AgentWritable: false,
 		},
@@ -650,7 +650,7 @@ func buildSettingsCatalog(siteID string, settingsMap map[string]string) Settings
 		"analytics.cookie_cat_analytics":             "1",
 		"analytics.cookie_cat_marketing":             "1",
 		"analytics.cookie_cat_preferences":           "1",
-		"analytics.atomicsite_tracking_enabled":      "1",
+		"analytics.slab_tracking_enabled":            "1",
 		"analytics.ga4_enabled":                      "0",
 		"analytics.ga4_id":                           "",
 		"analytics.umami_enabled":                    "0",

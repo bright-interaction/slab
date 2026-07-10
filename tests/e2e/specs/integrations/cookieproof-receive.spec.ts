@@ -3,7 +3,7 @@ import { test, expect, u } from '../../fixtures/auth';
 import { createSite, deleteSite, type Site } from '../../fixtures/data';
 
 // /t/consent is the *receiver* side of the CookieProof relay: the in-page
-// element POSTs the consent payload here. Atomicsite parses it, validates
+// element POSTs the consent payload here. Slab parses it, validates
 // shape, and updates visit_sessions. consent.spec.ts already covers the
 // happy path + CRM emission; this spec drills into payload-parsing edge
 // cases that the receiver enforces.

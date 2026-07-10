@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/atrest"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/deploy"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/atrest"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/deploy"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // DeployHandler handles deploy_target CRUD plus default selection.
@@ -28,7 +28,7 @@ func NewDeployHandler(cfg *config.Config, queries *store.Queries, db *sql.DB) *D
 
 // deployConfigCipher builds the at-rest cipher for deploy-target
 // secrets (rsync private_key_pem), same key + pattern as the TOTP and
-// app-install ciphers. Passthrough when ATOMICSITE_SHIELD_KEY is unset.
+// app-install ciphers. Passthrough when SLAB_SHIELD_KEY is unset.
 func deployConfigCipher(cfg *config.Config) *atrest.Cipher {
 	if cfg == nil {
 		return atrest.New(nil)

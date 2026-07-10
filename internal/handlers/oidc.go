@@ -4,7 +4,7 @@ package handlers
 // generic OIDC provider (point OIDC_ISSUER_URL at your issuer, e.g.
 // Authentik, Auth0, Keycloak, Zitadel). State + PKCE verifier ride a single
 // HMAC-signed cookie so we don't need server-side session storage.
-// On callback success we mint the same atomicsite_token JWT that the
+// On callback success we mint the same slab_token JWT that the
 // password login issues, so the rest of the app sees an SSO user
 // identically to a password user. Account provisioning: SSO requires a
 // pre-existing user by default; OIDC_ALLOW_DOMAINS allows auto-create
@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 const (

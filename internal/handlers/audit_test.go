@@ -9,8 +9,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func openAuditTestDB(t *testing.T) *store.Queries {
@@ -34,7 +34,7 @@ func openAuditTestDB(t *testing.T) *store.Queries {
 // which the trusted-proxy middleware (TrustedProxyRealIP, mounted at
 // the top of the request stack in production) has already rewritten
 // from XFF when the immediate peer is in
-// ATOMICSITE_TRUSTED_PROXIES. auditClientIP intentionally does NOT
+// SLAB_TRUSTED_PROXIES. auditClientIP intentionally does NOT
 // read XFF / CF-Connecting-IP directly; that would let any direct
 // peer spoof the audit log.
 func TestAuditLog_HappyPath(t *testing.T) {

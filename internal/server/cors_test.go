@@ -3,13 +3,13 @@ package server
 import (
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/slab/internal/config"
 )
 
 func prodCfg() *config.Config {
 	return &config.Config{
-		BaseURL:         "https://atomicsite.example.com",
-		BuiltSiteSuffix: ".atomicsite.example.com",
+		BaseURL:         "https://slab.example.com",
+		BuiltSiteSuffix: ".slab.example.com",
 	}
 }
 
@@ -18,7 +18,7 @@ func prodCfg() *config.Config {
 // to admin routes. Pre-fix this returned true.
 func TestCORS_AdminRoutesRejectBuiltSiteOrigins(t *testing.T) {
 	cfg := prodCfg()
-	got := isAllowedOriginForPath(cfg, "https://malicious-tenant.atomicsite.example.com", "/api/sites/abc/blocks")
+	got := isAllowedOriginForPath(cfg, "https://malicious-tenant.slab.example.com", "/api/sites/abc/blocks")
 	if got {
 		t.Error("admin route /api/sites/... must NOT accept built-site subdomain origins (C2 regression)")
 	}
@@ -27,7 +27,7 @@ func TestCORS_AdminRoutesRejectBuiltSiteOrigins(t *testing.T) {
 func TestCORS_PublicVisitorRoutesAllowBuiltSiteOrigins(t *testing.T) {
 	cfg := prodCfg()
 	for _, path := range []string{"/t/consent", "/t/visitor", "/t/inbound", "/t/pageview"} {
-		got := isAllowedOriginForPath(cfg, "https://tenant-foo.atomicsite.example.com", path)
+		got := isAllowedOriginForPath(cfg, "https://tenant-foo.slab.example.com", path)
 		if !got {
 			t.Errorf("public visitor route %s must accept built-site subdomain", path)
 		}
@@ -47,8 +47,8 @@ func TestCORS_RandomOriginsRejected(t *testing.T) {
 	cfg := prodCfg()
 	for _, origin := range []string{
 		"https://attacker.example.com",
-		"https://atomicsite.example.com.attacker.com", // suffix trick
-		"http://atomicsite.example.com",               // wrong scheme
+		"https://slab.example.com.attacker.com", // suffix trick
+		"http://slab.example.com",               // wrong scheme
 		"https://otherproduct.com",
 	} {
 		for _, path := range []string{"/api/sites/abc", "/t/consent"} {
@@ -62,7 +62,7 @@ func TestCORS_RandomOriginsRejected(t *testing.T) {
 func TestCORS_LocalhostInDev(t *testing.T) {
 	cfg := &config.Config{
 		BaseURL:         "http://localhost:8080",
-		BuiltSiteSuffix: ".atomicsite.example.com",
+		BuiltSiteSuffix: ".slab.example.com",
 	}
 	for _, origin := range []string{
 		"http://localhost:5173", // Vite dev server

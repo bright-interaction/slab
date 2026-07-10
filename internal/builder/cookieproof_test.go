@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // TestRenderCookieProofSnippet_HappyPath verifies the snippet emits the
@@ -323,12 +323,12 @@ func TestCookieProofThemeFromBranding_SecondaryFallsBackToSurface(t *testing.T) 
 func TestPresetCookieDeclarations_AlwaysOnBaseline(t *testing.T) {
 	site := store.Site{Lang: "sv"}
 	got := PresetCookieDeclarations(site, map[string]string{})
-	// Expect the Atomic Site consent cookie in necessary + lang in
+	// Expect the Slab consent cookie in necessary + lang in
 	// preferences. The cookie name must match what the widget actually
 	// writes, so we read from the same constant the embed config uses.
 	wantNames := map[string]string{
-		AtomicSiteConsentCookieName: "necessary",
-		"lang":                      "preferences",
+		SlabConsentCookieName: "necessary",
+		"lang":                "preferences",
 	}
 	for name, cat := range wantNames {
 		found := false
@@ -470,13 +470,13 @@ func TestBuildCookieProofConfig_ReadsComplianceSettings(t *testing.T) {
 	}
 }
 
-// TestEmbedConfig_AtomicSiteConsentCookieName guards the rename: the
+// TestEmbedConfig_SlabConsentCookieName guards the rename: the
 // widget's storage layer reads cookieName from window.__CCB__, so the
-// embed config must always carry the Atomic Site name. If anyone ever
+// embed config must always carry the Slab name. If anyone ever
 // removes the CookieName assignment in buildCookieProofEmbedConfig, the
 // widget falls back to the upstream "ce_consent" default and the
 // declared cookie row stops matching what the browser actually stores.
-func TestEmbedConfig_AtomicSiteConsentCookieName(t *testing.T) {
+func TestEmbedConfig_SlabConsentCookieName(t *testing.T) {
 	cfg := CookieProofConfig{
 		SiteID:    "abcdef0123456789abcdef01",
 		Domain:    "example.com",
@@ -487,12 +487,12 @@ func TestEmbedConfig_AtomicSiteConsentCookieName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildCookieProofEmbedConfig: %v", err)
 	}
-	want := `"cookieName":"` + AtomicSiteConsentCookieName + `"`
+	want := `"cookieName":"` + SlabConsentCookieName + `"`
 	if !strings.Contains(string(out), want) {
 		t.Errorf("embed config missing %s; got %s", want, string(out))
 	}
-	if AtomicSiteConsentCookieName == "ce_consent" {
-		t.Error("AtomicSiteConsentCookieName regressed to upstream CookieProof default")
+	if SlabConsentCookieName == "ce_consent" {
+		t.Error("SlabConsentCookieName regressed to upstream CookieProof default")
 	}
 }
 
@@ -584,7 +584,7 @@ func TestBuildCookieProofConfig_InjectsDeclarations(t *testing.T) {
 	if got := byID["marketing"]; len(got.Declarations) != 1 || got.Declarations[0].Name != "fbp" {
 		t.Errorf("expected user-added fbp on marketing; got %+v", got.Declarations)
 	}
-	if got := byID["necessary"]; len(got.Declarations) == 0 || got.Declarations[0].Name != AtomicSiteConsentCookieName {
-		t.Errorf("expected %s preset on necessary; got %+v", AtomicSiteConsentCookieName, got.Declarations)
+	if got := byID["necessary"]; len(got.Declarations) == 0 || got.Declarations[0].Name != SlabConsentCookieName {
+		t.Errorf("expected %s preset on necessary; got %+v", SlabConsentCookieName, got.Declarations)
 	}
 }

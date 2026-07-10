@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/conversions"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/conversions"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func (s *Server) registerGoalTools() {
@@ -309,12 +309,12 @@ func (s *Server) registerGoalTools() {
 
 	register(Tool{
 		Name:        "track_event",
-		Description: "Server-side equivalent of window.atomic.track(name, props) on a rendered site. Records a conversion_event for any active event_name goal whose match_value equals name. Useful when an agent wants to fire a conversion from a back-channel (a webhook, a Slack approval flow) rather than the visitor's browser. fingerprint is required because the conversion is keyed to a visitor (use the same atomicsite_fp cookie value the rendered site uses); empty fingerprint returns an error rather than silently dropping.",
+		Description: "Server-side equivalent of window.atomic.track(name, props) on a rendered site. Records a conversion_event for any active event_name goal whose match_value equals name. Useful when an agent wants to fire a conversion from a back-channel (a webhook, a Slack approval flow) rather than the visitor's browser. fingerprint is required because the conversion is keyed to a visitor (use the same slab_fp cookie value the rendered site uses); empty fingerprint returns an error rather than silently dropping.",
 		InputSchema: schema(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"event name to match against active event_name goals"},
-				"fingerprint":{"type":"string","description":"16-hex-char visitor fingerprint from atomicsite_fp cookie"},
+				"fingerprint":{"type":"string","description":"16-hex-char visitor fingerprint from slab_fp cookie"},
 				"path":{"type":"string","description":"optional URL path to record alongside the event"},
 				"value_cents":{"type":"number","description":"optional event-time value override (otherwise the matched goal's value_cents wins)"},
 				"properties":{"type":"object","description":"optional event properties stored as JSON on the conversion_events row"}

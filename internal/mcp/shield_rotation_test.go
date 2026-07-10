@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/shield"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/shield"
 )
 
 // testAgent is a stable server-resolved identity used by the shield

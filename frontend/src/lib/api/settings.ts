@@ -192,7 +192,7 @@ export function remove(siteID: string, settingID: string): Promise<{ status: str
 	return apiDelete<{ status: string }>(`/sites/${siteID}/settings/${settingID}`);
 }
 
-// getCookiePresets returns the cookie declarations atomicsite auto-derives
+// getCookiePresets returns the cookie declarations slab auto-derives
 // from the site's enabled trackers (GA4, language settings, etc.). The
 // admin Cookies page renders these alongside the user-edited list so
 // the operator sees the full disclosure surface without re-entering

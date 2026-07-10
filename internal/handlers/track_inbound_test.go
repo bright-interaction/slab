@@ -14,8 +14,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // inboundRouter mirrors the production wiring for /t/inbound. The handler
@@ -41,7 +41,7 @@ func signedInboundReq(t *testing.T, r chi.Router, secret string, body any, heade
 
 	req := httptest.NewRequest(http.MethodPost, "/t/inbound", bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Atomicsite-Signature", sig)
+	req.Header.Set("X-Slab-Signature", sig)
 	for k, v := range headerOverrides {
 		if v == "" {
 			req.Header.Del(k)
@@ -100,7 +100,7 @@ func TestInbound_RejectsWithoutSecret(t *testing.T) {
 }
 
 // TestInbound_RejectsMissingSignature ensures the handler refuses requests
-// that arrive without the X-Atomicsite-Signature header.
+// that arrive without the X-Slab-Signature header.
 func TestInbound_RejectsMissingSignature(t *testing.T) {
 	sqlDB, q := setupDeployTestDB(t)
 	cfg := &config.Config{BrightCRMWebhookSecret: "shared-secret"}
@@ -110,7 +110,7 @@ func TestInbound_RejectsMissingSignature(t *testing.T) {
 	resp, _ := signedInboundReq(t, r, "shared-secret", map[string]any{
 		"site_id":    testSiteID,
 		"visitor_id": "v_1",
-	}, map[string]string{"X-Atomicsite-Signature": ""})
+	}, map[string]string{"X-Slab-Signature": ""})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
@@ -147,7 +147,7 @@ func TestInbound_RejectsMalformedJSON(t *testing.T) {
 	sig := hex.EncodeToString(mac.Sum(nil))
 	req := httptest.NewRequest(http.MethodPost, "/t/inbound", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Atomicsite-Signature", sig)
+	req.Header.Set("X-Slab-Signature", sig)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {

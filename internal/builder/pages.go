@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // RenderSingleBlock returns the rendered Astro source for a single block.

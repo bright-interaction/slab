@@ -18,10 +18,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	_ "modernc.org/sqlite"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/migration"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/migration"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // fakeUploaderForHandlers mirrors fakeUploader in the migration package
@@ -35,7 +35,7 @@ func (f *fakeUploaderForHandlers) UploadFromURL(ctx context.Context, siteID, sou
 		return "", "", errors.New("empty source URL")
 	}
 	n := f.uploads.Add(1)
-	return fmt.Sprintf("media_%020d", n), fmt.Sprintf("https://atomicsite.local/m/%d.jpg", n), nil
+	return fmt.Sprintf("media_%020d", n), fmt.Sprintf("https://slab.local/m/%d.jpg", n), nil
 }
 
 func newMigrationHandlerForTest(t *testing.T) (*MigrationHandler, *store.Queries, string) {
@@ -470,7 +470,7 @@ func pollVerifyJobUntilDone(t *testing.T, h *MigrationHandler, siteID, migID, jo
 
 func TestMigration_VerifyLiveAsyncStoresResults(t *testing.T) {
 	h, q, siteID := newMigrationHandlerForTest(t)
-	// Synthetic deployed atomicsite: /old 301 -> /new (200), /broken 404.
+	// Synthetic deployed slab: /old 301 -> /new (200), /broken 404.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/new", http.StatusMovedPermanently)

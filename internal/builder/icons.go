@@ -1,6 +1,6 @@
 package builder
 
-// lucideIcons maps the icon names atomicsite agents commonly write into
+// lucideIcons maps the icon names slab agents commonly write into
 // feature_grid items (Mail, Server, Lock, etc.) to their inline SVG path
 // content. The SVGs are drawn from the Lucide icon library
 // (https://lucide.dev), 24x24 viewBox, currentColor stroke, stroke-width

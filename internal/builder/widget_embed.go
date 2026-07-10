@@ -14,7 +14,7 @@ import (
 // is defined and the embed entry reads `window.__CCB__` to configure it.
 // No runtime fetch to consent.example.com.
 //
-// Updated in lockstep by the atomicsite Dockerfile's "widget" stage so a
+// Updated in lockstep by the slab Dockerfile's "widget" stage so a
 // production build always carries the freshest widget code.
 //
 //go:embed assets/cookieproof.embed.esm.js

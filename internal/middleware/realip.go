@@ -10,7 +10,7 @@
 // Why not chi.middleware.RealIP: chi's stock RealIP honours
 // X-Forwarded-For unconditionally, which lets any direct caller spoof
 // the audit-log IP by setting the header. The fix is to make trust
-// boundary configuration explicit (ATOMICSITE_TRUSTED_PROXIES) and to
+// boundary configuration explicit (SLAB_TRUSTED_PROXIES) and to
 // fall back to r.RemoteAddr when the peer isn't trusted.
 //
 // XFF parsing walks right-to-left: the rightmost entry is the proxy

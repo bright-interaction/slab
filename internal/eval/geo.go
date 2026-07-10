@@ -8,12 +8,12 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/slab/internal/agent"
 )
 
 // RunGEOChecks evaluates AI-search / Generative Engine Optimization signals.
 // These overlap with classic SEO but score AI-citability surface specifically.
-// They are returned as part of the seo category so site-inspector and atomicsite
+// They are returned as part of the seo category so site-inspector and slab
 // stay aligned.
 func RunGEOChecks(site *SiteContext) []CheckResult {
 	var checks []CheckResult
@@ -44,7 +44,7 @@ func RunGEOChecks(site *SiteContext) []CheckResult {
 		// Home page is exempt, plus per-locale roots like /sv or /en. Single
 		// path-segment routes act as the "homepage" of their locale and
 		// shouldn't carry a breadcrumb (Site Inspector applies the same rule
-		// via `pathname === '/'`; atomicsite extends it to depth-1 locale roots).
+		// via `pathname === '/'`; slab extends it to depth-1 locale roots).
 		if isLocaleRoot(p.Slug) {
 			return true, ""
 		}
@@ -105,7 +105,7 @@ func RunGEOChecks(site *SiteContext) []CheckResult {
 
 // isLocaleRoot reports whether a slug is the homepage or a depth-1 locale
 // root (e.g. "/", "/sv", "/sv/", "/en"). Site Inspector exempts the
-// homepage from BreadcrumbList; atomicsite extends to locale roots.
+// homepage from BreadcrumbList; slab extends to locale roots.
 func isLocaleRoot(slug string) bool {
 	s := strings.Trim(slug, "/")
 	if s == "" {

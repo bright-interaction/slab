@@ -15,7 +15,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // --- Profile read / write ---

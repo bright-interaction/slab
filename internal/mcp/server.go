@@ -15,14 +15,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/billing"
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/migration"
-	"github.com/bright-interaction/atomicsite/internal/revisions"
-	"github.com/bright-interaction/atomicsite/internal/shield"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/billing"
+	"github.com/bright-interaction/slab/internal/handlers"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/migration"
+	"github.com/bright-interaction/slab/internal/revisions"
+	"github.com/bright-interaction/slab/internal/shield"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // BuildTrigger is the small interface the MCP server depends on for the
@@ -260,7 +260,7 @@ func (s *Server) WithMediaUploader(m migration.MediaUploader) *Server {
 }
 
 // WithShield enables LLM-boundary tokenization. store and key are
-// required; key must be 32 bytes (the same ATOMICSITE_SHIELD_KEY env
+// required; key must be 32 bytes (the same SLAB_SHIELD_KEY env
 // var consumed at startup). ttl defaults to 30 minutes when zero.
 //
 // When enabled: every tool result + resource read passes through
@@ -619,7 +619,7 @@ func (s *Server) handleInitialize(req Request) (any, *ResponseError) {
 	return InitializeResult{
 		ProtocolVersion: version,
 		ServerInfo: ServerInfo{
-			Name:    "atomicsite",
+			Name:    "slab",
 			Version: "1.0.0",
 		},
 		Capabilities: Capabilities{
@@ -627,7 +627,7 @@ func (s *Server) handleInitialize(req Request) (any, *ResponseError) {
 			Resources: &struct{}{},
 			Prompts:   &struct{}{},
 		},
-		Instructions: "atomicsite MCP server. On session start: (1) read atomicsite://meta/design-playbook (the rubric the Inspector grades against, ADAPTED to this site's design.fidelity dial: performance / balanced / showcase; the fidelity section at the top states what is unlocked, how grading changes, and what is never relaxed) BEFORE authoring any block, (2) read atomicsite://meta/capabilities for identity plus the live tools/resources/prompts surface, (3) read atomicsite://site/context for site state. The fidelity dial is agent-writable (bulk_upsert_settings category=design key=fidelity); change it BEFORE authoring, then re-read the playbook. Use tools/list to see writable surfaces. Visitor data plus identified-tier PII is intentionally NOT exposed via MCP.",
+		Instructions: "slab MCP server. On session start: (1) read slab://meta/design-playbook (the rubric the Inspector grades against, ADAPTED to this site's design.fidelity dial: performance / balanced / showcase; the fidelity section at the top states what is unlocked, how grading changes, and what is never relaxed) BEFORE authoring any block, (2) read slab://meta/capabilities for identity plus the live tools/resources/prompts surface, (3) read slab://site/context for site state. The fidelity dial is agent-writable (bulk_upsert_settings category=design key=fidelity); change it BEFORE authoring, then re-read the playbook. Use tools/list to see writable surfaces. Visitor data plus identified-tier PII is intentionally NOT exposed via MCP.",
 	}, nil
 }
 

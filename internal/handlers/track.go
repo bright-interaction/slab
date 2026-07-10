@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/analytics"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/conversions"
-	"github.com/bright-interaction/atomicsite/internal/crmsync"
-	"github.com/bright-interaction/atomicsite/internal/identify"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/sharedsecret"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/analytics"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/conversions"
+	"github.com/bright-interaction/slab/internal/crmsync"
+	"github.com/bright-interaction/slab/internal/identify"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/sharedsecret"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // normaliseCFCountry mirrors internal/analytics.normaliseCountry without
@@ -54,7 +54,7 @@ const trackBodyMaxBytes = 16 * 1024
 //     the endpoint ships for future client-routed sites.
 //
 // Both endpoints rely on FingerprintMiddleware having already set the
-// atomicsite_fp cookie on the request, so r.Context() carries a 16-hex
+// slab_fp cookie on the request, so r.Context() carries a 16-hex
 // fingerprint. The handlers only validate that the posted siteId actually
 // belongs to a real site row; everything else is best-effort to keep the
 // receiver fast and tolerant of malformed clients.
@@ -512,7 +512,7 @@ type pageViewRequest struct {
 }
 
 // PageView records a visit_event for SPA route changes. The static Astro
-// builds Atomicsite produces don't normally need this (nginx access-logs
+// builds Slab produces don't normally need this (nginx access-logs
 // catch every navigation), but client-routed sites need it to show up in
 // per-page counts. Always 204 on completion.
 func (h *TrackHandler) PageView(w http.ResponseWriter, r *http.Request) {

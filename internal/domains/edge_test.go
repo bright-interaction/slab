@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func tempEdge(t *testing.T) *EdgeWriter {
@@ -24,8 +24,8 @@ func tempEdge(t *testing.T) *EdgeWriter {
 		NginxConfDir:   confDir,
 		NginxSitesDir:  sitesDir,
 		AcmeWebrootDir: "/var/www/acme",
-		SlugSuffix:     ".atomicsite.example.com",
-		HeadersSnippet: "/etc/nginx/snippets/atomicsite-headers.conf",
+		SlugSuffix:     ".slab.example.com",
+		HeadersSnippet: "/etc/nginx/snippets/slab-headers.conf",
 		CaddyUpstream:  "127.0.0.1:8080",
 	}
 }
@@ -132,12 +132,12 @@ func TestEdgeWriter_WriteDomainVhost(t *testing.T) {
 	for _, want := range []string{
 		"server_name shop.example.org",
 		"listen 443 ssl",
-		"include /etc/nginx/snippets/atomicsite-headers.conf",
+		"include /etc/nginx/snippets/slab-headers.conf",
 		"ssl_certificate /etc/letsencrypt/live/shop.example.org/fullchain.pem",
 		"ssl_certificate_key /etc/letsencrypt/live/shop.example.org/privkey.pem",
 		"proxy_pass http://127.0.0.1:8080",
-		"proxy_set_header Host tenant-shop.atomicsite.example.com",
-		"X-Atomicsite-Custom-Host $host",
+		"proxy_set_header Host tenant-shop.slab.example.com",
+		"X-Slab-Custom-Host $host",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("vhost missing %q\n--- block ---\n%s", want, s)
@@ -156,7 +156,7 @@ func TestEdgeWriter_SweepOrphanVhosts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Drop a non-atomicsite file in the same dir to make sure we
+	// Drop a non-slab file in the same dir to make sure we
 	// only sweep our own files.
 	other := filepath.Join(e.NginxSitesDir, "other.conf")
 	if err := os.WriteFile(other, []byte("# unrelated"), 0o644); err != nil {

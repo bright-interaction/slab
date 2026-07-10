@@ -13,8 +13,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // RedirectHandler implements the per-site CRUD + bulk import + pre-launch
@@ -358,7 +358,7 @@ type VerifyResponse struct {
 
 // Verify takes a list of source-site URLs (from a Search Console export, the
 // site's sitemap, or a crawl) and reports what each one will resolve to on
-// the new atomicsite domain. The output drives the "block deploy if will_404
+// the new slab domain. The output drives the "block deploy if will_404
 // is non-empty" check in the migration apply flow (Layer 5).
 func (h *RedirectHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	siteID := urlParam(r, "siteID")

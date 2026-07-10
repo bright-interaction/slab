@@ -30,7 +30,7 @@ func RunSecurityChecks(site *SiteContext) []CheckResult {
 	add("Strict-Transport-Security", "headers", h["Strict-Transport-Security"] != "", 2,
 		"Enable HSTS in Settings -> Security to enforce HTTPS for 1 year.")
 	add("Content-Security-Policy", "headers", h["Content-Security-Policy"] != "", 3,
-		"Enable CSP. Atomicsite auto-builds it from your allowed scripts.")
+		"Enable CSP. Slab auto-builds it from your allowed scripts.")
 	add("X-Content-Type-Options: nosniff", "headers",
 		strings.EqualFold(h["X-Content-Type-Options"], "nosniff"), 1,
 		"Set X-Content-Type-Options to 'nosniff'.")

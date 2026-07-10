@@ -1,6 +1,6 @@
 # Block renderer patterns
 
-Atomic Site composes pages from blocks. There are 19 registered block types, each with a schema describing its fields. Every page is a sorted sequence of blocks. The agent's primary job is choosing the right blocks, in the right order, with the right data.
+Slab composes pages from blocks. There are 19 registered block types, each with a schema describing its fields. Every page is a sorted sequence of blocks. The agent's primary job is choosing the right blocks, in the right order, with the right data.
 
 ## The 19 block types
 
@@ -10,7 +10,7 @@ Social proof: `logo_strip`, `logo_carousel`, `stat_grid`, `replacement_grid`.
 Conversion: `feature_grid`, `pricing`, `cta`, `form`.
 Embed: `image`, `embed`, `custom`, `raw_astro`.
 
-The full schema lives in `internal/blocks/registry.go`. Always pull `atomicsite://site/context` first so the block schemas the agent has match the running server's registry version.
+The full schema lives in `internal/blocks/registry.go`. Always pull `slab://site/context` first so the block schemas the agent has match the running server's registry version.
 
 ## Schema kinds
 

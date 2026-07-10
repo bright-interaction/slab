@@ -5,7 +5,7 @@
 // Slice A (2026-05-24) ships the marketplace + per-site install
 // flow + credential storage. Slice B will wire the upstream MCP
 // proxy + namespaced tool exposure so an agent connected to
-// atomicsite can fan out to every installed app's MCP server.
+// slab can fan out to every installed app's MCP server.
 package apps
 
 // CredentialField describes one entry in an app's credentials_schema_json.
@@ -56,7 +56,7 @@ var Curated = []CuratedApp{
 		ID:          "app_stripe_v1",
 		Slug:        "stripe",
 		Name:        "Stripe",
-		Description: "Hosted checkout, subscriptions, refunds. Use when Mollie's not enough (US-first markets, Apple Pay, complex billing). Atomicsite's own checkout already covers Mollie EU one-shot; install Stripe for everything else.",
+		Description: "Hosted checkout, subscriptions, refunds. Use when Mollie's not enough (US-first markets, Apple Pay, complex billing). Slab's own checkout already covers Mollie EU one-shot; install Stripe for everything else.",
 		Category:    "commerce",
 		Publisher:   "Stripe Inc.",
 		IconURL:     "https://stripe.com/img/v3/home/social.png",
@@ -163,7 +163,7 @@ var Curated = []CuratedApp{
 		ID:          "app_openai_v1",
 		Slug:        "openai",
 		Name:        "OpenAI",
-		Description: "Optional secondary model surface (DALL-E, Whisper, etc). Atomicsite's BYOAI agent flow is already Claude-native; install OpenAI when you need an image or speech model under the same MCP namespace.",
+		Description: "Optional secondary model surface (DALL-E, Whisper, etc). Slab's BYOAI agent flow is already Claude-native; install OpenAI when you need an image or speech model under the same MCP namespace.",
 		Category:    "ai",
 		Publisher:   "OpenAI",
 		IconURL:     "https://openai.com/favicon.ico",

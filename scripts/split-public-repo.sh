@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Produce the public fair-code mirror of Atomicsite at
-# github.com/bright-interaction/atomicsite, so
-# `go install github.com/bright-interaction/atomicsite/cmd/server@latest` resolves.
+# Produce the public fair-code mirror of Slab at
+# github.com/bright-interaction/slab, so
+# `go install github.com/bright-interaction/slab/cmd/server@latest` resolves.
 #
-# Atomicsite is open core (fair-code). The whole atomicsite/ tree ships in the
-# mirror under the Atomicsite Sustainable Use License (fair-code: self-host free,
+# Slab is open core (fair-code). The whole atomicsite/ tree (the monorepo
+# directory keeps its atomicsite/ name; only the product identity was renamed
+# to Slab) ships in the mirror under the Slab Sustainable Use License
+# (fair-code: self-host free,
 # no reselling as a hosted service), EXCEPT the enterprise (ee) cloud layer,
 # which is HELD BACK: the `-tags ee` implementations (tenant subscription
 # billing, multi-tenant edge) are stripped from the mirror's entire history so
@@ -15,16 +17,18 @@
 #
 # Safe by default: with no --push it produces + checks the filtered tree and prints
 # what it WOULD push. --push performs the outward mirror (requires the public repo
-# to exist: gh repo create bright-interaction/atomicsite --public).
+# to exist: gh repo create bright-interaction/slab --public).
 #
 # Pattern (single-branch split-clone + gitleaks gate) mirrors mesh/reactor/flare/pare;
 # see the Hive gotcha "mesh-mirror-split-clone-drags-in-monorepo-branch-secrets".
 set -euo pipefail
 
 PUSH=0
-REMOTE_URL="git@github.com:bright-interaction/atomicsite.git"
+REMOTE_URL="git@github.com:bright-interaction/slab.git"
+# PREFIX is the monorepo DIRECTORY name, intentionally NOT renamed (the live
+# deploy pipeline targets atomicsite/); only the product identity became Slab.
 PREFIX="atomicsite"
-SPLIT_BRANCH="atomicsite-public-split"
+SPLIT_BRANCH="slab-public-split"
 
 # Internal-ONLY paths + the held-back enterprise (ee) layer: stripped from the
 # mirror's entire history. Paths are relative to atomicsite/ (the subtree split
@@ -87,7 +91,7 @@ git subtree split --prefix="$PREFIX" -b "$SPLIT_BRANCH"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-CLONE="$WORK/atomicsite-public"
+CLONE="$WORK/slab-public"
 # --single-branch + --no-tags: the throwaway clone holds ONLY the disjoint
 # atomicsite subtree history, never the monorepo's other branches (which carry
 # unrelated project CI secrets). The clone == the publish payload, which makes
@@ -152,7 +156,7 @@ fi
 if [ "$PUSH" -eq 0 ]; then
   echo; echo "DRY RUN. Filtered mirror ready at: $CLONE"
   echo "Would push its HEAD -> $REMOTE_URL main"
-  echo "Re-run with --push once the public repo exists (gh repo create bright-interaction/atomicsite --public)."
+  echo "Re-run with --push once the public repo exists (gh repo create bright-interaction/slab --public)."
   trap - EXIT  # keep $WORK so the operator can inspect the dry-run tree
   exit 0
 fi

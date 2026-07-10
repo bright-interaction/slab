@@ -21,7 +21,7 @@ test.describe('build-pipeline: nginx.conf', () => {
 			adminApi,
 			site.id,
 			'analytics',
-			'atomicsite_tracking_enabled',
+			'slab_tracking_enabled',
 			'true'
 		);
 
@@ -32,7 +32,7 @@ test.describe('build-pipeline: nginx.conf', () => {
 
 		// nginx.conf is at workspace root, not under dist/.
 		const conf = readWorkspaceFile(site.id, 'nginx.conf');
-		expect(conf).toContain('log_format atomicsite_json');
+		expect(conf).toContain('log_format slab_json');
 		// At least one location block
 		expect(conf).toMatch(/location\s+[^{]*\{/);
 		// Security headers piped through nginx as well

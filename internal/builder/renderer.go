@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // BuildResult holds the complete outcome of a site build.

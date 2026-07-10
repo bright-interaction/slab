@@ -29,7 +29,7 @@ type GraphEdge struct {
 	Kind string `json:"kind"` // "mentions" | "tagged" | "ordered_after"
 }
 
-// Graph is the full payload behind atomicsite://meta/knowledge-graph.
+// Graph is the full payload behind slab://meta/knowledge-graph.
 // Fields are JSON-stable so external clients can index them.
 type Graph struct {
 	Nodes []GraphNode `json:"nodes"`
@@ -47,11 +47,11 @@ type GraphStats struct {
 	TopReferenced []string       `json:"top_referenced"`
 }
 
-// resourceURIPattern matches every atomicsite:// URI that may appear
+// resourceURIPattern matches every slab:// URI that may appear
 // inside curriculum bodies. The agent uses these to navigate from a
 // concept doc to a runtime resource (e.g. the security-authoring doc
-// references atomicsite://site/security_posture).
-var resourceURIPattern = regexp.MustCompile(`atomicsite://[a-z0-9_/-]+`)
+// references slab://site/security_posture).
+var resourceURIPattern = regexp.MustCompile(`slab://[a-z0-9_/-]+`)
 
 // toolNamePattern matches snake_case tool names mentioned in body text.
 // We only emit a "mentions" edge if the matched name is on the known
@@ -62,7 +62,7 @@ var toolNamePattern = regexp.MustCompile(`\b[a-z][a-z0-9_]+[a-z0-9]\b`)
 // BuildGraph computes the knowledge graph from the embedded curriculum
 // plus the live MCP surface (tool names, resource URIs, prompt names
 // the caller threads in). Pure function; no I/O. Cheap enough to run on
-// every resources/read of atomicsite://meta/knowledge-graph.
+// every resources/read of slab://meta/knowledge-graph.
 //
 // Tool, resource, prompt name slices are passed in instead of being
 // imported from the mcp package because internal/knowledge cannot

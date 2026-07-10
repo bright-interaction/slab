@@ -8,13 +8,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/revisions"
-	"github.com/bright-interaction/atomicsite/internal/store"
-	"github.com/bright-interaction/atomicsite/internal/webhook"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/config"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/revisions"
+	"github.com/bright-interaction/slab/internal/store"
+	"github.com/bright-interaction/slab/internal/webhook"
 )
 
 func encodeWarnings(vs []agent.Violation) string {
@@ -327,7 +327,7 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	page, _ := h.queries.GetPageByID(r.Context(), pageID)
 	if len(violations) > 0 {
-		w.Header().Set("X-Atomicsite-Warnings", encodeWarnings(violations))
+		w.Header().Set("X-Slab-Warnings", encodeWarnings(violations))
 	}
 	emitWebhook(r.Context(), siteID, webhook.EventPageUpdated, page)
 	writeJSON(w, http.StatusOK, page)

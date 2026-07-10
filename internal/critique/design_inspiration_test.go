@@ -48,7 +48,7 @@ func TestInspirationsFor_UnknownTypeReturnsNil(t *testing.T) {
 }
 
 // TestInspirationsFor_CoversCanonicalBlockTypes spot-checks the most
-// common atomicsite block types so the curated map doesn't lose its
+// common slab block types so the curated map doesn't lose its
 // minimum-viable coverage. New block_types added to renderer should
 // also get an entry here.
 func TestInspirationsFor_CoversCanonicalBlockTypes(t *testing.T) {

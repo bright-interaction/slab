@@ -14,7 +14,7 @@ var DefaultAdminBaseURL = ""
 
 // RenderVisitorHydration emits a small inline <script> that fetches per-
 // visitor metadata from /t/visitor (cross-origin to the admin host),
-// exposes it on window.__ATOMICSITE_VISITOR__, walks every block tagged
+// exposes it on window.__SLAB_VISITOR__, walks every block tagged
 // with [data-asp-when], evaluates the embedded DSL against the visitor
 // fields, and removes the `hidden` attribute when the condition matches.
 //
@@ -76,8 +76,8 @@ func VisitorHydrationScript(siteID, adminBaseURL, trackPath string) string {
   }
   fetch(ENDPOINT+"?site_id="+encodeURIComponent(SITE_ID),{credentials:"omit",mode:"cors",cache:"no-store"})
     .then(function(r){return r.ok?r.json():null;})
-    .then(function(v){window.__ATOMICSITE_VISITOR__=v||{returning:false,anonymous:{},identified:{}};apply(flat(window.__ATOMICSITE_VISITOR__));})
-    .catch(function(){window.__ATOMICSITE_VISITOR__={returning:false,anonymous:{},identified:{}};});
+    .then(function(v){window.__SLAB_VISITOR__=v||{returning:false,anonymous:{},identified:{}};apply(flat(window.__SLAB_VISITOR__));})
+    .catch(function(){window.__SLAB_VISITOR__={returning:false,anonymous:{},identified:{}};});
 })();
 `, siteID, endpoint)
 }

@@ -80,9 +80,9 @@
 	const strategyHint = $derived.by(() => {
 		switch (hreflangStrategy) {
 			case 'path':
-				return 'Recommended. Each language sits at /<lang>/<slug>; default language at root. Atomicsite emits hreflang automatically when a page has counterparts in other locales (e.g. /about + /sv/about both published). One domain, one cert, no DNS work.';
+				return 'Recommended. Each language sits at /<lang>/<slug>; default language at root. Slab emits hreflang automatically when a page has counterparts in other locales (e.g. /about + /sv/about both published). One domain, one cert, no DNS work.';
 			case 'subdomain':
-				return 'For sites already running sv.example.com / de.example.com separately. Atomicsite trusts your additional_langs list; you handle the DNS + TLS per subdomain. Hreflang URLs use the <lang>.<host> pattern.';
+				return 'For sites already running sv.example.com / de.example.com separately. Slab trusts your additional_langs list; you handle the DNS + TLS per subdomain. Hreflang URLs use the <lang>.<host> pattern.';
 			case 'off':
 				return 'Disable hreflang emission entirely. Use only if you manage hreflang from a custom layout or your site is single-language and you want to be explicit.';
 		}
@@ -297,7 +297,7 @@
 					Languages and hreflang
 				</h2>
 				<p class="mt-2 text-[12px] text-text-muted">
-					Atomicsite optimizes for path-based multi-language by default
+					Slab optimizes for path-based multi-language by default
 					(/sv/about, /de/about). Subdomain mode is opt-in for sites that
 					already run sv.example.com. TLD-per-locale (example.se,
 					example.de) is handled as separate sites linked together; that

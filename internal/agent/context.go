@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/blocks"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/blocks"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // ContextBuilder assembles the full context response for an AI agent.
@@ -53,7 +53,7 @@ type SiteContext struct {
 	// sees.
 	Endpoints EndpointsInfo `json:"endpoints"`
 	// BlockSchemas tells the agent which JSON keys each block_type
-	// expects under data_json. The keys come from atomicsite's renderer
+	// expects under data_json. The keys come from slab's renderer
 	// (internal/builder/pages.go) and the Text Mode UI's canonical text
 	// field set. Use this to put copy in the right field instead of
 	// inventing new keys that the renderer ignores.
@@ -68,7 +68,7 @@ type SiteContext struct {
 	// trusted_domains carries every active allowed_scripts row keyed by
 	// kind so the agent can answer "is cal.com already trusted?"; csp
 	// carries the resolved Content-Security-Policy the next build will
-	// emit; generated_files names the artifacts atomicsite ships for
+	// emit; generated_files names the artifacts slab ships for
 	// every site so the agent doesn't try to manually re-author them.
 	// Added 2026-04-29 alongside the per-kind CSP allowlist + Security
 	// settings UI rebuild.
@@ -78,7 +78,7 @@ type SiteContext struct {
 	// and -description templates, and the locale prefixes that have
 	// actual published pages. Use this to author copy in the right
 	// locale, to know whether you should emit hreflang as part of a
-	// page (you don't, atomicsite does it for you), and to pick the
+	// page (you don't, slab does it for you), and to pick the
 	// right slug prefix when creating a page in a non-default locale.
 	I18n I18nInfo `json:"i18n"`
 	// SettingsCatalog is the per-key dictionary of every setting the
@@ -93,7 +93,7 @@ type SiteContext struct {
 	SettingsCatalog SettingsCatalogInfo `json:"settings_catalog"`
 	// EvalPlaybook is a hard-coded checklist the agent reads on first
 	// session to know exactly how to converge the site to A+ on the
-	// atomicsite eval engine. It connects every block-renderer field,
+	// slab eval engine. It connects every block-renderer field,
 	// every settings_catalog key, and every pending_setup item to the
 	// specific eval check it satisfies, so the agent doesn't have to
 	// trial-and-error the eval to figure out what each failing check
@@ -149,7 +149,7 @@ type MasteryInfo struct {
 // marketing-site audits. The agent that reads this carefully should
 // one-shot a B+ site that looks like a real agency built it, not
 // "AI template + nice fonts". Every rule has been adapted to
-// atomicsite's static-Astro reality (no React/Framer Motion, CSS
+// slab's static-Astro reality (no React/Framer Motion, CSS
 // animations only, JSON authoring instead of utility classes).
 type DesignPlaybookInfo struct {
 	// Fidelity is the active design-freedom dial (performance |
@@ -171,7 +171,7 @@ type DesignPlaybookInfo struct {
 
 	// AntiPatterns lists the AI design tells that make a site look
 	// generic. Each entry pairs a banned pattern with the preferred
-	// alternative AND the atomicsite-specific way to apply it. Read
+	// alternative AND the slab-specific way to apply it. Read
 	// before every site build, nothing else in this playbook helps
 	// if the output ships an AI tell.
 	AntiPatterns []AntiPattern `json:"anti_patterns"`
@@ -184,7 +184,7 @@ type DesignPlaybookInfo struct {
 	VibeArchetypes []VibeArchetype `json:"vibe_archetypes"`
 
 	// Materiality describes how surfaces look, borders, shadows,
-	// glass, double-bezel patterns. Atomicsite's renderer ships
+	// glass, double-bezel patterns. Slab's renderer ships
 	// most of these as defaults; this section tells the agent
 	// what's already wired up so it doesn't try to invent custom CSS.
 	Materiality MaterialityGuidance `json:"materiality"`
@@ -194,7 +194,7 @@ type DesignPlaybookInfo struct {
 	// banned. The agent reads this BEFORE writing copy, not after.
 	ContentAuthenticity ContentRules `json:"content_authenticity"`
 
-	// MotionGuidance is the agent's motion-design rules. Atomicsite
+	// MotionGuidance is the agent's motion-design rules. Slab
 	// is static Astro, no Framer Motion, no scroll listeners. CSS
 	// animations only, prefers-reduced-motion respected, transform
 	// + opacity only.
@@ -203,19 +203,19 @@ type DesignPlaybookInfo struct {
 	// StrategicOmissions is the checklist of things AI typically
 	// forgets. Skip-to-content, custom 404, form validation,
 	// favicon, legal links, cookie consent, "back" navigation.
-	// Atomicsite handles many automatically, this section tells
+	// Slab handles many automatically, this section tells
 	// the agent which ones it gets for free vs which need explicit
 	// authorship.
 	StrategicOmissions []OmissionItem `json:"strategic_omissions"`
 
 	// AuditChecklist is the final pre-flight checklist the agent
 	// runs against its own output before declaring the site done.
-	// Mirrors redesign-existing's audit but scoped to atomicsite
+	// Mirrors redesign-existing's audit but scoped to slab
 	// authoring (block_type + data + settings, not arbitrary CSS).
 	AuditChecklist []AuditItem `json:"audit_checklist"`
 
 	// IconPolicy says which icon set to use, banned strokes, and how
-	// to wire icons through atomicsite's icons.go dictionary.
+	// to wire icons through slab's icons.go dictionary.
 	IconPolicy IconRules `json:"icon_policy"`
 
 	// CopyVoice gives the agent a tight, opinionated voice rule set
@@ -224,7 +224,7 @@ type DesignPlaybookInfo struct {
 	// taste-skill content rules.
 	CopyVoice VoiceRules `json:"copy_voice"`
 
-	// Fonts documents atomicsite's font system: self-hosted woff2 only,
+	// Fonts documents slab's font system: self-hosted woff2 only,
 	// per-site uploads, admin UI path, recommended families with
 	// download sources, system fallback behaviour. The agent reads
 	// this BEFORE setting branding.font_heading or font_body, picking
@@ -232,7 +232,7 @@ type DesignPlaybookInfo struct {
 	Fonts FontGuidance `json:"fonts"`
 
 	// StackRecommendations names the four canonical site stacks
-	// atomicsite supports: pure static Astro (default), Astro + Svelte
+	// slab supports: pure static Astro (default), Astro + Svelte
 	// islands (light interactivity), Astro + Svelte + headless commerce
 	// (ecom), and Astro + Svelte + Stripe Checkout (paid digital
 	// goods). Tells the agent which to pick AND which payment provider
@@ -249,12 +249,12 @@ type DesignPlaybookInfo struct {
 	// DesignWorkflow tells the agent which installed design skill to
 	// invoke for each vibe before writing custom HTML/CSS. Cross-links
 	// taste-skill, high-end-visual-design, stitch-design, minimalist-ui
-	// to atomicsite vibes.
+	// to slab vibes.
 	DesignWorkflow DesignWorkflow `json:"design_workflow"`
 }
 
 // DesignPrinciple is a first-principles design rule with a concrete
-// "how-to-apply-via-atomicsite" mapping so the agent isn't left
+// "how-to-apply-via-slab" mapping so the agent isn't left
 // translating abstract advice into block fields.
 type DesignPrinciple struct {
 	Name         string `json:"name"`
@@ -318,7 +318,7 @@ type SpacingScale struct {
 }
 
 // ColorGuidance maps the CSS custom properties to "what they're for."
-// Atomicsite emits --color-primary / --color-text / --color-bg /
+// Slab emits --color-primary / --color-text / --color-bg /
 // --color-surface-elevated and others; this tells the agent which one
 // belongs in which UI moment.
 type ColorGuidance struct {
@@ -358,11 +358,11 @@ type DesignReferenceRepo struct {
 }
 
 // AntiPattern is one banned AI-design tell with its preferred replacement
-// and how to apply that replacement through atomicsite primitives.
+// and how to apply that replacement through slab primitives.
 type AntiPattern struct {
-	Banned          string `json:"banned"`
-	Preferred       string `json:"preferred"`
-	HowInAtomicsite string `json:"how_in_atomicsite"`
+	Banned    string `json:"banned"`
+	Preferred string `json:"preferred"`
+	HowInSlab string `json:"how_in_slab"`
 }
 
 // VibeArchetype names one of three coherent aesthetic identities. The
@@ -382,7 +382,7 @@ type VibeArchetype struct {
 	ApplyVia     string   `json:"apply_via"`
 }
 
-// MaterialityGuidance describes the surface treatments atomicsite
+// MaterialityGuidance describes the surface treatments slab
 // supports + the patterns the agent should reach for vs avoid.
 type MaterialityGuidance struct {
 	Defaults   []string `json:"defaults"`
@@ -398,10 +398,10 @@ type ContentRules struct {
 	BannedCompanies []string `json:"banned_companies"`
 	BannedPhrases   []string `json:"banned_phrases"`
 	StyleRules      []string `json:"style_rules"`
-	HowInAtomicsite string   `json:"how_in_atomicsite"`
+	HowInSlab       string   `json:"how_in_slab"`
 }
 
-// MotionGuidance scopes animation to atomicsite reality (CSS only, no JS).
+// MotionGuidance scopes animation to slab reality (CSS only, no JS).
 type MotionGuidance struct {
 	StackReality string   `json:"stack_reality"`
 	DoUse        []string `json:"do_use"`
@@ -411,7 +411,7 @@ type MotionGuidance struct {
 }
 
 // OmissionItem is one thing AI typically forgets, and whether
-// atomicsite handles it automatically or needs explicit authorship.
+// slab handles it automatically or needs explicit authorship.
 type OmissionItem struct {
 	Item       string `json:"item"`
 	Importance string `json:"importance"`
@@ -440,7 +440,7 @@ type HeroGraphic struct {
 }
 
 // DesignWorkflow cross-links the harness-installed design skills to the
-// atomicsite vibe archetypes. The agent reads this BEFORE composing a
+// slab vibe archetypes. The agent reads this BEFORE composing a
 // hero or styling a page so it invokes the right skill (taste-skill,
 // high-end-visual-design, stitch-design, minimalist-ui) instead of
 // reinventing patterns inline.
@@ -475,7 +475,7 @@ type VoiceRules struct {
 	Forbidden  []string `json:"forbidden"`
 }
 
-// FontGuidance tells the agent how atomicsite's font system works,
+// FontGuidance tells the agent how slab's font system works,
 // where to upload fonts in the admin UI, how to list / register
 // fonts via the agent API, and which families are good picks for
 // each archetype + how to obtain the woff2 files (all SIL OFL 1.1
@@ -505,7 +505,7 @@ type FontFamily struct {
 	Notes        string   `json:"notes"`
 }
 
-// StackGuidance documents the four canonical stacks atomicsite
+// StackGuidance documents the four canonical stacks slab
 // supports + a decision tree for picking one + payment-provider rules.
 type StackGuidance struct {
 	Philosophy string         `json:"philosophy"`
@@ -587,7 +587,7 @@ type I18nInfo struct {
 	// AdditionalLangs is the operator-declared CSV expanded into the
 	// list of other languages the site publishes (general.additional_langs).
 	AdditionalLangs []string `json:"additional_langs"`
-	// Strategy is "path" (default), "subdomain", or "off". Atomicsite
+	// Strategy is "path" (default), "subdomain", or "off". Slab
 	// optimizes for path-based; subdomain is opt-in for sites already
 	// running sv.example.com etc; off disables hreflang emission.
 	Strategy string `json:"hreflang_strategy"`
@@ -636,7 +636,7 @@ type SecurityPostureInfo struct {
 	// HumanAdminURL is the path the agent should point the user at
 	// when an iframe / image / script host needs whitelisting.
 	HumanAdminURL string `json:"human_admin_url"`
-	// GeneratedFiles names every artifact atomicsite emits on every
+	// GeneratedFiles names every artifact slab emits on every
 	// build so the agent doesn't try to re-create them.
 	GeneratedFiles []GeneratedFileInfo `json:"generated_files"`
 }
@@ -652,7 +652,7 @@ type TrustedDomainsByKind struct {
 	All     []string `json:"all"`
 }
 
-// GeneratedFileInfo names one artifact atomicsite auto-ships.
+// GeneratedFileInfo names one artifact slab auto-ships.
 type GeneratedFileInfo struct {
 	Path        string `json:"path"`
 	Label       string `json:"label"`
@@ -1148,15 +1148,15 @@ func (b *ContextBuilder) Build(ctx context.Context, siteID string) (*SiteContext
 }
 
 // defaultEvalPlaybook returns the hard-coded agent playbook for converging
-// a site to A+ on the atomicsite eval engine. Connects every block-renderer
+// a site to A+ on the slab eval engine. Connects every block-renderer
 // field, every settings_catalog key, and every pending_setup item to the
 // eval check it satisfies, so an agent reading the context can plan the
 // whole setup pass without trial-and-error against the eval.
 func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 	return EvalPlaybookInfo{
 		Mastery: MasteryInfo{
-			GraphURI:   "atomicsite://meta/knowledge-graph",
-			CatalogURI: "atomicsite://knowledge/index",
+			GraphURI:   "slab://meta/knowledge-graph",
+			CatalogURI: "slab://knowledge/index",
 			ReadingOrder: []string{
 				// Stack mastery first: how the builder emits Astro + TS + custom CSS,
 				// the block registry vocabulary, the Collection / schema-org layer
@@ -1184,9 +1184,9 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 				"dark-mode",
 				"premium-design-principles",
 			},
-			Hint: "Read atomicsite://meta/knowledge-graph FIRST on session start. It returns nodes + edges for every doc, tool, resource, prompt, and concept tag, so you can pick what's relevant in one fetch instead of crawling 30+ resources. Follow up with atomicsite://knowledge/<slug> for full bodies, and tools/list / resources/list for the live MCP surface. The reading_order above is the deterministic curriculum sequence the master_the_stack prompt walks; honor it when picking docs to read.",
+			Hint: "Read slab://meta/knowledge-graph FIRST on session start. It returns nodes + edges for every doc, tool, resource, prompt, and concept tag, so you can pick what's relevant in one fetch instead of crawling 30+ resources. Follow up with slab://knowledge/<slug> for full bodies, and tools/list / resources/list for the live MCP surface. The reading_order above is the deterministic curriculum sequence the master_the_stack prompt walks; honor it when picking docs to read.",
 		},
-		Goal: "Atomicsite is a website builder where designers / agents pick blocks and content freely; the platform guardrails the technical side so the site ends up correctly architected. You handle: design (block sequence, copy, imagery), brand (palette, fonts, logo), structure (pages, slugs, locales). Atomicsite handles automatically: SEO meta + JSON-LD, hreflang emission, sitemap, robots.txt, llms.txt, security.txt, security headers (HSTS, CSP, X-Frame-Options, COOP/CORP/COEP, Permissions-Policy), <picture> + WebP variants + width/height, lazy loading, mobile breakpoints, focus indicators, semantic landmarks, FAQPage / Organization JSON-LD, h1/h2 hierarchy enforcement at block-render time. Drive the site to 95%+ on agent-writable eval categories. Custom interactive widgets (calculators, scanners, custom visualisations) are bespoke, build them as Astro components in the site's component catalog (see component block_type) when a customer needs one; atomicsite ships the generic primitives (form, feature_grid, replacement_grid, embed, logo_carousel, etc.) the agent composes from.",
+		Goal: "Slab is a website builder where designers / agents pick blocks and content freely; the platform guardrails the technical side so the site ends up correctly architected. You handle: design (block sequence, copy, imagery), brand (palette, fonts, logo), structure (pages, slugs, locales). Slab handles automatically: SEO meta + JSON-LD, hreflang emission, sitemap, robots.txt, llms.txt, security.txt, security headers (HSTS, CSP, X-Frame-Options, COOP/CORP/COEP, Permissions-Policy), <picture> + WebP variants + width/height, lazy loading, mobile breakpoints, focus indicators, semantic landmarks, FAQPage / Organization JSON-LD, h1/h2 hierarchy enforcement at block-render time. Drive the site to 95%+ on agent-writable eval categories. Custom interactive widgets (calculators, scanners, custom visualisations) are bespoke, build them as Astro components in the site's component catalog (see component block_type) when a customer needs one; slab ships the generic primitives (form, feature_grid, replacement_grid, embed, logo_carousel, etc.) the agent composes from.",
 		PageTemplate: PageTemplate{
 			Description: "Canonical block sequence for a marketing-grade homepage modeled after world-class marketing sites (Linear, Stripe, Vercel, Resend). Use as the default when creating a fresh page; remove blocks only when the page is short-form (legal, 404).",
 			Blocks: []TemplateBlock{
@@ -1205,7 +1205,7 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 			{Rule: "Set both meta_title (30-60 chars) AND meta_description (120-160 chars with action verbs like learn / try / get / book / läs / prova) on every page row via update_page.", WhyItMatters: "Eval flags Title Length 30-60, Meta Description 120-160, Meta Description Has CTA per page; branding fallback alone fails these.", HowToApply: "update_page(slug=..., meta_title=..., meta_description=...) for every published page including legal + 404."},
 			{Rule: "Use a hero block at sort_order=0 on every content page so the renderer emits an h1 from the headline field.", WhyItMatters: "Eval Has H1 + Single H1 are page-level checks. Without a hero block, no h1 renders, both checks fail.", HowToApply: "create_block(page_slug, block_type='hero', sort_order=0, data={headline, subheading, cta_text, cta_url, ...})"},
 			{Rule: "Set per-page no_index=0 on real content pages. Use no_index=1 only for splash + admin pages.", WhyItMatters: "Eval Not Noindexed expects content pages to be indexable. Splash pages are fine to flag here as long as they're the only ones.", HowToApply: "update_page(slug=..., no_index=0). Default is 0; only flip to 1 for splash."},
-			{Rule: "For multi-language sites, every page needs a counterpart in every other locale at the matching slug pattern.", WhyItMatters: "Eval Hreflang Tags fires when general.additional_langs is set; missing counterparts cause atomicsite to skip emitting hreflang for those pages, which the eval flags as missing.", HowToApply: "create_page for each locale. Slug convention: /<lang>/<slug>. Mirror /en/about ↔ /sv/about, /en/privacy ↔ /sv/privacy, etc."},
+			{Rule: "For multi-language sites, every page needs a counterpart in every other locale at the matching slug pattern.", WhyItMatters: "Eval Hreflang Tags fires when general.additional_langs is set; missing counterparts cause slab to skip emitting hreflang for those pages, which the eval flags as missing.", HowToApply: "create_page for each locale. Slug convention: /<lang>/<slug>. Mirror /en/about ↔ /sv/about, /en/privacy ↔ /sv/privacy, etc."},
 			{Rule: "PATCH /api/agent/branding to set meta_title, meta_description, og_image_id, favicon_id, lang as a fallback layer.", WhyItMatters: "Pages that don't override get the fallback. og_image_id + favicon_id drive the OG Image, OG Image Size 1200x630, Favicon, Apple Touch Icon, Organization Schema (logo) eval checks all at once.", HowToApply: "Upload a 1200x630 PNG to brand folder via /api/agent/media (no MCP wrapper for upload, use curl POST /api/agent/media/from-url or media/from-base64). Then PATCH branding with the returned media id."},
 			{Rule: "Wire seo.same_as with newline-separated social URLs (LinkedIn, GitHub, Instagram, X, YouTube).", WhyItMatters: "Drives JSON-LD Organization sameAs which is the Organization Schema Completeness eval check.", HowToApply: "bulk_upsert_settings([{category:'seo', key:'same_as', value:'https://...\\nhttps://...'}])"},
 			{Rule: "trigger_build is the publish verb. After it returns success, the live URL reflects the new content via auto-deploy.", WhyItMatters: "Build also runs eval. The eval response is the source of truth for what's failing; act on its checks_json directly rather than guessing.", HowToApply: "trigger_build -> poll get_build_status until status=='success' -> get_evaluation(build_id) -> walk failing checks -> fix -> repeat."},
@@ -1213,7 +1213,7 @@ func defaultEvalPlaybook(siteID string) EvalPlaybookInfo {
 			{Rule: "Update block sort_order via update_block (now persists; previously dropped). Don't delete-and-recreate to reorder.", WhyItMatters: "Was a contradiction in the agent surface; fixed in the same session that authored this playbook (commit 8a0f87d0). Block sort_order writes are now reliable.", HowToApply: "update_block(block_id, sort_order=N, data=...). Use unique sort_order values per page so render order is deterministic."},
 		},
 		BuildLoop: []string{
-			"1. Read /api/agent/context to get pending_setup + settings_catalog + block_schemas + this playbook. Then fetch atomicsite://meta/knowledge-graph for the cross-reference map of curriculum + tools + resources + prompts; pick relevant nodes from the graph instead of crawling. Walk atomicsite://knowledge/<slug> for any doc whose summary is on point. The reading_order in eval_playbook.mastery is the deterministic curriculum sequence.",
+			"1. Read /api/agent/context to get pending_setup + settings_catalog + block_schemas + this playbook. Then fetch slab://meta/knowledge-graph for the cross-reference map of curriculum + tools + resources + prompts; pick relevant nodes from the graph instead of crawling. Walk slab://knowledge/<slug> for any doc whose summary is on point. The reading_order in eval_playbook.mastery is the deterministic curriculum sequence.",
 			"2. Profile + branding + settings via update_profile / PATCH /api/agent/branding / bulk_upsert_settings.",
 			"3. Page structure: create_page for every page in every locale.",
 			"4. Per-page meta: update_page(slug, meta_title, meta_description, no_index, og_image_id) for every page.",
@@ -1313,7 +1313,7 @@ func (b *ContextBuilder) computeI18n(ctx context.Context, siteID string, site st
 // computeSecurityPosture builds the agent-facing security summary. Reads
 // allowed_scripts to group trusted domains by kind, computes the resolved
 // CSP via the same builder helper the build pipeline uses, and lists the
-// auto-generated files atomicsite emits for every site.
+// auto-generated files slab emits for every site.
 func (b *ContextBuilder) computeSecurityPosture(ctx context.Context, siteID string) SecurityPostureInfo {
 	rows, _ := b.queries.ListAllowedScriptsBySite(ctx, siteID)
 	td := TrustedDomainsByKind{
@@ -1444,7 +1444,7 @@ func DefaultDesignPlaybook() DesignPlaybookInfo { return DesignPlaybookFor(Fidel
 
 func defaultDesignPlaybook() DesignPlaybookInfo {
 	return DesignPlaybookInfo{
-		Stack: "Atomicsite renders agent input into static Astro 5 sites styled with Tailwind 4 utilities + a per-site CSS pipeline (internal/builder/css.go). Block content is authored as JSON via the agent API; the renderer turns it into semantic HTML. TypeScript is reserved for built-in interactive widgets (CookieProof, hydration script, circuit canvas), agents do not write Astro/TS by hand. Every visual decision flows through block_type + data fields + settings + the eight CSS custom properties (--color-primary, --color-text, --color-bg, --color-surface-elevated, --font-heading, --font-body, --font-mono, --container-width).",
+		Stack: "Slab renders agent input into static Astro 5 sites styled with Tailwind 4 utilities + a per-site CSS pipeline (internal/builder/css.go). Block content is authored as JSON via the agent API; the renderer turns it into semantic HTML. TypeScript is reserved for built-in interactive widgets (CookieProof, hydration script, circuit canvas), agents do not write Astro/TS by hand. Every visual decision flows through block_type + data fields + settings + the eight CSS custom properties (--color-primary, --color-text, --color-bg, --color-surface-elevated, --font-heading, --font-body, --font-mono, --container-width).",
 		Principles: []DesignPrinciple{
 			{
 				Name:         "Hierarchy first, decoration last",
@@ -1462,7 +1462,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				Name:         "White space is a feature, not a bug",
 				Rule:         "Section padding-block ≥ 5rem on desktop, ≥ 3rem on mobile. Subheading max-width ≤ 50ch. Don't fill empty space with extra cards.",
 				WhyItMatters: "Density signals downmarket. The most expensive sites in a category have the most whitespace. AstroWind, Linear, Resend all use 5-7rem section gutters.",
-				HowToApply:   "Atomicsite's renderer ships these defaults, don't override them with style_json overrides unless you have a specific reason. If a section feels cramped, REMOVE content (drop one feature card), don't reduce padding.",
+				HowToApply:   "Slab's renderer ships these defaults, don't override them with style_json overrides unless you have a specific reason. If a section feels cramped, REMOVE content (drop one feature card), don't reduce padding.",
 			},
 			{
 				Name:         "Visual rhythm via alternating surfaces",
@@ -1479,7 +1479,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			{
 				Name:         "Copy is design",
 				Rule:         "An eyebrow tells the visitor what category they're in. A headline tells them what changes. A subheading tells them why now. A CTA tells them what happens next. If any of those is generic, the section reads as filler.",
-				WhyItMatters: "Atomicsite renders whatever you give it, beautifully. But beautiful generic copy still converts at 0.5%. Specific copy at 3-4%.",
+				WhyItMatters: "Slab renders whatever you give it, beautifully. But beautiful generic copy still converts at 0.5%. Specific copy at 3-4%.",
 				HowToApply:   "Reject 'Welcome', 'Our services', 'Get in touch' as eyebrows. Use the noun the visitor is shopping for ('Open-source infrastructure', 'GDPR compliance', 'EU hosting'). For headlines, use a transformation verb + concrete noun ('Stop renting your business. Own it.' beats 'Our solutions for your business.').",
 			},
 			{
@@ -1553,8 +1553,8 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			},
 			{
 				Name:        "Ecommerce, catalog + product detail + checkout",
-				Use:         "Selling physical/digital goods on Atomicsite's first-party storefront stack. Covers three page types: catalog (product grid), product detail (single item), checkout (form). Cart drawer is a global block placed once.",
-				Description: "Sprint 2 (2026-05-22) shipped a first-party storefront. Use the four typed storefront blocks: product_grid for catalog pages, product_detail for product pages, cart_drawer placed once globally, checkout_form on a dedicated /checkout page. All four are server-rendered Go HTML at build time; cart state + checkout submit are driven by a per-site vanilla JS island (_atomic-storefront.js) injected automatically by the layout. The checkout form POSTs to /api/sites/{siteID}/checkout, which server-validates the cart against the catalog, applies discount codes, creates an order row, and returns a Mollie checkout URL. Payment is OUTSOURCED to Mollie hosted pages, atomicsite does not handle PCI/SCA. After payment, Mollie redirects to checkout_form.return_url with ?order=ATM-... appended. Inventory + discount-used-count + order-state side-effects fire on the Mollie webhook server-side. Catalog page (typical), hero -> product_grid -> accordion_faq -> cta. Product detail page (typical), product_detail -> feature_grid (specs / what's included) -> stat_grid (reviews / stock / ship time) -> accordion_faq (shipping + returns). Checkout page, hero (light, hide_global_blocks=1 for conversion) -> checkout_form. Place cart_drawer once as a global block so every page has the trigger + drawer shell.",
+				Use:         "Selling physical/digital goods on Slab's first-party storefront stack. Covers three page types: catalog (product grid), product detail (single item), checkout (form). Cart drawer is a global block placed once.",
+				Description: "Sprint 2 (2026-05-22) shipped a first-party storefront. Use the four typed storefront blocks: product_grid for catalog pages, product_detail for product pages, cart_drawer placed once globally, checkout_form on a dedicated /checkout page. All four are server-rendered Go HTML at build time; cart state + checkout submit are driven by a per-site vanilla JS island (_atomic-storefront.js) injected automatically by the layout. The checkout form POSTs to /api/sites/{siteID}/checkout, which server-validates the cart against the catalog, applies discount codes, creates an order row, and returns a Mollie checkout URL. Payment is OUTSOURCED to Mollie hosted pages, slab does not handle PCI/SCA. After payment, Mollie redirects to checkout_form.return_url with ?order=ATM-... appended. Inventory + discount-used-count + order-state side-effects fire on the Mollie webhook server-side. Catalog page (typical), hero -> product_grid -> accordion_faq -> cta. Product detail page (typical), product_detail -> feature_grid (specs / what's included) -> stat_grid (reviews / stock / ship time) -> accordion_faq (shipping + returns). Checkout page, hero (light, hide_global_blocks=1 for conversion) -> checkout_form. Place cart_drawer once as a global block so every page has the trigger + drawer shell.",
 				Blocks: []ArchetypeBlock{
 					{BlockType: "product_detail", Role: "Hero + gallery + variant picker + Add-to-cart", Notes: "Required. Set product_slug to the product.slug from the Store dashboard. The renderer resolves variants at build time and emits a radio variant picker plus an Add-to-cart button carrying the snapshot the storefront island reads."},
 					{BlockType: "feature_grid", Role: "What's included / specs / materials", Notes: "Each item is a spec line. Use icon + body. 4-6 items max."},
@@ -1685,70 +1685,70 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				Stack:   "Astro 5 + Tailwind 3",
 				BestFor: []string{"B2B SaaS marketing, Hero/Pricing/FAQs/Stats/Steps/Brands/CTA widgets", "Bento grid patterns", "Primary archetype: Soft Structuralism"},
 				License: "MIT",
-				Notes:   "src/components/widgets/ has 1:1 analogues for most atomicsite block types. Same stack as atomicsite output. The default reference for marketing-site builds.",
+				Notes:   "src/components/widgets/ has 1:1 analogues for most slab block types. Same stack as slab output. The default reference for marketing-site builds.",
 			},
 			{
 				Path:    "automations/design-references/astro-paper/",
 				Stack:   "Astro 5 + TailwindCSS",
 				BestFor: []string{"Blog/portfolio archetype", "Long-form article rendering", "Tag/category systems", "Pagination patterns", "Search UX (fuzzy search component)", "Light/dark theme toggle patterns"},
 				License: "MIT",
-				Notes:   "Production-grade blog template (5k+ stars). Use when atomicsite renders insights/blog/article archetypes. src/components/ has clean Card, Pagination, Header, Footer, Datetime, ShareLinks patterns. src/layouts/ shows article-detail page composition. Particularly strong on typography for long-form prose.",
+				Notes:   "Production-grade blog template (5k+ stars). Use when slab renders insights/blog/article archetypes. src/components/ has clean Card, Pagination, Header, Footer, Datetime, ShareLinks patterns. src/layouts/ shows article-detail page composition. Particularly strong on typography for long-form prose.",
 			},
 			{
 				Path:    "automations/design-references/starlight/",
 				Stack:   "Astro 5 + native CSS (custom theme system, no Tailwind)",
 				BestFor: []string{"Documentation sites + knowledge bases", "Sidebar navigation patterns", "Search overlays", "Versioned docs / i18n routing", "MDX content pipelines", "Component-libraries patterns (callouts, tabs, code blocks)"},
 				License: "MIT",
-				Notes:   "Official Astro docs framework, used by Astro itself, Bun, Tauri, and 100+ open-source projects. packages/starlight/components/ has the canonical implementations of Sidebar, Search, TableOfContents, Tabs, Card, LinkCard, FileTree, Badge, Aside (callout). docs/ contains the actual Astro.build documentation site as a real production reference. Use when atomicsite needs to render docs/wiki/changelog archetypes (which is on the roadmap, not currently a built-in primitive). NOT a Tailwind reference, starlight uses its own CSS variable system, which is itself a clean reference for design-token architecture.",
+				Notes:   "Official Astro docs framework, used by Astro itself, Bun, Tauri, and 100+ open-source projects. packages/starlight/components/ has the canonical implementations of Sidebar, Search, TableOfContents, Tabs, Card, LinkCard, FileTree, Badge, Aside (callout). docs/ contains the actual Astro.build documentation site as a real production reference. Use when slab needs to render docs/wiki/changelog archetypes (which is on the roadmap, not currently a built-in primitive). NOT a Tailwind reference, starlight uses its own CSS variable system, which is itself a clean reference for design-token architecture.",
 			},
 			{
 				Path:    "automations/design-references/shadcn-svelte/",
 				Stack:   "SvelteKit + Tailwind 4 + bits-ui (Svelte port of Radix UI)",
 				BestFor: []string{"Svelte 5 component DNA, Button, Card, Dialog, Tabs, Form, Select, Combobox, DatePicker, DataTable, Toast", "Component-library patterns the agent's interactive islands should follow", "Ecom UI: Cart drawer, Variant picker, Quickview modal, built on Sheet + Dialog + Select", "Calendar/date pickers (calendar-01 through calendar-10 in registry/blocks)", "Form patterns with proper a11y + validation"},
 				License: "MIT",
-				Notes:   "The OFFICIAL Svelte port of shadcn, same design language, same component DNA, but Svelte 5 instead of React. ALIGNED with atomicsite's stack: the admin frontend already uses Svelte 5 + SvelteKit + Tailwind 4. When atomicsite renders interactive islands (cart drawer, variant picker, search-as-you-type, modals), this is the design vocabulary to copy. docs/src/lib/registry/blocks/ has 100+ production block compositions including calendars, dashboards, login flows. docs/src/lib/registry/ui/ has the primitives (Button, Card, Dialog, etc).",
+				Notes:   "The OFFICIAL Svelte port of shadcn, same design language, same component DNA, but Svelte 5 instead of React. ALIGNED with slab's stack: the admin frontend already uses Svelte 5 + SvelteKit + Tailwind 4. When slab renders interactive islands (cart drawer, variant picker, search-as-you-type, modals), this is the design vocabulary to copy. docs/src/lib/registry/blocks/ has 100+ production block compositions including calendars, dashboards, login flows. docs/src/lib/registry/ui/ has the primitives (Button, Card, Dialog, etc).",
 			},
 			{
 				Path:    "automations/design-references/shadcn-ui/",
 				Stack:   "Next.js + React + Tailwind 4 + Radix UI",
 				BestFor: []string{"Component design language gold standard (50k+ stars)", "Cross-framework component vocabulary", "Tailwind class composition patterns", "Radix accessibility primitives mapped to common components"},
 				License: "MIT",
-				Notes:   "Sparse-checkout of apps/v4/registry + apps/v4/lib only (~9MB instead of full 111MB monorepo). React stack, does NOT match atomicsite's output. Used as cross-stack reference for: Tailwind class composition patterns, accessibility patterns (Radix), component prop shapes. When you need the canonical 'how should a Combobox / DatePicker / DataTable look', read this. When you need it in our stack, read shadcn-svelte instead.",
+				Notes:   "Sparse-checkout of apps/v4/registry + apps/v4/lib only (~9MB instead of full 111MB monorepo). React stack, does NOT match slab's output. Used as cross-stack reference for: Tailwind class composition patterns, accessibility patterns (Radix), component prop shapes. When you need the canonical 'how should a Combobox / DatePicker / DataTable look', read this. When you need it in our stack, read shadcn-svelte instead.",
 			},
 		},
 
 		AntiPatterns: []AntiPattern{
 			// Typography
-			{Banned: "Inter font (anywhere)", Preferred: "Space Grotesk (heading), Inter is acceptable as body fallback only when paired with a display heading. For premium feel: Geist, Outfit, Cabinet Grotesk, Satoshi, Switzer, Plus Jakarta Sans.", HowInAtomicsite: "Update branding.font_heading to Space Grotesk (default already) or one of the premium families. Do NOT set font_heading to Inter. Body can be Inter for legibility but the eye reads heading first."},
-			{Banned: "Roboto, Open Sans, Helvetica, Arial as heading fonts", Preferred: "Same as above, Space Grotesk default, Geist/Outfit/Cabinet Grotesk for character.", HowInAtomicsite: "branding.font_heading, and upload the family as self-hosted woff2 first (POST /api/agent/fonts or the upload_font MCP tool; check GET /api/agent/fonts for what is already available). There is NO font CDN link in the layout, see Fonts.Philosophy."},
-			{Banned: "Pure black (#000000) anywhere", Preferred: "Off-black: zinc-950 (#0a0a0a), charcoal (#18181b, atomicsite default --color-text), or a tinted dark.", HowInAtomicsite: "Default --color-text is #18181b. Don't override branding.text_color to #000000."},
-			{Banned: "Generic shadow-md / shadow-lg / shadow-xl on cards", Preferred: "Tinted shadows that carry the bg hue. Or no shadow + 1px subtle border. Or inner shadow for elevation.", HowInAtomicsite: "Atomicsite's renderer ships subtle box-shadows tuned for each block (.replacement-card, .pricing-tier, .about-split-image). Do not override via style_json, the defaults match this rule."},
-			{Banned: "Oversaturated brand colours (saturation > 80%)", Preferred: "Desaturated, muted accents (max ~75% saturation). Brand colour appears in 4-7 places per page max.", HowInAtomicsite: "branding.primary_color. Avoid pure #FF0000, #00FF00, #0000FF. Use OKLCH-tuned colours or muted variants like #0E7490 (BI's teal)."},
-			{Banned: "Purple/blue 'AI gradient' aesthetic (the most common AI fingerprint)", Preferred: "Neutral bases (Zinc/Slate) with one considered accent: Emerald, Electric Blue, Deep Rose, Burnt Orange, Forest Green.", HowInAtomicsite: "Set branding.primary_color to a single non-purple accent. NEVER use linear gradients on backgrounds (atomicsite has no gradient block by design)."},
-			{Banned: "Mixing warm and cool grays in the same site", Preferred: "Pick ONE gray family. All borders, muted text, surfaces follow it.", HowInAtomicsite: "branding.border_color + muted_color + surface_color must share a temperature with text_color + bg_color."},
-			{Banned: "Linear or ease-in-out CSS transitions", Preferred: "Custom cubic-bezier with weight: cubic-bezier(0.16, 1, 0.3, 1) for 'soft landing', cubic-bezier(0.32, 0.72, 0, 1) for premium feel.", HowInAtomicsite: "Atomicsite's CSS uses ease-out + 150-200ms by default. For richer feel, the agent can author CSS classes via /api/agent/css-classes; the renderer respects them."},
+			{Banned: "Inter font (anywhere)", Preferred: "Space Grotesk (heading), Inter is acceptable as body fallback only when paired with a display heading. For premium feel: Geist, Outfit, Cabinet Grotesk, Satoshi, Switzer, Plus Jakarta Sans.", HowInSlab: "Update branding.font_heading to Space Grotesk (default already) or one of the premium families. Do NOT set font_heading to Inter. Body can be Inter for legibility but the eye reads heading first."},
+			{Banned: "Roboto, Open Sans, Helvetica, Arial as heading fonts", Preferred: "Same as above, Space Grotesk default, Geist/Outfit/Cabinet Grotesk for character.", HowInSlab: "branding.font_heading, and upload the family as self-hosted woff2 first (POST /api/agent/fonts or the upload_font MCP tool; check GET /api/agent/fonts for what is already available). There is NO font CDN link in the layout, see Fonts.Philosophy."},
+			{Banned: "Pure black (#000000) anywhere", Preferred: "Off-black: zinc-950 (#0a0a0a), charcoal (#18181b, slab default --color-text), or a tinted dark.", HowInSlab: "Default --color-text is #18181b. Don't override branding.text_color to #000000."},
+			{Banned: "Generic shadow-md / shadow-lg / shadow-xl on cards", Preferred: "Tinted shadows that carry the bg hue. Or no shadow + 1px subtle border. Or inner shadow for elevation.", HowInSlab: "Slab's renderer ships subtle box-shadows tuned for each block (.replacement-card, .pricing-tier, .about-split-image). Do not override via style_json, the defaults match this rule."},
+			{Banned: "Oversaturated brand colours (saturation > 80%)", Preferred: "Desaturated, muted accents (max ~75% saturation). Brand colour appears in 4-7 places per page max.", HowInSlab: "branding.primary_color. Avoid pure #FF0000, #00FF00, #0000FF. Use OKLCH-tuned colours or muted variants like #0E7490 (BI's teal)."},
+			{Banned: "Purple/blue 'AI gradient' aesthetic (the most common AI fingerprint)", Preferred: "Neutral bases (Zinc/Slate) with one considered accent: Emerald, Electric Blue, Deep Rose, Burnt Orange, Forest Green.", HowInSlab: "Set branding.primary_color to a single non-purple accent. NEVER use linear gradients on backgrounds (slab has no gradient block by design)."},
+			{Banned: "Mixing warm and cool grays in the same site", Preferred: "Pick ONE gray family. All borders, muted text, surfaces follow it.", HowInSlab: "branding.border_color + muted_color + surface_color must share a temperature with text_color + bg_color."},
+			{Banned: "Linear or ease-in-out CSS transitions", Preferred: "Custom cubic-bezier with weight: cubic-bezier(0.16, 1, 0.3, 1) for 'soft landing', cubic-bezier(0.32, 0.72, 0, 1) for premium feel.", HowInSlab: "Slab's CSS uses ease-out + 150-200ms by default. For richer feel, the agent can author CSS classes via /api/agent/css-classes; the renderer respects them."},
 			// Icons
-			{Banned: "Lucide / Feather icons in their default state", Preferred: "Phosphor Light (icon stroke 1.5), Radix Icons, Heroicons. Standardize stroke width across all icons.", HowInAtomicsite: "Atomicsite ships a curated 52-icon Lucide subset in internal/builder/icons.go. They're already tuned (stroke 2). For non-marketing icon needs the agent registers a custom component via /api/agent/components."},
-			{Banned: "Cliché icons: rocket for 'Launch', shield for 'Security', cog for 'Settings'", Preferred: "Less obvious metaphors: bolt for speed, fingerprint for security, spark for launch, vault for storage.", HowInAtomicsite: "feature_grid items[].icon picks from the icon dictionary. Pick the less-obvious match."},
+			{Banned: "Lucide / Feather icons in their default state", Preferred: "Phosphor Light (icon stroke 1.5), Radix Icons, Heroicons. Standardize stroke width across all icons.", HowInSlab: "Slab ships a curated 52-icon Lucide subset in internal/builder/icons.go. They're already tuned (stroke 2). For non-marketing icon needs the agent registers a custom component via /api/agent/components."},
+			{Banned: "Cliché icons: rocket for 'Launch', shield for 'Security', cog for 'Settings'", Preferred: "Less obvious metaphors: bolt for speed, fingerprint for security, spark for launch, vault for storage.", HowInSlab: "feature_grid items[].icon picks from the icon dictionary. Pick the less-obvious match."},
 			// Layouts
-			{Banned: "Three equal cards horizontally as feature row", Preferred: "2-column zig-zag, asymmetric grid (replacement_grid with .is-wide spans), horizontal scroll, or masonry.", HowInAtomicsite: "Use replacement_grid (which has .is-wide span variants for visual interest), or feature_grid with 4 items (auto-flow handles 2/2 on tablet, 4-up on desktop)."},
-			{Banned: "Centered hero with text over an image", Preferred: "Asymmetric: left-aligned content with image right (split_hero), or centered text WITHOUT image but with circuit-canvas / mesh-gradient bg.", HowInAtomicsite: "split_hero (image right) OR hero with bg=circuit (canvas animation). Don't use hero with image_id + center alignment, atomicsite's hero is always centered without image."},
-			{Banned: "h-screen on hero (iOS Safari viewport bug)", Preferred: "min-h-[100dvh] always.", HowInAtomicsite: "Atomicsite's .block--hero uses min-height: clamp(36rem, 70vh, 50rem), already correct. Do not override via style_json."},
-			{Banned: "Edge-to-edge content (no max-width container)", Preferred: "Container max-width 1024-1440px (--container-width).", HowInAtomicsite: "general.container_width setting (narrow|default|wide|fluid). Default is 72rem (1152px), leave it alone unless the brand demands otherwise."},
-			{Banned: "Symmetric vertical padding (top = bottom always)", Preferred: "Optical adjustment, bottom often slightly larger.", HowInAtomicsite: "Renderer's defaults have this baked in (.block--hero { padding-block: 6rem 5rem }). Don't override."},
+			{Banned: "Three equal cards horizontally as feature row", Preferred: "2-column zig-zag, asymmetric grid (replacement_grid with .is-wide spans), horizontal scroll, or masonry.", HowInSlab: "Use replacement_grid (which has .is-wide span variants for visual interest), or feature_grid with 4 items (auto-flow handles 2/2 on tablet, 4-up on desktop)."},
+			{Banned: "Centered hero with text over an image", Preferred: "Asymmetric: left-aligned content with image right (split_hero), or centered text WITHOUT image but with circuit-canvas / mesh-gradient bg.", HowInSlab: "split_hero (image right) OR hero with bg=circuit (canvas animation). Don't use hero with image_id + center alignment, slab's hero is always centered without image."},
+			{Banned: "h-screen on hero (iOS Safari viewport bug)", Preferred: "min-h-[100dvh] always.", HowInSlab: "Slab's .block--hero uses min-height: clamp(36rem, 70vh, 50rem), already correct. Do not override via style_json."},
+			{Banned: "Edge-to-edge content (no max-width container)", Preferred: "Container max-width 1024-1440px (--container-width).", HowInSlab: "general.container_width setting (narrow|default|wide|fluid). Default is 72rem (1152px), leave it alone unless the brand demands otherwise."},
+			{Banned: "Symmetric vertical padding (top = bottom always)", Preferred: "Optical adjustment, bottom often slightly larger.", HowInSlab: "Renderer's defaults have this baked in (.block--hero { padding-block: 6rem 5rem }). Don't override."},
 			// Visual
-			{Banned: "Generic 1px solid gray border on every card", Preferred: "Hairline border at 8-12% opacity of text colour. Tinted to bg.", HowInAtomicsite: "Renderer uses border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent), already correct."},
-			{Banned: "Edge-to-edge sticky navbars glued to top", Preferred: "Floating glass pill or detached fixed bar with mt-6. backdrop-blur on fixed elements only.", HowInAtomicsite: "Atomicsite ships a sticky h-14 header with backdrop-blur. Don't author custom navbars."},
-			{Banned: "Filling sections with full-width container + max char count", Preferred: "Narrow content columns. Subheading max-width 36-50ch. Heroic whitespace.", HowInAtomicsite: "Renderer enforces max-width per block (.block--text 42rem, .block--accordion_faq 56rem). Don't override."},
+			{Banned: "Generic 1px solid gray border on every card", Preferred: "Hairline border at 8-12% opacity of text colour. Tinted to bg.", HowInSlab: "Renderer uses border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent), already correct."},
+			{Banned: "Edge-to-edge sticky navbars glued to top", Preferred: "Floating glass pill or detached fixed bar with mt-6. backdrop-blur on fixed elements only.", HowInSlab: "Slab ships a sticky h-14 header with backdrop-blur. Don't author custom navbars."},
+			{Banned: "Filling sections with full-width container + max char count", Preferred: "Narrow content columns. Subheading max-width 36-50ch. Heroic whitespace.", HowInSlab: "Renderer enforces max-width per block (.block--text 42rem, .block--accordion_faq 56rem). Don't override."},
 			// Content
-			{Banned: "John Doe / Jane Smith / Sarah Chan in testimonials", Preferred: "Realistic, specific names (e.g. Anna Lindqvist, Mehdi Ahmadi, Johan Berg).", HowInAtomicsite: "Quote blocks + about_split. Author real names, never the AI defaults."},
-			{Banned: "Round fake numbers: 99.99%, 50%, $100.00, 1234567", Preferred: "Organic data: 47.2%, 599 audited, +46 76 297 80 35, $4,892.", HowInAtomicsite: "stat_grid items[].value, replacement_grid descriptions, FAQ answers. Specific > round."},
-			{Banned: "Acme Corp / Nexus / SmartFlow / TechFlow in logo bars", Preferred: "Real customer names (with consent) or a 'Founder previously worked with' frame using real prior employers.", HowInAtomicsite: "logo_carousel items[].label OR logo_strip items[].alt. Real names build trust; fakes destroy it."},
-			{Banned: "Title Case On Every Heading", Preferred: "Sentence case for headlines (better readability), Title Case only for product names + section eyebrows.", HowInAtomicsite: "headline + heading + eyebrow fields. Default to sentence case."},
-			{Banned: "Exclamation marks in success messages and CTAs", Preferred: "Be confident, not loud. 'Audit booked.' beats 'Audit booked!'", HowInAtomicsite: "cta_text, form submit_label, FAQ answers."},
+			{Banned: "John Doe / Jane Smith / Sarah Chan in testimonials", Preferred: "Realistic, specific names (e.g. Anna Lindqvist, Mehdi Ahmadi, Johan Berg).", HowInSlab: "Quote blocks + about_split. Author real names, never the AI defaults."},
+			{Banned: "Round fake numbers: 99.99%, 50%, $100.00, 1234567", Preferred: "Organic data: 47.2%, 599 audited, +46 76 297 80 35, $4,892.", HowInSlab: "stat_grid items[].value, replacement_grid descriptions, FAQ answers. Specific > round."},
+			{Banned: "Acme Corp / Nexus / SmartFlow / TechFlow in logo bars", Preferred: "Real customer names (with consent) or a 'Founder previously worked with' frame using real prior employers.", HowInSlab: "logo_carousel items[].label OR logo_strip items[].alt. Real names build trust; fakes destroy it."},
+			{Banned: "Title Case On Every Heading", Preferred: "Sentence case for headlines (better readability), Title Case only for product names + section eyebrows.", HowInSlab: "headline + heading + eyebrow fields. Default to sentence case."},
+			{Banned: "Exclamation marks in success messages and CTAs", Preferred: "Be confident, not loud. 'Audit booked.' beats 'Audit booked!'", HowInSlab: "cta_text, form submit_label, FAQ answers."},
 			// Behaviour
-			{Banned: "AI copywriting clichés: Elevate, Seamless, Unleash, Next-Gen, Game-changer, Delve, Tapestry, In the world of...", Preferred: "Concrete verbs (replace, audit, migrate, save, ship, host, sell). Specific nouns (CRM, server, GDPR, EU, audit).", HowInAtomicsite: "All copy fields. The instant fix: read aloud, if it sounds like marketing fluff, rewrite."},
-			{Banned: "Lorem ipsum or 'placeholder copy' anywhere", Preferred: "Real draft copy. The 5-minute version of real copy beats perfect Lorem.", HowInAtomicsite: "Never ship a block with Lorem text. The text field is content, not a placeholder."},
+			{Banned: "AI copywriting clichés: Elevate, Seamless, Unleash, Next-Gen, Game-changer, Delve, Tapestry, In the world of...", Preferred: "Concrete verbs (replace, audit, migrate, save, ship, host, sell). Specific nouns (CRM, server, GDPR, EU, audit).", HowInSlab: "All copy fields. The instant fix: read aloud, if it sounds like marketing fluff, rewrite."},
+			{Banned: "Lorem ipsum or 'placeholder copy' anywhere", Preferred: "Real draft copy. The 5-minute version of real copy beats perfect Lorem.", HowInSlab: "Never ship a block with Lorem text. The text field is content, not a placeholder."},
 		},
 
 		VibeArchetypes: []VibeArchetype{
@@ -1763,7 +1763,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				TextColor:    "#18181b",
 				FontHeading:  "Space Grotesk",
 				FontBody:     "Inter",
-				ApplyVia:     "Default atomicsite branding maps here. Set branding.bg_color=#fafaf9, primary_color=brand-accent, text_color=#18181b. Use bg=circuit on hero for tech/security/infra; bg=image otherwise. This is the atomicsite default and the right pick for ~70% of marketing sites.",
+				ApplyVia:     "Default slab branding maps here. Set branding.bg_color=#fafaf9, primary_color=brand-accent, text_color=#18181b. Use bg=circuit on hero for tech/security/infra; bg=image otherwise. This is the slab default and the right pick for ~70% of marketing sites.",
 			},
 			{
 				Name:         "Editorial Luxury",
@@ -1844,7 +1844,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				"backdrop-blur on scrolling content. Apply only to fixed/sticky elements (the navbar already has it).",
 			},
 			HowToApply: []string{
-				"For 99% of cards, use the renderer defaults, atomicsite has all these patterns wired into the per-block CSS rules.",
+				"For 99% of cards, use the renderer defaults, slab has all these patterns wired into the per-block CSS rules.",
 				"To customise card materiality across a site, write CSS classes via PUT /api/agent/css-classes. Don't author per-block style_json overrides.",
 				"For an 'expensive feel' upgrade: bump general.container_width to 'wide', use bg=circuit hero, mark a stat as featured (it auto-promotes visually).",
 			},
@@ -1876,11 +1876,11 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				"Phone numbers in real local format: '+46 76 297 80 35' beats '1-800-555-0100'.",
 				"Email addresses on a domain you control. Never gmail/outlook for company contact.",
 			},
-			HowInAtomicsite: "All copy ships through the agent API: hero/split_hero text fields, stat_grid items, replacement_grid descriptions, pricing tier names, FAQ Q+A. The renderer doesn't validate copy quality, that's on the agent. Read aloud before saving: if it sounds like marketing fluff, rewrite.",
+			HowInSlab: "All copy ships through the agent API: hero/split_hero text fields, stat_grid items, replacement_grid descriptions, pricing tier names, FAQ Q+A. The renderer doesn't validate copy quality, that's on the agent. Read aloud before saving: if it sounds like marketing fluff, rewrite.",
 		},
 
 		Motion: MotionGuidance{
-			StackReality: "Atomicsite renders STATIC Astro. No React, no Framer Motion, no client-side reactivity beyond CookieProof + the hero circuit canvas + the visitor-hydration script. ALL animation is CSS-only. Anything that requires JS state has to register as a custom component via /api/agent/components or live in a custom block_type.",
+			StackReality: "Slab renders STATIC Astro. No React, no Framer Motion, no client-side reactivity beyond CookieProof + the hero circuit canvas + the visitor-hydration script. ALL animation is CSS-only. Anything that requires JS state has to register as a custom component via /api/agent/components or live in a custom block_type.",
 			DoUse: []string{
 				"CSS transitions on :hover and :active states (already wired on .btn-*, .replacement-card, .faq-item).",
 				"CSS animations for marquees (logo_carousel uses a 30s linear infinite translate).",
@@ -1891,7 +1891,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			},
 			DontUse: []string{
 				"window.addEventListener('scroll'), kills mobile performance.",
-				"useState magnetic buttons or hover trackers (not even available, atomicsite is server-rendered).",
+				"useState magnetic buttons or hover trackers (not even available, slab is server-rendered).",
 				"Animating top/left/width/height, layout-thrashing, slow.",
 				"GSAP, ThreeJS, Lottie unless registered as a custom component (heavy + needs CSP allow-list).",
 				"Animations that fire on initial load without prefers-reduced-motion check.",
@@ -1902,7 +1902,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				"Accent-color animations (underline draws, color shifts) replayed on hover. They fire ONCE per page load, then settle.",
 			},
 			Performance: []string{
-				"transform + opacity only. Atomicsite's CSS is already this strict.",
+				"transform + opacity only. Slab's CSS is already this strict.",
 				"will-change: transform sparingly, only on actively-animating elements.",
 				"backdrop-blur on FIXED elements only (navbar has it; nothing else should).",
 				"Avoid > 1s transitions on hover, visitors lose context.",
@@ -1916,7 +1916,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 
 		StrategicOmissions: []OmissionItem{
 			{Item: "Skip-to-content link", Importance: "WCAG required, eval check", Status: "Auto", HowApplied: "Layout emits <a href='#main' class='sr-only-focusable'> as first focusable element on every page."},
-			{Item: "Custom 404 page", Importance: "Brand consistency + conversion recovery", Status: "Auto-seeded but agent should populate copy", HowApplied: "atomicsite's wizard creates /<lang>/404 pages. Agent should author hero + a couple of links to popular pages, don't ship the default."},
+			{Item: "Custom 404 page", Importance: "Brand consistency + conversion recovery", Status: "Auto-seeded but agent should populate copy", HowApplied: "slab's wizard creates /<lang>/404 pages. Agent should author hero + a couple of links to popular pages, don't ship the default."},
 			{Item: "Favicon + apple-touch-icon", Importance: "SEO + brand presence in tabs/bookmarks", Status: "Auto-emitted (degrades silently if missing)", HowApplied: "Upload favicon.ico + apple-touch-icon.png to media library folder='brand'. Set branding.favicon_id."},
 			{Item: "OG image (1200x630 social card)", Importance: "Conversion on shared links", Status: "Auto-emitted from sites.og_image_id with proper meta tags + width/height", HowApplied: "Upload OG image to media. Set seo.og_default_image_id."},
 			{Item: "Privacy + Terms + Cookie policy pages", Importance: "Legal requirement + privacy eval check", Status: "Auto-seeded with starter content, agent populates", HowApplied: "Pages exist at /<lang>/privacy, /terms, /cookies. Edit with create_block on a text block."},
@@ -1951,14 +1951,14 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 		},
 
 		IconPolicy: IconRules{
-			UseSet:      "Lucide subset, atomicsite ships 52 curated icons in internal/builder/icons.go (Mail, Server, Lock, Workflow, FileText, MessageCircle, Shield, ChevronRight, Linkedin, Github, Sparkles, BarChart, Layers, Cloud, etc).",
-			StrokeWidth: "2 (atomicsite default). Standardized across the icon set so feature_grid items don't visually clash.",
+			UseSet:      "Lucide subset, slab ships 52 curated icons in internal/builder/icons.go (Mail, Server, Lock, Workflow, FileText, MessageCircle, Shield, ChevronRight, Linkedin, Github, Sparkles, BarChart, Layers, Cloud, etc).",
+			StrokeWidth: "2 (slab default). Standardized across the icon set so feature_grid items don't visually clash.",
 			Banned: []string{
 				"Lucide rocket for 'Launch' (cliché). Use Sparkles or BarChart instead.",
 				"Shield for 'Security' (cliché). Use Lock or Fingerprint variant.",
 				"Cog for 'Settings' (cliché). Use Layers or Workflow.",
 				"Standard SVG 'egg' avatar placeholders.",
-				"Emojis in any icon position. Banned by atomicsite's voice rules + WCAG.",
+				"Emojis in any icon position. Banned by slab's voice rules + WCAG.",
 			},
 			Available: []string{
 				"To list available icons: read internal/builder/icons.go on disk, or query graphify.",
@@ -1968,12 +1968,12 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 		},
 
 		Fonts: FontGuidance{
-			Philosophy: "Self-hosted woff2 only. NEVER Google Fonts. Two reasons: (1) Google Fonts CSS doesn't carry SRI hashes, fails the Subresource Integrity eval check; (2) every font fetch leaks visitor IP to Google, which clashes with the EU-sovereignty positioning many atomicsite tenants ship. Self-hosting via the per-site upload mechanism is one POST + one branding setting away. All recommended families below are SIL OFL 1.1 licensed, free to self-host with attribution preserved in the woff2 metadata.",
+			Philosophy: "Self-hosted woff2 only. NEVER Google Fonts. Two reasons: (1) Google Fonts CSS doesn't carry SRI hashes, fails the Subresource Integrity eval check; (2) every font fetch leaks visitor IP to Google, which clashes with the EU-sovereignty positioning many slab tenants ship. Self-hosting via the per-site upload mechanism is one POST + one branding setting away. All recommended families below are SIL OFL 1.1 licensed, free to self-host with attribution preserved in the woff2 metadata.",
 			System: []string{
 				"Per-site fonts live in the `site_fonts` table (id, site_id, family_name, weight, style, source_url, file_path, ...).",
 				"Upload accepted formats: woff2 only (rejects woff, ttf, otf, woff2 compresses ~30% better and is universally supported).",
 				"Storage: {DataDir}/fonts/{site_id}/{font_id}.woff2.",
-				"Public serving: GET /atomicsite-fonts/{siteID}/{fontID}.woff2, same-origin, no CORS, no CSP exception needed.",
+				"Public serving: GET /slab-fonts/{siteID}/{fontID}.woff2, same-origin, no CORS, no CSP exception needed.",
 				"The Astro layout auto-emits @font-face rules + <link rel=preload> for every uploaded font. You don't write CSS, uploading is enough.",
 				"When no fonts are uploaded, sites fall back to system-ui via the --font-heading / --font-body custom properties. Still readable, just system-styled.",
 			},
@@ -1981,7 +1981,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				{Method: "GET", Path: "/api/agent/fonts", Use: "List every font uploaded to the current site. Returns {fonts: [{id, family_name, weight, style}]}."},
 				{Method: "POST", Path: "/api/agent/fonts", Use: "Upload a woff2 file. Multipart/form-data: family_name (string), weight (100-900), style (normal|italic), file (woff2 binary)."},
 				{Method: "DELETE", Path: "/api/agent/fonts/{id}", Use: "Remove an uploaded font."},
-				{Method: "GET", Path: "/atomicsite-fonts/{siteID}/{fontID}.woff2", Use: "Public font serving (used by the rendered site, not by the agent directly)."},
+				{Method: "GET", Path: "/slab-fonts/{siteID}/{fontID}.woff2", Use: "Public font serving (used by the rendered site, not by the agent directly)."},
 			},
 			AdminUI: []string{
 				"Path: /sites/{siteID}/branding (the same page where palette + colours live).",
@@ -2016,7 +2016,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 					GoodFor:      []string{"Eyebrows (uppercase, tracking-widest)", "Brand wordmarks", "Code labels", "Tier-step tags (STEP 01)"},
 					License:      "SIL OFL 1.1",
 					DownloadFrom: "https://fonts.google.com/specimen/Space+Mono (download → host the woff2). Or @fontsource/space-mono.",
-					Notes:        "Atomicsite's --font-mono default. Use for ANY mono surface (eyebrow, code, brand badge, footer fine print).",
+					Notes:        "Slab's --font-mono default. Use for ANY mono surface (eyebrow, code, brand badge, footer fine print).",
 				},
 				{
 					Name:         "Geist + Geist Mono",
@@ -2075,17 +2075,17 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 					Notes:        "Higher legibility at small sizes than Space Mono. Pick when the site is developer-heavy.",
 				},
 			},
-			SystemFallback: "If no font is uploaded, atomicsite emits --font-heading: 'Space Grotesk', system-ui, sans-serif (where 'Space Grotesk' is just a name in the cascade with no actual file). The browser falls through to system-ui, readable but not the intended look. The agent should ALWAYS check `GET /api/agent/fonts` first; if empty, ask the user to upload via /sites/{id}/branding before claiming the site is design-complete.",
+			SystemFallback: "If no font is uploaded, slab emits --font-heading: 'Space Grotesk', system-ui, sans-serif (where 'Space Grotesk' is just a name in the cascade with no actual file). The browser falls through to system-ui, readable but not the intended look. The agent should ALWAYS check `GET /api/agent/fonts` first; if empty, ask the user to upload via /sites/{id}/branding before claiming the site is design-complete.",
 			HowToSet:       "After uploading a font with family_name='Space Grotesk', call `bulk_upsert_settings` with category='general' (NOT possible, branding fields are separate), actually use the agent branding endpoint: PATCH /api/agent/branding {font_heading: 'Space Grotesk', font_body: 'Inter'}. The family_name string must match exactly what was used during upload (case-sensitive). Verify after build by checking the rendered global.css for the @font-face rule with the matching family-name.",
 		},
 
 		StackRecommendations: StackGuidance{
-			Philosophy: "Atomicsite is Astro static by default, fastest TTFB, best SEO, lowest hosting cost. Reach for client-side reactivity ONLY when the page genuinely needs it (cart, search-as-you-type, real-time status). Avoid React; prefer Svelte 5 islands when interactivity is required because (1) atomicsite's admin already runs Svelte 5 + SvelteKit so the team has the muscle memory, (2) Svelte's compiled output is smaller than React's runtime, matters for ecom CWV, (3) Astro + Svelte islands hydrate per-component, not per-page.",
+			Philosophy: "Slab is Astro static by default, fastest TTFB, best SEO, lowest hosting cost. Reach for client-side reactivity ONLY when the page genuinely needs it (cart, search-as-you-type, real-time status). Avoid React; prefer Svelte 5 islands when interactivity is required because (1) slab's admin already runs Svelte 5 + SvelteKit so the team has the muscle memory, (2) Svelte's compiled output is smaller than React's runtime, matters for ecom CWV, (3) Astro + Svelte islands hydrate per-component, not per-page.",
 			Stacks: []StackVariant{
 				{
 					Name:        "Static-only (default)",
-					Use:         "Marketing sites, blogs, docs, landing pages, anything where every interaction is server-rendered or a plain anchor link. Covers ~80% of atomicsite use cases.",
-					Composition: []string{"Astro 5 (output: static)", "Tailwind 4 + atomicsite's per-site CSS pipeline", "TypeScript only inside built-in widgets (CookieProof, hero canvas, hydration script)", "Forms POST to a worker URL or n8n webhook"},
+					Use:         "Marketing sites, blogs, docs, landing pages, anything where every interaction is server-rendered or a plain anchor link. Covers ~80% of slab use cases.",
+					Composition: []string{"Astro 5 (output: static)", "Tailwind 4 + slab's per-site CSS pipeline", "TypeScript only inside built-in widgets (CookieProof, hero canvas, hydration script)", "Forms POST to a worker URL or n8n webhook"},
 					Constraints: []string{"No state across pages beyond cookies/localStorage", "No real-time updates", "Forms get HTML5 validation, not custom states"},
 					HowApplied:  "Default. Just compose blocks via the agent API. No custom components needed.",
 				},
@@ -2097,8 +2097,8 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 					HowApplied:  "Register Svelte components via PUT /api/agent/components with name + props schema. Use block_type=component in pages, set data.component=<name> + data.props={...}. The renderer wires the Astro <Component client:load /> directive.",
 				},
 				{
-					Name:        "Atomicsite first-party storefront (ecom)",
-					Use:         "Selling physical or digital goods using Atomicsite's built-in catalog + checkout. Sprint 2 (2026-05-22) shipped the full stack: products / variants / inventory / discount codes / orders / Mollie checkout / webhooks / admin Orders UI.",
+					Name:        "Slab first-party storefront (ecom)",
+					Use:         "Selling physical or digital goods using Slab's built-in catalog + checkout. Sprint 2 (2026-05-22) shipped the full stack: products / variants / inventory / discount codes / orders / Mollie checkout / webhooks / admin Orders UI.",
 					Composition: []string{"Astro 5 static for catalog + product pages", "Four typed storefront blocks: product_grid, product_detail, cart_drawer, checkout_form", "One per-site vanilla JS island (_atomic-storefront.js) for cart state + checkout submit", "Cart state in localStorage (until checkout)", "Mollie hosted checkout for the transaction (NEVER PCI in our shell)", "Built-in: products / variants / inventory_adjustments / discount_codes / orders / payment_events tables", "Public endpoints: POST /api/sites/{id}/checkout, POST /api/sites/{id}/payments/mollie/webhook"},
 					Constraints: []string{"Mollie is the only payment provider in v1 (Stripe / PayPal deferred)", "Single-currency per cart (mixed currencies rejected at checkout)", "VAT-inclusive prices, integer cents per ISO 4217", "VAT rates table + per-country lookup deferred to Sprint 1.5", "checkout_form.return_url must point to a real page on this site (Mollie redirects there with ?order=ATM-... appended)"},
 					HowApplied:  "Set payments.mollie_api_key in site settings (Mollie test key or live). Create products + variants + (optional) discount codes via the admin Store tab. Author a catalog page with product_grid. Author a product page with product_detail (set product_slug). Author a /checkout page with checkout_form (set return_url=/thank-you). Place cart_drawer once as a global block so every page has the trigger. The storefront island is injected by the layout automatically.",
@@ -2112,7 +2112,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				},
 			},
 			Payments: PaymentRules{
-				Philosophy: "Always use a hosted checkout (Stripe Checkout or Mollie hosted pages), never PCI inside atomicsite. Atomicsite is a static-site platform, not a payment processor; PCI compliance scope is exactly what we don't want. Both Stripe and Mollie are wired via the same pattern: Go worker creates session, redirect user, listen for webhook, update order in your data layer.",
+				Philosophy: "Always use a hosted checkout (Stripe Checkout or Mollie hosted pages), never PCI inside slab. Slab is a static-site platform, not a payment processor; PCI compliance scope is exactly what we don't want. Both Stripe and Mollie are wired via the same pattern: Go worker creates session, redirect user, listen for webhook, update order in your data layer.",
 				Providers: []PaymentProvider{
 					{
 						Name:       "Stripe Checkout",
@@ -2141,14 +2141,14 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 					{IfCustomerIs: "US / UK marketplace or platform with Connect-style splits", Pick: "Stripe", Why: "Mollie has nothing equivalent to Stripe Connect."},
 					{IfCustomerIs: "Selling courses / digital downloads under €100", Pick: "Stripe Checkout", Why: "Faster setup, cleaner one-shot checkout, no need for Mollie's EU-method advantage on small purchases."},
 				},
-				HowApplied: "Add provider keys to settings: integrations.stripe_publishable_key + .stripe_secret_key + .stripe_webhook_secret, OR integrations.mollie_api_key + .mollie_webhook_secret. Buy/cart-button Svelte islands POST to a Go worker endpoint (atomicsite hosts no payment logic itself); the worker creates the Stripe Checkout session or Mollie payment, returns a redirect URL, the island redirects the browser. CSP must allow the provider's domain, set security.allowed_scripts (admin-only) for stripe.com / mollie.com if you embed their JS for Apple Pay etc. For both providers, the success/cancel return pages should be atomicsite pages with hide_global_blocks=1 for a clean conversion finish.",
+				HowApplied: "Add provider keys to settings: integrations.stripe_publishable_key + .stripe_secret_key + .stripe_webhook_secret, OR integrations.mollie_api_key + .mollie_webhook_secret. Buy/cart-button Svelte islands POST to a Go worker endpoint (slab hosts no payment logic itself); the worker creates the Stripe Checkout session or Mollie payment, returns a redirect URL, the island redirects the browser. CSP must allow the provider's domain, set security.allowed_scripts (admin-only) for stripe.com / mollie.com if you embed their JS for Apple Pay etc. For both providers, the success/cancel return pages should be slab pages with hide_global_blocks=1 for a clean conversion finish.",
 			},
 			WhenToPick: []StackPick{
 				{IfSiteIs: "Marketing site, blog, docs, portfolio, contact page", Pick: "Static-only", Why: "No interactivity needed. Fastest TTFB, lowest hosting cost, perfect SEO."},
 				{IfSiteIs: "Marketing site + a calendar booker / search bar / configurator / theme toggle", Pick: "Astro + Svelte islands (light interactivity)", Why: "Just need a single hydrated component for the interactive moment. Rest stays static."},
 				{IfSiteIs: "Selling physical or digital goods with cart + variants + inventory", Pick: "Astro + Svelte + headless commerce (ecom)", Why: "Cart + variant picker + search-as-you-type + real-time stock all need client state. Static can't do that."},
 				{IfSiteIs: "Selling a single course / subscription / download", Pick: "Astro + Stripe Checkout (paid digital goods)", Why: "No cart needed. One Svelte 'Buy' button is enough. Skip the ecom complexity."},
-				{IfSiteIs: "Internal dashboard or admin tool", Pick: "Different platform, atomicsite is for public-facing static sites only", Why: "BrightCRM / dockyard / sentinel are the internal-tool platforms. Atomicsite would be the wrong fit (no auth, no real-time, no row-level access control)."},
+				{IfSiteIs: "Internal dashboard or admin tool", Pick: "Different platform, slab is for public-facing static sites only", Why: "BrightCRM / dockyard / sentinel are the internal-tool platforms. Slab would be the wrong fit (no auth, no real-time, no row-level access control)."},
 			},
 		},
 
@@ -2167,7 +2167,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			},
 			Subheading: []string{
 				"≤ 2 sentences, ≤ 50ch wide.",
-				"Names the painful current state + the relief atomicsite-style site delivers.",
+				"Names the painful current state + the relief slab-style site delivers.",
 				"Specific numbers if available: '200 EUR per employee per month' beats 'expensive software'.",
 				"Avoid AI clichés (Elevate, Seamless, Unleash) at all costs.",
 			},
@@ -2218,7 +2218,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			},
 			{
 				Name:        "audit-receipt",
-				BestFor:     []string{"Atomicsite homepage", "Inspector / audit-style tools", "B2B SaaS selling 'we score / we grade / we audit'", "Trust-led product pages"},
+				BestFor:     []string{"Slab homepage", "Inspector / audit-style tools", "B2B SaaS selling 'we score / we grade / we audit'", "Trust-led product pages"},
 				Description: "Mock browser frame showing a 100/100 inspector grade with 'Industry average 62' comparison and a CTA to run the audit. Doubles the hero as a lead-magnet surface.",
 				Materiality: "Self-contained card with browser-chrome dots, monospace numerals, hairline border, tinted shadow. Fully accessible, readable as plain text by screen readers.",
 				Performance: "~2kb CSS, no scripts. Real values come from hero.audit_score / hero.audit_baseline / hero.audit_label data fields.",
@@ -2231,7 +2231,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 				{
 					Vibe:        "Soft Structuralism",
 					Skill:       "minimalist-ui",
-					HowToInvoke: "Invoke via Claude Code Skill tool when the chosen vibe is Soft Structuralism (default for ~70% of sites). The skill teaches warm-monochrome editorial patterns that match atomicsite's render defaults.",
+					HowToInvoke: "Invoke via Claude Code Skill tool when the chosen vibe is Soft Structuralism (default for ~70% of sites). The skill teaches warm-monochrome editorial patterns that match slab's render defaults.",
 				},
 				{
 					Vibe:        "Editorial Luxury",
@@ -2256,7 +2256,7 @@ func defaultDesignPlaybook() DesignPlaybookInfo {
 			},
 			BeforeAuthoring: []string{
 				"Read this playbook section + the AntiPatterns + the chosen vibe's row before writing any custom HTML.",
-				"To extract design tokens from a reference URL (color/font/radii inventory), use the start_migration_crawl MCP tool, it bundles assets the agent can read. Atomicsite does not run computed-style extraction (chromedp not wired); manual extraction from the bundled HTML/CSS is the workflow today.",
+				"To extract design tokens from a reference URL (color/font/radii inventory), use the start_migration_crawl MCP tool, it bundles assets the agent can read. Slab does not run computed-style extraction (chromedp not wired); manual extraction from the bundled HTML/CSS is the workflow today.",
 				"For inspector-coherent custom blocks: keep hard-coded values inside the canonical token allowlist exported from builder/css.go (CanonicalRadiiRem, CanonicalShadowFormula, CanonicalBeziers). The designTokenCoherenceChecks() in critique/critique.go enforces this.",
 				"Max ONE perpetual animation per page (see Motion.DontUse). Marquee + circuit + pulse + drift on the same page reads as AI-builder demo.",
 			},
@@ -2543,13 +2543,13 @@ func (b *ContextBuilder) computePendingSetup(ctx context.Context, siteID string,
 	}
 
 	// --- Analytics + consent ---
-	atomicsiteTracking := boolFromSetting(settingMap["analytics.atomicsite_tracking_enabled"], true)
+	slabTracking := boolFromSetting(settingMap["analytics.slab_tracking_enabled"], true)
 	// cookieproof_enabled defaults to true (auto-A on Privacy + GDPR by default
 	// for every fresh tenant, 2026-05-01). The setup task only fires when the
 	// row is explicitly 0 AND tracking is on AND no custom banner is present.
 	cookieproofOn := boolFromSetting(settingMap["analytics.cookieproof_enabled"], true)
 	customBanner := strings.TrimSpace(settingMap["analytics.cookie_banner_snippet"]) != ""
-	if atomicsiteTracking && !cookieproofOn && !customBanner {
+	if slabTracking && !cookieproofOn && !customBanner {
 		push(SetupTask{
 			ID:       "analytics.consent",
 			Category: "analytics",

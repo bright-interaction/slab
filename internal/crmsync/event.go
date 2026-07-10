@@ -1,5 +1,5 @@
-// Package crmsync forwards Atomicsite visitor analytics events to BrightCRM
-// via the /webhooks/incoming/atomicsite receiver. The package owns the wire
+// Package crmsync forwards Slab visitor analytics events to BrightCRM
+// via the /webhooks/incoming/slab receiver. The package owns the wire
 // format, HMAC signing, throttling, and the no-op fallback used when the
 // CRM webhook URL/secret are unset (dev environments).
 package crmsync
@@ -7,8 +7,8 @@ package crmsync
 import "time"
 
 // EventName is the discriminator the CRM uses to pick an activity_type.
-// Keep these aligned with brightcrm/internal/handler/atomicsite_webhook.go's
-// mapAtomicsiteActivityType.
+// Keep these aligned with brightcrm/internal/handler/slab_webhook.go's
+// mapSlabActivityType.
 type EventName string
 
 const (
@@ -19,7 +19,7 @@ const (
 	EventIdentified EventName = "identified"
 )
 
-// Event is the JSON payload Atomicsite POSTs to BrightCRM.
+// Event is the JSON payload Slab POSTs to BrightCRM.
 type Event struct {
 	Event         EventName      `json:"event"`
 	SiteID        string         `json:"site_id"`

@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/payments/mollie"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/payments/mollie"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Sprint 2 slice B (WP/Webflow roadmap): order pipeline tests.

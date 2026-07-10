@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // Recorder writes conversion_events for goals that match an in-flight
@@ -119,7 +119,7 @@ func (r *Recorder) Evaluate(ctx context.Context, sig Signal) int {
 }
 
 // newConversionID returns a 24-hex random id matching the rest of
-// atomicsite's id space.
+// slab's id space.
 func newConversionID() string {
 	b := make([]byte, 12)
 	if _, err := rand.Read(b); err != nil {

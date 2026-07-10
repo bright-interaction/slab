@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/slab/internal/config"
 )
 
 // fakeShieldUpdater implements ShieldKeyUpdater for tests so we can
@@ -53,7 +53,7 @@ func TestAdminReload_ShieldKey_HotSwap(t *testing.T) {
 	const newKey = "abcdefghijklmnopqrstuvwxyz012345" // 32 ASCII chars
 	w := httptest.NewRecorder()
 	h.ReloadSecrets(w, newReq(t, map[string]any{
-		"secrets": map[string]string{"ATOMICSITE_SHIELD_KEY": newKey},
+		"secrets": map[string]string{"SLAB_SHIELD_KEY": newKey},
 	}))
 
 	if w.Code != http.StatusNoContent {
@@ -74,7 +74,7 @@ func TestAdminReload_ShieldKey_RejectedWhenShieldDisabled(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.ReloadSecrets(w, newReq(t, map[string]any{
-		"secrets": map[string]string{"ATOMICSITE_SHIELD_KEY": "abcdefghijklmnopqrstuvwxyz012345"},
+		"secrets": map[string]string{"SLAB_SHIELD_KEY": "abcdefghijklmnopqrstuvwxyz012345"},
 	}))
 
 	// 503 ServiceUnavailable, NOT 204; the rotation engine treats this as
@@ -95,7 +95,7 @@ func TestAdminReload_ShieldKey_RejectedWhenMCPNotWired(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.ReloadSecrets(w, newReq(t, map[string]any{
-		"secrets": map[string]string{"ATOMICSITE_SHIELD_KEY": "abcdefghijklmnopqrstuvwxyz012345"},
+		"secrets": map[string]string{"SLAB_SHIELD_KEY": "abcdefghijklmnopqrstuvwxyz012345"},
 	}))
 
 	if w.Code != http.StatusServiceUnavailable {
@@ -122,7 +122,7 @@ func TestAdminReload_BadBearer(t *testing.T) {
 	h := NewAdminReloadHandler(cfg, nil)
 
 	r := httptest.NewRequest(http.MethodPost, "/admin/reload-secrets",
-		bytes.NewReader([]byte(`{"secrets":{"ATOMICSITE_SHIELD_KEY":"x"}}`)))
+		bytes.NewReader([]byte(`{"secrets":{"SLAB_SHIELD_KEY":"x"}}`)))
 	r.Header.Set("Authorization", "Bearer wrong-token")
 	w := httptest.NewRecorder()
 	h.ReloadSecrets(w, r)

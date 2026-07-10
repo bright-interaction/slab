@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // RenderLayouts generates Astro layout files from site settings and global blocks.
@@ -143,9 +143,9 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 
 	// Fonts: self-hosted woff2 only. NEVER Google Fonts (leaks visitor IP
 	// to Google, fails Subresource Integrity eval, clashes with the
-	// EU-sovereignty positioning many atomicsite tenants ship).
+	// EU-sovereignty positioning many slab tenants ship).
 	// Per-site fonts are uploaded via POST /api/sites/{id}/fonts and
-	// served from /atomicsite-fonts/{siteID}/{fontID}.woff2; the @font-face
+	// served from /slab-fonts/{siteID}/{fontID}.woff2; the @font-face
 	// block below renders one rule per uploaded font. When no fonts are
 	// uploaded the site falls back to system-ui through the --font-heading
 	// / --font-body CSS custom properties (still readable, just system-
@@ -228,7 +228,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	// <script> tag pointing at /_ccb.{hash}.js .  the widget bundle we
 	// wrote into the workspace's public/ dir from the embedded widget bytes.
 	// No third-party fetch. Proofs POST to same-origin /t/consent and land
-	// in atomicsite's consent_records table.
+	// in slab's consent_records table.
 	cookieProofEnabled := boolSetting(settingsMap["analytics.cookieproof_enabled"], false)
 	if cookieProofEnabled {
 		cpCfg := BuildCookieProofConfig(site, settingsMap)
@@ -285,13 +285,13 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 	}
 
 	// @font-face emissions for any site_fonts uploaded via /api/sites/{id}/fonts.
-	// Self-hosted woff2 only; served by /atomicsite-fonts/{site}/{id}.woff2.
+	// Self-hosted woff2 only; served by /slab-fonts/{site}/{id}.woff2.
 	// font-display:swap so headers don't render invisibly while the file
 	// downloads.
 	if fontRows, err := queries.ListSiteFonts(ctx, siteID); err == nil && len(fontRows) > 0 {
 		b.WriteString("  <style>\n")
 		for _, f := range fontRows {
-			src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, f.ID)
+			src := fmt.Sprintf("/slab-fonts/%s/%s.woff2", siteID, f.ID)
 			rangeDecl := UnicodeRangeFor(f.Subset)
 			if rangeDecl != "" {
 				b.WriteString(fmt.Sprintf(
@@ -316,7 +316,7 @@ func RenderLayouts(ctx context.Context, queries *store.Queries, siteID string, w
 		// contains characters in the declared range. For a Latin-only
 		// site that's still a perf win because the file lands in cache.
 		for _, f := range fontRows {
-			src := fmt.Sprintf("/atomicsite-fonts/%s/%s.woff2", siteID, f.ID)
+			src := fmt.Sprintf("/slab-fonts/%s/%s.woff2", siteID, f.ID)
 			b.WriteString(fmt.Sprintf(
 				"  <link rel=\"preload\" as=\"font\" type=\"font/woff2\" crossorigin=\"anonymous\" href=%q />\n",
 				src,

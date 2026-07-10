@@ -13,8 +13,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/payments/mollie"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/payments/mollie"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // UpdateStatusForAgent applies a state-machine flip for the MCP path.

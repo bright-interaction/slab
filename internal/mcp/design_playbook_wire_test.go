@@ -13,7 +13,7 @@ import (
 func TestWireResourceReadDesignPlaybook(t *testing.T) {
 	s := freshTestServer(t)
 	resp, _ := jsonRPCRoundtrip(t, s, "resources/read", map[string]any{
-		"uri": "atomicsite://meta/design-playbook",
+		"uri": "slab://meta/design-playbook",
 	})
 
 	result, ok := resp.Result.(map[string]any)

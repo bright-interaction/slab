@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // RenderPageDraft assembles a complete, browser-renderable HTML document
@@ -124,13 +124,13 @@ func RenderPageDraft(ctx context.Context, queries *store.Queries, siteID, pageID
 	doc.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1.0">`)
 	doc.WriteString(`<meta name="robots" content="noindex, nofollow">`)
 	doc.WriteString(fmt.Sprintf(`<title>%s · Preview</title>`, escapeAttr(title)))
-	doc.WriteString(`<style data-atomicsite-preview="reset">html,body{margin:0;padding:0}body{min-height:100vh;background:#fafaf9;color:#18181b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}*{box-sizing:border-box}img{max-width:100%;height:auto}.atomicsite-preview-component-stub{margin:1.5rem auto;max-width:60rem;padding:1.25rem 1.5rem;border:1px dashed #d6d3d1;border-radius:0.75rem;background:#fff7ed;color:#9a3412;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8125rem;line-height:1.55}</style>`)
+	doc.WriteString(`<style data-slab-preview="reset">html,body{margin:0;padding:0}body{min-height:100vh;background:#fafaf9;color:#18181b;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}*{box-sizing:border-box}img{max-width:100%;height:auto}.slab-preview-component-stub{margin:1.5rem auto;max-width:60rem;padding:1.25rem 1.5rem;border:1px dashed #d6d3d1;border-radius:0.75rem;background:#fff7ed;color:#9a3412;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8125rem;line-height:1.55}</style>`)
 	if fontFace != "" {
-		doc.WriteString(`<style data-atomicsite-preview="fonts">`)
+		doc.WriteString(`<style data-slab-preview="fonts">`)
 		doc.WriteString(fontFace)
 		doc.WriteString(`</style>`)
 	}
-	doc.WriteString(`<style data-atomicsite-preview="site">`)
+	doc.WriteString(`<style data-slab-preview="site">`)
 	doc.WriteString(css)
 	doc.WriteString(`</style>`)
 	doc.WriteString("</head><body>")
@@ -178,7 +178,7 @@ func componentBlockPlaceholder(bl store.Block, componentExts map[string]string) 
 		compName = bl.BlockType
 	}
 	return fmt.Sprintf(
-		`<aside class="atomicsite-preview-component-stub" data-block-id="%s" data-block-type="%s"><strong>Component block:</strong> &lt;%s /&gt;. Preview shows the rendered output after the next build.</aside>`,
+		`<aside class="slab-preview-component-stub" data-block-id="%s" data-block-type="%s"><strong>Component block:</strong> &lt;%s /&gt;. Preview shows the rendered output after the next build.</aside>`,
 		escapeAttr(bl.ID),
 		escapeAttr(bl.BlockType),
 		escapeAttr(pascalCase(compName)),

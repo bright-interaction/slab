@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/ee"
+	"github.com/bright-interaction/slab/ee"
 )
 
 // Default sentinel values. The Validate() guard refuses to start in
 // production-like deployments when any one of these is still in place.
 const (
 	DefaultJWTSecret     = "change-me-in-production"
-	DefaultAnalyticsSalt = "atomicsite-default-fingerprint-salt-change-me"
+	DefaultAnalyticsSalt = "slab-default-fingerprint-salt-change-me"
 	DefaultAdminPassword = "changeme123"
 )
 
@@ -28,7 +28,7 @@ const (
 	DeploymentModeCloud  = "cloud"
 )
 
-// RequireMFA values. Read from ATOMICSITE_REQUIRE_MFA. Empty string is
+// RequireMFA values. Read from SLAB_REQUIRE_MFA. Empty string is
 // the default (users may enroll, not gated). "admin" forces every user
 // with role=admin to enroll. "all" forces every authenticated user.
 // Validate() rejects any other value at boot.
@@ -64,7 +64,7 @@ type Config struct {
 	MediaVariants []int
 
 	// Analytics. The CookieProof widget is now embedded directly into the
-	// atomicsite Go binary (see internal/builder/widget_embed.go); the
+	// slab Go binary (see internal/builder/widget_embed.go); the
 	// remote-API admin token + base URL fields were removed 2026-04-30.
 	TrackPath     string // public tracking endpoint prefix, default "/t"
 	AnalyticsSalt string // server secret mixed into visitor fingerprints
@@ -74,7 +74,7 @@ type Config struct {
 	// CRMSyncMinInterval throttles non-identified events per (site, visitor).
 	BrightCRMWebhookURL string
 	// BrightCRMWebhookSecret is the current shared HMAC value, used both to
-	// sign outbound /webhooks/atomicsite calls and to verify inbound /t/inbound
+	// sign outbound /webhooks/slab calls and to verify inbound /t/inbound
 	// pings from BrightCRM. BrightCRMWebhookSecretPrevious is the previous
 	// value, accepted by the inbound verifier during a rotation grace window
 	// so requests in flight signed with the old key still verify. Outbound
@@ -95,17 +95,17 @@ type Config struct {
 	AdminWriteRateCapacity int
 	AdminWriteRateRefill   int
 
-	// PrimaryDomain is the apex domain this Atomic Site instance serves
+	// PrimaryDomain is the apex domain this Slab instance serves
 	// (e.g. "example.com"). Empty for local dev or for deployments that
 	// host many unrelated tenants. When set, it surfaces in the agent
 	// context as the canonical "what domain am I building for?" answer
 	// and seeds defaults for fresh sites (cookieproof_domain, default
 	// canonical base, CORS allow-list). Read from the
-	// ATOMICSITE_PRIMARY_DOMAIN environment variable.
+	// SLAB_PRIMARY_DOMAIN environment variable.
 	PrimaryDomain string
 
 	// BuiltSiteSuffix is set ONLY for multi-tenant deployments where
-	// each Atomic Site tenant gets a wildcard subdomain (e.g. every
+	// each Slab tenant gets a wildcard subdomain (e.g. every
 	// tenant lives at <slug>.tenants.example.com). The CORS middleware
 	// (server.go isAllowedOriginForPath) widens to accept any origin
 	// whose hostname ends with this suffix on public visitor paths.
@@ -117,9 +117,9 @@ type Config struct {
 	BuiltSiteSuffix string
 
 	// DeploymentMode selects the operating shape: "single" (the OSS
-	// default, one Atomic Site instance for one root domain) or
+	// default, one Slab instance for one root domain) or
 	// "cloud" (multi-tenant edge orchestration, requires a binary
-	// built with -tags ee). Read from ATOMICSITE_DEPLOYMENT_MODE.
+	// built with -tags ee). Read from SLAB_DEPLOYMENT_MODE.
 	// Validate() rejects unknown values and refuses to start in
 	// "cloud" mode when ee.IsAvailable() returns false.
 	DeploymentMode string
@@ -128,14 +128,14 @@ type Config struct {
 	// fragments + invokes certbot at these locations on the host.
 	// Empty values disable the reconciler (local dev / OSS deploys
 	// without root); the admin still records the rows but no edge
-	// changes happen. When operating Atomic Site as a SaaS, point
+	// changes happen. When operating Slab as a SaaS, point
 	// these at the host nginx + certbot tree and run with sudoer
 	// rights for the reload script.
 	NginxConfDir       string // /etc/nginx/conf.d (auto-included by http{})
 	NginxSitesDir      string // /etc/nginx/sites-enabled (vhost includes)
 	AcmeWebrootDir     string // /var/www/acme, webroot for certbot HTTP-01
 	CertbotPath        string // path to the certbot binary, or empty
-	NginxReloadCommand string // shell command, e.g. "sudo /usr/local/bin/atomicsite-nginx-reload"
+	NginxReloadCommand string // shell command, e.g. "sudo /usr/local/bin/slab-nginx-reload"
 	EdgeIP             string // public A-record target shown to admins
 
 	// DesignReferencesDir points at the bundled MIT-licensed reference
@@ -146,14 +146,14 @@ type Config struct {
 	DesignReferencesDir string
 
 	// ShieldKey is the 32-byte AES-256-GCM master key for the shield
-	// LLM-boundary tokenizer. Read from ATOMICSITE_SHIELD_KEY. When empty
+	// LLM-boundary tokenizer. Read from SLAB_SHIELD_KEY. When empty
 	// (no key set, or len != 32), shield is disabled and the MCP server
 	// returns plaintext responses + accepts plaintext arguments. When
 	// set, every PII field crossing the MCP boundary is tokenized.
 	ShieldKey string
 
 	// ShieldHintLevel dials how much value-derived metadata appears in
-	// shield markers. Read from ATOMICSITE_SHIELD_HINT_LEVEL. Values:
+	// shield markers. Read from SLAB_SHIELD_HINT_LEVEL. Values:
 	//
 	//   ""         (default) -> HintFull: domain, initials, len, etc.
 	//   "bucketed" -> HintBucketed: industry buckets, length buckets
@@ -166,7 +166,7 @@ type Config struct {
 	ShieldHintLevel string
 
 	// ShieldRedisURL points the Shield store at a Redis instance for
-	// multi-node deploys. Read from ATOMICSITE_SHIELD_REDIS_URL. When
+	// multi-node deploys. Read from SLAB_SHIELD_REDIS_URL. When
 	// empty, Shield falls back to the per-node SQLStore (single-process
 	// SQLite). When set, every node in a cluster shares the same
 	// shield_sessions + shield_tokens state, so an MCP session opened
@@ -179,11 +179,11 @@ type Config struct {
 
 	// ShieldRedisPrefix is prepended to every key when ShieldRedisURL is
 	// set. Empty = "shield:" default. Set to "<tenant>:shield:" when
-	// multiple atomicsite tenants share one Redis instance.
+	// multiple slab tenants share one Redis instance.
 	ShieldRedisPrefix string
 
 	// RequireMFA enforces TOTP enrollment policy. Read from
-	// ATOMICSITE_REQUIRE_MFA. Values:
+	// SLAB_REQUIRE_MFA. Values:
 	//
 	//   ""       (default) -> optional MFA; users may enroll but it's
 	//                         not gated.
@@ -202,7 +202,7 @@ type Config struct {
 
 	// AuditLogRetentionDays caps how long rows stay in audit_log
 	// before the daily retention sweep purges them. Read from
-	// ATOMICSITE_AUDIT_LOG_RETENTION_DAYS. Zero (or unset) uses the
+	// SLAB_AUDIT_LOG_RETENTION_DAYS. Zero (or unset) uses the
 	// retention package's DefaultAuditLogDays (365). Clamped to
 	// [MinRetentionDays, MaxRetentionDays] inside the manager.
 	AuditLogRetentionDays int
@@ -213,8 +213,8 @@ type Config struct {
 	// sweep flips status: active -> paused at LifecyclePauseDays,
 	// any -> deleted at LifecycleDeleteDays. Both default to 0 =
 	// disabled. Self-host operators almost never want this; cloud
-	// installs set both via ATOMICSITE_LIFECYCLE_PAUSE_DAYS /
-	// ATOMICSITE_LIFECYCLE_DELETE_DAYS. The 'deleted' transition
+	// installs set both via SLAB_LIFECYCLE_PAUSE_DAYS /
+	// SLAB_LIFECYCLE_DELETE_DAYS. The 'deleted' transition
 	// is a SOFT state change; rows stay in the DB until an operator-
 	// initiated hard purge so a sweep mistake stays recoverable.
 	LifecyclePauseDays  int
@@ -223,7 +223,7 @@ type Config struct {
 	// GDPRDeleteCoolingDays is the cooling-off window between a
 	// user's POST /api/account/delete and the retention sweep's
 	// hard cascade. 0 falls back to retention.DefaultGDPRDeleteCoolingDays
-	// (7). Read from ATOMICSITE_GDPR_DELETE_COOLING_DAYS.
+	// (7). Read from SLAB_GDPR_DELETE_COOLING_DAYS.
 	GDPRDeleteCoolingDays int
 
 	// TrustedProxies is the comma-separated list of CIDRs (or bare IPs,
@@ -235,8 +235,8 @@ type Config struct {
 	// the list can rewrite the client IP via XFF: every other peer's
 	// header is discarded.
 	//
-	// Read from ATOMICSITE_TRUSTED_PROXIES. Common values:
-	//   - "127.0.0.1/32,::1/128" for a single-host nginx + atomicsite
+	// Read from SLAB_TRUSTED_PROXIES. Common values:
+	//   - "127.0.0.1/32,::1/128" for a single-host nginx + slab
 	//   - "10.0.0.0/8" for a private VPC fronted by a managed LB
 	//   - "172.16.0.0/12" for Docker's default bridge network
 	TrustedProxies string
@@ -263,7 +263,7 @@ func Load() *Config {
 	return &Config{
 		Port:          envInt("PORT", 8080),
 		DataDir:       dataDir,
-		DBPath:        filepath.Join(dataDir, "atomicsite.db"),
+		DBPath:        filepath.Join(dataDir, "slab.db"),
 		MediaDir:      filepath.Join(dataDir, "media"),
 		FontsDir:      filepath.Join(dataDir, "fonts"),
 		JWTSecret:     envOr("JWT_SECRET", "change-me-in-production"),
@@ -272,7 +272,7 @@ func Load() *Config {
 		MediaVariants: envIntList("MEDIA_VARIANTS", []int{320, 640, 1280, 1920}),
 
 		TrackPath:     envOr("TRACK_PATH", "/t"),
-		AnalyticsSalt: envOr("ANALYTICS_SALT", "atomicsite-default-fingerprint-salt-change-me"),
+		AnalyticsSalt: envOr("ANALYTICS_SALT", "slab-default-fingerprint-salt-change-me"),
 
 		BrightCRMWebhookURL:            envOr("BRIGHTCRM_WEBHOOK_URL", ""),
 		BrightCRMWebhookSecret:         envOr("BRIGHTCRM_WEBHOOK_SECRET", ""),
@@ -282,34 +282,34 @@ func Load() *Config {
 		AdminWriteRateRefill:           envInt("ADMIN_WRITE_RATE_REFILL", 1),
 		CRMSyncMinInterval:             time.Duration(envInt("CRM_SYNC_MIN_INTERVAL_SECONDS", 60)) * time.Second,
 
-		PrimaryDomain:   envOr("ATOMICSITE_PRIMARY_DOMAIN", ""),
+		PrimaryDomain:   envOr("SLAB_PRIMARY_DOMAIN", ""),
 		BuiltSiteSuffix: envOr("BUILT_SITE_SUFFIX", ""),
-		DeploymentMode:  envOr("ATOMICSITE_DEPLOYMENT_MODE", DeploymentModeSingle),
+		DeploymentMode:  envOr("SLAB_DEPLOYMENT_MODE", DeploymentModeSingle),
 
-		NginxConfDir:       envOr("ATOMICSITE_NGINX_CONF_DIR", ""),
-		NginxSitesDir:      envOr("ATOMICSITE_NGINX_SITES_DIR", ""),
-		AcmeWebrootDir:     envOr("ATOMICSITE_ACME_WEBROOT", ""),
-		CertbotPath:        envOr("ATOMICSITE_CERTBOT_PATH", ""),
-		NginxReloadCommand: envOr("ATOMICSITE_NGINX_RELOAD_CMD", ""),
-		EdgeIP:             envOr("ATOMICSITE_EDGE_IP", ""),
+		NginxConfDir:       envOr("SLAB_NGINX_CONF_DIR", ""),
+		NginxSitesDir:      envOr("SLAB_NGINX_SITES_DIR", ""),
+		AcmeWebrootDir:     envOr("SLAB_ACME_WEBROOT", ""),
+		CertbotPath:        envOr("SLAB_CERTBOT_PATH", ""),
+		NginxReloadCommand: envOr("SLAB_NGINX_RELOAD_CMD", ""),
+		EdgeIP:             envOr("SLAB_EDGE_IP", ""),
 
 		DesignReferencesDir: envOr("DESIGN_REFERENCES_DIR", ""),
 
-		ShieldKey:         envOr("ATOMICSITE_SHIELD_KEY", ""),
-		ShieldHintLevel:   envOr("ATOMICSITE_SHIELD_HINT_LEVEL", ""),
-		ShieldRedisURL:    envOr("ATOMICSITE_SHIELD_REDIS_URL", ""),
-		ShieldRedisPrefix: envOr("ATOMICSITE_SHIELD_REDIS_PREFIX", ""),
+		ShieldKey:         envOr("SLAB_SHIELD_KEY", ""),
+		ShieldHintLevel:   envOr("SLAB_SHIELD_HINT_LEVEL", ""),
+		ShieldRedisURL:    envOr("SLAB_SHIELD_REDIS_URL", ""),
+		ShieldRedisPrefix: envOr("SLAB_SHIELD_REDIS_PREFIX", ""),
 
-		RequireMFA: strings.ToLower(strings.TrimSpace(envOr("ATOMICSITE_REQUIRE_MFA", ""))),
+		RequireMFA: strings.ToLower(strings.TrimSpace(envOr("SLAB_REQUIRE_MFA", ""))),
 
-		AuditLogRetentionDays: envInt("ATOMICSITE_AUDIT_LOG_RETENTION_DAYS", 0),
+		AuditLogRetentionDays: envInt("SLAB_AUDIT_LOG_RETENTION_DAYS", 0),
 
-		LifecyclePauseDays:  envInt("ATOMICSITE_LIFECYCLE_PAUSE_DAYS", 0),
-		LifecycleDeleteDays: envInt("ATOMICSITE_LIFECYCLE_DELETE_DAYS", 0),
+		LifecyclePauseDays:  envInt("SLAB_LIFECYCLE_PAUSE_DAYS", 0),
+		LifecycleDeleteDays: envInt("SLAB_LIFECYCLE_DELETE_DAYS", 0),
 
-		GDPRDeleteCoolingDays: envInt("ATOMICSITE_GDPR_DELETE_COOLING_DAYS", 0),
+		GDPRDeleteCoolingDays: envInt("SLAB_GDPR_DELETE_COOLING_DAYS", 0),
 
-		TrustedProxies: envOr("ATOMICSITE_TRUSTED_PROXIES", ""),
+		TrustedProxies: envOr("SLAB_TRUSTED_PROXIES", ""),
 
 		OIDCEnabled:      strings.EqualFold(strings.TrimSpace(envOr("OIDC_ENABLED", "")), "true"),
 		OIDCIssuerURL:    strings.TrimSpace(envOr("OIDC_ISSUER_URL", "")),
@@ -348,17 +348,17 @@ func (c *Config) Validate() error {
 		// always fine
 	case DeploymentModeCloud:
 		if !ee.IsAvailable() {
-			return fmt.Errorf("ATOMICSITE_DEPLOYMENT_MODE=%s requires a binary built with -tags ee; this is the OSS build", mode)
+			return fmt.Errorf("SLAB_DEPLOYMENT_MODE=%s requires a binary built with -tags ee; this is the OSS build", mode)
 		}
 	default:
-		return fmt.Errorf("ATOMICSITE_DEPLOYMENT_MODE=%q is not a recognised value; use %q or %q", mode, DeploymentModeSingle, DeploymentModeCloud)
+		return fmt.Errorf("SLAB_DEPLOYMENT_MODE=%q is not a recognised value; use %q or %q", mode, DeploymentModeSingle, DeploymentModeCloud)
 	}
 
 	switch c.RequireMFA {
 	case MFAOptional, MFAAdminsOnly, MFAAllUsers:
 		// always fine
 	default:
-		return fmt.Errorf("ATOMICSITE_REQUIRE_MFA=%q is not a recognised value; use %q, %q, or %q", c.RequireMFA, MFAOptional, MFAAdminsOnly, MFAAllUsers)
+		return fmt.Errorf("SLAB_REQUIRE_MFA=%q is not a recognised value; use %q, %q, or %q", c.RequireMFA, MFAOptional, MFAAdminsOnly, MFAAllUsers)
 	}
 
 	if c.IsLocalDev() {
@@ -383,7 +383,7 @@ func (c *Config) Validate() error {
 	// order PII to the LLM. Required in production: a missing crypto key must
 	// refuse to start, not fail open.
 	if len(c.ShieldKey) != 32 {
-		problems = append(problems, "ATOMICSITE_SHIELD_KEY is unset or not 32 bytes; production must set a 32-byte key or at-rest encryption (TOTP seeds, app credentials) and MCP PII redaction are silently disabled. Generate one with: head -c 24 /dev/urandom | base64")
+		problems = append(problems, "SLAB_SHIELD_KEY is unset or not 32 bytes; production must set a 32-byte key or at-rest encryption (TOTP seeds, app credentials) and MCP PII redaction are silently disabled. Generate one with: head -c 24 /dev/urandom | base64")
 	}
 
 	// HTTPS scheme guard. The auth cookie's Secure attribute is gated on
@@ -394,15 +394,15 @@ func (c *Config) Validate() error {
 		problems = append(problems, fmt.Sprintf("BASE_URL=%q is not HTTPS; production deployments must serve over TLS or sessions will not persist", c.BaseURL))
 	}
 
-	// Either ATOMICSITE_PRIMARY_DOMAIN (single-root-domain shape, the
+	// Either SLAB_PRIMARY_DOMAIN (single-root-domain shape, the
 	// typical SaaS deploy) or BUILT_SITE_SUFFIX (legacy multi-tenant
 	// subdomain shape) must be set in production. Both unset means the
-	// operator hasn't told Atomic Site which domain it's responsible
+	// operator hasn't told Slab which domain it's responsible
 	// for, and any defaults we'd seed for fresh sites would be wrong.
 	// Allowing both is fine: PrimaryDomain seeds the canonical site,
 	// BuiltSiteSuffix widens CORS for legacy subdomain tenancy.
 	if strings.TrimSpace(c.PrimaryDomain) == "" && strings.TrimSpace(c.BuiltSiteSuffix) == "" {
-		problems = append(problems, "ATOMICSITE_PRIMARY_DOMAIN is unset; set it to the apex domain this Atomic Site instance serves (e.g. ATOMICSITE_PRIMARY_DOMAIN=example.com). Multi-tenant deployments that use wildcard subdomains may set BUILT_SITE_SUFFIX instead.")
+		problems = append(problems, "SLAB_PRIMARY_DOMAIN is unset; set it to the apex domain this Slab instance serves (e.g. SLAB_PRIMARY_DOMAIN=example.com). Multi-tenant deployments that use wildcard subdomains may set BUILT_SITE_SUFFIX instead.")
 	}
 
 	if len(problems) > 0 {
@@ -440,15 +440,45 @@ func (c *Config) IsLocalDev() bool {
 		strings.HasPrefix(c.BaseURL, "http://0.0.0.0")
 }
 
-func envOr(key, fallback string) string {
+// legacyEnvKey maps a current SLAB_ env key to its pre-rename ATOMICSITE_
+// name. The product was renamed Atomicsite -> Slab; keeping the old prefix as
+// a fallback lets an existing env-file (ATOMICSITE_* values) keep working after
+// the rename, so the eventual prod cutover does not need a same-instant env
+// rewrite. Mirrors the estate envFirst migration contract (Reactor
+// FF_ -> ARACHNE_ -> REACTOR_): migrate every read to the new prefix, keep the
+// old name only as a fallback. Returns "" for keys not under the SLAB_ prefix.
+func legacyEnvKey(key string) string {
+	if suffix, ok := strings.CutPrefix(key, "SLAB_"); ok {
+		return "ATOMICSITE_" + suffix
+	}
+	return ""
+}
+
+// Env returns the value of a SLAB_ environment key, falling back to the legacy
+// ATOMICSITE_ name when the primary is unset. Exported so packages outside
+// config (cmd, server, handlers) resolve the SLAB_/ATOMICSITE_ pair the same
+// way. Empty string means neither name is set. The legacy name is read via a
+// variable (not a string literal) so a prefix-migration guard treats this as a
+// proper fallback read rather than a stale legacy read.
+func Env(key string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	if legacy := legacyEnvKey(key); legacy != "" {
+		return os.Getenv(legacy)
+	}
+	return ""
+}
+
+func envOr(key, fallback string) string {
+	if v := Env(key); v != "" {
 		return v
 	}
 	return fallback
 }
 
 func envInt(key string, fallback int) int {
-	if v := os.Getenv(key); v != "" {
+	if v := Env(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
@@ -457,7 +487,7 @@ func envInt(key string, fallback int) int {
 }
 
 func envInt64(key string, fallback int64) int64 {
-	if v := os.Getenv(key); v != "" {
+	if v := Env(key); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return n
 		}
@@ -466,7 +496,7 @@ func envInt64(key string, fallback int64) int64 {
 }
 
 func envIntList(key string, fallback []int) []int {
-	v := os.Getenv(key)
+	v := Env(key)
 	if v == "" {
 		return fallback
 	}

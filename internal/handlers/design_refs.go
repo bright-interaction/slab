@@ -1,8 +1,8 @@
 // Public-GitHub design references (Phase 12.8). Site owners paste a public
-// repo URL; atomicsite pre-fetches a representative bundle (package.json,
+// repo URL; slab pre-fetches a representative bundle (package.json,
 // README, tailwind.config, global stylesheet, a few component files) and
 // surfaces it via the agent context endpoint as "design vocabulary the
-// user wants atomicsite to feel like." Read-only pattern reference, not
+// user wants slab to feel like." Read-only pattern reference, not
 // code copy.
 //
 // Public repos only. Auth-bearing PAT support is a follow-up.
@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 const (

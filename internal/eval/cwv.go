@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // cwvMinSamples is the floor below which a metric is reported as Info

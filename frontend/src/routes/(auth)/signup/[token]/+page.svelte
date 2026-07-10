@@ -80,7 +80,7 @@
 			Activate your account
 		</h1>
 		<p class="text-[13px] text-text-secondary">
-			You've been invited to join an Atomicsite workspace.
+			You've been invited to join an Slab workspace.
 		</p>
 	</div>
 

@@ -14,7 +14,7 @@
 // writes per user per minute. Returns 429 with Retry-After.
 //
 // The limiter is in-process; horizontal scale-out moves this to Redis
-// via the same `Limiter` interface. For atomicsite's single-binary
+// via the same `Limiter` interface. For slab's single-binary
 // shape, in-process is the right scope.
 
 package middleware

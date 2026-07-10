@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/slab/internal/agent"
 )
 
 // LintFinding is one warning the block-level linter emits at write time
@@ -280,7 +280,7 @@ func lintArchetypeHeroGraphic(archetype string, data map[string]any) []LintFindi
 // lintCustomDuplicateEyebrow catches the documented MCP gotcha #1: when
 // a custom block sets data.eyebrow AND the markup already contains its
 // own eyebrow, renderCustomBlock prepends a duplicate. See
-// Hive/concepts/atomicsite-mcp-mistakes.md item 1.
+// Hive/concepts/slab-mcp-mistakes.md item 1.
 func lintCustomDuplicateEyebrow(data map[string]any) []LintFinding {
 	eyebrow := strings.TrimSpace(stringOf(data, "eyebrow"))
 	if eyebrow == "" {
@@ -299,7 +299,7 @@ func lintCustomDuplicateEyebrow(data map[string]any) []LintFinding {
 		Severity: "warning",
 		Field:    "eyebrow",
 		Message:  "data.eyebrow is set AND the markup already contains its own eyebrow markup; the renderer will emit both, producing a duplicate eyebrow line.",
-		Fix:      "Drop data.eyebrow from the create_block / update_block call when the markup ships its own eyebrow. Documented in Hive concept atomicsite-mcp-mistakes item 1.",
+		Fix:      "Drop data.eyebrow from the create_block / update_block call when the markup ships its own eyebrow. Documented in Hive concept slab-mcp-mistakes item 1.",
 	}}
 }
 

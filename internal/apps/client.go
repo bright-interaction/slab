@@ -19,7 +19,7 @@ import (
 // non-bearer credential fields (Algolia application_id, etc).
 //
 // Slice A shipped marketplace + install ledger; Slice B closes the
-// loop so an agent connected to atomicsite can fan out to every
+// loop so an agent connected to slab can fan out to every
 // installed app's tool surface under one namespace.
 
 const (
@@ -85,7 +85,7 @@ func CallUpstreamMCP(ctx context.Context, call UpstreamCall) (*UpstreamResult, e
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "atomicsite-use-app/1.0")
+	req.Header.Set("User-Agent", "slab-use-app/1.0")
 	bearer := PrimaryBearer(call.Schema, call.Credentials)
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)

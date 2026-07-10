@@ -4,7 +4,7 @@ import { ADMIN_EMAIL, ADMIN_PASSWORD } from '../../fixtures/auth';
 test.describe('Login flow', () => {
 	test('shows error on bad creds', async ({ page }) => {
 		await page.goto('/login');
-		await page.getByLabel(/email/i).fill('admin@atomicsite.dev');
+		await page.getByLabel(/email/i).fill('admin@slab.dev');
 		await page.getByLabel(/password/i).fill('not-the-real-password');
 		await page.getByRole('button', { name: /sign in/i }).click();
 		const alert = page.getByRole('alert');

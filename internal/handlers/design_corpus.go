@@ -21,7 +21,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
+	"github.com/bright-interaction/slab/internal/config"
 )
 
 // SearchDesignCorpusRequest is the MCP tool input shape.

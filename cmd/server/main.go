@@ -1,4 +1,4 @@
-// Command server is the AtomicSite HTTP server.
+// Command server is the Slab HTTP server.
 package main
 
 import (
@@ -24,20 +24,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 
-	"github.com/bright-interaction/atomicsite/internal/analytics"
-	"github.com/bright-interaction/atomicsite/internal/analyticsdb"
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/domains"
-	"github.com/bright-interaction/atomicsite/internal/handlers"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/migration"
-	"github.com/bright-interaction/atomicsite/internal/retention"
-	"github.com/bright-interaction/atomicsite/internal/server"
-	"github.com/bright-interaction/atomicsite/internal/storage"
-	"github.com/bright-interaction/atomicsite/internal/store"
-	"github.com/bright-interaction/atomicsite/internal/webhook"
+	"github.com/bright-interaction/slab/internal/analytics"
+	"github.com/bright-interaction/slab/internal/analyticsdb"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/config"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/domains"
+	"github.com/bright-interaction/slab/internal/handlers"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/migration"
+	"github.com/bright-interaction/slab/internal/retention"
+	"github.com/bright-interaction/slab/internal/server"
+	"github.com/bright-interaction/slab/internal/storage"
+	"github.com/bright-interaction/slab/internal/store"
+	"github.com/bright-interaction/slab/internal/webhook"
 )
 
 //go:embed all:frontend/build
@@ -72,7 +72,7 @@ func main() {
 	// Error reporting (no-op unless FLARE_DSN is set; the DSN is injected
 	// by your deploy pipeline's error-reporting provisioning step). This
 	// binary has no build-time version var, so the release is pinned to "dev".
-	authmw.InitFlare("atomicsite", "dev")
+	authmw.InitFlare("slab", "dev")
 	// Default admin base URL for the personalization hydration script
 	// (Phase 18.2). Per-site override via the analytics.admin_base_url
 	// setting; falls back to cfg.BaseURL otherwise.
@@ -177,7 +177,7 @@ func main() {
 
 	// Analytics manager: tails per-site Nginx JSON logs and writes visit_events.
 	// Reload-on-settings-change is delegated to handlers (they call Reload after
-	// toggling analytics.atomicsite_tracking_enabled).
+	// toggling analytics.slab_tracking_enabled).
 	analyticsMgr := analytics.NewManager(queries, cfg.AnalyticsSalt)
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
 	defer mgrCancel()
@@ -259,18 +259,18 @@ func main() {
 		NginxSitesDir:  cfg.NginxSitesDir,
 		AcmeWebrootDir: cfg.AcmeWebrootDir,
 		SlugSuffix:     cfg.BuiltSiteSuffix,
-		HeadersSnippet: "/etc/nginx/snippets/atomicsite-headers.conf",
+		HeadersSnippet: "/etc/nginx/snippets/slab-headers.conf",
 		CaddyUpstream:  "127.0.0.1:8080",
 	}
 	domainCertbot := &domains.CertbotRunner{
 		BinaryPath:     cfg.CertbotPath,
 		WebrootDir:     cfg.AcmeWebrootDir,
-		AdminEmail:     os.Getenv("ATOMICSITE_LE_EMAIL"),
+		AdminEmail:     config.Env("SLAB_LE_EMAIL"),
 		NonInteractive: true,
 	}
-	cfZones := parseZoneMap(os.Getenv("ATOMICSITE_CLOUDFLARE_ZONES"))
+	cfZones := parseZoneMap(config.Env("SLAB_CLOUDFLARE_ZONES"))
 	domainCF := &domains.CloudflareClient{
-		APIToken: os.Getenv("ATOMICSITE_CLOUDFLARE_TOKEN"),
+		APIToken: config.Env("SLAB_CLOUDFLARE_TOKEN"),
 		Zones:    cfZones,
 	}
 	domains.SetReloadCommand(cfg.NginxReloadCommand)
@@ -306,7 +306,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		slog.Info("atomicsite: listening", "port", cfg.Port)
+		slog.Info("slab: listening", "port", cfg.Port)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("listen", "error", err)
 			os.Exit(1)
@@ -314,7 +314,7 @@ func main() {
 	}()
 
 	<-quit
-	slog.Info("atomicsite: shutting down")
+	slog.Info("slab: shutting down")
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -327,7 +327,7 @@ func main() {
 		_ = analyticsMgrConn.Close()
 	}
 
-	slog.Info("atomicsite: stopped")
+	slog.Info("slab: stopped")
 }
 
 func applySchema(sqlDB *sql.DB) error {
@@ -390,7 +390,7 @@ func applySchema(sqlDB *sql.DB) error {
 		// / visit_engagement on the existing fingerprint column so the
 		// DuckDB analytics layer can do (site_id, fingerprint) joins
 		// without going through visit_sessions.session_id (which doesn't
-		// match the client's atomicsite_sid for new visitors).
+		// match the client's slab_sid for new visitors).
 		{"consent_records", "fingerprint", "TEXT NOT NULL DEFAULT ''"},
 		// Block label (schema-driven editor) added 2026-05-01. Surfaces
 		// the human-readable name shown in the editor card header
@@ -679,7 +679,7 @@ func seedAdminUser(cfg *config.Config, queries *store.Queries, sqlDB *sql.DB) {
 	email := os.Getenv("ADMIN_EMAIL")
 	password := os.Getenv("ADMIN_PASSWORD")
 	if email == "" {
-		email = "admin@atomicsite.dev"
+		email = "admin@slab.dev"
 	}
 
 	// Production-like deployments must set ADMIN_PASSWORD explicitly.
@@ -805,18 +805,18 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-// resetPasswordCLI is the `atomicsite reset-password <email>` subcommand.
+// resetPasswordCLI is the `slab reset-password <email>` subcommand.
 // Reads the new password from stdin (one line, no echo-off - run with
 // `docker exec -i` from a terminal you trust). Bumps token_version so any
 // existing JWTs for that user are invalidated.
 //
 // Usage:
 //
-//	docker exec -i atomicsite /app/server reset-password admin@example.com
+//	docker exec -i slab /app/server reset-password admin@example.com
 //	(then type the new password and press enter)
 func resetPasswordCLI(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: atomicsite reset-password <email>")
+		fmt.Fprintln(os.Stderr, "usage: slab reset-password <email>")
 		os.Exit(2)
 	}
 	email := strings.TrimSpace(strings.ToLower(args[0]))
@@ -875,7 +875,7 @@ func resetPasswordCLI(args []string) {
 	fmt.Fprintf(os.Stderr, "password reset for %s (active sessions invalidated)\n", email)
 }
 
-// parseZoneMap reads ATOMICSITE_CLOUDFLARE_ZONES, formatted as
+// parseZoneMap reads SLAB_CLOUDFLARE_ZONES, formatted as
 // "apex1=zoneID1,apex2=zoneID2,...". Returns nil for empty input so
 // the Cloudflare helper stays disabled by default.
 func parseZoneMap(s string) map[string]string {
@@ -905,11 +905,11 @@ func parseZoneMap(s string) map[string]string {
 	return out
 }
 
-// backupDBCLI is the `atomicsite backup-db [--output=PATH]` subcommand.
+// backupDBCLI is the `slab backup-db [--output=PATH]` subcommand.
 // Uses SQLite's VACUUM INTO to take a WAL-consistent online snapshot
 // without locking writers, then optionally compresses with gzip.
 //
-// Why VACUUM INTO instead of cp /data/atomicsite.db: a hot copy of
+// Why VACUUM INTO instead of cp /data/slab.db: a hot copy of
 // the .db file can land mid-WAL-checkpoint and produce a corrupt
 // snapshot. VACUUM INTO acquires a read transaction, materialises a
 // page-by-page copy at the destination, and writes it consistently.
@@ -917,10 +917,10 @@ func parseZoneMap(s string) map[string]string {
 //
 // Usage:
 //
-//	atomicsite backup-db                        # /data/backups/atomicsite-{ts}.db
-//	atomicsite backup-db --output=/path/file.db
-//	atomicsite backup-db --gzip                 # appends .gz, gzip stream
-//	atomicsite backup-db --output=/dev/stdout   # pipe to S3, B2, age, gpg
+//	slab backup-db                        # /data/backups/slab-{ts}.db
+//	slab backup-db --output=/path/file.db
+//	slab backup-db --gzip                 # appends .gz, gzip stream
+//	slab backup-db --output=/dev/stdout   # pipe to S3, B2, age, gpg
 func backupDBCLI(args []string) {
 	cfg := config.Load()
 
@@ -952,7 +952,7 @@ func backupDBCLI(args []string) {
 		if gzipOut {
 			ext = ".db.gz"
 		}
-		outPath = filepath.Join(cfg.DataDir, "backups", "atomicsite-"+ts+ext)
+		outPath = filepath.Join(cfg.DataDir, "backups", "slab-"+ts+ext)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -1013,13 +1013,13 @@ func backupDBCLI(args []string) {
 	fmt.Fprintf(os.Stderr, "backup ok: %s (%d bytes)\n", outPath, info.Size())
 }
 
-// listOrphansCLI is the `atomicsite list-orphans` subcommand. Walks
+// listOrphansCLI is the `slab list-orphans` subcommand. Walks
 // {DataDir}/workspaces/ and reports any directory whose siteID is no
 // longer in the sites table. Read-only; the retention manager actually
 // reaps these on its daily sweep, but operators want a one-shot
 // "what's eating disk right now?" view.
 //
-// Usage: atomicsite list-orphans
+// Usage: slab list-orphans
 func listOrphansCLI(args []string) {
 	if len(args) > 0 {
 		fmt.Fprintln(os.Stderr, "list-orphans takes no arguments")

@@ -30,14 +30,14 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Hero.astro",
 				Pattern:  "centred hero with image right",
-				WhyRead:  "The image-right variant of AstroWind's Hero ships the typography hierarchy + button spacing atomicsite's renderer mirrors. Read it to see how to balance an editorial headline with a CTA pair without crowding the eyebrow.",
+				WhyRead:  "The image-right variant of AstroWind's Hero ships the typography hierarchy + button spacing slab's renderer mirrors. Read it to see how to balance an editorial headline with a CTA pair without crowding the eyebrow.",
 				HowToUse: "Mirror the eyebrow > headline > subheading > primary CTA + secondary link order. Keep the headline <=12 words like the playbook's headline_length rule.",
 			},
 			{
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Hero2.astro",
 				Pattern:  "split hero with image left",
-				WhyRead:  "Hero2's split layout is the right reference for any hero with a real product / dashboard / chart on one side. Atomicsite's split_hero block_type maps 1:1.",
+				WhyRead:  "Hero2's split layout is the right reference for any hero with a real product / dashboard / chart on one side. Slab's split_hero block_type maps 1:1.",
 				HowToUse: "Use block_type=split_hero when the image carries actual information; use block_type=hero (centred) when the message stands alone.",
 			},
 			{
@@ -54,14 +54,14 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Hero2.astro",
 				Pattern:  "split hero, image left, content right",
-				WhyRead:  "AstroWind Hero2 is the canonical split. atomicsite's renderer ships the same grid breakpoints.",
+				WhyRead:  "AstroWind Hero2 is the canonical split. slab's renderer ships the same grid breakpoints.",
 				HowToUse: "Image carries the actual proposition (dashboard, chart, product), not decoration. Decorative image = use centred hero instead.",
 			},
 			{
 				Repo:     "shadcn-ui",
 				Path:     "design-references/shadcn-ui/apps/www/components/site-header.tsx",
 				Pattern:  "tight typography pairing for tech audiences",
-				WhyRead:  "shadcn's headline pairing (Geist Sans + Geist Mono) is the de-facto B2B tech standard. atomicsite's --font-heading / --font-mono variables are tuned for this look.",
+				WhyRead:  "shadcn's headline pairing (Geist Sans + Geist Mono) is the de-facto B2B tech standard. slab's --font-heading / --font-mono variables are tuned for this look.",
 				HowToUse: "If branding.font_heading is Geist or Inter and the audience is technical, this is your typography reference.",
 			},
 		}
@@ -71,7 +71,7 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Pricing.astro",
 				Pattern:  "3-tier pricing card grid with featured middle tier",
-				WhyRead:  "The middle-featured pattern (lift + accent border + 'Most popular' tag) is the highest-converting B2B pricing layout. Atomicsite's pricing block_type maps directly.",
+				WhyRead:  "The middle-featured pattern (lift + accent border + 'Most popular' tag) is the highest-converting B2B pricing layout. Slab's pricing block_type maps directly.",
 				HowToUse: "Set the middle tier's featured=true so the renderer lifts it. Use 3 tiers (not 4, not 5); 4+ collapses choice on mobile.",
 			},
 			{
@@ -96,7 +96,7 @@ func InspirationsFor(blockType string) []Inspiration {
 				Path:     "design-references/starlight/packages/starlight/components/Tabs.astro",
 				Pattern:  "tabs as alternative to accordion",
 				WhyRead:  "When questions group into 2-3 audiences (developers / ops / legal), tabs read cleaner than a flat accordion.",
-				HowToUse: "Atomicsite has no native tabs block_type yet; use a custom block_type=custom with tabs markup if the audience-grouping is needed.",
+				HowToUse: "Slab has no native tabs block_type yet; use a custom block_type=custom with tabs markup if the audience-grouping is needed.",
 			},
 		}
 	case "stat_grid":
@@ -105,7 +105,7 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Stats.astro",
 				Pattern:  "4-column number grid with label + context",
-				WhyRead:  "AstroWind's Stats is the reference for above-the-fold trust signals. Atomicsite's stat_grid block_type maps 1:1.",
+				WhyRead:  "AstroWind's Stats is the reference for above-the-fold trust signals. Slab's stat_grid block_type maps 1:1.",
 				HowToUse: "3-4 numbers max. Each carries: value (big), label (one line), context (one line under). Numbers must be real (the slop_number lint catches 99.99%, 1M+, etc).",
 			},
 		}
@@ -115,7 +115,7 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Features.astro",
 				Pattern:  "3-up feature grid with icon + title + body",
-				WhyRead:  "The canonical 3-column feature pattern. Atomicsite's feature_grid block_type renders the same shape.",
+				WhyRead:  "The canonical 3-column feature pattern. Slab's feature_grid block_type renders the same shape.",
 				HowToUse: "Stick to 3-4 items. 5+ stacks on mobile into an unreadable list; use replacement_grid or two separate feature_grid blocks instead.",
 			},
 			{
@@ -132,7 +132,7 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/Steps.astro",
 				Pattern:  "numbered 4-step vertical timeline",
-				WhyRead:  "Atomicsite's process_steps block uses the same numbered timeline pattern. Read for spacing + numeral typography.",
+				WhyRead:  "Slab's process_steps block uses the same numbered timeline pattern. Read for spacing + numeral typography.",
 				HowToUse: "Always exactly 4 steps. Number them 01-04 (mono font carries the eyebrow weight). Step 4 should resolve the journey, not introduce a new branch.",
 			},
 		}
@@ -142,7 +142,7 @@ func InspirationsFor(blockType string) []Inspiration {
 				Repo:     "astrowind",
 				Path:     "astrowind/src/components/widgets/CallToAction.astro",
 				Pattern:  "centred CTA banner with single button",
-				WhyRead:  "The CallToAction widget is the reference for closing-section CTAs. Atomicsite's cta block matches.",
+				WhyRead:  "The CallToAction widget is the reference for closing-section CTAs. Slab's cta block matches.",
 				HowToUse: "ONE button only. Two = the visitor reads neither. Variant: variant=secondary for a softer mid-page banner; variant=primary for the final close at the end of the page.",
 			},
 		}

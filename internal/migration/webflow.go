@@ -13,7 +13,7 @@ import (
 
 // WebflowClient consumes the Webflow CMS API v2 (api.webflow.com/v2). Webflow
 // is unique among the importers we ship: its CMS schema is already typed
-// (PlainText, RichText, Image, Reference, etc.) so the schema -> atomicsite
+// (PlainText, RichText, Image, Reference, etc.) so the schema -> slab
 // FieldDef translation is one-to-one. Sitemap-crawl can never recover that
 // fidelity from the rendered HTML.
 //
@@ -412,8 +412,8 @@ func webflowSourceDomain(site *webflowSite) string {
 	return ""
 }
 
-// webflowSchemaToFields maps Webflow CMS field types to atomicsite field
-// type names. The atomicsite type strings are the same ones FieldDef.Type
+// webflowSchemaToFields maps Webflow CMS field types to slab field
+// type names. The slab type strings are the same ones FieldDef.Type
 // uses in handlers/collections.go - kept aligned so the porter can write
 // the Webflow schema verbatim into a Collection.
 func webflowSchemaToFields(fields []webflowField) []MigrationCollectionField {
@@ -446,7 +446,7 @@ func webflowFieldType(wf string) string {
 	case "Reference":
 		return "reference"
 	case "MultiReference":
-		return "multiselect" // atomicsite has no multi-reference yet; stored as slug list
+		return "multiselect" // slab has no multi-reference yet; stored as slug list
 	case "DateTime":
 		return "datetime"
 	case "Date":
@@ -493,7 +493,7 @@ func webflowItemToMigration(it webflowItem, coll webflowCollection) MigrationCol
 }
 
 // cleanWebflowFieldData maps the raw fieldData blob into the same shape
-// atomicsite stores. Image fields come back as `{url, alt, ...}` maps; we
+// slab stores. Image fields come back as `{url, alt, ...}` maps; we
 // flatten to the `url` for the porter to re-upload. Reference fields come
 // back as item IDs which we'd resolve in 3d once the referenced collections
 // are imported.

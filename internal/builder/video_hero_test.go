@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func TestRenderVideoHero_YouTubeUsesNoCookieDomain(t *testing.T) {

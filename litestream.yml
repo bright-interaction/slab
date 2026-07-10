@@ -1,6 +1,6 @@
-# Litestream config for Atomic Site (Phase 30.4, 2026-05-06).
+# Litestream config for Slab (Phase 30.4, 2026-05-06).
 #
-# Continuously streams the SQLite WAL of /app/data/atomicsite.db to a
+# Continuously streams the SQLite WAL of /app/data/slab.db to a
 # Hetzner Object Storage bucket. Sub-1-second RPO: a host failure
 # loses at most ~1 second of writes. Replication is per-WAL-segment
 # (~10s default snapshot interval, with finer-grained writes in
@@ -12,7 +12,7 @@
 # below as the only template variable so this file stays static
 # across deploys).
 #
-# To run as a sidecar process inside the existing atomicsite
+# To run as a sidecar process inside the existing slab
 # container, the entrypoint wraps the server with:
 #
 #   exec litestream replicate -exec "/app/server"
@@ -23,7 +23,7 @@
 #
 # Restore (one-shot, manual):
 #
-#   litestream restore -o /app/data/atomicsite.db \
+#   litestream restore -o /app/data/slab.db \
 #     "${LITESTREAM_REPLICA_URL}"
 #
 # Run from a fresh container with the same env. The DB file appears
@@ -34,7 +34,7 @@
 # and execs the server directly). No replication, no cost.
 
 dbs:
-  - path: /app/data/atomicsite.db
+  - path: /app/data/slab.db
     replicas:
       - url: ${LITESTREAM_REPLICA_URL}
         # Snapshot every 6 hours (4/day). WAL segments stream

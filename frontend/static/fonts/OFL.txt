@@ -13,7 +13,7 @@ License Version 1.1 (OFL-1.1). Upstream sources:
 - Lora:                 https://github.com/cyrealtype/Lora-Cyrillic
 - Source Serif 4:       https://github.com/adobe-fonts/source-serif
 
-EU sovereignty: Atomicsite is sold as a cloud-rebellion alternative.
+EU sovereignty: Slab is sold as a cloud-rebellion alternative.
 We do not load fonts from a third-party CDN at runtime. fonts.googleapis.com
 and fonts.gstatic.com would expose the visitor's IP to Google on every page
 load (cf. LG Munich case 3 O 17493/20). We refuse that exposure as a matter

@@ -18,7 +18,7 @@
 //
 // The middleware extracts siteID from the URL via chi's URLParam. Routes
 // using a different param name need a different middleware instance (or
-// rename the param to siteID — every site-scoped route in atomicsite
+// rename the param to siteID, every site-scoped route in slab
 // already uses {siteID}, verified at registration time).
 package middleware
 
@@ -31,7 +31,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // siteIDPattern mirrors handlers.isSafeSiteID. We duplicate it here so the

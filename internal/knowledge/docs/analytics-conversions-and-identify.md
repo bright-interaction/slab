@@ -1,6 +1,6 @@
 # Analytics: conversions, goals, and visitor identify
 
-Atomicsite ships a first-party analytics layer that does three
+Slab ships a first-party analytics layer that does three
 things no third-party pixel can do for a CMS-built site: it counts
 conversions against operator-defined goals, it identifies visitors
 by email when they fill a form (no separate tag-management round
@@ -123,7 +123,7 @@ a submitted form carries an email-shaped value. The matcher
 checks field names first (regex on `email`, `your-email`,
 `e_mail`, `e-mail`, `emailaddress`, `email_address`,
 `user_email`, `contact_email`) then falls back to a value-shape
-scan if no labelled field matched. This means an atomicsite form
+scan if no labelled field matched. This means an slab form
 identifies its visitor without any extra wiring on the rendered
 site.
 
@@ -160,8 +160,8 @@ When everything is wired, the chain looks like this:
    `utm_source=brightcrm&utm_medium=email&utm_campaign={seq}&utm_content={msg_id}`
    onto every href before the click-proxy wrap.
 2. The visitor clicks. The click-proxy at `/t/{tid}/click?url=...`
-   redirects to the atomicsite landing page with the UTM intact.
-3. Atomicsite parser writes `visit_events.utm_source=brightcrm`,
+   redirects to the slab landing page with the UTM intact.
+3. Slab parser writes `visit_events.utm_source=brightcrm`,
    `utm_medium=email`, `utm_campaign={seq}`, `utm_content={msg_id}`.
 4. CookieProof banner shows. Visitor accepts analytics. A
    visit_session row gets upserted, identified_at gets stamped
@@ -174,7 +174,7 @@ When everything is wired, the chain looks like this:
 7. BrightCRM matches the identified event to the contact and
    stamps the source attribution onto the lead.
 8. (Phase 31.4, future) BrightCRM moves the deal to WON, posts a
-   /t/revenue event back, atomicsite stores the realised value
+   /t/revenue event back, slab stores the realised value
    keyed to the original `utm_campaign`. The Analytics tab now
    shows revenue per source, end to end, single source of truth.
 

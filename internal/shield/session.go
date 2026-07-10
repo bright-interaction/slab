@@ -12,7 +12,7 @@ import (
 
 // Store is the minimal logical surface Session needs. Each calling
 // service supplies an implementation: shield.SQLStore wraps database/sql
-// (SQLite) for atomicsite + dockyard; brightcrm's mcp package provides a
+// (SQLite) for slab + dockyard; brightcrm's mcp package provides a
 // pgx-backed implementation. The interface keeps the shield package
 // pure logic + crypto so the same code ships unchanged across services.
 type Store interface {
@@ -69,7 +69,7 @@ type Session struct {
 //
 // Expired sessions are auto-revived. The original 2026-05-08 design
 // returned ErrSessionExpired here, which surfaced as a hard MCP error
-// after the smallest idle gap (atomicsite default TTL is 30 minutes;
+// after the smallest idle gap (slab default TTL is 30 minutes;
 // real conversations span days). The agent's auth is checked upstream
 // by the MCP transport via X-Agent-Key, so a session row past its TTL
 // just means "issue a fresh tokenization context for the same

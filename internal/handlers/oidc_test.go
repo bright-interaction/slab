@@ -11,9 +11,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/bright-interaction/atomicsite/internal/config"
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/config"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 func newOIDCHandlerForTest(t *testing.T, allowDomains string) (*OIDCHandler, *store.Queries) {
@@ -35,7 +35,7 @@ func newOIDCHandlerForTest(t *testing.T, allowDomains string) (*OIDCHandler, *st
 		JWTSecret:        "test-jwt-secret-1234567890-abcdef",
 		OIDCEnabled:      true,
 		OIDCIssuerURL:    "https://issuer.test.invalid",
-		OIDCClientID:     "atomicsite-test",
+		OIDCClientID:     "slab-test",
 		OIDCClientSecret: "shh",
 		OIDCRedirectURL:  "http://localhost:8080/auth/oidc/callback",
 		OIDCAllowDomains: allowDomains,

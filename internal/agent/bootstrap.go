@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // RenderCLAUDEMD generates a personalised CLAUDE.md for an agent session.
@@ -24,7 +24,7 @@ func RenderCLAUDEMD(ctx context.Context, q *store.Queries, siteID, baseURL, rawK
 	}
 	siteName := site.Name
 	if siteName == "" {
-		siteName = "this Atomic Site"
+		siteName = "this Slab"
 	}
 	siteDomain := site.Domain
 	if siteDomain == "" {
@@ -40,11 +40,11 @@ func RenderCLAUDEMD(ctx context.Context, q *store.Queries, siteID, baseURL, rawK
 		pending = cb.computePendingSetup(ctx, siteID, nil, nil)
 	}
 
-	keyLine := "$ATOMICSITE_KEY"
+	keyLine := "$SLAB_KEY"
 	if rawKey != "" {
 		keyLine = rawKey
 	}
-	urlLine := "$ATOMICSITE_API"
+	urlLine := "$SLAB_API"
 	if baseURL != "" {
 		urlLine = baseURL
 	}
@@ -53,7 +53,7 @@ func RenderCLAUDEMD(ctx context.Context, q *store.Queries, siteID, baseURL, rawK
 	b.WriteString("# Working on ")
 	b.WriteString(siteName)
 	b.WriteString("\n\n")
-	b.WriteString("You are an AI agent connected to an Atomic Site instance. Your job is to build\nand edit this website by calling the agent API.\n\n")
+	b.WriteString("You are an AI agent connected to an Slab instance. Your job is to build\nand edit this website by calling the agent API.\n\n")
 
 	b.WriteString("## Site\n")
 	b.WriteString("- Name: ")
@@ -135,7 +135,7 @@ func RenderCLAUDEMD(ctx context.Context, q *store.Queries, siteID, baseURL, rawK
 	b.WriteString("- Media: alt text required; SVG rejected for safety; SSRF-guarded\n  from-url ingestion\n\n")
 
 	b.WriteString("## Bring-your-own integrations\n")
-	b.WriteString("- CRM: any HTTPS webhook URL + shared secret. Set via\n  `PATCH /api/agent/settings` with category=analytics, keys\n  crm_webhook_url and crm_webhook_secret. Payloads HMAC-signed\n  (X-Atomicsite-Signature, SHA-256 hex).\n")
+	b.WriteString("- CRM: any HTTPS webhook URL + shared secret. Set via\n  `PATCH /api/agent/settings` with category=analytics, keys\n  crm_webhook_url and crm_webhook_secret. Payloads HMAC-signed\n  (X-Slab-Signature, SHA-256 hex).\n")
 	b.WriteString("- Cookie banner: paste any HTML/JS into analytics.cookie_banner_snippet\n  (Cookiebot, OneTrust, Termly, Iubenda, your own). Or flip\n  analytics.cookieproof_enabled=1 for the bundled CookieProof.\n")
 
 	return b.String()
@@ -144,11 +144,11 @@ func RenderCLAUDEMD(ctx context.Context, q *store.Queries, siteID, baseURL, rawK
 // RenderEnvFile returns a shell-ready .env content with the base URL and key
 // pre-filled. Intended as a download companion to the CLAUDE.md.
 func RenderEnvFile(baseURL, rawKey string) string {
-	return fmt.Sprintf(`# Atomic Site agent credentials.
+	return fmt.Sprintf(`# Slab agent credentials.
 # Source this file (or copy into your shell profile) before invoking your agent.
 
-export ATOMICSITE_API=%q
-export ATOMICSITE_KEY=%q
+export SLAB_API=%q
+export SLAB_KEY=%q
 `, baseURL, rawKey)
 }
 
@@ -156,5 +156,5 @@ export ATOMICSITE_KEY=%q
 // verify the key works. Wraps the URL in single quotes so shells with $ in
 // the key are safe.
 func RenderSmokeTest(baseURL string) string {
-	return fmt.Sprintf("curl -sH \"X-Agent-Key: $ATOMICSITE_KEY\" '%s/api/agent/context' | jq .site\n", baseURL)
+	return fmt.Sprintf("curl -sH \"X-Agent-Key: $SLAB_KEY\" '%s/api/agent/context' | jq .site\n", baseURL)
 }

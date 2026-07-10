@@ -2,9 +2,9 @@
 //
 // Sprint 4 (MCP-as-Apps platform, slice A, 2026-05-24). The
 // marketplace + install flow is the wedge: tenants browse curated
-// third-party MCP integrations, enter credentials, and atomicsite
+// third-party MCP integrations, enter credentials, and slab
 // stores the install row. Slice B will wire the upstream MCP proxy
-// so the agent can dial each install's tools/list through atomicsite
+// so the agent can dial each install's tools/list through slab
 // under a namespaced surface (e.g. stripe.create_payment_link).
 //
 // Cross-tenant safety: every routes is mounted under siteAccessMW
@@ -22,10 +22,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/apps"
-	"github.com/bright-interaction/atomicsite/internal/atrest"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/apps"
+	"github.com/bright-interaction/slab/internal/atrest"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 type AppsHandler struct {
@@ -37,7 +37,7 @@ func NewAppsHandler(cfg *config.Config, queries *store.Queries) *AppsHandler {
 	return &AppsHandler{cfg: cfg, queries: queries}
 }
 
-// credsCipher builds the at-rest cipher from ATOMICSITE_SHIELD_KEY. A
+// credsCipher builds the at-rest cipher from SLAB_SHIELD_KEY. A
 // nil cfg or unset key yields a passthrough cipher so deployments
 // without the key keep working with plaintext credentials_json.
 func (h *AppsHandler) credsCipher() *atrest.Cipher {

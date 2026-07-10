@@ -1,6 +1,6 @@
 # CookieProof integration
 
-CookieProof is the consent banner Atomic Site embeds on every published site. It implements the IMY 2026 equal-prominence rule (Reject and Accept share the same primary color and visual weight), exposes a per-category toggle, and cleans up pre-consent tracker cookies that leak from parent domains.
+CookieProof is the consent banner Slab embeds on every published site. It implements the IMY 2026 equal-prominence rule (Reject and Accept share the same primary color and visual weight), exposes a per-category toggle, and cleans up pre-consent tracker cookies that leak from parent domains.
 
 ## Default behaviour
 
@@ -8,7 +8,7 @@ When `analytics.cookieproof_enabled` is on (default 1 since 2026-05-01), every p
 
 ## Equal prominence
 
-The IMY 2026 rule says Reject must be as visually prominent as Accept. Atomic Site enforces this in the widget: both buttons render with the site's primary color, the same size, the same weight. The agent must not propose a banner where Reject is "subtle" or text-only; the eval engine flags it.
+The IMY 2026 rule says Reject must be as visually prominent as Accept. Slab enforces this in the widget: both buttons render with the site's primary color, the same size, the same weight. The agent must not propose a banner where Reject is "subtle" or text-only; the eval engine flags it.
 
 ## Pre-consent cookie sweep
 
@@ -16,7 +16,7 @@ Some parent domains (`.example.com`, customer apex domains) set tracker cookies 
 
 ## Cookie tables
 
-Each consent category lists the actual cookies that fire when granted. Atomic Site stores them in `analytics.cookie_declarations` as JSON; the widget renders one row per cookie with name, purpose, duration, provider. The agent can edit declarations via `bulk_upsert_settings`; the JSON shape is documented in `atomicsite://site/settings_catalog`.
+Each consent category lists the actual cookies that fire when granted. Slab stores them in `analytics.cookie_declarations` as JSON; the widget renders one row per cookie with name, purpose, duration, provider. The agent can edit declarations via `bulk_upsert_settings`; the JSON shape is documented in `slab://site/settings_catalog`.
 
 ## Language toggle
 

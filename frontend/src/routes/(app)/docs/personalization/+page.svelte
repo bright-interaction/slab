@@ -34,7 +34,7 @@
 				class="mt-4 overflow-x-auto rounded-lg border border-border-light bg-bg-elevated p-4 font-mono text-[12px] text-text-primary"
 			>{`1. Visitor lands on built site (e.g. example.com or a slug subdomain)
 2. CookieProof banner -> visitor accepts -> POST /t/consent
-3. Atomicsite emits identified event -> CRM webhook
+3. Slab emits identified event -> CRM webhook
 4. CRM looks up the visitor by visitor_id, finds history
 5. CRM POSTs metadata BACK to /t/inbound (HMAC-SHA256 signed)
 6. Hydration <script> in built site GET /t/visitor on next page load
@@ -161,7 +161,7 @@ email_hash present`}</pre>
 				<div>
 					<dt class="font-mono text-text-primary">POST /t/inbound</dt>
 					<dd class="text-text-secondary">
-						HMAC-SHA256 signed (X-Atomicsite-Signature). The CRM POSTs metadata for a known
+						HMAC-SHA256 signed (X-Slab-Signature). The CRM POSTs metadata for a known
 						visitor. Body:
 						<code class="font-mono">
 							{'{ site_id, visitor_id, fingerprint?, email?, metadata, expires_at?, identity_confirmed_at? }'}
@@ -195,8 +195,8 @@ email_hash present`}</pre>
 			<p class="mt-3 text-[13px] text-text-secondary">
 				The reverse direction needs a CRM that can call <code class="font-mono">POST /t/inbound</code>.
 				BrightCRM ships with this out of the box (Phase 18.7): set
-				<code class="font-mono">ATOMICSITE_INBOUND_URL</code> +
-				<code class="font-mono">ATOMICSITE_INBOUND_SECRET</code> on the CRM container. For any
+				<code class="font-mono">SLAB_INBOUND_URL</code> +
+				<code class="font-mono">SLAB_INBOUND_SECRET</code> on the CRM container. For any
 				other CRM, the wire format is symmetric with the outbound path: same HMAC-SHA256 hex
 				header, same JSON shape. Roll your own with a workflow / Zap / n8n flow that fires on
 				contact updates.

@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
-// PresetCookieDeclarations returns the cookie metadata atomicsite already
+// PresetCookieDeclarations returns the cookie metadata slab already
 // knows about a tenant site's stack: always-on entries (consent record,
 // language) plus conditional rows gated on the relevant analytics
 // settings (GA4 enabled, etc.).
@@ -25,7 +25,7 @@ func PresetCookieDeclarations(site store.Site, settingsMap map[string]string) []
 	out := []CookieDeclaration{
 		{
 			Category: "necessary",
-			Name:     AtomicSiteConsentCookieName,
+			Name:     SlabConsentCookieName,
 			Provider: "This site",
 			Purpose:  "Stores consent preferences",
 			Expiry:   "1 year",
@@ -35,7 +35,7 @@ func PresetCookieDeclarations(site store.Site, settingsMap map[string]string) []
 	// Tracker presets. Each block fires when the operator has either
 	// flipped the corresponding *_enabled boolean or pasted a tracker
 	// ID. Mirrors CookieProof's KNOWN_COOKIES catalogue
-	// (CookieProof/src/scanner/cookie-database.ts) so atomicsite tenants
+	// (CookieProof/src/scanner/cookie-database.ts) so slab tenants
 	// who connect a tracker get the right disclosure rows automatically.
 	if boolSetting(settingsMap["analytics.ga4_enabled"], false) ||
 		strings.TrimSpace(settingsMap["analytics.ga4_id"]) != "" {

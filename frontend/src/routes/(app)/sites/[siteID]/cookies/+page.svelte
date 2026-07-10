@@ -989,7 +989,7 @@
 						Connected trackers
 					</h2>
 					<p class="mt-2 text-[12px] text-text-muted">
-						Paste the ID of any tracker you load on the site. Atomicsite auto-populates the
+						Paste the ID of any tracker you load on the site. Slab auto-populates the
 						matching cookies in the disclosure table below, no manual entry needed. Leave blank
 						to skip.
 					</p>

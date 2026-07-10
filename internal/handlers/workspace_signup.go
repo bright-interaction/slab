@@ -19,8 +19,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // validateWorkspaceInvite fails CLOSED on unparseable expiry (matches

@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // buildJSONLD produces the JSON-LD body to embed in a

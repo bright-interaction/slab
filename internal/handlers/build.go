@@ -6,21 +6,20 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
-	"github.com/bright-interaction/atomicsite/internal/builder"
-	"github.com/bright-interaction/atomicsite/internal/config"
-	"github.com/bright-interaction/atomicsite/internal/critique"
-	"github.com/bright-interaction/atomicsite/internal/deploy"
-	"github.com/bright-interaction/atomicsite/internal/eval"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/agent"
+	"github.com/bright-interaction/slab/internal/builder"
+	"github.com/bright-interaction/slab/internal/config"
+	"github.com/bright-interaction/slab/internal/critique"
+	"github.com/bright-interaction/slab/internal/deploy"
+	"github.com/bright-interaction/slab/internal/eval"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // safeSiteIDPattern matches the format newID() produces (24-char hex). Blocks
@@ -65,7 +64,7 @@ type BuildHandler struct {
 	// buildSem caps builds running concurrently across ALL sites. The per-site
 	// lock only serializes same-site builds; without a global cap, N tenants
 	// triggering at once spawn N bun/astro processes and OOM the host. Default
-	// 3, override with ATOMICSITE_BUILD_CONCURRENCY.
+	// 3, override with SLAB_BUILD_CONCURRENCY.
 	buildSem chan struct{}
 }
 
@@ -80,7 +79,7 @@ type buildState struct {
 
 func NewBuildHandler(cfg *config.Config, queries *store.Queries, quota *QuotaHandler) *BuildHandler {
 	maxConc := 3
-	if v := strings.TrimSpace(os.Getenv("ATOMICSITE_BUILD_CONCURRENCY")); v != "" {
+	if v := strings.TrimSpace(config.Env("SLAB_BUILD_CONCURRENCY")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			maxConc = n
 		}
@@ -171,7 +170,7 @@ var gradeRank = map[string]int{
 }
 
 // belowPublishGrade reports whether the worst category grade in reports falls
-// below ATOMICSITE_MIN_PUBLISH_GRADE. Returns (false, "") when the gate is unset
+// below SLAB_MIN_PUBLISH_GRADE. Returns (false, "") when the gate is unset
 // (advisory mode, the default) or the threshold/grades can't be ranked, so the
 // existing unconditional-publish behavior is preserved unless an operator opts
 // in. This resolves the audit's "eval grade gates nothing" finding without
@@ -183,7 +182,7 @@ var gradeRank = map[string]int{
 // would fight the dial). Security, seo, accessibility, and privacy keep
 // the full configured minimum in every fidelity.
 func belowPublishGrade(reports []eval.CategoryReport, fidelity agent.DesignFidelity) (bool, string) {
-	want, ok := gradeRank[strings.TrimSpace(os.Getenv("ATOMICSITE_MIN_PUBLISH_GRADE"))]
+	want, ok := gradeRank[strings.TrimSpace(config.Env("SLAB_MIN_PUBLISH_GRADE"))]
 	if !ok {
 		return false, ""
 	}
@@ -295,9 +294,9 @@ func (h *BuildHandler) lockForSite(siteID string) *sync.Mutex {
 	return mu
 }
 
-// provisionCookieProof was removed 2026-04-30 when atomicsite became
+// provisionCookieProof was removed 2026-04-30 when slab became
 // standalone for cookies. The widget bundle is now embedded in the
-// atomicsite Go binary (see internal/builder/widget_embed.go) and shipped
+// slab Go binary (see internal/builder/widget_embed.go) and shipped
 // per-tenant as a same-origin asset. No remote CookieProof API call is
 // needed at build time; the inline config blob carries everything.
 
@@ -442,17 +441,17 @@ func (h *BuildHandler) StartBuild(ctx context.Context, siteID string) (string, e
 			if _, err := critique.Run(bgCtx, h.queries, siteID, deployID, result.DistDir); err != nil {
 				result.BuildLog += "\n=== critique ===\nfailed: " + err.Error() + "\n"
 			}
-			// Opt-in publish gate: when ATOMICSITE_MIN_PUBLISH_GRADE is set, a
+			// Opt-in publish gate: when SLAB_MIN_PUBLISH_GRADE is set, a
 			// build whose worst category grade is below it is built + graded but
 			// NOT auto-published. Unset (default) keeps publish unconditional.
 			// The gate fails CLOSED on a missing grade: if eval errored (reports
 			// nil/empty) while the gate is configured, an ungraded build must
 			// not slip past the operator's threshold.
-			gateConfigured := strings.TrimSpace(os.Getenv("ATOMICSITE_MIN_PUBLISH_GRADE")) != ""
+			gateConfigured := strings.TrimSpace(config.Env("SLAB_MIN_PUBLISH_GRADE")) != ""
 			if gateConfigured && (evalErr != nil || len(reports) == 0) {
-				result.BuildLog += "\n=== deploy ===\nskipped: eval produced no grades while ATOMICSITE_MIN_PUBLISH_GRADE is set; refusing to publish ungraded\n"
+				result.BuildLog += "\n=== deploy ===\nskipped: eval produced no grades while SLAB_MIN_PUBLISH_GRADE is set; refusing to publish ungraded\n"
 			} else if blocked, worst := belowPublishGrade(reports, agent.FidelityForSite(bgCtx, h.queries, siteID)); blocked {
-				result.BuildLog += "\n=== deploy ===\nskipped: worst grade " + worst + " is below ATOMICSITE_MIN_PUBLISH_GRADE; published nothing\n"
+				result.BuildLog += "\n=== deploy ===\nskipped: worst grade " + worst + " is below SLAB_MIN_PUBLISH_GRADE; published nothing\n"
 			} else if targetID, deployURL, deployErr := h.autoDeployDefault(bgCtx, siteID, result.DistDir); deployErr != nil {
 				result.BuildLog += "\n=== deploy ===\nfailed: " + deployErr.Error() + "\n"
 			} else if targetID != "" {
@@ -488,7 +487,7 @@ func (h *BuildHandler) autoDeployDefault(ctx context.Context, siteID, distDir st
 		_ = json.Unmarshal([]byte(t.ConfigJson), &cfg)
 	}
 	decryptDeployConfigSecrets(deployConfigCipher(h.cfg), cfg)
-	// Slug lets the local deployer accept a /srv/atomicsite/{slug}/dist path
+	// Slug lets the local deployer accept a /srv/slab/{slug}/dist path
 	// (the wildcard serving convention) under the cross-tenant path guard.
 	var slug string
 	if site, err := h.queries.GetSiteByID(ctx, siteID); err == nil {

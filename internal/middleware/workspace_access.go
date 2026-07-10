@@ -30,7 +30,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // workspaceIDPattern matches the 24-hex-char site-id shape (workspaces
@@ -175,7 +175,7 @@ func newAuditID() string {
 // auditClientIP returns the visitor IP for audit_log. Reads only
 // r.RemoteAddr because TrustedProxyRealIP at the top of the
 // middleware stack has already canonicalized it (resolving XFF only
-// when the immediate peer is in ATOMICSITE_TRUSTED_PROXIES). Reading
+// when the immediate peer is in SLAB_TRUSTED_PROXIES). Reading
 // XFF directly here would let an untrusted peer spoof the audit log.
 func auditClientIP(r *http.Request) string {
 	addr := r.RemoteAddr

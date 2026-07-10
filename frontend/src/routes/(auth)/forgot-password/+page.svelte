@@ -44,7 +44,7 @@
 			</p>
 			<p class="mt-2 text-[12px] text-text-muted">
 				Don't see it? Check spam, then ask an operator to read the application log
-				for the reset link (atomicsite logs them when no mail integration is wired).
+				for the reset link (slab logs them when no mail integration is wired).
 			</p>
 			<a
 				href="/login"

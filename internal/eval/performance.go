@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bright-interaction/atomicsite/internal/agent"
+	"github.com/bright-interaction/slab/internal/agent"
 )
 
 // perfBudget holds the fidelity-dependent performance thresholds. The
@@ -109,7 +109,7 @@ func RunPerformanceChecks(site *SiteContext) []CheckResult {
 			return true, ""
 		}
 		return false, "no WebP/AVIF/SVG images detected"
-	}, "Use Atomicsite's media pipeline for automatic WebP variants."))
+	}, "Use Slab's media pipeline for automatic WebP variants."))
 
 	// 4. Lazy-loaded images (recommend loading=lazy for below-fold)
 	checks = append(checks, perPageCheck("Lazy-Loaded Images", "images", 2, site, func(p PageContext) (bool, string) {

@@ -72,7 +72,7 @@ func TestDockyardDeployer_Validate_HappyPath(t *testing.T) {
 		SiteID: "s1",
 		Name:   "main",
 		Kind:   "dockyard",
-		Config: validDockyardConfig(t, "/var/atomicsite/site"),
+		Config: validDockyardConfig(t, "/var/slab/site"),
 	}
 	if err := d.Validate(target); err != nil {
 		t.Fatalf("validate: %v", err)
@@ -99,7 +99,7 @@ func TestDockyardDeployer_Validate_RejectsMissingFields(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := validDockyardConfig(t, "/var/atomicsite/site")
+			cfg := validDockyardConfig(t, "/var/slab/site")
 			tc.mut(cfg)
 			d := NewDockyardDeployer()
 			err := d.Validate(Target{ID: "t1", SiteID: "s1", Name: "main", Kind: "dockyard", Config: cfg})
@@ -172,7 +172,7 @@ func TestDockyardDeployer_Deploy_RsyncFailureSurfaces(t *testing.T) {
 	d := NewDockyardDeployer()
 	d.SetClient(&fakeDockyardClient{})
 
-	cfg := validDockyardConfig(t, "/tmp/atomicsite-test-dest")
+	cfg := validDockyardConfig(t, "/tmp/slab-test-dest")
 	cfg["host"] = "127.0.0.1"
 	cfg["port"] = freePort(t) // guaranteed nothing is listening
 	target := Target{ID: "t1", SiteID: "s1", Name: "main", Kind: "dockyard", Config: cfg}
@@ -234,7 +234,7 @@ func TestDockyardDeployer_DeployPostRsync_Success(t *testing.T) {
 		SiteID: "s1",
 		Name:   "main",
 		Kind:   "dockyard",
-		Config: validDockyardConfig(t, "/var/atomicsite/site"),
+		Config: validDockyardConfig(t, "/var/slab/site"),
 	}
 
 	res, err := deployWithStubbedRsync(context.Background(), t, d, target,
@@ -275,7 +275,7 @@ func TestDockyardDeployer_DeployPostRsync_RouteConflictTreatedOK(t *testing.T) {
 	defer srv.Close()
 
 	d := &DockyardDeployer{httpClient: srv.Client(), rsync: NewRsyncDeployer()}
-	cfg := validDockyardConfig(t, "/var/atomicsite/site")
+	cfg := validDockyardConfig(t, "/var/slab/site")
 	cfg["dockyard_url"] = srv.URL
 	target := Target{ID: "t1", SiteID: "s1", Name: "main", Kind: "dockyard", Config: cfg}
 
@@ -303,7 +303,7 @@ func TestDockyardDeployer_DeployPostRsync_RouteServerErrorFails(t *testing.T) {
 	defer srv.Close()
 
 	d := &DockyardDeployer{httpClient: srv.Client(), rsync: NewRsyncDeployer()}
-	cfg := validDockyardConfig(t, "/var/atomicsite/site")
+	cfg := validDockyardConfig(t, "/var/slab/site")
 	cfg["dockyard_url"] = srv.URL
 	target := Target{ID: "t1", SiteID: "s1", Name: "main", Kind: "dockyard", Config: cfg}
 
@@ -327,7 +327,7 @@ func TestDockyardDeployer_PutProxyRoute_FakeClientErrPropagates(t *testing.T) {
 		SiteID: "s1",
 		Name:   "main",
 		Kind:   "dockyard",
-		Config: validDockyardConfig(t, "/var/atomicsite/site"),
+		Config: validDockyardConfig(t, "/var/slab/site"),
 	}
 	_, err := deployWithStubbedRsync(context.Background(), t, d, target, Result{}, nil)
 	if !errors.Is(err, wantErr) {
@@ -345,7 +345,7 @@ func TestDockyardDeployer_ApplyProxy_FakeClientErrPropagates(t *testing.T) {
 		SiteID: "s1",
 		Name:   "main",
 		Kind:   "dockyard",
-		Config: validDockyardConfig(t, "/var/atomicsite/site"),
+		Config: validDockyardConfig(t, "/var/slab/site"),
 	}
 	_, err := deployWithStubbedRsync(context.Background(), t, d, target, Result{}, nil)
 	if !errors.Is(err, wantErr) {

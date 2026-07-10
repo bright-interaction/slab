@@ -2,7 +2,7 @@
 // and consent rows per site. Without this the SQLite DB grows unbounded:
 // at moderate traffic (10 sites, 1k visitors/day, 5 pageviews/visit) the
 // visit_events table alone gains ~7 GB/year. The sweep keeps the DB lean
-// without needing an external cron, by running inside the atomicsite Go
+// without needing an external cron, by running inside the slab Go
 // binary on a 24h ticker.
 //
 // Per-site retention is configurable via three settings (general category):
@@ -40,7 +40,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bright-interaction/atomicsite/internal/store"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // DefaultAnalyticsDays is the per-site fallback when general.analytics_retention_days
@@ -215,7 +215,7 @@ func (m *Manager) SetGDPRDeleteCoolingDays(days int) {
 // The transition is a soft state change only (a 'deleted' workspace's
 // rows stay in the DB until an operator-initiated hard delete) so a
 // sweep mistake doesn't blow up customer data. Cloud operators run
-// `atomicsite purge-deleted-workspaces` (a separate CLI verb) to
+// `slab purge-deleted-workspaces` (a separate CLI verb) to
 // commit the hard delete after a confirmation window.
 func (m *Manager) SetLifecyclePolicy(pauseDays, deleteDays int) {
 	m.mu.Lock()

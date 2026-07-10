@@ -13,8 +13,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	dbpkg "github.com/bright-interaction/atomicsite/internal/db"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	dbpkg "github.com/bright-interaction/slab/internal/db"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // newSearchHandlerForTest builds a SearchHandler against an in-memory
@@ -73,7 +73,7 @@ func TestSearch_EmptyQueryReturnsEmptyResults(t *testing.T) {
 func TestSearch_ReindexThenQueryFindsPage(t *testing.T) {
 	h, _, q, siteID := newSearchHandlerForTest(t)
 	if err := q.CreatePage(context.Background(), store.CreatePageParams{
-		ID: "p-1", SiteID: siteID, Slug: "about", Title: "About Atomicsite",
+		ID: "p-1", SiteID: siteID, Slug: "about", Title: "About Slab",
 		Layout: "default",
 	}); err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func TestSearch_ReindexThenQueryFindsPage(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	h.Search(w, searchReq("GET", siteID, "atomicsite", ""))
+	h.Search(w, searchReq("GET", siteID, "slab", ""))
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
@@ -98,8 +98,8 @@ func TestSearch_ReindexThenQueryFindsPage(t *testing.T) {
 		t.Fatal("expected at least one result")
 	}
 	first := results[0].(map[string]any)
-	if !strings.Contains(strings.ToLower(first["title"].(string)), "atomicsite") {
-		t.Errorf("first hit title = %v, want to contain 'atomicsite'", first["title"])
+	if !strings.Contains(strings.ToLower(first["title"].(string)), "slab") {
+		t.Errorf("first hit title = %v, want to contain 'slab'", first["title"])
 	}
 }
 

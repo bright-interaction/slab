@@ -1,6 +1,6 @@
 // Package atrest encrypts tenant secrets at rest (app-install
 // credentials, TOTP seeds) with AES-256-GCM under the same key as the
-// shield tokenizer (ATOMICSITE_SHIELD_KEY).
+// shield tokenizer (SLAB_SHIELD_KEY).
 //
 // Stored values carry an "enc:v1:" prefix so ciphertext and legacy
 // plaintext coexist during rollout:
@@ -11,7 +11,7 @@
 //
 // A deploy without a 32-byte key gets a passthrough Cipher (Encrypt and
 // Decrypt are the identity), so single-tenant self-hosters that never
-// set ATOMICSITE_SHIELD_KEY keep working and are never locked out. When
+// set SLAB_SHIELD_KEY keep working and are never locked out. When
 // the key is set, new writes are encrypted and existing plaintext rows
 // upgrade lazily on their next save.
 package atrest
@@ -35,7 +35,7 @@ type Cipher struct{ key []byte }
 
 // New returns a Cipher. A key that is not exactly 32 bytes yields a
 // passthrough Cipher rather than an error, so a missing/empty
-// ATOMICSITE_SHIELD_KEY degrades to storing plaintext (the prior
+// SLAB_SHIELD_KEY degrades to storing plaintext (the prior
 // behavior) instead of refusing to operate.
 func New(key []byte) *Cipher {
 	if len(key) != 32 {

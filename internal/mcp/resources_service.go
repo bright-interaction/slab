@@ -6,9 +6,9 @@ import (
 	"sort"
 	"time"
 
-	agentpkg "github.com/bright-interaction/atomicsite/internal/agent"
-	authmw "github.com/bright-interaction/atomicsite/internal/middleware"
-	"github.com/bright-interaction/atomicsite/internal/store"
+	agentpkg "github.com/bright-interaction/slab/internal/agent"
+	authmw "github.com/bright-interaction/slab/internal/middleware"
+	"github.com/bright-interaction/slab/internal/store"
 )
 
 // registerServiceContextResources adds the surface that lets an agent
@@ -21,7 +21,7 @@ func (s *Server) registerServiceContextResources() {
 	register := func(r Resource) { s.resources[r.URI] = r }
 
 	register(Resource{
-		URI:         "atomicsite://eval/latest",
+		URI:         "slab://eval/latest",
 		Name:        "Latest evaluation scores",
 		Description: "Per-category eval scores from the most recent build (security, seo, accessibility, privacy, performance, geo). Returns empty list when no builds have run yet. Read this after trigger_build to see what to fix.",
 		MimeType:    "application/json",
@@ -43,7 +43,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://build/history",
+		URI:         "slab://build/history",
 		Name:        "Recent builds",
 		Description: "Last 10 deployments for this site: id, status, duration_ms, error, deploy_url, target. Useful for diagnosing flaky builds and avoiding repeating failed deployments.",
 		MimeType:    "application/json",
@@ -60,7 +60,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://deploy/status",
+		URI:         "slab://deploy/status",
 		Name:        "Current deploy status",
 		Description: "Most recent deployment record: status (building/success/failed), deploy_url, target. Read before calling screenshot to confirm the build succeeded and a URL is live.",
 		MimeType:    "application/json",
@@ -94,7 +94,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://domains",
+		URI:         "slab://domains",
 		Name:        "Custom domains",
 		Description: "Every custom hostname on this site, with reconciler state (pending/verified/cert_ready/live/error), canonical flag, last error. The agent uses this to confirm the live URL before reporting completion.",
 		MimeType:    "application/json",
@@ -108,7 +108,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://members",
+		URI:         "slab://members",
 		Name:        "Site members",
 		Description: "Workspace users with access to this site: user_id, role (owner/admin/member), email, name. Useful when the agent needs to confirm collaboration shape before destructive operations.",
 		MimeType:    "application/json",
@@ -122,7 +122,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://knowledgebase",
+		URI:         "slab://knowledgebase",
 		Name:        "Site knowledgebase",
 		Description: "Per-site KB entries: brand voice, product positioning, FAQ source, anything operators want the agent to remember when authoring. Use this before writing copy so the voice matches.",
 		MimeType:    "application/json",
@@ -136,7 +136,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://consent/stats",
+		URI:         "slab://consent/stats",
 		Name:        "Consent aggregates (no individual records)",
 		Description: "Aggregate consent stats over the last 30 days: total banners shown, accept-all rate, reject-all rate, custom-categories rate, GPC signals received, do-not-sell-count. Aggregates only; individual consent records are never exposed via MCP.",
 		MimeType:    "application/json",
@@ -166,7 +166,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://retention/status",
+		URI:         "slab://retention/status",
 		Name:        "Retention manager status",
 		Description: "Configuration of the GDPR retention sweep: configured retention days for analytics/consent/engagement, plus an instruction on where to read the actual sweep result (admin /api/admin/metrics).",
 		MimeType:    "application/json",
@@ -195,7 +195,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://integrations",
+		URI:         "slab://integrations",
 		Name:        "Wired integrations",
 		Description: "Snapshot of which third-party services are configured for this site: GA4, Umami, CRM webhook, Figma (via design refs or token import), GitHub design references count, deploy targets count.",
 		MimeType:    "application/json",
@@ -227,7 +227,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://design-references",
+		URI:         "slab://design-references",
 		Name:        "Design references",
 		Description: "External GitHub repos the operator registered as design vocabulary (taste-skill, high-end-visual-design, custom). Each ref carries a fetched bundle: README, tailwind config when present, sample components. Read this before composing pages so the agent can match the operator's preferred design language.",
 		MimeType:    "application/json",
@@ -247,7 +247,7 @@ func (s *Server) registerServiceContextResources() {
 	// is it firing?" answer in one fetch. Aggregates only; identified-
 	// tier emails are never exposed.
 	register(Resource{
-		URI:         "atomicsite://analytics/goals",
+		URI:         "slab://analytics/goals",
 		Name:        "Conversion goals + rates (7-day)",
 		Description: "Per-site conversion goals with conversions / unique_converters / conversion_rate_pct / total_value_cents over the last 7 days. Use this to learn what counts as a conversion before suggesting goal changes; use the get_goals_analytics tool when you need a different time range.",
 		MimeType:    "application/json",
@@ -299,7 +299,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://meta/capabilities",
+		URI:         "slab://meta/capabilities",
 		Name:        "Agent capabilities",
 		Description: "Self-describing snapshot the agent can read to know what it can do right now: identity (key id, site id, capability bits), tool/resource/prompt counts, write capability, eval thresholds. Read this once on session start to plan what is in reach.",
 		MimeType:    "application/json",
@@ -309,7 +309,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 
 	register(Resource{
-		URI:         "atomicsite://meta/design-playbook",
+		URI:         "slab://meta/design-playbook",
 		Name:        "Design playbook (rubric the Inspector grades against)",
 		Description: "THE site's design DNA, adapted to its design.fidelity dial (performance / balanced / showcase): the fidelity contract (what is unlocked, how grading changes, what is never relaxed), principles, page archetypes, anti-patterns (AI tells), vibe archetypes, materiality, content authenticity (banned slop terms), motion budget, copy voice, font system, hero graphics catalog, one-shot recipe. The Inspector grades against THIS rubric, so read it BEFORE authoring blocks. Re-read after changing design.fidelity.",
 		MimeType:    "application/json",
@@ -320,7 +320,7 @@ func (s *Server) registerServiceContextResources() {
 	})
 }
 
-// capabilitiesSnapshot is the payload behind atomicsite://meta/capabilities
+// capabilitiesSnapshot is the payload behind slab://meta/capabilities
 // AND the get_capabilities tool. Same shape so clients can pick the
 // surface they prefer (resources/read or tools/call).
 func (s *Server) capabilitiesSnapshot(agent *authmw.AgentIdentity) map[string]any {
@@ -362,7 +362,7 @@ func (s *Server) capabilitiesSnapshot(agent *authmw.AgentIdentity) map[string]an
 			"can_write":    hasWrite,
 		},
 		"server": map[string]any{
-			"name":             "atomicsite",
+			"name":             "slab",
 			"version":          "1.0.0",
 			"protocol_version": Protocol,
 		},
