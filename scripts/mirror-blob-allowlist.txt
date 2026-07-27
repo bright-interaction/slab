@@ -1,0 +1,12 @@
+# Substrings exempted from the home-path half of mirror_blob_sanity_check
+# (scripts/mirror-redactions.sh). One per line, with the reason.
+#
+# This rule exists to catch a MAINTAINER's laptop path baked into a committed
+# binary or sourcemap. A container's own service-user home is a different thing
+# and is fine to publish.
+
+# The Dockerfile runs the service as the unprivileged user "atomicsite", and a
+# comment records that DuckDB caches its sqlite_scanner extension under that
+# user's home inside the image. That is documentation about the container, not
+# about anyone's machine.
+/home/atomicsite/

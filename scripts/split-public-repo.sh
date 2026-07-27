@@ -35,6 +35,14 @@ SPLIT_BRANCH="slab-public-split"
 # routes are directory-scoped (no build tag) so they must be listed explicitly.
 STRIP_PATHS=(
   docker-compose.yml                       # estate deploy compose (house proxy net)
+  # A compiled Go binary was committed at the subtree root in March 2026 and
+  # later deleted, so it is invisible at HEAD but still 36MB of the published
+  # history in two blobs (19.6MB + 16.2MB). It cannot be redacted the way text
+  # can: it embeds 240 copies of the maintainer's laptop path (/Users/<name>)
+  # plus internal hostnames in its build metadata, and rewriting bytes inside an
+  # executable corrupts it. Strip it from history instead. mirror_blob_sanity_check
+  # now refuses to publish any oversized blob so the next one cannot slip past.
+  server
   ee/cloud_ee.go                           # EE: cloud orchestration impl
   internal/cloud/mollie                    # EE: Mollie billing client (all files //go:build ee)
   internal/handlers/billing_ee.go          # EE: billing HTTP handlers
@@ -84,13 +92,25 @@ echo "Stripping internal + enterprise paths from all history: ${STRIP_PATHS[*]}"
 # Rename the module/org (atomicsite -> slab) and redact internal infra hostnames
 # across ALL history (file contents + commit messages).
 REDACT="$WORK/redactions.txt"
-{
-  echo 'github.com/bright-interaction/slab==>github.com/bright-interaction/slab'
-  echo 'host==>host'
-  echo 'web-proxy==>web-proxy'
-} > "$REDACT"
+# Redactions come from ONE shared list plus this product's extras, because the
+# per-product copies drifted: slab's never got the estate host IP or the internal
+# service hostnames, so the production IP sat in its test fixtures labelled "prod
+# host" and 98 occurrences of an internal SaaS hostname stayed in its history.
+# shellcheck source=../../scripts/mirror-redactions.sh
+. "$ROOT/scripts/mirror-redactions.sh"
+mirror_redaction_file "$ROOT" "$ROOT/atomicsite/scripts/mirror-redactions.txt" "$REDACT"
 echo "Renaming module atomicsite -> slab + redacting infra hostnames ..."
 ( cd "$CLONE" && git filter-repo --force --replace-text "$REDACT" --replace-message "$REDACT" )
+
+# Assert the redaction actually took. Rewriting a token is a hope; checking it is
+# gone is the guarantee, and this walks every blob in every commit because that is
+# what the push publishes (mesh found names neutralised at HEAD still present in 61
+# of 156 published commits).
+mirror_redaction_check "$CLONE" "$ROOT" "$ROOT/atomicsite/scripts/mirror-redactions.txt"
+
+# Blobs that text redaction cannot fix: a committed binary or archive, or a
+# maintainer home path baked into build metadata. Nothing at HEAD reveals these.
+mirror_blob_sanity_check "$CLONE" "$ROOT/atomicsite/scripts/mirror-blob-allowlist.txt"
 
 # Defense in depth #1: every stripped path is gone.
 for p in "${STRIP_PATHS[@]}"; do

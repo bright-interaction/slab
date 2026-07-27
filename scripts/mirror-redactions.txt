@@ -1,0 +1,13 @@
+# Redactions specific to this product, appended AFTER the shared list in
+# scripts/mirror-redactions.txt. Same format (literal==>replacement) and the same
+# contract: every left-hand literal here is ALSO asserted gone from the filtered
+# history before the mirror is allowed to publish.
+#
+# Estate hostnames, the production host IP and other cross-product tokens belong
+# in the SHARED list, not here. Put a token here only when it is genuinely unique
+# to this product.
+
+# module path rename: the monorepo dir is atomicsite, the public product is slab
+github.com/bright-interaction/slab==>github.com/bright-interaction/slab
+# internal SaaS host; 98 occurrences survived in history because the frontend cleanup never reached the redaction list
+slab.example.com==>slab.example.com
