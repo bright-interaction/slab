@@ -102,6 +102,11 @@ mirror_redaction_file "$ROOT" "$ROOT/atomicsite/scripts/mirror-redactions.txt" "
 echo "Renaming module atomicsite -> slab + redacting infra hostnames ..."
 ( cd "$CLONE" && git filter-repo --force --replace-text "$REDACT" --replace-message "$REDACT" )
 
+# Rewrite authors BEFORE asserting. The redaction check reads COMMIT objects too,
+# so it sees the author field; running it first flagged identities that this very
+# pass was about to fix. Assertions belong last, over the final state.
+mirror_rewrite_authors "$CLONE"
+
 # Assert the redaction actually took. Rewriting a token is a hope; checking it is
 # gone is the guarantee, and this walks every blob in every commit because that is
 # what the push publishes (mesh found names neutralised at HEAD still present in 61
@@ -112,10 +117,6 @@ mirror_redaction_check "$CLONE" "$ROOT" "$ROOT/atomicsite/scripts/mirror-redacti
 # maintainer home path baked into build metadata. Nothing at HEAD reveals these.
 mirror_blob_sanity_check "$CLONE" "$ROOT/atomicsite/scripts/mirror-blob-allowlist.txt"
 
-# Laptop-local and placeholder author addresses. Publish time is the only
-# moment these can be fixed: the push rewrites history and addresses are
-# immutable afterwards.
-mirror_rewrite_authors "$CLONE"
 
 # Defense in depth #1: every stripped path is gone.
 for p in "${STRIP_PATHS[@]}"; do
